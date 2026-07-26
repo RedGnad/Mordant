@@ -1,0 +1,48 @@
+{
+  "name": "mordant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Funded protection for conflicting pledges on tokenized receivables.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:cleanverse": "tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js",
+    "test:unit": "tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js",
+    "build:contracts": "forge build --root contracts",
+    "fmt:contracts": "forge fmt --root contracts --check",
+    "test:contracts": "forge test --root contracts -vvv",
+    "test:e2e": "playwright test",
+    "test": "tsc --noEmit && tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js && forge test --root contracts -vvv",
+    "validate": "eslint . && tsc --noEmit && tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js && forge test --root contracts -vvv && forge fmt --root contracts --check && next build"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "5.3.0",
+    "@fontsource/space-mono": "5.3.0",
+    "@tanstack/react-query": "5.101.4",
+    "lucide-react": "1.27.0",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "viem": "2.55.8",
+    "wagmi": "3.7.4",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  }
+}

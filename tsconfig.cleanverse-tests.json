@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": ".cleanverse-test-dist",
+    "rootDir": ".",
+    "plugins": [],
+    "types": ["node"]
+  },
+  "include": [
+    "src/lib/cleanverse/cleanverse.test.ts",
+    "src/lib/contracts/read-vault.test.ts",
+    "src/lib/contracts/pledge.test.ts",
+    "src/lib/mordant/scenario.test.ts",
+    "test/stubs/server-only.d.ts"
+  ]
+}
