@@ -36,11 +36,15 @@ fallback address and transfers factory ownership after allowlisting the two asse
 
 1. Save addresses and transaction hashes in a new judged deployment record.
 2. Register both participating facilities through the final factory owner.
-3. Launch one custom invoice A-Token and bind its approved adapter only once.
-4. Create the buyer-accepted invoice vault from the buyer wallet.
-5. Credit exactly the issued CVA supply to that vault through the sponsor adapter.
-6. Execute activation, conflict, 6/4 protection claims and independent 66/44 redemption.
-7. Set `NEXT_PUBLIC_MORDANT_VAULT_ADDRESS`; the UI will then read a single-block snapshot and call
+3. Launch one standard invoice A-Token through the documented Cleanverse issuance flow and wait for
+   `ISSUED`.
+4. Create the buyer-accepted invoice vault from the buyer wallet and register the sponsor-confirmed
+   Ownable target as a Validator pool.
+5. Prove that the vault is a policy-approved A-Token recipient before granting the adapter its
+   narrowly required mint/burn role.
+6. Credit exactly the issued CVA supply to that vault through the sponsor adapter.
+7. Execute activation, conflict, 6/4 protection claims and independent 66/44 redemption.
+8. Set `NEXT_PUBLIC_MORDANT_VAULT_ADDRESS`; the UI will then read a single-block snapshot and call
    `assertAccounting()` before displaying a live proof.
 
 Never reuse the synthetic mocks or prebuild keys for the judged deployment.

@@ -321,8 +321,8 @@ contract MordantInvoiceVaultTest is Test {
         vault.releaseDefaultCva(20 * ONE);
         assertTrue(vault.defaultCvaReleaseStarted());
 
-        ausdc.mint(debtor, FACE);
-        vm.startPrank(debtor);
+        ausdc.mint(buyer, FACE);
+        vm.startPrank(buyer);
         ausdc.approve(address(vault), FACE);
         vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
         vault.fundRedemption(ONE);
@@ -340,7 +340,7 @@ contract MordantInvoiceVaultTest is Test {
         assertEq(vault.totalSupply(), 0);
         assertEq(vault.cvaAccounted(), 0);
 
-        vm.prank(debtor);
+        vm.prank(buyer);
         vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
         vault.fundRedemption(ONE);
     }
@@ -359,11 +359,12 @@ contract MordantInvoiceVaultTest is Test {
         assertEq(uint256(vault.receivableState()), 2);
     }
 
-    function testDefaultCvaReleaseCannotStartWhileRedemptionEscrowIsFunded() public {
+    function testFullyFundedPostDefaultCashBlocksCvaAndAllowsRedemption() public {
         _activateSixtyForty(vault);
         vm.warp(protectionEnd + 1);
         vault.closeProtection();
         _fundRedemption(FACE);
+        assertEq(vault.redemptionEscrow(), FACE);
 
         vm.prank(holderA);
         vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
@@ -374,6 +375,120 @@ contract MordantInvoiceVaultTest is Test {
         vault.redeem(60 * ONE);
         vm.prank(holderB);
         vault.redeem(40 * ONE);
+    }
+
+    function testBuyerCannotFundPostDefaultDustInsteadOfFullRemainingLiability() public {
+        MockERC20 concentratedCva = new MockERC20("Concentrated invoice", "cINV", 6);
+        MockCvaAdapter concentratedAdapter = new MockCvaAdapter(concentratedCva);
+        factory.setCvaAdapter(address(concentratedAdapter), true);
+        MordantInvoiceVault concentratedVault =
+            _createVault(keccak256("concentrated-invoice"), concentratedAdapter, 10 * ONE);
+        _creditVault(concentratedAdapter, concentratedCva, concentratedVault, 10 * ONE);
+        ausdc.mint(holderA, ADVANCE);
+        vm.prank(holderA);
+        ausdc.approve(address(concentratedVault), type(uint256).max);
+
+        (MordantInvoiceVault.Pledge memory pledge, bytes memory signature) =
+            _signedPledge(concentratedVault, facilityA, 1, originatorKey);
+        address[] memory holders = new address[](2);
+        holders[0] = holderA;
+        holders[1] = holderB;
+        uint256[] memory allocations = new uint256[](2);
+        allocations[0] = 6 * ONE;
+        allocations[1] = 4 * ONE;
+        vm.prank(facilityA);
+        concentratedVault.activate(pledge, signature, holderA, holders, allocations);
+
+        vm.warp(protectionEnd + 1);
+        concentratedVault.closeProtection();
+        ausdc.mint(buyer, 1);
+        vm.startPrank(buyer);
+        ausdc.approve(address(concentratedVault), 1);
+        vm.expectRevert(MordantInvoiceVault.InvalidAmount.selector);
+        concentratedVault.fundRedemption(1);
+        vm.stopPrank();
+
+        assertEq(concentratedVault.redemptionEscrow(), 0);
+        vm.prank(holderA);
+        concentratedVault.releaseDefaultCva(ONE);
+        assertTrue(concentratedVault.defaultCvaReleaseStarted());
+    }
+
+    function testPreDefaultPartialDustIsRefundedWhenCvaPathIsSelected() public {
+        _activateSixtyForty(vault);
+        ausdc.mint(buyer, 1);
+        vm.startPrank(buyer);
+        ausdc.approve(address(vault), 1);
+        vault.fundRedemption(1);
+        vm.stopPrank();
+        assertEq(ausdc.balanceOf(buyer), 0);
+
+        vm.warp(protectionEnd + 1);
+        vault.closeProtection();
+        vm.prank(holderA);
+        vault.releaseDefaultCva(ONE);
+
+        assertEq(vault.redemptionEscrow(), 0);
+        assertEq(ausdc.balanceOf(buyer), 1);
+        assertTrue(vault.defaultCvaReleaseStarted());
+    }
+
+    function testBuyerCanCompletePreDefaultPartialEscrowAfterDefault() public {
+        _activateSixtyForty(vault);
+        _fundRedemption(ONE);
+        vm.warp(protectionEnd + 1);
+        vault.closeProtection();
+
+        ausdc.mint(buyer, FACE - ONE);
+        vm.startPrank(buyer);
+        ausdc.approve(address(vault), FACE - ONE);
+        vault.fundRedemption(FACE - ONE);
+        vm.stopPrank();
+
+        assertEq(vault.redemptionEscrow(), FACE);
+        vm.prank(holderA);
+        vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
+        vault.releaseDefaultCva(ONE);
+        vm.prank(holderA);
+        assertEq(vault.redeem(60 * ONE), 66 * ONE);
+        vm.prank(holderB);
+        assertEq(vault.redeem(40 * ONE), 44 * ONE);
+    }
+
+    function testPartiallyConsumedEscrowRemainderIsRefundedWhenCvaPathIsSelected() public {
+        _activateSixtyForty(vault);
+        _fundRedemption(60 * ONE);
+        vm.warp(protectionEnd + 1);
+        vault.closeProtection();
+
+        vm.prank(holderA);
+        assertEq(vault.redeem(50 * ONE), 55 * ONE);
+        assertEq(vault.redemptionEscrow(), 5 * ONE);
+        assertEq(ausdc.balanceOf(buyer), 0);
+
+        vm.prank(holderB);
+        vault.releaseDefaultCva(ONE);
+        assertEq(vault.redemptionEscrow(), 0);
+        assertEq(ausdc.balanceOf(buyer), 5 * ONE);
+        assertTrue(vault.defaultCvaReleaseStarted());
+    }
+
+    function testUnauthorizedThirdPartyCannotFundDustToBlockDefaultCvaRelease() public {
+        _activateSixtyForty(vault);
+        vm.warp(protectionEnd + 1);
+        vault.closeProtection();
+
+        ausdc.mint(debtor, 1);
+        vm.startPrank(debtor);
+        ausdc.approve(address(vault), 1);
+        vm.expectRevert(MordantInvoiceVault.Unauthorized.selector);
+        vault.fundRedemption(1);
+        vm.stopPrank();
+
+        assertEq(vault.redemptionEscrow(), 0);
+        vm.prank(holderA);
+        vault.releaseDefaultCva(ONE);
+        assertTrue(vault.defaultCvaReleaseStarted());
     }
 
     function testRedeemedUnitsDoNotBlockRemainingUnitsChoosingDefaultCvaWhenEscrowIsZero() public {
@@ -444,8 +559,8 @@ contract MordantInvoiceVaultTest is Test {
 
     function testRedemptionFundingCannotExceedRemainingFaceValue() public {
         _activateSixtyForty(vault);
-        ausdc.mint(debtor, FACE + 1);
-        vm.startPrank(debtor);
+        ausdc.mint(buyer, FACE + 1);
+        vm.startPrank(buyer);
         ausdc.approve(address(vault), type(uint256).max);
         vm.expectRevert(MordantInvoiceVault.InvalidAmount.selector);
         vault.fundRedemption(FACE + 1);
@@ -605,8 +720,8 @@ contract MordantInvoiceVaultTest is Test {
     }
 
     function _fundRedemption(uint256 amount) private {
-        ausdc.mint(debtor, amount);
-        vm.startPrank(debtor);
+        ausdc.mint(buyer, amount);
+        vm.startPrank(buyer);
         ausdc.approve(address(vault), type(uint256).max);
         vault.fundRedemption(amount);
         vm.stopPrank();

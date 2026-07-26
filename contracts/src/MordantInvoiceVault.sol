@@ -152,6 +152,7 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     event BondClaimed(address indexed holder, uint256 units, uint256 amount);
     event BondReturned(address indexed originator, uint256 amount);
     event RedemptionFunded(address indexed payer, uint256 amount);
+    event PartialRedemptionEscrowRefunded(address indexed buyer, uint256 amount);
     event Redeemed(address indexed holder, uint256 units, uint256 amount);
     event DefaultCvaReleasePathSelected();
     event DefaultCvaReleased(address indexed holder, uint256 units);
@@ -535,6 +536,7 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     }
 
     function fundRedemption(uint256 amount) external nonReentrant {
+        if (msg.sender != buyer) revert Unauthorized();
         _assertCvaIntegrity();
         if (defaultCvaReleaseStarted) revert InvalidState();
         if (
@@ -542,7 +544,12 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
                 && receivableState != ReceivableState.DefaultOutstanding
         ) revert InvalidState();
         if (amount == 0) revert InvalidAmount();
-        if (redemptionEscrow + redeemedFace + amount > faceValue) revert InvalidAmount();
+        uint256 remainingUnfundedLiability = faceValue - redeemedFace - redemptionEscrow;
+        if (
+            receivableState == ReceivableState.DefaultOutstanding
+                && amount != remainingUnfundedLiability
+        ) revert InvalidAmount();
+        if (amount > remainingUnfundedLiability) revert InvalidAmount();
         uint256 beforeVault = settlementToken.balanceOf(address(this));
         settlementToken.safeTransferFrom(msg.sender, address(this), amount);
         if (settlementToken.balanceOf(address(this)) - beforeVault != amount) {
@@ -616,14 +623,22 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
 
     function releaseDefaultCva(uint256 units) external nonReentrant {
         if (receivableState != ReceivableState.DefaultOutstanding) revert InvalidState();
-        if (!defaultCvaReleaseStarted) {
-            if (redemptionEscrow != 0) revert InvalidState();
-            defaultCvaReleaseStarted = true;
-            emit DefaultCvaReleasePathSelected();
-        }
         _requireHolder(msg.sender);
         if (units == 0 || balanceOf(msg.sender) < units || cvaAccounted < units) {
             revert InvalidAmount();
+        }
+        if (!defaultCvaReleaseStarted) {
+            uint256 remainingCashLiability = faceValue - redeemedFace;
+            uint256 partialEscrow = redemptionEscrow;
+            if (partialEscrow == remainingCashLiability) revert InvalidState();
+
+            redemptionEscrow = 0;
+            defaultCvaReleaseStarted = true;
+            if (partialEscrow != 0) {
+                _transferExact(settlementToken, buyer, partialEscrow);
+                emit PartialRedemptionEscrowRefunded(buyer, partialEscrow);
+            }
+            emit DefaultCvaReleasePathSelected();
         }
 
         uint256 cvaBefore = cvaAdapter.availableBalance(address(this));

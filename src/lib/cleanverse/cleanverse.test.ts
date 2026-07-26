@@ -11,9 +11,12 @@ import {
 import { CleanverseKeyError, encryptCleanverseRequest } from "./crypto";
 import { toPublicAPass, toPublicApplyStatus, toPublicDiscovery } from "./public-view";
 import {
+  faucetRequestSchema,
+  generateAPassRequestSchema,
   queryAPassDataSchema,
   queryApplyStatusDataSchema,
   querySupportedATokensDataSchema,
+  registerATokenRequestSchema,
 } from "./schemas";
 
 const TEST_AES_KEY = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
@@ -129,10 +132,24 @@ test("a non-0000 Cleanverse envelope becomes a typed, redacted error", async () 
   );
 });
 
-test("client sends auth headers and encrypts only the two documented write endpoints", async () => {
+test("client follows the v5.6 encryption boundary for all supported endpoints", async () => {
   const captured: CapturedRequest[] = [];
   const fixtures: Record<string, unknown> = {
+    "/generate_apass": {
+      customerId: "MordantUser2026",
+      cvRecordId: "record-generated",
+      tier: "3",
+      wallet: {
+        operate: "update",
+        address: ADDRESS_B,
+        chain: "monad",
+        txHash: `0x${"43".repeat(32)}`,
+        depositUSDCWallet: ADDRESS_A,
+        depositUSDTWallet: ADDRESS_A,
+      },
+    },
     "/atoken/launch": { requestId: "IA123", issueAssetId: 7 },
+    "/atoken/register_atoken": { requestId: "IAR123", issueAssetRegisterId: 5 },
     "/atoken/query_apply_status/IA123": {
       flowType: "LAUNCH",
       requestId: "IA123",
@@ -168,11 +185,23 @@ test("client sends auth headers and encrypts only the two documented write endpo
       contract_address: ADDRESS_A,
       tx_hash: `0x${"55".repeat(32)}`,
     },
+    "/validator/is_register": {
+      chain: "monad",
+      contract_address: ADDRESS_A,
+      registered: true,
+    },
     "/validator/verify": {
       chain: "monad",
       contract_address: ADDRESS_A,
       user_address: ADDRESS_B,
       valid: true,
+    },
+    "/faucet": {
+      chain: "monad",
+      symbol: "usdc",
+      deposit_address: ADDRESS_B,
+      amount: "10",
+      tx_hash: `0x${"66".repeat(32)}`,
     },
   };
   const fetchMock = createFetchMock((url) => {
@@ -198,6 +227,42 @@ test("client sends auth headers and encrypts only the two documented write endpo
     },
     icon: "https://assets.invalid/minv.svg",
   };
+  const generateInput = {
+    customerId: "MordantUser2026",
+    kycSource: "sandbox",
+    kycId: "KYC2026072701",
+    subTier: 9,
+    subGroup: "CD",
+    override: false,
+    expirationTime: 1_900_000_000,
+    wallet: { chain: "monad" as const, address: ADDRESS_B },
+    identityDataList: [
+      {
+        idType: "PASSPORT" as const,
+        fullName: "Mordant Demo",
+        idNumber: "P123456789",
+        validUntil: "2030-12-31",
+        issuingCountryISO2: "FR",
+      },
+    ],
+    bankAccountList: [
+      {
+        bankCountry: "FR",
+        bankName: "Sandbox Bank",
+        bankAccount: "FR761234567890",
+        bankAccountType: "A" as const,
+        balance: 0,
+        currency: "EUR",
+      },
+    ],
+  };
+  const registerATokenInput = {
+    chain: "monad" as const,
+    atoken_address: ADDRESS_A,
+    owner_signature: OWNER_SIGNATURE,
+    atoken_icon: "https://assets.invalid/minv.svg",
+    callback_url: "https://mordant.invalid/api/cleanverse/atoken-callback",
+  };
   const registerInput = {
     chain: "monad" as const,
     contract_address: ADDRESS_A,
@@ -211,20 +276,35 @@ test("client sends auth headers and encrypts only the two documented write endpo
     },
     owner_signature: OWNER_SIGNATURE,
   };
+  const faucetInput = {
+    chain: "monad" as const,
+    symbol: "usdc",
+    depositAddress: ADDRESS_B,
+    amount: "10",
+  };
+  const isRegisteredInput = {
+    chain: "monad" as const,
+    contract_address: ADDRESS_A,
+  };
 
+  await client.generateAPass(generateInput);
   await client.launchAToken(launchInput);
   await client.queryApplyStatus("IA123");
+  await client.registerAToken(registerATokenInput);
   await client.querySupportedATokens({ chain: "monad" });
   await client.queryAPass({ chain: "monad", address: ADDRESS_B });
   await client.verifyAPass({ chain: "monad", atoken: ADDRESS_A, address: ADDRESS_B });
   await client.registerValidatorPool(registerInput);
+  const registrationStatus = await client.isValidatorPoolRegistered(isRegisteredInput);
   await client.verifyValidatorPool({
     chain: "monad",
     contract_address: ADDRESS_A,
     user_address: ADDRESS_B,
   });
+  await client.requestFaucet(faucetInput);
+  assert.equal(registrationStatus.registered, true);
 
-  assert.equal(captured.length, 7);
+  assert.equal(captured.length, 11);
   for (const request of captured) {
     const headers = new Headers(request.init.headers);
     assert.equal(headers.get("api-id"), TEST_API_ID);
@@ -234,16 +314,28 @@ test("client sends auth headers and encrypts only the two documented write endpo
   }
 
   const byPath = new Map(captured.map((request) => [relativePath(request.url), request]));
-  const encryptedPaths = ["/atoken/launch", "/validator/register"];
+  const encryptedPaths = [
+    "/generate_apass",
+    "/atoken/launch",
+    "/atoken/register_atoken",
+    "/validator/register",
+  ];
   for (const path of encryptedPaths) {
     const request = byPath.get(path);
     assert.ok(request);
     const body = jsonBody(request);
     assert.deepEqual(Object.keys(body), ["data"]);
     assert.equal(typeof body.data, "string");
-    assert.doesNotMatch(body.data as string, /Mordant|owner_signature|contract_address/);
+    assert.doesNotMatch(
+      body.data as string,
+      /Mordant|owner_signature|contract_address|atoken_address|customerId/,
+    );
   }
 
+  assert.deepEqual(
+    decryptTestPayload(jsonBody(byPath.get("/generate_apass")!).data as string),
+    generateInput,
+  );
   assert.deepEqual(
     decryptTestPayload(jsonBody(byPath.get("/atoken/launch")!).data as string),
     launchInput,
@@ -252,23 +344,78 @@ test("client sends auth headers and encrypts only the two documented write endpo
     decryptTestPayload(jsonBody(byPath.get("/validator/register")!).data as string),
     registerInput,
   );
+  assert.deepEqual(
+    decryptTestPayload(jsonBody(byPath.get("/atoken/register_atoken")!).data as string),
+    registerATokenInput,
+  );
 
   for (const path of [
     "/query_deposit_atoken_list",
     "/query_apass",
     "/verify_apass",
+    "/validator/is_register",
     "/validator/verify",
+    "/faucet",
   ]) {
     const request = byPath.get(path);
     assert.ok(request);
     assert.equal(Object.hasOwn(jsonBody(request), "data"), false);
   }
+  assert.deepEqual(jsonBody(byPath.get("/faucet")!), faucetInput);
+  assert.deepEqual(jsonBody(byPath.get("/validator/is_register")!), isRegisteredInput);
 
   const statusRequest = byPath.get("/atoken/query_apply_status/IA123");
   assert.ok(statusRequest);
   assert.equal(statusRequest.init.method, "GET");
   assert.equal(statusRequest.init.body, undefined);
   assert.equal(new Headers(statusRequest.init.headers).has("content-type"), false);
+});
+
+test("v5.6 write schemas reject malformed identity, signature, and chain addresses", () => {
+  assert.throws(() =>
+    generateAPassRequestSchema.parse({
+      customerId: "too-short",
+      expirationTime: 1_900_000_000,
+      wallet: { chain: "monad", address: ADDRESS_A },
+    }),
+  );
+
+  assert.throws(() =>
+    generateAPassRequestSchema.parse({
+      customerId: "MordantUser2026",
+      subTier: 0,
+      expirationTime: 1_900_000_000,
+      wallet: { chain: "monad", address: ADDRESS_A },
+    }),
+  );
+
+  assert.throws(() =>
+    registerATokenRequestSchema.parse({
+      chain: "monad",
+      atoken_address: ADDRESS_A,
+      owner_signature: "0x1234",
+      atoken_icon: "https://assets.invalid/minv.svg",
+    }),
+  );
+
+  assert.throws(() =>
+    faucetRequestSchema.parse({
+      chain: "solana",
+      symbol: "usdc",
+      depositAddress: ADDRESS_A,
+      amount: "1",
+    }),
+  );
+
+  assert.equal(
+    queryApplyStatusDataSchema.parse({
+      flowType: "LAUNCH",
+      requestId: "IAISSUING",
+      applyStatus: "ISSUING",
+      chain: "monad",
+    }).applyStatus,
+    "ISSUING",
+  );
 });
 
 test("public route projections strip internal and future upstream fields", () => {

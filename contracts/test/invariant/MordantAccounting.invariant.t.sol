@@ -72,7 +72,6 @@ contract MordantAccountingInvariant is StdInvariant, Test {
     address private facility;
     address private holderA;
     address private holderB;
-    address private debtor;
 
     function setUp() public {
         vm.warp(1_000_000);
@@ -81,7 +80,6 @@ contract MordantAccountingInvariant is StdInvariant, Test {
         facility = vm.addr(FACILITY_KEY);
         holderA = vm.addr(0xAA01);
         holderB = vm.addr(0xBB02);
-        debtor = vm.addr(0xDD04);
 
         MockEligibility eligibility = new MockEligibility();
         eligibility.setEligible(buyer, 1, true);
@@ -158,8 +156,8 @@ contract MordantAccountingInvariant is StdInvariant, Test {
         vm.prank(facility);
         vault.activate(pledge, signature, holderA, holders, allocations);
 
-        ausdc.mint(debtor, FACE);
-        vm.startPrank(debtor);
+        ausdc.mint(buyer, FACE);
+        vm.startPrank(buyer);
         ausdc.approve(address(vault), type(uint256).max);
         vault.fundRedemption(FACE);
         vm.stopPrank();
@@ -287,7 +285,6 @@ contract MordantEntitledInvariant is StdInvariant, Test {
     address private facilityB;
     address private holderA;
     address private holderB;
-    address private debtor;
     uint64 private protectionEnd;
 
     MockERC20 private ausdc;
@@ -304,7 +301,6 @@ contract MordantEntitledInvariant is StdInvariant, Test {
         facilityB = vm.addr(0xFB22);
         holderA = vm.addr(0xAA01);
         holderB = vm.addr(0xBB02);
-        debtor = vm.addr(0xDD04);
         protectionEnd = uint64(block.timestamp + 30 days);
 
         MockEligibility eligibility = _eligibilityFixture();
@@ -389,8 +385,8 @@ contract MordantEntitledInvariant is StdInvariant, Test {
     }
 
     function _fundFaceValue() private {
-        ausdc.mint(debtor, FACE);
-        vm.startPrank(debtor);
+        ausdc.mint(buyer, FACE);
+        vm.startPrank(buyer);
         ausdc.approve(address(vault), FACE);
         vault.fundRedemption(FACE);
         vm.stopPrank();

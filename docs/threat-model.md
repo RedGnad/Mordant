@@ -11,7 +11,12 @@
 - pro-rata, one-shot protection entitlement with bounded rounding dust;
 - reserve amortization after clean partial redemption;
 - separate protection and redemption accounting;
-- irreversible cash-or-CVA resolution after default, preventing mixed double allocation;
+- buyer-only redemption funding, preventing third-party dust deposits from blocking the default CVA
+  release choice;
+- exact full-liability funding after default and automatic return of partial escrow when the CVA rail
+  is selected, preventing buyer-controlled dust from deadlocking holder recovery;
+- irreversible CVA-rail selection after default, preventing later cash funding or redemption from
+  double-allocating the remaining face value;
 - balance-delta checks against fee-on-transfer behavior;
 - exact CVA custody credit, issued-supply and asset-integrity checks;
 - no owner withdrawal of an active reserve.
@@ -30,8 +35,9 @@
 - correctness or upgrade safety of sponsor contracts;
 - economic calibration of a production reserve.
 
-## P0 integration risk
+## Integration kill gate
 
 Cleanverse must confirm a compliant custody account or approved Mordant contract that can credit,
-burn and release the custom A-Token without bypassing A-Pass rules. Local mocks are evidence of
-Mordant accounting only, never evidence that this sponsor path exists.
+burn and release the invoice A-Token without bypassing A-Pass rules. Local mocks are evidence of
+Mordant accounting only, never evidence that this sponsor path exists. Current Monad UAT issuance
+and Validator read failures must also be cleared before an end-to-end testnet claim.

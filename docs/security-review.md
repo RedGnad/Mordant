@@ -12,7 +12,13 @@ This is a prebuild engineering review, not an external audit and not a productio
 - CVA credit, asset identity and dedicated issued supply are checked; an unexpected mint or adapter
   asset change stops state transitions.
 - Redemption funding cannot exceed the unpaid face value.
-- Default cannot mix CVA withdrawals with cash redemption or strand a funded redemption escrow.
+- Only the immutable buyer/debtor can fund redemption, preventing an unrelated account from
+  front-running the default CVA-release rail with dust.
+- After default, the buyer can only complete the full remaining cash liability. A partial escrow
+  carried across default is refunded when a holder selects CVA release, while fully funded cash
+  continues to block CVA withdrawal and remains available for redemption.
+- Once CVA release starts, default cannot accept or consume cash escrow, and a partial redemption
+  escrow cannot strand the remaining holders.
 - A transfer after the hidden commit cannot move the historical 60/40 entitlement.
 - Protection claims never burn receipts or CVA and cannot consume receivable escrow.
 

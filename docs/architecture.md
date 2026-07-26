@@ -42,8 +42,13 @@ No protection transition changes the receivable state or burns its units.
 
 After default, the first CVA withdrawal irrevocably selects the CVA-release rail. Cash funding and
 cash redemption are then disabled, so one holder cannot retain the CVA while another consumes cash
-that economically belongs to the same face value. A funded cash escrow blocks selection of the CVA
-rail.
+that economically belongs to the same face value. A cash escrow covering the full remaining face
+value blocks selection of the CVA rail and remains redeemable by holders. A partial escrow carried
+into default is refunded to the buyer when the first holder selects CVA release; after default the
+buyer may only fund the exact shortfall needed to cover the full remaining cash liability. This
+prevents either an unrelated account or an adversarial buyer from obstructing the CVA choice with
+dust while preserving partial redemptions before default. A production servicer would require an
+explicit immutable or buyer-authorized role rather than permissionless funding.
 
 ## Conflict proof
 

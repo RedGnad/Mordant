@@ -43,9 +43,10 @@ defined consequence for a registered conflicting pledge inside a mandatory workf
 - Next.js 16 / React 19 / TypeScript
 - Foundry / Solidity
 - Monad testnet
-- Cleanverse CVI (A-Pass), CVA (custom A-Token), aUSDC and validator/CCP rules
+- Cleanverse CVI (A-Pass), CVA (dedicated invoice A-Token), aUSDC and Validator Compliance; the
+  exact relationship to the separately named CCP Protocol awaits sponsor confirmation
 
-The custom CVA custody path is isolated behind an allowlisted adapter. Mordant does not assume that
+The dedicated CVA custody path is isolated behind an allowlisted adapter. Mordant does not assume that
 an ordinary contract can receive an A-Pass-gated A-Token. The adapter must instead prove a dedicated
 invoice A-Token supply and sponsor-approved custody credit attributable to one vault.
 
@@ -53,13 +54,17 @@ invoice A-Token supply and sponsor-approved custody credit attributable to one v
 
 - Solidity state machines, EIP-712 pledges, hidden record date and 90/10 accounting are implemented.
 - Unit and stateful invariant suites cover both clean amortization and the 60/40 → 6/4 conflict path.
-- A server-only Cleanverse v5.6 client implements the documented CVI, CVA and validator endpoints.
+- A server-only Cleanverse v5.6 client implements the documented CVI, CVA, validator and sandbox
+  provisioning endpoints needed by the integration path.
 - A read-only Monad/viem layer verifies all live vault fields at one block and calls the contract's
   own accounting assertion.
 - The interface runs honestly in synthetic mode until a judged vault address is configured.
 
-The remaining P0 is sponsor-specific, not hidden in a mock: Cleanverse must confirm the real custom
-A-Token custody/burn/release adapter and the CVI verifier path. See
+The permissionless redemption-dust P0 is fixed and regression-tested. The remaining integration
+gate is sponsor-specific, not hidden in a mock: the disposable testnet spike must prove compliant
+A-Token custody, burn authority and the direct CVI verifier path. Read-only probes on 27 July also
+found current Monad UAT failures in A-Token launch and Validator reads; these must be cleared before
+the live spike can pass. See
 [`docs/cleanverse-integration.md`](docs/cleanverse-integration.md).
 
 ## Local development

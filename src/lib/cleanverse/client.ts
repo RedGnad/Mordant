@@ -7,6 +7,12 @@ import { getCleanverseConfig, type CleanverseConfig } from "./config";
 import { encryptCleanverseRequest } from "./crypto";
 import {
   cleanverseEnvelopeSchema,
+  faucetDataSchema,
+  faucetRequestSchema,
+  generateAPassDataSchema,
+  generateAPassRequestSchema,
+  isValidatorPoolRegisteredDataSchema,
+  isValidatorPoolRegisteredRequestSchema,
   launchATokenDataSchema,
   launchATokenRequestSchema,
   queryAPassDataSchema,
@@ -14,6 +20,8 @@ import {
   queryApplyStatusDataSchema,
   querySupportedATokensDataSchema,
   querySupportedATokensRequestSchema,
+  registerATokenDataSchema,
+  registerATokenRequestSchema,
   registerValidatorPoolDataSchema,
   registerValidatorPoolRequestSchema,
   requestIdSchema,
@@ -21,6 +29,12 @@ import {
   verifyAPassRequestSchema,
   verifyValidatorPoolDataSchema,
   verifyValidatorPoolRequestSchema,
+  type FaucetData,
+  type FaucetRequest,
+  type GenerateAPassData,
+  type GenerateAPassRequest,
+  type IsValidatorPoolRegisteredData,
+  type IsValidatorPoolRegisteredRequest,
   type LaunchATokenData,
   type LaunchATokenRequest,
   type QueryAPassData,
@@ -28,6 +42,8 @@ import {
   type QueryApplyStatusData,
   type QuerySupportedATokensData,
   type QuerySupportedATokensRequest,
+  type RegisterATokenData,
+  type RegisterATokenRequest,
   type RegisterValidatorPoolData,
   type RegisterValidatorPoolRequest,
   type VerifyAPassData,
@@ -123,6 +139,15 @@ export class CleanverseClient {
     return { data: encryptCleanverseRequest(payload, this.config.apiKey) };
   }
 
+  async generateAPass(input: GenerateAPassRequest): Promise<GenerateAPassData> {
+    const payload = generateAPassRequestSchema.parse(input);
+    return this.request(
+      "/generate_apass",
+      { method: "POST", body: this.encryptedBody(payload) },
+      generateAPassDataSchema,
+    );
+  }
+
   async launchAToken(input: LaunchATokenRequest): Promise<LaunchATokenData> {
     const payload = launchATokenRequestSchema.parse(input);
     return this.request("/atoken/launch", { method: "POST", body: this.encryptedBody(payload) }, launchATokenDataSchema);
@@ -134,6 +159,15 @@ export class CleanverseClient {
       `/atoken/query_apply_status/${encodeURIComponent(parsedRequestId)}`,
       { method: "GET" },
       queryApplyStatusDataSchema,
+    );
+  }
+
+  async registerAToken(input: RegisterATokenRequest): Promise<RegisterATokenData> {
+    const payload = registerATokenRequestSchema.parse(input);
+    return this.request(
+      "/atoken/register_atoken",
+      { method: "POST", body: this.encryptedBody(payload) },
+      registerATokenDataSchema,
     );
   }
 
@@ -161,9 +195,25 @@ export class CleanverseClient {
     );
   }
 
+  async isValidatorPoolRegistered(
+    input: IsValidatorPoolRegisteredRequest,
+  ): Promise<IsValidatorPoolRegisteredData> {
+    const payload = isValidatorPoolRegisteredRequestSchema.parse(input);
+    return this.request(
+      "/validator/is_register",
+      { method: "POST", body: payload },
+      isValidatorPoolRegisteredDataSchema,
+    );
+  }
+
   async verifyValidatorPool(input: VerifyValidatorPoolRequest): Promise<VerifyValidatorPoolData> {
     const payload = verifyValidatorPoolRequestSchema.parse(input);
     return this.request("/validator/verify", { method: "POST", body: payload }, verifyValidatorPoolDataSchema);
+  }
+
+  async requestFaucet(input: FaucetRequest): Promise<FaucetData> {
+    const payload = faucetRequestSchema.parse(input);
+    return this.request("/faucet", { method: "POST", body: payload }, faucetDataSchema);
   }
 }
 
