@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T23:02:43.752Z",
+  "repositoryCommit": "f9c68cb7af772e767e860031a0cdb1602ade3732",
+  "mode": "live-read-only",
+  "documentationSource": {
+    "sourceKind": "manual-versioned-transcription",
+    "documentationVersion": "v5.6",
+    "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+    "documentationConsultedAt": "2026-07-27",
+    "liveFetchedByEvidenceGate": false
+  },
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48663660",
+    "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+    "onchainObservedAt": "2026-07-27T23:02:45.732Z"
+  },
+  "documentation": [
+    {
+      "pageTitle": "Cleanverse public chain configuration (unauthenticated)",
+      "pagePath": "GET /api/skills/query_chain_config",
+      "documentationVersion": "UNSTATED",
+      "documentationVersionSource": "The response body carries no version field",
+      "consultedAt": "2026-07-27T23:02:43.770Z",
+      "network": "monad-testnet",
+      "topic": "Monad chain id and contract configuration",
+      "documentedAbiOrEndpoint": "chain_id 10143, apass_address 0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9, aUSDC 0xaC0893567D43C3E7e6e35a72803df05416C1f20D, access_core 0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC, deposit_gateway 0x8e084646080a35347B2D053Dd72F550f12245c8B",
+      "documentedBehavior": "Publishes the canonical Monad testnet addresses and six-decimal aUSDC",
+      "limitations": "Unauthenticated endpoint. It states no documentation version and does not describe ABIs, lifecycle rules or gateway acceptance."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-pass-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "CVI / A-Pass issuance and expiry",
+      "documentedAbiOrEndpoint": "POST /generate_apass (AES/CBC encrypted body, api-id header)",
+      "documentedBehavior": "Creates an A-Pass for wallet{address, chain}. expirationTime is a required Unix-seconds timestamp. Country tags are derived from identityDataList[].issuingCountryISO2 since v5.5.",
+      "limitations": "The chapter documents the gateway request contract only. It publishes no Solidity interface and does not state whether a contract address is accepted."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-pass-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "A-Pass support for smart-contract addresses",
+      "documentedAbiOrEndpoint": "POST /generate_apass, field wallet.address",
+      "documentedBehavior": "Described generically as the \"A-Pass receiving wallet address\". No EOA-only restriction is stated anywhere in the chapter.",
+      "limitations": "Absence of a restriction is not a documented guarantee of acceptance. Only the Validator chapter explicitly contemplates contract addresses, and it does so for the registrar role, not for A-Pass issuance."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-token-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "A-Token launch and factory ABI",
+      "documentedAbiOrEndpoint": "POST /atoken/launch with chain, token_name, token_symbol, decimals, admin_address, rule, icon, optional callback_url",
+      "documentedBehavior": "Submits an application for a standard A-Token. The rule object carries allowed_group, allowed_sub_group, min_tier, min_sub_tier and, since v5.5 (2026-07-13), is_black_list and countries.",
+      "limitations": "The documentation describes the REST contract. It publishes no on-chain factory ABI, so no documented launch selector exists to compare against bytecode."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-token-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "A-Token issuance application lifecycle",
+      "documentedAbiOrEndpoint": "GET /atoken/query_apply_status/{requestId}; optional apply-result webhook via callback_url",
+      "documentedBehavior": "Submission returns only a requestId. An issuance is successful only when applyStatus becomes ISSUED.",
+      "limitations": "Terminal failure states are observable through the same endpoint but their remediation is not documented."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-token-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "Mint and burn role semantics on issued A-Tokens",
+      "documentedAbiOrEndpoint": "MINTER_ROLE, granted by admin_address after ISSUED",
+      "documentedBehavior": "For a standard A-Token the admin wallet grants MINTER_ROLE to the chosen minter, and only then may that minter mint. For a Wrapped A-Token, MINTER_ROLE is granted to the access_core contract, which locks the origin token and mints 1:1.",
+      "limitations": "BURN authority is never documented for a standard A-Token. The documentation states what MINTER_ROLE permits for minting only."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-token-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "Custody and transfer policy",
+      "documentedAbiOrEndpoint": "rule object (compliance rule) evaluated against A-Pass attributes",
+      "documentedBehavior": "The platform uses the token's rule together with the holder's A-Pass attributes (tier, subTier, group, subGroup and country tags) to determine whether a wallet may receive or transfer that A-Token. min_tier admits a user whose tier is strictly greater than the configured value.",
+      "limitations": "No Solidity policy interface is published. `canTransfer(address,address,address,uint256)` appears nowhere in the documentation; Mordant's ICleanversePolicy is inferred from deployed bytecode, not from a documented ABI."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-token-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "aUSDC semantics",
+      "documentedAbiOrEndpoint": "Wrapped A-Token flow; access_core resolved via the supported A-Token list endpoint",
+      "documentedBehavior": "A wrapped asset is minted 1:1 against a locked origin token when a whitelisted institution address funds the deposit address.",
+      "limitations": "Per-network aUSDC addresses and decimals are not published as a static table; they must be discovered through the query endpoints."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#a-pass-management",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "Monad configuration and addresses",
+      "documentedAbiOrEndpoint": "chain slug \"monad\" in the supported-network lists",
+      "documentedBehavior": "monad is a documented, case-insensitive chain slug for A-Pass and A-Token operations, alongside solana, base, avalanche, arbitrum, ethereum, polygon, bsc, hashkey and platon.",
+      "limitations": "The documentation publishes no Monad chain id and no Monad contract addresses. Those come from the runtime configuration endpoint, which states no version."
+    },
+    {
+      "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+      "pagePath": "/docs/cleanverse#validator-compliance",
+      "documentationVersion": "v5.6",
+      "documentationVersionSource": "Page title \"Cleanverse API v5.6 - Integration Documentation\" and the version-history table, whose latest entry is v5.6 dated 2026-07-21",
+      "consultedAt": "2026-07-27",
+      "network": "monad-testnet",
+      "topic": "Validator Compliance surface",
+      "documentedAbiOrEndpoint": "POST /validator/{grant,register,set_rule,add_rule,remove_rule,set_paused} encrypted; /validator/{is_register,rules,verify,is_paused} plain JSON",
+      "documentedBehavior": "Pools are on-chain addresses registered with the APass Compliance Validator contract. grant and register require an EIP-191 owner_signature over the lowercase chain slug concatenated with the lowercase hex address. Signed grant is explicitly intended for smart-contract addresses exposing Ownable.owner().",
+      "limitations": "No Validator contract address and no Solidity ABI are published for any network, so an on-chain ICviVerifier cannot be written from the documentation."
+    }
+  ],
+  "onchainObservations": [
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "implementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "A-Pass: 122 bytes of bytecode, EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "aUSDC: 122 bytes of bytecode, EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+      "implementation": null,
+      "codeHash": "0x96215e6049ed615cdc22fea7701e85458a8e51a2df3e7d45e8f9fa1d521b5a78",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "USDC: 1798 bytes of bytecode, not an EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "implementation": "0xb099f7049517a9f886fdbc60cf4a9db33ff02f9a",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "AccessCore: 122 bytes of bytecode, EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x8e084646080a35347B2D053Dd72F550f12245c8B",
+      "implementation": "0x56b7ae83aa9dd37e6e465d195c5a88b4da081cde",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "deposit gateway: 122 bytes of bytecode, EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xd1ad67ca3b7da5934813f4bd005812ebb3b43ff6",
+      "implementation": "0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode + EIP-1967 implementation slot",
+      "result": "A-Token factory proxy: 122 bytes of bytecode, EIP-1967 proxy",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "implementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "codeHash": null,
+      "callOrSelector": "isValidAPass(0x0000000000000000000000000000000000000000)",
+      "result": "false",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "implementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "codeHash": null,
+      "callOrSelector": "isValidAPass(0x000000000000000000000000000000000000dead)",
+      "result": "true",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "implementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "codeHash": null,
+      "callOrSelector": "isValidAPass(0x00000000000000000000000000000000deadbeef)",
+      "result": "false",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "codeHash": null,
+      "callOrSelector": "decimals()",
+      "result": "6",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "codeHash": null,
+      "callOrSelector": "policy()",
+      "result": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "MINTER_ROLE()",
+      "result": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "totalSupply()",
+      "result": "112140000",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "balanceOf(0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC)",
+      "result": "0",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "hasRole(MINTER_ROLE, 0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC)",
+      "result": "true",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "implementation": null,
+      "codeHash": "0xa7e47de33dd9e5e112d0d116588d45342ab3b062dedee17fd1215017a43d4173",
+      "callOrSelector": "bytecode selector scan 0x40c10f19 mint(address,uint256) / 0x9dc29fac burn(address,uint256)",
+      "result": "mint PRESENT, burn PRESENT (dispatch-table scan, not a callability proof)",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "implementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+      "codeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+      "callOrSelector": "eth_getCode (aUSDC policy contract)",
+      "result": "122 bytes of bytecode",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "canTransfer(aUSDC, 0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC, 0x8e084646080a35347B2D053Dd72F550f12245c8B, 1) [AccessCore]",
+      "result": "reverted with ComplianceFailed(address) [0x8a4e1859]",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "canTransfer(aUSDC, 0x000000000000000000000000000000000000dead, 0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC, 1) [A-Pass holder to A-Pass holder]",
+      "result": "reverted with ComplianceFailed(address) [0x8a4e1859]",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "implementation": null,
+      "codeHash": null,
+      "callOrSelector": "canTransfer(aUSDC, 0x000000000000000000000000000000000000dead, 0x000000000000000000000000000000000000dead, 1) [A-Pass holder to itself]",
+      "result": "reverted with ComplianceFailed(address) [0x8a4e1859]",
+      "classification": "READ-ONLY"
+    },
+    {
+      "network": "monad-testnet",
+      "chainId": 10143,
+      "blockNumber": "48663660",
+      "blockHash": "0x0487286d4b9afd1c23a657a927323c8468749024bee08784755ad3d76305adbf",
+      "address": "0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea",
+      "implementation": null,
+      "codeHash": "0x1cf40300ba567e911e92a76f58857def8d6de25aa82c40966e6c5b100a87c74a",
+      "callOrSelector": "bytecode selector scan 0xeff21872 / 0xef84b94a",
+      "result": "0xeff21872 PRESENT, 0xef84b94a PRESENT (dispatch-table scan, not a callability proof)",
+      "classification": "READ-ONLY"
+    }
+  ],
+  "comparisons": [
+    {
+      "topic": "Monad chain id and canonical addresses",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "UNSTATED",
+      "documentedSignatureOrBehavior": "chain_id 10143, A-Pass 0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9, aUSDC 0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9, 0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "observedImplementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "observedSignatureOrBehavior": "chain id 10143 confirmed by the RPC; both addresses carry bytecode",
+      "comparisonStatus": "MATCH",
+      "impactOnMordant": "Settlement token and credential contract addresses can be discovered and verified before any deployment.",
+      "smallestSponsorQuestion": "None for this surface."
+    },
+    {
+      "topic": "aUSDC six-decimal scale",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "UNSTATED",
+      "documentedSignatureOrBehavior": "chain config publishes decimals 6 for aUSDC",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "observedImplementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "observedSignatureOrBehavior": "decimals() returned 6",
+      "comparisonStatus": "MATCH",
+      "impactOnMordant": "Mordant receipts and face values share the settlement token's six-decimal base unit; a different scale would invalidate every amount in the vault.",
+      "smallestSponsorQuestion": "None for this surface."
+    },
+    {
+      "topic": "A-Pass isValidAPass(address) credential surface",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "v5.6",
+      "documentedSignatureOrBehavior": "Creates an A-Pass for wallet{address, chain}. expirationTime is a required Unix-seconds timestamp. Country tags are derived from identityDataList[].issuingCountryISO2 since v5.5. LIMITS: The chapter documents the gateway request contract only. It publishes no Solidity interface and does not state whether a contract address is accepted.",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "observedImplementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "observedSignatureOrBehavior": "isValidAPass(address) answers and returns false for addresses without a record",
+      "comparisonStatus": "NOT PROVEN",
+      "impactOnMordant": "CleanverseAPassVerifier depends on this exact selector and on a false answer for absent records. The deployment behaves that way; the documented guarantee is unread.",
+      "smallestSponsorQuestion": "Which documentation page and version defines isValidAPass(address) and its behavior for expired or absent records on Monad?"
+    },
+    {
+      "topic": "aUSDC role-gated mint and burn surface",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "v5.6",
+      "documentedSignatureOrBehavior": "For a standard A-Token the admin wallet grants MINTER_ROLE to the chosen minter, and only then may that minter mint. For a Wrapped A-Token, MINTER_ROLE is granted to the access_core contract, which locks the origin token and mints 1:1. LIMITS: BURN authority is never documented for a standard A-Token. The documentation states what MINTER_ROLE permits for minting only.",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "observedImplementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+      "observedSignatureOrBehavior": "MINTER_ROLE() present, hasRole(bytes32,address) answers, mint selector present, burn selector present",
+      "comparisonStatus": "NOT PROVEN",
+      "impactOnMordant": "CleanverseCvaAdapter assumes the issued invoice A-Token exposes the same MINTER_ROLE-gated mint/burn surface proven here for the deployed aUSDC.",
+      "smallestSponsorQuestion": "On a standard A-Token created by /atoken/launch, does MINTER_ROLE authorize both mint(address,uint256) and burn(address,uint256) as it does on aUSDC?"
+    },
+    {
+      "topic": "Transfer policy canTransfer(address,address,address,uint256)",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "v5.6",
+      "documentedSignatureOrBehavior": "The platform uses the token's rule together with the holder's A-Pass attributes (tier, subTier, group, subGroup and country tags) to determine whether a wallet may receive or transfer that A-Token. min_tier admits a user whose tier is strictly greater than the configured value. LIMITS: No Solidity policy interface is published. `canTransfer(address,address,address,uint256)` appears nowhere in the documentation; Mordant's ICleanversePolicy is inferred from deployed bytecode, not from a documented ABI.",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "observedImplementation": null,
+      "observedSignatureOrBehavior": "the probed tuples were rejected with ComplianceFailed(address) [0x8a4e1859], which is consistent with a compliance rule that is not satisfied by those participants",
+      "comparisonStatus": "BLOCKED",
+      "impactOnMordant": "CleanverseAPassVerifier treats a rejecting policy as a refusal, so for these exact participants every aUSDC settlement path in Mordant (activation proceeds, bond claims, cash redemption) fails closed with SettlementNotReady. Mordant has not identified an A-Pass profile this token accepts. Which attribute is unsatisfied was not read back and is not asserted.",
+      "smallestSponsorQuestion": "Which A-Pass profile (tier, subTier, group, subGroup, country tags) satisfies the Monad aUSDC compliance rule? The tuples we probed were rejected with ComplianceFailed."
+    },
+    {
+      "topic": "Monad A-Token factory launch ABI",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "v5.6",
+      "documentedSignatureOrBehavior": "Submits an application for a standard A-Token. The rule object carries allowed_group, allowed_sub_group, min_tier, min_sub_tier and, since v5.5 (2026-07-13), is_black_list and countries. LIMITS: The documentation describes the REST contract. It publishes no on-chain factory ABI, so no documented launch selector exists to compare against bytecode.",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xd1ad67ca3b7da5934813f4bd005812ebb3b43ff6",
+      "observedImplementation": "0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea",
+      "observedSignatureOrBehavior": "0xeff21872 PRESENT, 0xef84b94a PRESENT; implementation differs from the one recorded in the repository",
+      "comparisonStatus": "NOT PROVEN",
+      "impactOnMordant": "No backend/factory selector skew was observable at block 48663660. That is a read-only bytecode fact: whether a /atoken/launch application now succeeds stays NOT PROVEN — WRITE ACTION REQUIRED.",
+      "smallestSponsorQuestion": "Which factory implementation and launch ABI version is the Monad backend expected to call today?"
+    },
+    {
+      "topic": "Gateway acceptance of an A-Pass for a smart-contract address",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "v5.6",
+      "documentedSignatureOrBehavior": "Described generically as the \"A-Pass receiving wallet address\". No EOA-only restriction is stated anywhere in the chapter. LIMITS: Absence of a restriction is not a documented guarantee of acceptance. Only the Validator chapter explicitly contemplates contract addresses, and it does so for the registrar role, not for A-Pass issuance.",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "observedImplementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3",
+      "observedSignatureOrBehavior": "not observable read-only: issuing an A-Pass is a write action",
+      "comparisonStatus": "NOT PROVEN",
+      "impactOnMordant": "The adapter and each vault need their own A-Pass. On-chain feasibility and gateway acceptance are separate proofs and only the first is within read-only reach.",
+      "smallestSponsorQuestion": "Does the /generate_apass gateway accept a contract address controlled by a verified legal entity on Monad?"
+    },
+    {
+      "topic": "Mordant invoice vault deployment",
+      "documentedNetwork": "monad-testnet",
+      "documentedVersion": "NOT APPLICABLE",
+      "documentedSignatureOrBehavior": "Mordant owns this contract; Cleanverse documents nothing here",
+      "observedNetwork": "monad-testnet",
+      "observedBlock": "48663660",
+      "observedAddress": "not configured",
+      "observedImplementation": null,
+      "observedSignatureOrBehavior": "no vault address configured for this run",
+      "comparisonStatus": "NOT APPLICABLE",
+      "impactOnMordant": "The live vault proof in the interface stays unconfigured until a judged deployment exists.",
+      "smallestSponsorQuestion": "None: this is a Mordant deployment step, not a sponsor dependency."
+    }
+  ],
+  "conclusions": [
+    {
+      "statement": "The canonical Cleanverse Monad testnet contracts exist and answer their documented-by-configuration read surfaces at the pinned block.",
+      "classification": "READ-ONLY",
+      "basis": "eth_getCode and eth_call against the A-Pass, aUSDC, AccessCore and factory addresses at one pinned block."
+    },
+    {
+      "statement": "No backend/factory selector skew was observable at block 48663660: the Monad A-Token factory implementation exposes both launch selectors.",
+      "classification": "READ-ONLY",
+      "basis": "EIP-1967 implementation slot read, followed by a dispatch-table selector scan of the implementation bytecode. A selector scan proves presence in the dispatch table. It does not show that a /atoken/launch application succeeds, which stays NOT PROVEN — WRITE ACTION REQUIRED."
+    },
+    {
+      "statement": "BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED: the probed tuples were rejected with ComplianceFailed, which is consistent with a compliance rule that is not satisfied by those participants. Mordant settlement prechecks fail closed for them.",
+      "classification": "BLOCKED",
+      "basis": "eth_call against policy().canTransfer(aUSDC, from, to, 1) for three tuples, including two addresses whose isValidAPass is true; each was rejected with ComplianceFailed(address) [0x8a4e1859]. Bounded to those tuples: it does not establish which attribute is unsatisfied, that the policy rejects every participant, that the policy is faulty, or that holding a valid A-Pass suffices."
+    },
+    {
+      "statement": "The Cleanverse CVA/aUSDC rail is not live for Mordant.",
+      "classification": "NOT PROVEN",
+      "basis": "No A-Pass was issued, no A-Token was launched, no role was granted and no transaction was broadcast. Those are write actions and are out of scope here."
+    },
+    {
+      "statement": "Every claim that depends on the protected Cleanverse documentation is unproven in this run.",
+      "classification": "BLOCKED",
+      "basis": "No documentation session access code was available, so the access-gated pages could not be read. Repository notes were not substituted for them."
+    }
+  ],
+  "missingEvidence": [
+    {
+      "topic": "Protected Cleanverse API documentation (all chapters)",
+      "reason": "No session access code was available to this run; the pages are access-gated.",
+      "whatWouldProveIt": "A documentation session that can read the A-Pass, A-Token launch, roles, policy and Monad network chapters, recording page, path, version and date."
+    },
+    {
+      "topic": "Gateway issuance of an A-Pass to the adapter and vault contract addresses",
+      "reason": "Issuing an A-Pass is a state-changing sponsor call and is out of scope.",
+      "whatWouldProveIt": "A controlled, authorized /generate_apass call for both contract addresses, with the resulting credential read back on chain."
+    },
+    {
+      "topic": "End-to-end issuance of a dedicated invoice A-Token on Monad",
+      "reason": "Launching an A-Token is a state-changing sponsor call and is out of scope.",
+      "whatWouldProveIt": "One authorized /atoken/launch application reaching ISSUED, followed by read-back of the issued token implementation, decimals, policy and role surface."
+    },
+    {
+      "topic": "Mint and burn authority on a newly issued invoice A-Token",
+      "reason": "Requires a token that does not exist yet, plus a role grant.",
+      "whatWouldProveIt": "hasRole(MINTER_ROLE, adapter) returning true on the issued token, and a burn attempt from an unauthorized address reverting."
+    },
+    {
+      "topic": "An A-Pass profile the Monad aUSDC compliance rule accepts",
+      "reason": "The probed tuples were rejected with ComplianceFailed(address) [0x8a4e1859], consistent with an unsatisfied compliance rule. Compliant participants cannot be enumerated from public state.",
+      "whatWouldProveIt": "One canTransfer(aUSDC, from, to, amount) tuple returning true, or the rule values the token was launched with, read back from the sponsor."
+    },
+    {
+      "topic": "Mordant invoice vault on Monad testnet",
+      "reason": "No vault address is configured, so the interface cannot show a live proof.",
+      "whatWouldProveIt": "A judged deployment address whose accounting reads back at a pinned block through the Mordant read layer."
+    }
+  ]
+}

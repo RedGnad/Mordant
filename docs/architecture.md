@@ -21,7 +21,8 @@ of the beneficial holders at the hidden-commit record date. The invoice claim re
 The adapters are intentional. A disposable Monad fork proves that a contract with its own A-Pass can
 pass the deployed aUSDC policy and that a `MINTER_ROLE` holder can mint to and burn from that contract.
 Cleanverse does not yet publish the definitive lifecycle ABI for a newly issued invoice A-Token, and
-the live Monad launcher is currently unhealthy. The vault therefore does not hard-code the deployed
+Monad issuance health is unverified (no backend/factory selector skew was observable at block
+48663660, but no application has been run since). The vault therefore does not hard-code the deployed
 aUSDC behavior as if it applied to every CVA: the approved adapter must expose an exact custody credit
 for that vault. A local mock proves Mordant accounting only.
 

@@ -69,8 +69,14 @@ This is a prebuild engineering review, not an external audit and not a productio
   simultaneous burn/release loss.
 - Both contract A-Passes must expire after the full invoice and recovery horizon. If either expires,
   the affected activation, cash or CVA path pauses until the issuer renews the identity.
-- The current Monad launcher backend/factory version skew prevents a fresh invoice CVA from being
-  treated as live even though read-only on-chain calls prove the intended contract-custody shape.
+- No backend/factory selector skew was observable at block 48663660: the factory implementation
+  carries the ten-argument launch selector. This is a read-only bytecode fact. Whether a
+  /atoken/launch application now succeeds is NOT PROVEN — WRITE ACTION REQUIRED, so a fresh invoice
+  CVA still may not be treated as live.
+- The probed `canTransfer` tuples were rejected with `ComplianceFailed(address)`, consistent with a
+  compliance rule that is not satisfied. Mordant fails closed correctly. No settlement path can
+  complete for those participants until a compliant A-Pass profile is identified with Cleanverse:
+  BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED.
 - One global pending commitment can be used by an allowlisted facility for bounded griefing or to
   delay another reveal. Production needs quotas, a caution or parallel per-facility commitments.
 - Factory ownership can change facility membership and thereby censor future reveals or freeze a
