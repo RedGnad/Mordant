@@ -96,6 +96,7 @@ contract MordantAccountingInvariant is StdInvariant, Test {
         factory.setCvaAdapter(address(adapter), true);
         factory.setSettlementToken(address(ausdc), true);
         vault = _deployVault(factory);
+        eligibility.setIdentityValid(address(vault), true);
         _activateAndFund();
 
         MordantVaultHandler handler = new MordantVaultHandler(vault, holderA, holderB);
@@ -313,6 +314,7 @@ contract MordantEntitledInvariant is StdInvariant, Test {
         factory.setCvaAdapter(address(adapter), true);
         factory.setSettlementToken(address(ausdc), true);
         vault = _deployVault(factory);
+        eligibility.setIdentityValid(address(vault), true);
         _activateAndFinalizeConflict();
         _fundFaceValue();
 

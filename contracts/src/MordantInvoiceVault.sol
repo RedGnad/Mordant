@@ -118,6 +118,8 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     error InvalidAmount();
     error InvalidAllocation();
     error InsufficientCva();
+    error CvaNotReady();
+    error SettlementNotReady();
     error AccountingMismatch();
     error NothingToClaim();
 
@@ -153,8 +155,10 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     event BondReturned(address indexed originator, uint256 amount);
     event RedemptionFunded(address indexed payer, uint256 amount);
     event PartialRedemptionEscrowRefunded(address indexed buyer, uint256 amount);
+    event SettlementCreditAccrued(address indexed account, uint256 amount);
+    event SettlementCreditClaimed(address indexed account, uint256 amount);
     event Redeemed(address indexed holder, uint256 units, uint256 amount);
-    event DefaultCvaReleasePathSelected();
+    event DefaultCvaReleaseStarted();
     event DefaultCvaReleased(address indexed holder, uint256 units);
     event DefaultMarked();
 
@@ -211,7 +215,10 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
 
     uint256 public redemptionEscrow;
     uint256 public redeemedFace;
+    uint256 public cvaReleasedFace;
     bool public defaultCvaReleaseStarted;
+    uint256 public settlementCreditTotal;
+    mapping(address account => uint256 amount) public settlementCredit;
 
     constructor(Init memory init) ERC20("Mordant Invoice Units", "mINV") EIP712("Mordant", "1") {
         if (
@@ -221,9 +228,10 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
                 || init.buyer == address(0) || init.originatorTreasury == address(0)
                 || init.initialOriginatorSigner == address(0) || init.initialUnits == 0
                 || init.initialUnits > type(uint208).max || init.advanceAmount == 0
-                || init.faceValue < init.advanceAmount || init.bondBps == 0
-                || init.bondBps >= 10_000 || init.protectionEnd <= block.timestamp
-                || init.revealPeriod == 0 || init.curePeriod == 0
+                || init.faceValue < init.advanceAmount || init.faceValue < init.initialUnits
+                || init.bondBps == 0 || init.bondBps >= 10_000
+                || init.protectionEnd <= block.timestamp || init.revealPeriod == 0
+                || init.curePeriod == 0
         ) revert InvalidConfiguration();
 
         factory = IMordantFactory(init.factory);
@@ -339,12 +347,20 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         if (cvaAdapter.asset() != cvaToken || cvaAdapter.issuedSupply() != initialUnits) {
             revert AccountingMismatch();
         }
-        _requireHolder(funder);
+        if (!cvaAdapter.isActivationReady(address(this))) revert CvaNotReady();
+        _requireSettlementIdentity();
+        _requireHolderRole(funder);
 
         uint256 allocated;
         for (uint256 i; i < holders.length; ++i) {
-            _requireHolder(holders[i]);
             if (allocations[i] == 0) revert InvalidAllocation();
+            for (uint256 j; j < i; ++j) {
+                if (holders[i] == holders[j]) revert InvalidAllocation();
+            }
+            _requireHolder(holders[i], allocations[i]);
+            if (!cvaAdapter.isRedemptionReady(address(this), allocations[i])) {
+                revert CvaNotReady();
+            }
             allocated += allocations[i];
         }
         if (allocated != initialUnits) revert InvalidAllocation();
@@ -515,9 +531,9 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         if (protectionState != ProtectionState.Entitled || bondClaimedBy[msg.sender]) {
             revert NothingToClaim();
         }
-        _requireEligible(msg.sender, ROLE_HOLDER);
         uint256 units = balanceAt(msg.sender, entitlementSnapshotSequence);
         if (units == 0) revert NothingToClaim();
+        _requireHolderRole(msg.sender);
 
         uint256 nextClaimedUnits = entitlementClaimedUnits + units;
         if (nextClaimedUnits > entitlementSnapshotSupply) revert AccountingMismatch();
@@ -538,18 +554,20 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     function fundRedemption(uint256 amount) external nonReentrant {
         if (msg.sender != buyer) revert Unauthorized();
         _assertCvaIntegrity();
-        if (defaultCvaReleaseStarted) revert InvalidState();
         if (
             receivableState != ReceivableState.Outstanding
                 && receivableState != ReceivableState.DefaultOutstanding
         ) revert InvalidState();
         if (amount == 0) revert InvalidAmount();
-        uint256 remainingUnfundedLiability = faceValue - redeemedFace - redemptionEscrow;
+        uint256 remainingUnfundedLiability =
+            faceValue - redeemedFace - cvaReleasedFace - redemptionEscrow;
         if (
             receivableState == ReceivableState.DefaultOutstanding
                 && amount != remainingUnfundedLiability
         ) revert InvalidAmount();
         if (amount > remainingUnfundedLiability) revert InvalidAmount();
+        if (!cvaAdapter.isCashRedemptionReady(address(this))) revert CvaNotReady();
+        _requireSettlementIdentity();
         uint256 beforeVault = settlementToken.balanceOf(address(this));
         settlementToken.safeTransferFrom(msg.sender, address(this), amount);
         if (settlementToken.balanceOf(address(this)) - beforeVault != amount) {
@@ -560,19 +578,26 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         emit RedemptionFunded(msg.sender, amount);
     }
 
+    function claimSettlementCredit() external nonReentrant returns (uint256 amount) {
+        amount = settlementCredit[msg.sender];
+        if (amount == 0) revert NothingToClaim();
+        settlementCredit[msg.sender] = 0;
+        settlementCreditTotal -= amount;
+        _transferExact(settlementToken, msg.sender, amount);
+        _assertAccounting();
+        emit SettlementCreditClaimed(msg.sender, amount);
+    }
+
     function redeem(uint256 units) external nonReentrant returns (uint256 amount) {
-        if (defaultCvaReleaseStarted) revert InvalidState();
         if (
             receivableState != ReceivableState.Outstanding
                 && receivableState != ReceivableState.DefaultOutstanding
         ) revert InvalidState();
-        _requireHolder(msg.sender);
         uint256 supplyBefore = totalSupply();
         if (units == 0 || balanceOf(msg.sender) < units) revert InvalidAmount();
+        _requireHolderRole(msg.sender);
 
-        amount = units == supplyBefore
-            ? faceValue - redeemedFace
-            : Math.mulDiv(faceValue, units, initialUnits);
+        amount = _faceAmount(units, supplyBefore);
         if (redemptionEscrow < amount || cvaAccounted < units) revert InvalidAmount();
 
         uint256 cvaBefore = cvaAdapter.availableBalance(address(this));
@@ -586,6 +611,7 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         redeemedFace += amount;
         _burn(msg.sender, units);
         _transferExact(settlementToken, msg.sender, amount);
+        _refundExcessRedemptionEscrow();
 
         if (protectionState == ProtectionState.Active) {
             _releaseExcessBond();
@@ -623,22 +649,27 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
 
     function releaseDefaultCva(uint256 units) external nonReentrant {
         if (receivableState != ReceivableState.DefaultOutstanding) revert InvalidState();
-        _requireHolder(msg.sender);
-        if (units == 0 || balanceOf(msg.sender) < units || cvaAccounted < units) {
+        uint256 holderBalance = balanceOf(msg.sender);
+        if (units == 0 || holderBalance < units || cvaAccounted < units) {
             revert InvalidAmount();
         }
+        // Probe the holder's complete remaining claim, not only this release delta. Policies
+        // that cap `current CVA balance + transfer amount` can therefore reject a partial
+        // release that would strand the holder's residual receipt balance.
+        _requireHolder(msg.sender, holderBalance);
+        uint256 supplyBefore = totalSupply();
+        uint256 holderCashAmount = _faceAmount(holderBalance, supplyBefore);
+        if (
+            redemptionEscrow >= holderCashAmount
+                && cvaAdapter.isRedemptionReady(address(this), holderBalance)
+                && cviVerifier.isAssetTransferAllowed(
+                    address(settlementToken), address(this), msg.sender, holderCashAmount
+                )
+        ) revert InvalidState();
+        uint256 releasedFace = _faceAmount(units, supplyBefore);
         if (!defaultCvaReleaseStarted) {
-            uint256 remainingCashLiability = faceValue - redeemedFace;
-            uint256 partialEscrow = redemptionEscrow;
-            if (partialEscrow == remainingCashLiability) revert InvalidState();
-
-            redemptionEscrow = 0;
             defaultCvaReleaseStarted = true;
-            if (partialEscrow != 0) {
-                _transferExact(settlementToken, buyer, partialEscrow);
-                emit PartialRedemptionEscrowRefunded(buyer, partialEscrow);
-            }
-            emit DefaultCvaReleasePathSelected();
+            emit DefaultCvaReleaseStarted();
         }
 
         uint256 cvaBefore = cvaAdapter.availableBalance(address(this));
@@ -647,7 +678,10 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         if (cvaBefore < cvaAfter || cvaBefore - cvaAfter != units) revert AccountingMismatch();
 
         cvaAccounted -= units;
+        cvaReleasedFace += releasedFace;
         _burn(msg.sender, units);
+        _refundExcessRedemptionEscrow();
+        if (totalSupply() == 0) receivableState = ReceivableState.Redeemed;
         _assertAccounting();
         emit DefaultCvaReleased(msg.sender, units);
     }
@@ -655,6 +689,20 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     function requiredBond(uint256 supply) public view returns (uint256 result) {
         result = Math.mulDiv(initialBond, supply, initialUnits);
         if (mulmod(initialBond, supply, initialUnits) != 0) ++result;
+    }
+
+    function _faceAmount(uint256 units, uint256 supplyBefore) private view returns (uint256) {
+        if (units == supplyBefore) return faceValue - redeemedFace - cvaReleasedFace;
+        return Math.mulDiv(faceValue, units, initialUnits);
+    }
+
+    function _refundExcessRedemptionEscrow() private {
+        uint256 remainingCashLiability = faceValue - redeemedFace - cvaReleasedFace;
+        if (redemptionEscrow <= remainingCashLiability) return;
+        uint256 refund = redemptionEscrow - remainingCashLiability;
+        redemptionEscrow = remainingCashLiability;
+        _creditSettlement(buyer, refund);
+        emit PartialRedemptionEscrowRefunded(buyer, refund);
     }
 
     function balanceAt(address holder, uint48 atSequence) public view returns (uint256) {
@@ -668,7 +716,8 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
     }
 
     function accountedSettlementBalance() public view returns (uint256) {
-        return bondLocked + (entitlementAllocated - entitlementClaimed) + redemptionEscrow;
+        return bondLocked + (entitlementAllocated - entitlementClaimed) + redemptionEscrow
+            + settlementCreditTotal;
     }
 
     function assertAccounting() external view {
@@ -702,12 +751,26 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         if (!cviVerifier.isEligible(account, role)) revert Ineligible(account, role);
     }
 
-    function _requireHolder(address account) private view {
+    function _requireHolder(address account, uint256 amount) private view {
+        _requireHolderRole(account);
+        if (!cviVerifier.isEligibleForAsset(
+                account, ROLE_HOLDER, cvaToken, address(cvaAdapter), amount
+            )) revert Ineligible(account, ROLE_HOLDER);
+    }
+
+    function _requireHolderRole(address account) private view {
         _requireEligible(account, ROLE_HOLDER);
         if (
             account == address(0) || account == buyer || account == originatorTreasury
-                || authorizedOriginator[account] || factory.isFacility(account)
+                || account == address(this) || account == address(cvaAdapter) || account == cvaToken
+                || account == address(settlementToken) || account == address(factory)
+                || account == address(cviVerifier) || authorizedOriginator[account]
+                || factory.isFacility(account)
         ) revert Ineligible(account, ROLE_HOLDER);
+    }
+
+    function _requireSettlementIdentity() private view {
+        if (!cviVerifier.hasValidIdentity(address(this))) revert SettlementNotReady();
     }
 
     function _releaseExcessBond() private {
@@ -717,7 +780,7 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         uint256 amount = bondLocked - target;
         bondLocked = target;
         bondReturned += amount;
-        _transferExact(settlementToken, originatorTreasury, amount);
+        _creditSettlement(originatorTreasury, amount);
         emit BondReturned(originatorTreasury, amount);
     }
 
@@ -725,12 +788,23 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
         uint256 amount = bondLocked;
         bondLocked = 0;
         bondReturned += amount;
-        if (amount != 0) _transferExact(settlementToken, originatorTreasury, amount);
+        _creditSettlement(originatorTreasury, amount);
         emit BondReturned(originatorTreasury, amount);
+    }
+
+    function _creditSettlement(address account, uint256 amount) private {
+        if (amount == 0) return;
+        settlementCredit[account] += amount;
+        settlementCreditTotal += amount;
+        emit SettlementCreditAccrued(account, amount);
     }
 
     function _transferExact(IERC20 token, address recipient, uint256 amount) private {
         if (amount == 0) return;
+        _requireSettlementIdentity();
+        if (!cviVerifier.isAssetTransferAllowed(address(token), address(this), recipient, amount)) {
+            revert SettlementNotReady();
+        }
         uint256 beforeRecipient = token.balanceOf(recipient);
         token.safeTransfer(recipient, amount);
         if (token.balanceOf(recipient) - beforeRecipient != amount) revert AccountingMismatch();
@@ -746,10 +820,10 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
             entitlementClaimed > entitlementAllocated
                 || entitlementClaimedUnits > entitlementSnapshotSupply
         ) revert AccountingMismatch();
+        if (redeemedFace + cvaReleasedFace > faceValue) revert AccountingMismatch();
         if (settlementToken.balanceOf(address(this)) < accountedSettlementBalance()) {
             revert AccountingMismatch();
         }
-        if (defaultCvaReleaseStarted && redemptionEscrow != 0) revert AccountingMismatch();
     }
 
     function _assertCvaIntegrity() private view {
@@ -767,12 +841,17 @@ contract MordantInvoiceVault is ERC20, EIP712, ReentrancyGuard {
                 receivableState != ReceivableState.Outstanding
                     && receivableState != ReceivableState.DefaultOutstanding
             ) revert InvalidState();
-            _requireHolder(from);
-            _requireHolder(to);
+            _requireHolderRole(from);
+            uint256 recipientClaim = balanceOf(to);
+            if (from != to) recipientClaim += value;
+            _requireHolder(to, recipientClaim);
+            if (!cviVerifier.isAssetTransferAllowed(cvaToken, from, to, value)) {
+                revert Ineligible(to, ROLE_HOLDER);
+            }
         } else if (to != address(0)) {
-            _requireHolder(to);
+            _requireHolder(to, value);
         } else if (from != address(0)) {
-            _requireHolder(from);
+            _requireHolderRole(from);
         }
 
         if (sequence == type(uint48).max) revert InvalidState();

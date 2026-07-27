@@ -34,6 +34,18 @@ contract MockCvaAdapter is ICvaAdapter {
         return custodyCredit[vault];
     }
 
+    function isActivationReady(address vault) external view returns (bool) {
+        return custodyCredit[vault] != 0;
+    }
+
+    function isCashRedemptionReady(address vault) external view returns (bool) {
+        return custodyCredit[vault] != 0;
+    }
+
+    function isRedemptionReady(address vault, uint256 units) external view returns (bool) {
+        return units != 0 && custodyCredit[vault] >= units;
+    }
+
     /// @notice Test-only stand-in for sponsor-approved custody crediting a vault.
     function creditVault(address vault, uint256 units) external {
         uint256 beforeBalance = token.balanceOf(address(this));

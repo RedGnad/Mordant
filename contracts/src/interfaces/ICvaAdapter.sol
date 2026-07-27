@@ -14,6 +14,17 @@ interface ICvaAdapter {
     /// @dev The vault itself is not assumed to be eligible to custody the A-Token.
     function availableBalance(address vault) external view returns (uint256);
 
+    /// @notice Base custody, identity, role, supply and policy configuration is live.
+    /// @dev The vault separately checks every initial allocation through `isRedemptionReady`.
+    function isActivationReady(address vault) external view returns (bool);
+
+    /// @notice Base custody, identity, burn role and policy configuration can accept cash.
+    /// @dev Exact holder lots are checked during redemption and default-path selection.
+    function isCashRedemptionReady(address vault) external view returns (bool);
+
+    /// @notice True when this exact receipt amount can currently be burned for cash redemption.
+    function isRedemptionReady(address vault, uint256 units) external view returns (bool);
+
     function consumeOnRedemption(address vault, uint256 units) external;
 
     function releaseOnDefault(address vault, address holder, uint256 units) external;

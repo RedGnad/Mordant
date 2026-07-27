@@ -147,6 +147,16 @@ contract MordantInvoiceVaultTest is Test {
         vault.assertAccounting();
     }
 
+    function testCashBondClaimDoesNotDependOnCvaDeliveryEligibility() public {
+        _activateSixtyForty(vault);
+        _finalizeConflict(vault, 2);
+        eligibility.setAssetEligible(holderA, 4, false);
+
+        vm.prank(holderA);
+        assertEq(vault.claimBond(), 6 * ONE);
+        assertEq(ausdc.balanceOf(holderA), 6 * ONE);
+    }
+
     function testCleanRedemptionReturnsAmortizedBond() public {
         _activateSixtyForty(vault);
         _fundRedemption(FACE);
@@ -160,6 +170,8 @@ contract MordantInvoiceVaultTest is Test {
         vault.redeem(40 * ONE);
         assertEq(vault.bondLocked(), 0);
         assertEq(vault.bondReturned(), 10 * ONE);
+        vm.prank(originator);
+        assertEq(vault.claimSettlementCredit(), 10 * ONE);
         assertEq(ausdc.balanceOf(originator), ADVANCE);
         assertEq(uint256(vault.protectionState()), 5);
         assertEq(uint256(vault.receivableState()), 2);
@@ -306,6 +318,8 @@ contract MordantInvoiceVaultTest is Test {
         vm.warp(block.timestamp + REVEAL_PERIOD + 1);
         vault.expireCommit();
         vault.closeProtection();
+        vm.prank(originator);
+        vault.claimSettlementCredit();
         assertEq(ausdc.balanceOf(originator), ADVANCE);
         assertEq(uint256(vault.receivableState()), 3);
     }
@@ -315,6 +329,8 @@ contract MordantInvoiceVaultTest is Test {
         vm.warp(protectionEnd + 1);
         vault.closeProtection();
 
+        vm.prank(originator);
+        vault.claimSettlementCredit();
         assertEq(ausdc.balanceOf(originator), ADVANCE);
         assertEq(uint256(vault.receivableState()), 3);
         vm.prank(holderA);
@@ -324,11 +340,11 @@ contract MordantInvoiceVaultTest is Test {
         ausdc.mint(buyer, FACE);
         vm.startPrank(buyer);
         ausdc.approve(address(vault), FACE);
-        vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
+        vm.expectRevert(MordantInvoiceVault.InvalidAmount.selector);
         vault.fundRedemption(ONE);
         vm.stopPrank();
         vm.prank(holderB);
-        vm.expectRevert(MordantInvoiceVault.InvalidState.selector);
+        vm.expectRevert(MordantInvoiceVault.InvalidAmount.selector);
         vault.redeem(ONE);
 
         vm.prank(holderA);
@@ -427,8 +443,14 @@ contract MordantInvoiceVaultTest is Test {
         vault.closeProtection();
         vm.prank(holderA);
         vault.releaseDefaultCva(ONE);
+        vm.prank(holderA);
+        vault.releaseDefaultCva(59 * ONE);
+        vm.prank(holderB);
+        vault.releaseDefaultCva(40 * ONE);
 
         assertEq(vault.redemptionEscrow(), 0);
+        vm.prank(buyer);
+        vault.claimSettlementCredit();
         assertEq(ausdc.balanceOf(buyer), 1);
         assertTrue(vault.defaultCvaReleaseStarted());
     }
@@ -467,8 +489,12 @@ contract MordantInvoiceVaultTest is Test {
         assertEq(ausdc.balanceOf(buyer), 0);
 
         vm.prank(holderB);
-        vault.releaseDefaultCva(ONE);
+        vault.releaseDefaultCva(40 * ONE);
+        vm.prank(holderA);
+        vault.releaseDefaultCva(10 * ONE);
         assertEq(vault.redemptionEscrow(), 0);
+        vm.prank(buyer);
+        vault.claimSettlementCredit();
         assertEq(ausdc.balanceOf(buyer), 5 * ONE);
         assertTrue(vault.defaultCvaReleaseStarted());
     }
@@ -523,6 +549,18 @@ contract MordantInvoiceVaultTest is Test {
         config.settlementToken = address(unapprovedSettlement);
         vm.prank(buyer);
         vm.expectRevert(MordantFactory.NotApproved.selector);
+        factory.createInvoiceVault(config);
+    }
+
+    function testFactoryRejectsMoreReceiptUnitsThanAtomicFaceValue() public {
+        MockERC20 oversizedCva = new MockERC20("Oversized invoice", "OVERSIZED", 6);
+        MockCvaAdapter oversizedAdapter = new MockCvaAdapter(oversizedCva);
+        factory.setCvaAdapter(address(oversizedAdapter), true);
+        MordantFactory.InvoiceConfig memory config =
+            _config(keccak256("zero-value-atomic-lot"), oversizedAdapter, FACE + 1);
+
+        vm.prank(buyer);
+        vm.expectRevert(MordantInvoiceVault.InvalidConfiguration.selector);
         factory.createInvoiceVault(config);
     }
 
@@ -655,6 +693,7 @@ contract MordantInvoiceVaultTest is Test {
         MordantFactory.InvoiceConfig memory config = _config(root, adapter, units);
         vm.prank(buyer);
         created = factory.createInvoiceVault(config);
+        eligibility.setIdentityValid(address(created), true);
     }
 
     function _config(bytes32 root, MockCvaAdapter adapter, uint256 units)
