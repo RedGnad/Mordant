@@ -32,6 +32,7 @@ import {
   SecretLeakError,
   assertNoSecretLeak,
   findSecretLeaks,
+  fingerprintValue,
   redactSecrets,
 } from "./redaction";
 import {
@@ -40,7 +41,7 @@ import {
   createReadOnlyRpcClient,
 } from "./rpc";
 import { runCleanverseMonadEvidence } from "./run";
-import { ALLOWLIST_FILE, loadAllowlist } from "./secret-scan";
+import { ALLOWLIST_FILE, describeFindings, isFindingAllowed, loadAllowlist } from "./secret-scan";
 
 const DOCUMENTATION_UNAVAILABLE = Object.freeze({
   protectedDocsReachable: false,
@@ -52,7 +53,7 @@ const DOCUMENTATION_UNAVAILABLE = Object.freeze({
 function baseRunOptions() {
   return {
     mode: "fixture" as const,
-    generatedAt: "2026-07-27T00:00:00.000Z",
+    runStartedAt: "2026-07-27T00:00:00.000Z",
     repositoryCommit: "test-commit",
     documentation: DOCUMENTATION_UNAVAILABLE,
   };
@@ -360,19 +361,105 @@ test("a write-dependent conclusion is reported as NOT PROVEN, never as live", as
 
 // --- report schema ---------------------------------------------------------------------------
 
-test("the report schema rejects an unknown classification", () => {
-  assert.throws(() => parseEvidenceReport({
+function reportSkeleton(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
     schemaVersion: 1,
-    generatedAt: "now",
+    runStartedAt: "2026-07-28T10:00:00.000Z",
+    generatedAt: "2026-07-28T10:00:05.000Z",
     repositoryCommit: "abc",
     mode: "fixture",
-    network: { name: "monad-testnet", chainId: 10_143, blockNumber: "1", blockHash: "0x1" },
+    documentationSource: {
+      sourceKind: "unavailable",
+      documentationVersion: "x",
+      documentationVersionSource: "y",
+      documentationConsultedAt: null,
+      liveFetchedByEvidenceGate: false,
+    },
+    network: {
+      name: "monad-testnet",
+      chainId: 10_143,
+      blockNumber: "1",
+      blockHash: "0x1",
+      onchainObservedAt: "2026-07-28T10:00:02.000Z",
+    },
     documentation: [],
     onchainObservations: [],
     comparisons: [],
-    conclusions: [{ statement: "x", classification: "TOTALLY LIVE", basis: "y" }],
+    conclusions: [],
     missingEvidence: [],
-  }), /failed validation/);
+    ...overrides,
+  };
+}
+
+// --- artifact chronology ---------------------------------------------------------------------
+
+test("a coherent chronology is accepted", () => {
+  const report = parseEvidenceReport(reportSkeleton());
+  const observed = report.network.onchainObservedAt;
+  assert.ok(observed !== null);
+  assert.ok(Date.parse(report.runStartedAt) <= Date.parse(observed));
+  assert.ok(Date.parse(observed) <= Date.parse(report.generatedAt));
+});
+
+// A field named generatedAt must never precede the evidence the artifact carries.
+test("the schema rejects generatedAt before runStartedAt", () => {
+  assert.throws(
+    () => parseEvidenceReport(reportSkeleton({
+      generatedAt: "2026-07-28T09:59:00.000Z",
+      network: { ...(reportSkeleton().network as object), onchainObservedAt: null },
+    })),
+    /generatedAt precedes runStartedAt/,
+  );
+});
+
+test("the schema rejects generatedAt before onchainObservedAt", () => {
+  assert.throws(
+    () => parseEvidenceReport(reportSkeleton({ generatedAt: "2026-07-28T10:00:01.000Z" })),
+    /generatedAt precedes onchainObservedAt/,
+  );
+});
+
+test("the schema rejects onchainObservedAt before runStartedAt", () => {
+  assert.throws(
+    () => parseEvidenceReport(reportSkeleton({
+      network: {
+        ...(reportSkeleton().network as object),
+        onchainObservedAt: "2026-07-28T09:00:00.000Z",
+      },
+    })),
+    /onchainObservedAt precedes runStartedAt/,
+  );
+});
+
+test("the schema rejects an invalid instant", () => {
+  assert.throws(
+    () => parseEvidenceReport(reportSkeleton({ generatedAt: "not-a-date" })),
+    /valid ISO-8601 instant/,
+  );
+});
+
+test("a run with no on-chain observation reports a null instant", () => {
+  const report = parseEvidenceReport(reportSkeleton({
+    network: { ...(reportSkeleton().network as object), onchainObservedAt: null },
+  }));
+  assert.equal(report.network.onchainObservedAt, null);
+});
+
+test("a fixture run records no on-chain observation instant, a live run would", async () => {
+  const report = await runCleanverseMonadEvidence({
+    ...baseRunOptions(),
+    transport: createFixtureTransport(),
+  });
+  assert.equal(report.mode, "fixture");
+  assert.equal(report.network.onchainObservedAt, null);
+  // generatedAt is stamped at serialization, so it always follows the run start.
+  assert.ok(Date.parse(report.generatedAt) >= Date.parse(report.runStartedAt));
+});
+
+test("the report schema rejects an unknown classification", () => {
+  assert.throws(() => parseEvidenceReport(reportSkeleton({
+    conclusions: [{ statement: "x", classification: "TOTALLY LIVE", basis: "y" }],
+  })), /failed validation/);
 });
 
 // --- secret handling -------------------------------------------------------------------------
@@ -484,8 +571,9 @@ test("the report separates when it was rendered, observed and consulted", async 
   assert.equal(report.documentationSource.documentationConsultedAt, "2026-07-27");
   // The gate has no credential and must never imply it fetched the gated page.
   assert.equal(report.documentationSource.liveFetchedByEvidenceGate, false);
-  assert.ok(report.network.onchainObservedAt.length > 0);
-  assert.notEqual(report.network.onchainObservedAt, report.documentationSource.documentationConsultedAt);
+  // A fixture run reads a recorded chain, so it reports no on-chain observation instant.
+  assert.equal(report.network.onchainObservedAt, null);
+  assert.notEqual(report.generatedAt, report.documentationSource.documentationConsultedAt);
 });
 
 test("without an operator attestation the documentation source is unavailable", async () => {
@@ -552,20 +640,179 @@ test("the ComplianceFailed conclusion stays bounded to the probed tuples", async
   assert.match(conclusion.basis, /holding a valid A-Pass suffices/);
 });
 
-test("an allowlist entry without a stated reason is ignored", () => {
-  const directory = mkdtempSync(join(tmpdir(), "mordant-scan-"));
-  writeFileSync(join(directory, ALLOWLIST_FILE), JSON.stringify({
-    allow: [
-      { path: ".env.example", kind: "cleanverse-api-key", reason: "documented placeholder" },
-      { path: "src/secret.ts", kind: "cleanverse-api-key", reason: "   " },
-      { path: "src/other.ts", kind: "cleanverse-api-key" },
-    ],
-  }));
+// --- allowlist cannot be widened ---------------------------------------------------------------
 
-  const entries = loadAllowlist(directory);
-  assert.equal(entries.length, 1, "only the entry that states a reason may suppress a finding");
-  assert.equal(entries[0].path, ".env.example");
-  assert.equal(loadAllowlist(join(directory, "missing")).length, 0);
+const VALID_FINGERPRINT = `sha256:${"a".repeat(64)}`;
+
+function writeAllowlist(entries: readonly unknown[]): string {
+  const directory = mkdtempSync(join(tmpdir(), "mordant-scan-"));
+  writeFileSync(join(directory, ALLOWLIST_FILE), JSON.stringify({ allow: entries }));
+  return directory;
+}
+
+function validEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    path: "src/lib/evidence/evidence.test.ts",
+    ruleId: "cleanverse-api-key",
+    matchFingerprint: VALID_FINGERPRINT,
+    reason: "Synthetic fixture asserting detection and redaction",
+    reviewedAt: "2026-07-28",
+    ...overrides,
+  };
+}
+
+test("a wildcard allowlist entry is rejected", () => {
+  const directory = writeAllowlist([
+    validEntry({ ruleId: "*" }),
+    validEntry({ path: "src/lib/evidence/*" }),
+    validEntry({ path: "*" }),
+  ]);
+  const { entries, rejected } = loadAllowlist(directory);
+  assert.equal(entries.length, 0, "no wildcard may ever suppress a finding");
+  assert.equal(rejected.length, 3);
+  for (const entry of rejected) {
+    assert.match(entry.problem, /wildcards are not allowed/);
+  }
+});
+
+test("a whole-directory allowlist entry is rejected", () => {
+  const { entries, rejected } = loadAllowlist(writeAllowlist([
+    validEntry({ path: "src/lib/evidence/" }),
+  ]));
+  assert.equal(entries.length, 0);
+  assert.match(rejected[0].problem, /must name a file/);
+});
+
+test("an allowlist entry without a stated reason is rejected", () => {
+  const { entries, rejected } = loadAllowlist(writeAllowlist([
+    validEntry({ reason: "   " }),
+    validEntry({ reason: undefined }),
+  ]));
+  assert.equal(entries.length, 0);
+  for (const entry of rejected) {
+    assert.match(entry.problem, /"reason" must be a non-empty string/);
+  }
+});
+
+test("an allowlist entry without a usable fingerprint or review date is rejected", () => {
+  const { entries, rejected } = loadAllowlist(writeAllowlist([
+    validEntry({ matchFingerprint: "sha256:short" }),
+    validEntry({ matchFingerprint: undefined }),
+    validEntry({ reviewedAt: "yesterday" }),
+    validEntry({ reviewedAt: "2026-13-45" }),
+  ]));
+  assert.equal(entries.length, 0);
+  assert.equal(rejected.length, 4);
+});
+
+test("a suppression with the wrong fingerprint does not apply", () => {
+  const finding = {
+    file: "a.ts",
+    leak: { kind: "cleanverse-api-key" as const, location: "line 1", fingerprint: VALID_FINGERPRINT },
+  };
+  const matching = [validEntry({ path: "a.ts" })] as never;
+  const mismatched = [validEntry({ path: "a.ts", matchFingerprint: `sha256:${"b".repeat(64)}` })] as never;
+  assert.equal(isFindingAllowed(finding, matching), true);
+  assert.equal(isFindingAllowed(finding, mismatched), false, "a different digest must not suppress");
+});
+
+// The whole point of binding to content: an edit invalidates the suppression.
+test("changing a single character invalidates a suppression", () => {
+  const original = "CLEANVERSE_API_KEY=\"aGVsbG93b3JsZGtleTEyMzQ1Ng==\"";
+  const edited = "CLEANVERSE_API_KEY=\"aGVsbG93b3JsZGtleTEyMzQ1Nh==\"";
+
+  const before = findSecretLeaks(original)[0];
+  const after = findSecretLeaks(edited)[0];
+  assert.ok(before !== undefined && after !== undefined);
+  assert.notEqual(before.fingerprint, after.fingerprint);
+
+  const allowlist = [validEntry({ path: "x.env", matchFingerprint: before.fingerprint })] as never;
+  assert.equal(isFindingAllowed({ file: "x.env", leak: before }, allowlist), true);
+  assert.equal(
+    isFindingAllowed({ file: "x.env", leak: after }, allowlist),
+    false,
+    "a one-character edit must reopen the finding",
+  );
+});
+
+test("a real credential added elsewhere in an allowlisted file is still detected", () => {
+  // Mirrors a secret pasted into evidence.test.ts next to the synthetic fixtures.
+  const pasted = findSecretLeaks('CLEANVERSE_API_KEY: "Zm9yZ290dGVucmVhbGtleXZhbHVlMTIz"');
+  assert.equal(pasted.length, 1);
+  const allowlist = [
+    validEntry({ matchFingerprint: fingerprintValue("some-other-fixture-value") }),
+  ] as never;
+  assert.equal(
+    isFindingAllowed(
+      { file: "src/lib/evidence/evidence.test.ts", leak: pasted[0] },
+      allowlist,
+    ),
+    false,
+  );
+});
+
+test("a provider key added to a fixture RPC URL is detected", () => {
+  const leaks = findSecretLeaks(
+    'rpc_url: "https://eth-mainnet.g.alchemy.com/v2/RealLookingProviderKey123456"',
+  );
+  assert.ok(leaks.some((leak) => leak.kind === "provider-key-in-rpc-url"));
+});
+
+// --- placeholder rules -------------------------------------------------------------------------
+
+test("the current .env.example placeholders are accepted", () => {
+  for (const line of [
+    "CLEANVERSE_API_KEY=replace-with-rotated-base64-sandbox-key",
+    "CLEANVERSE_API_KEY=replace-with-sandbox-api-id",
+    "CLEANVERSE_API_KEY=your-api-key-here",
+    "DEPLOYER_PRIVATE_KEY=",
+    "CLEANVERSE_API_KEY=<SANDBOX KEY>",
+  ]) {
+    assert.equal(findSecretLeaks(line).length, 0, line.split("=")[0]);
+  }
+});
+
+test("replacing a placeholder with a realistic credential is detected", () => {
+  for (const line of [
+    "CLEANVERSE_API_KEY=aGVsbG93b3JsZGtleTEyMzQ1Njc4OTA=",
+    `DEPLOYER_PRIVATE_KEY=0x${"7f".repeat(32)}`,
+    "CLEANVERSE_DOCS_ACCESS_CODE=vHp3FyNx",
+  ]) {
+    assert.ok(findSecretLeaks(line).length > 0, `undetected: ${line.split("=")[0]}`);
+  }
+});
+
+// A value is a placeholder because of its shape, never because of the word it contains.
+test("a realistic credential merely containing a placeholder word is still detected", () => {
+  for (const line of [
+    "CLEANVERSE_API_KEY=aGVsbG9leGFtcGxlS2V5MTIzNDU2Nzg5MA==",
+    "CLEANVERSE_API_KEY=prod-your-live-key-8f3a91c4d7",
+  ]) {
+    assert.ok(findSecretLeaks(line).length > 0, `undetected: ${line}`);
+  }
+});
+
+test("scanner output never reprints the detected value", () => {
+  const secret = "aGVsbG93b3JsZGtleTEyMzQ1Ng==";
+  const leaks = findSecretLeaks(`CLEANVERSE_API_KEY="${secret}"`);
+  const rendered = describeFindings(leaks.map((leak) => ({ file: "x.env", leak })));
+
+  assert.ok(rendered.length > 0);
+  assert.doesNotMatch(rendered, new RegExp(secret.replace(/[+/=]/g, "\\$&")));
+  assert.match(rendered, /cleanverse-api-key/);
+  assert.match(rendered, /sha256:[0-9a-f]{64}/);
+});
+
+test("redaction never turns a disallowed finding into an allowed one", () => {
+  const leak = findSecretLeaks('CLEANVERSE_API_KEY="aGVsbG93b3JsZGtleTEyMzQ1Ng=="')[0];
+  const allowlist = [validEntry({ path: "x.env", matchFingerprint: leak.fingerprint })] as never;
+
+  // The redacted form carries no finding at all, so it can never satisfy a suppression either.
+  const redactedLeaks = findSecretLeaks(redactSecrets('CLEANVERSE_API_KEY="aGVsbG93b3JsZGtleTEyMzQ1Ng=="'));
+  assert.equal(redactedLeaks.length, 0);
+
+  const other = findSecretLeaks('CLEANVERSE_API_KEY="b3RoZXJyZWFsa2V5dmFsdWUxMjM0NTY="')[0];
+  assert.equal(isFindingAllowed({ file: "x.env", leak: other }, allowlist), false);
 });
 
 test("generated artifacts contain no secret pattern and no session URL", async () => {

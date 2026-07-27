@@ -71,7 +71,7 @@
 A disposable Monad fork proves that a contract with its own A-Pass can pass the deployed policy and
 that the current `MINTER_ROLE` can mint and burn. A separate read-only live check proves that
 `policy()` is callable and that `canTransfer(token, from, to, amount)` is routable. It does **not**
-prove the policy accepts anyone: at block 48663660 the probed tuples were rejected with
+prove the policy accepts anyone: at block 48667706 the probed tuples were rejected with
 `ComplianceFailed(address)`, consistent with an unsatisfied compliance rule, which Mordant reads as
 a refusal. The
 runtime CVA guard passes the complete position the holder would need to receive: the initial

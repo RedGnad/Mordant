@@ -130,6 +130,7 @@ async function probeDocumentation(
 }
 
 async function main(): Promise<number> {
+  const runStartedAt = new Date().toISOString();
   const options = parseArguments(process.argv.slice(2));
 
   const rpcUrl = options.rpcUrl
@@ -158,7 +159,7 @@ async function main(): Promise<number> {
   const report = await runCleanverseMonadEvidence({
     transport,
     mode: options.mode,
-    generatedAt: new Date().toISOString(),
+    runStartedAt,
     repositoryCommit: resolveRepositoryCommit(),
     documentation: await probeDocumentation(options.mode, options.docsConsultedAt),
     targets,

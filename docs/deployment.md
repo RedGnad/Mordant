@@ -120,9 +120,9 @@ business facts; an ordinary transaction receipt is not the final operational che
 Never reuse the synthetic mocks or prebuild keys for the judged deployment.
 
 This runbook is currently externally blocked. Re-measured on 27 July 2026 at Monad testnet block
-48663660 (`pnpm evidence:cleanverse --live`, artifacts in `docs/evidence/`):
+48667706 (`pnpm evidence:cleanverse --live`, artifacts in `docs/evidence/`):
 
-- **no backend/factory selector skew was observable at block 48663660**: the Monad proxy resolves to implementation
+- **no backend/factory selector skew was observable at block 48667706**: the Monad proxy resolves to implementation
   `0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea`, whose dispatch table contains the ten-argument
   launch selector `0xeff21872`. Issuance health itself remains untested;
 - live gateway issuance of an A-Pass to a contract address is still unobserved;

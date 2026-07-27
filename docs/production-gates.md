@@ -12,7 +12,7 @@ The hackathon build is testnet-only. Every item below is a hard gate before real
   and upgrade detection;
 - verified exact-tuple settlement-policy prechecks for every outgoing aUSDC transfer, including at
   least one `canTransfer(token, from, to, amount)` tuple the deployed policy actually accepts; as of
-  block 48663660 the probed tuples were rejected with `ComplianceFailed(address)`;
+  block 48667706 the probed tuples were rejected with `ComplianceFailed(address)`;
 - sponsor-confirmed policy class or explicit handling for mutable, history-dependent, non-monotone and
   max-per-transaction rules; do not market preflight as universal policy parity;
 - two independent facilities under one mandatory platform workflow;

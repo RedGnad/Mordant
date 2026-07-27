@@ -88,10 +88,20 @@ export const documentationSourceSchema = z.object({
   liveFetchedByEvidenceGate: z.literal(false),
 }).strict();
 
+const instantSchema = z.string().refine(
+  (value) => !Number.isNaN(Date.parse(value)),
+  "Expected a valid ISO-8601 instant",
+);
+
 export const evidenceReportSchema = z.object({
   schemaVersion: z.literal(1),
-  /** When this artifact was rendered. Distinct from when anything was observed or read. */
-  generatedAt: z.string().min(1),
+  /** When the run began, before any read. The earliest instant in the artifact. */
+  runStartedAt: instantSchema,
+  /**
+   * When this artifact was serialized, after every observation. A field named `generatedAt` must
+   * never precede the observations the artifact contains.
+   */
+  generatedAt: instantSchema,
   repositoryCommit: z.string().min(1),
   mode: z.enum(["live-read-only", "fixture"]),
   documentationSource: documentationSourceSchema,
@@ -100,15 +110,44 @@ export const evidenceReportSchema = z.object({
     chainId: z.number().int(),
     blockNumber: z.string(),
     blockHash: z.string(),
-    /** When the pinned block was read. Distinct from `generatedAt`. */
-    onchainObservedAt: z.string().min(1),
+    /** When the pinned block was read, or null for a run with no on-chain observation. */
+    onchainObservedAt: instantSchema.nullable(),
   }).strict(),
   documentation: z.array(documentationRecordSchema),
   onchainObservations: z.array(onchainObservationSchema),
   comparisons: z.array(comparisonSchema),
   conclusions: z.array(conclusionSchema),
   missingEvidence: z.array(missingEvidenceSchema),
-}).strict();
+}).strict().superRefine((report, context) => {
+  // An artifact whose chronology is impossible cannot be trusted about anything else.
+  const runStarted = Date.parse(report.runStartedAt);
+  const generated = Date.parse(report.generatedAt);
+  const observed = report.network.onchainObservedAt === null
+    ? null
+    : Date.parse(report.network.onchainObservedAt);
+
+  if (generated < runStarted) {
+    context.addIssue({
+      code: "custom",
+      path: ["generatedAt"],
+      message: "generatedAt precedes runStartedAt",
+    });
+  }
+  if (observed !== null && observed < runStarted) {
+    context.addIssue({
+      code: "custom",
+      path: ["network", "onchainObservedAt"],
+      message: "onchainObservedAt precedes runStartedAt",
+    });
+  }
+  if (observed !== null && generated < observed) {
+    context.addIssue({
+      code: "custom",
+      path: ["generatedAt"],
+      message: "generatedAt precedes onchainObservedAt",
+    });
+  }
+});
 
 export type DocumentationRecord = z.output<typeof documentationRecordSchema>;
 export type Comparison = z.output<typeof comparisonSchema>;
@@ -161,8 +200,9 @@ export function renderEvidenceMarkdown(report: EvidenceReport): string {
     `| Field | Value |`,
     `| --- | --- |`,
     `| mode | \`${report.mode}\` |`,
+    `| runStartedAt | ${report.runStartedAt} |`,
+    `| onchainObservedAt | ${report.network.onchainObservedAt ?? "not observed on chain"} |`,
     `| generatedAt | ${report.generatedAt} |`,
-    `| onchainObservedAt | ${report.network.onchainObservedAt} |`,
     `| blockNumber | ${report.network.blockNumber} |`,
     `| blockHash | \`${report.network.blockHash}\` |`,
     `| documentationVersion | ${report.documentationSource.documentationVersion} |`,

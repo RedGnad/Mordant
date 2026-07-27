@@ -110,9 +110,9 @@ integration gate is narrower and not hidden in a mock: the live spike must prove
 both the adapter and vault and the dedicated invoice A-Token lifecycle.
 
 A reproducible read-only evidence run (`pnpm evidence:cleanverse --live`, pinned to Monad testnet
-block 48663660 on 27 July 2026) updates that picture:
+block 48667706 on 27 July 2026) updates that picture:
 
-- **no backend/factory selector skew was observable at block 48663660**: the Monad factory proxy
+- **no backend/factory selector skew was observable at block 48667706**: the Monad factory proxy
   resolves to an implementation carrying the ten-argument launch selector. That is a read-only
   bytecode fact and not a claim that Monad issuance is fixed, which would need a `/atoken/launch`
   application and stays `NOT PROVEN — WRITE ACTION REQUIRED`;

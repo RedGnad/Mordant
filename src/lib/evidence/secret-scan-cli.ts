@@ -8,7 +8,19 @@ import { describeFindings, scanRepositoryForSecrets } from "./secret-scan";
  * silently vanishing from the output.
  */
 const extraPaths = process.argv.slice(2).filter((argument) => argument !== "--");
-const { findings, allowed } = scanRepositoryForSecrets(process.cwd(), extraPaths);
+const { findings, allowed, rejectedAllowlistEntries } =
+  scanRepositoryForSecrets(process.cwd(), extraPaths);
+
+if (rejectedAllowlistEntries.length !== 0) {
+  // An unusable suppression must be loud: silently ignoring it looks identical to it working.
+  process.stderr.write(
+    `${rejectedAllowlistEntries.length} allowlist entry/entries rejected as invalid:\n`
+    + `${rejectedAllowlistEntries
+      .map((entry) => `  allow[${entry.index}]: ${entry.problem}`)
+      .join("\n")}\n`,
+  );
+  process.exitCode = 1;
+}
 
 if (allowed.length !== 0) {
   process.stdout.write(

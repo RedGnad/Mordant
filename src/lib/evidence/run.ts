@@ -26,7 +26,11 @@ export type EvidenceRunMode = "live-read-only" | "fixture";
 export type EvidenceRunOptions = Readonly<{
   transport: RpcTransport;
   mode: EvidenceRunMode;
-  generatedAt: string;
+  /**
+   * When the run began. `generatedAt` is not an input: it is stamped at serialization, after
+   * every observation, so it can never precede the evidence it accompanies.
+   */
+  runStartedAt: string;
   repositoryCommit: string;
   documentation: DocumentationAvailability;
   targets?: CleanverseMonadTargets;
@@ -54,16 +58,21 @@ export async function runCleanverseMonadEvidence(
     options.confirmations ?? 20n,
   );
 
-  // Recorded before the reads, so the artifact separates "when observed" from "when rendered".
-  const onchainObservedAt = new Date().toISOString();
   const { observations, facts } = await collectCleanverseMonadObservations(client, targets, block);
+  // Stamped after the reads complete: this is when the chain was actually observed. A fixture run
+  // observes a recorded chain, not the network, so it reports no on-chain observation instant.
+  const onchainObservedAt = options.mode === "live-read-only"
+    ? new Date().toISOString()
+    : null;
   const documentationConsultedAt = options.documentation.protectedDocsConsultedAt ?? null;
   const docsRead = documentationConsultedAt !== null;
   const comparisons = buildCleanverseMonadComparisons(facts, targets, block, docsRead);
 
   return parseEvidenceReport({
     schemaVersion: 1,
-    generatedAt: options.generatedAt,
+    runStartedAt: options.runStartedAt,
+    // Last thing computed, immediately before validation and serialization.
+    generatedAt: new Date().toISOString(),
     repositoryCommit: options.repositoryCommit,
     mode: options.mode,
     documentationSource: {

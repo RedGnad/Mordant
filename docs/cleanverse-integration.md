@@ -76,10 +76,10 @@ The launch failure had a concrete on-chain explanation. The shared factory proxy
 implementation `0x31759eff15291a5e36bb5625b55c49107dc0ee71`, which lacked that selector and exposed
 only the older eight-argument `0xef84b94a`.
 
-**Superseded on 27 July 2026 by a re-measurement.** At Monad testnet block 48663660 the same proxy
+**Superseded on 27 July 2026 by a re-measurement.** At Monad testnet block 48667706 the same proxy
 resolves to implementation `0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea`, whose dispatch table
 contains **both** `0xeff21872` and `0xef84b94a`. **No backend/factory selector skew was observable
-at block 48663660.** The ABI-skew explanation above therefore no longer describes the deployment,
+at block 48667706.** The ABI-skew explanation above therefore no longer describes the deployment,
 and this document must not be cited as evidence that the Monad launcher is on an older ABI. It is
 equally not evidence that Monad issuance is fixed: that would require a `/atoken/launch`
 application, which stays `NOT PROVEN — WRITE ACTION REQUIRED`.
@@ -126,7 +126,7 @@ A separate live, read-only probe resolved the deployed A-Token's `policy()` and 
 `canTransfer(token, adapter, prospectiveHolder, 1)` without submitting a transaction.
 
 **Corrected on 27 July 2026.** The earlier wording claimed this "confirms that the policy surface
-can answer an adapter-to-holder question". At block 48663660 the policy
+can answer an adapter-to-holder question". At block 48667706 the policy
 `0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd` returned no boolean for any probed tuple: three
 `canTransfer(aUSDC, from, to, 1)` calls, including one between two addresses whose `isValidAPass`
 is `true`, each reverted with `ComplianceFailed(address)` (`0x8a4e1859`) carrying the aUSDC address.

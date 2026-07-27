@@ -69,7 +69,7 @@ This is a prebuild engineering review, not an external audit and not a productio
   simultaneous burn/release loss.
 - Both contract A-Passes must expire after the full invoice and recovery horizon. If either expires,
   the affected activation, cash or CVA path pauses until the issuer renews the identity.
-- No backend/factory selector skew was observable at block 48663660: the factory implementation
+- No backend/factory selector skew was observable at block 48667706: the factory implementation
   carries the ten-argument launch selector. This is a read-only bytecode fact. Whether a
   /atoken/launch application now succeeds is NOT PROVEN — WRITE ACTION REQUIRED, so a fresh invoice
   CVA still may not be treated as live.

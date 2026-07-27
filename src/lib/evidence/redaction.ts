@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 /**
  * Evidence artifacts are committed and shared with reviewers, so nothing secret may reach them.
  * The scan reports only the CATEGORY and the location of a leak, never the value itself.
@@ -19,6 +21,12 @@ export type SecretLeak = Readonly<{
   kind: SecretLeakKind;
   /** Where the leak was found, never what it contained. */
   location: string;
+  /**
+   * `sha256:<hex>` over the normalized matched value. It lets an allowlist bind a suppression to
+   * one exact piece of content, so changing a single character invalidates that suppression.
+   * A digest is not the value: it is one-way, and it is never printed alongside the value.
+   */
+  fingerprint: string;
 }>;
 
 export const REDACTED = "[REDACTED]";
@@ -34,7 +42,7 @@ type NamedPattern = Readonly<{
  * A secret value, in any of the shapes a leak takes. The negative lookahead keeps an already
  * redacted artifact from being reported as a fresh leak.
  */
-const VALUE = String.raw`(?!\[REDACTED\])("[^"]*"|'[^']*'|\S+)`;
+const VALUE = String.raw`(?!\[REDACTED\])("[^"]*"|'[^']*'|<[^>\n]{1,64}>|\S+)`;
 
 /**
  * The separator uses `[ \t]*` rather than `\s*` on purpose: `\s` matches newlines, so an empty
@@ -120,6 +128,15 @@ function locate(text: string, index: number): string {
   return `line ${line}`;
 }
 
+/**
+ * Digest of the matched value, normalized so that surrounding quoting or trailing punctuation
+ * does not change it while the value itself still does.
+ */
+export function fingerprintValue(rawValue: string): string {
+  const normalized = rawValue.trim().replace(/^["']|["']$/g, "").replace(/,$/, "").trim();
+  return `sha256:${createHash("sha256").update(normalized, "utf8").digest("hex")}`;
+}
+
 /** A member expression such as `process.env.X` or `config.apiKey`. */
 const MEMBER_EXPRESSION = /^[A-Za-z_$][\w$]*(?:\.[\w$]+)+$/;
 
@@ -129,12 +146,24 @@ const CONSTANT_REFERENCE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 /**
  * Values that are meant to be committed: template placeholders, and the deliberately malformed
  * fixtures a negative test needs in order to assert that a bad credential is rejected.
+ *
+ * These are anchored *shapes*, not substrings. An earlier version matched any value merely
+ * containing "example" or "sample", which would have let a realistic credential through as long
+ * as it happened to contain one of those words. A placeholder must look like a placeholder from
+ * beginning to end.
  */
-const PLACEHOLDER = new RegExp(
-  String.raw`^(?:<.*>|.*(?:your|example|changeme|replace[-_]?me|placeholder|todo|xxxx|\.\.\.`
-  + String.raw`|not[-_]a[-_]|invalid|dummy|fake|sample).*)$`,
-  "i",
-);
+const PLACEHOLDER_SHAPES: readonly RegExp[] = Object.freeze([
+  /^<[^>]{1,64}>$/,
+  /^(?:replace[-_]with|your|example|placeholder|changeme|change[-_]me|todo)[-_][a-z0-9]+(?:[-_][a-z0-9]+)*$/i,
+  /^not[-_]a[-_](?:valid[-_])?[a-z0-9]+(?:[-_][a-z0-9]+)*$/i,
+  /^(?:dummy|fake|sample|invalid|synthetic)[-_][a-z0-9]+(?:[-_][a-z0-9]+)*$/i,
+  /^x{4,}$/i,
+  /^0x0+$/,
+]);
+
+function isPlaceholderValue(value: string): boolean {
+  return PLACEHOLDER_SHAPES.some((shape) => shape.test(value));
+}
 
 /**
  * Distinguishes a real credential from a *reference* to one. `CLEANVERSE_API_KEY: process.env.X`
@@ -156,7 +185,7 @@ function isEnvironmentReference(rawValue: string): boolean {
   if (!wasQuoted && (MEMBER_EXPRESSION.test(value) || CONSTANT_REFERENCE.test(value))) {
     return true;
   }
-  return PLACEHOLDER.test(value);
+  return isPlaceholderValue(value);
 }
 
 /**
@@ -175,7 +204,11 @@ export function findSecretLeaks(
     while (match !== null) {
       const value = match[2];
       if (value === undefined || allowsReference !== true || !isEnvironmentReference(value)) {
-        leaks.push({ kind, location: locate(text, match.index) });
+        leaks.push({
+          kind,
+          location: locate(text, match.index),
+          fingerprint: fingerprintValue(value ?? match[0]),
+        });
       }
       match = scanner.exec(text);
     }
@@ -188,7 +221,11 @@ export function findSecretLeaks(
     }
     const index = text.indexOf(value);
     if (index !== -1) {
-      leaks.push({ kind: "known-secret-value", location: locate(text, index) });
+      leaks.push({
+        kind: "known-secret-value",
+        location: locate(text, index),
+        fingerprint: fingerprintValue(value),
+      });
     }
   }
 
