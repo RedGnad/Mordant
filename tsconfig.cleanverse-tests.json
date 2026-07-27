@@ -9,10 +9,13 @@
     "outDir": ".cleanverse-test-dist",
     "rootDir": ".",
     "plugins": [],
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/lib/cleanverse/cleanverse.test.ts",
+    "src/lib/contracts/abi-parity.test.ts",
     "src/lib/contracts/read-vault.test.ts",
     "src/lib/contracts/pledge.test.ts",
     "src/lib/mordant/scenario.test.ts",
