@@ -72,9 +72,11 @@ export function loadAllowlist(repositoryRoot: string): readonly AllowlistEntry[]
   );
 }
 
+/** `kind: "*"` allows every category for one file, for the scanner's own sources and fixtures. */
 function isAllowed(finding: ScanFinding, allowlist: readonly AllowlistEntry[]): boolean {
   return allowlist.some(
-    (entry) => entry.path === finding.file && entry.kind === finding.leak.kind,
+    (entry) => entry.path === finding.file
+      && (entry.kind === "*" || entry.kind === finding.leak.kind),
   );
 }
 
