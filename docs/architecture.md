@@ -174,3 +174,48 @@ record-date holders      60 / 40
 protection claims         6 / 4
 redemption claims        66 / 44
 ```
+
+## Policy compatibility and settlement rails
+
+The dedicated CVA custody path is isolated behind an allowlisted adapter. A no-write Monad fork proves
+that a contract with its own A-Pass can pass the deployed aUSDC policy and use role-gated mint/burn.
+Both the adapter and every vault must hold a valid A-Pass before activation, funding or aUSDC
+settlement; readiness fails closed if either credential or any external policy read is missing,
+reverting or negative. A holder must also be able to receive the corresponding amount of underlying
+CVA according to `cva.policy().canTransfer(cva, adapter, holder, futurePosition)` when CVA delivery is
+possible. Activation rejects duplicate holder addresses and probes each complete allocation. An mINV
+transfer probes the recipient's balance after the transfer plus the exact holder-to-holder pair and
+delta. Default release probes the caller's complete remaining mINV balance, including after a partial
+release. These total-position probes cover monotone caps such as `current CVA balance + amount`; the
+adapter still rechecks policy and actual balance deltas for the units it really moves. The adapter and
+vault themselves can never be mINV holders.
+
+This is conservative policy compatibility, not universal “policy parity.” A mutable,
+history-dependent or non-monotone policy can change between a probe and execution. Conversely, a
+max-per-transaction policy may reject a total-position probe even though the immediate delta would
+fit. Mordant accepts that safe false negative rather than claiming liveness it cannot prove.
+
+The cash rail stays separate. A funder that receives no mINV allocation needs the holder role and a
+valid A-Pass, not an artificial adapter-to-funder CVA probe; the real aUSDC transfer enforces its own
+policy on `funder -> vault`. Bond claims and cash redemptions likewise require holder role/A-Pass and
+an explicit exact-amount aUSDC policy precheck before the token transfer, but no CVA deliverability
+check because no CVA is delivered to the claimant. Every outgoing `_transferExact` performs that
+policy precheck before moving aUSDC.
+
+Default settlement is per holder, so CVA delivery for one account does not disable cash redemption
+for another. A holder is forced to cash only when escrow covers the face value of its complete mINV
+balance, `isRedemptionReady(vault, holderBalance)` confirms that exact burn, and
+`settlement.policy().canTransfer(settlement, vault, holder, exactCash)` approves the exact cash
+payout. If any condition is false, that holder may receive CVA without affecting the others. Each CVA
+payout increases `cvaReleasedFace`; any escrow above the remaining cash liability is credited to the
+buyer, while other cash-eligible holders may still redeem. `defaultCvaReleaseStarted` is an observable
+history flag, not a mode gate: it blocks neither funding nor redemption. After a CVA payout, the buyer
+may fund the exact remaining shortfall
+`faceValue - redeemedFace - cvaReleasedFace - redemptionEscrow`, so a prior CVA payout cannot starve
+the cash path of later holders.
+
+Buyer refunds and amortized/returned bond for the originator are `settlementCredit` pull-payments,
+not inline pushes. An expired buyer or originator therefore cannot block holder redemption,
+protection close or default CVA release; only that account's own `claimSettlementCredit` waits for
+its A-Pass/aUSDC eligibility to recover. Activation remains atomic: net proceeds are paid to the
+originator inline, and a failure reverts the entire activation before funds can be left in the vault.

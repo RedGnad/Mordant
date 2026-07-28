@@ -158,3 +158,10 @@ This runbook is currently externally blocked. Re-measured on 27 July 2026 at Mon
 
 Read-only calls prove the on-chain contract path, but they do not authorize skipping any live
 dependency, and a reverting policy must never be worked around by weakening the precheck.
+
+## Credential handling
+
+Never commit Cleanverse credentials. They are server-only and belong in `.env.local`, which is
+git-ignored. Any sandbox key that has been shared outside a secret manager must be rotated before
+durable use, and `pnpm secret:scan` runs as part of `pnpm validate` to catch a credential pattern
+before it reaches a commit.
