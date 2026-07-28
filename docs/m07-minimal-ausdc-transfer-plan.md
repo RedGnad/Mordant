@@ -42,14 +42,26 @@ All read-only, at Monad testnet block 48864474 and later.
 | aUSDC Transfer events, last 4,000 blocks | 0 | `eth_getLogs` |
 | USDC deposits into AccessCore, last 6,000 blocks | 0 | `eth_getLogs` |
 
-Two readings follow from the supply figures. AccessCore holds exactly as much USDC as aUSDC exists,
-so **aUSDC is a 1:1 wrapper minted by depositing USDC into AccessCore**. And the rail is currently
-idle: no aUSDC has moved in the scanned window, so this transfer will not be lost in noise.
+AccessCore holds exactly as much USDC as aUSDC exists, at the observed block:
+
+    AUSDC CURRENT BACKING CONSISTENCY: OBSERVED 1:1
+    AUSDC PUBLIC DEPOSIT PATH: NOT PROVEN
+
+That equality establishes backing consistency at one block. It does **not** establish the mechanism
+that produced it: no deposit was observed, no deposit selector has been read back, and an equal
+balance is equally consistent with an operator minting and funding both sides. Treating it as proof
+of a public deposit path would be an inference dressed as an observation.
+
+The rail is currently idle: no aUSDC moved in the scanned window, so this transfer will not be lost
+in noise.
 
 `0x7f7098632b0258Af07e527015D65e6bc743f4CF5` holds 0.5 aUSDC and has no other visible role, which
-is consistent with **a transfer fee**. The runner therefore measures that address across the
-transfer rather than assuming the recipient receives exactly what the sender paid. At one atomic
-unit a percentage fee likely rounds to zero, but that is a prediction, not a basis for a check.
+is consistent with **a transfer fee**. That is a prior, not a fact about this token: the address has
+not been shown to be a fee receiver, and there could be several or none. So the runner assumes
+nothing about it. It discovers every address the transfer actually touched from the `Transfer`
+events, reads each one's balance at the parent block and the receipt block, and reconciles the two.
+At one atomic unit a percentage fee likely rounds to zero, but that is a prediction, and predictions
+are not the basis of a check.
 
 ## How to obtain testnet aUSDC
 
@@ -68,11 +80,18 @@ the protected documentation site serves its content from a password-gated API ra
 page bundle, so it could not be re-read here. One authorized call resolves it. Ask for the smallest
 plausible amount first and read `tx_hash` back on chain.
 
-**Route B, wrap USDC.** Faucet `usdc` to the wallet, then deposit into AccessCore
-`0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC` to mint aUSDC 1:1. The 112.14 / 112.14 correspondence
-is direct evidence this path is what produced the existing supply. Cleanverse publishes the
-withdrawal side of this interface (`withdraw(address aToken, uint256 amount, address recipient)`);
-the deposit selector has not been read back and would need confirming before use.
+**Route B, wrap USDC.** A hypothesis, **not an executable procedure**. The idea is to faucet `usdc`
+to the wallet and deposit it into AccessCore `0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC` to obtain
+aUSDC.
+
+    AUSDC PUBLIC DEPOSIT PATH: NOT PROVEN
+
+Nothing here is ready to run. The deposit selector has not been identified, the deposit conditions
+are unknown (whether an A-Pass, an allowance, a minimum or a permissioned caller is required), and
+no deposit was observed in the scanned window. Cleanverse publishes only the withdrawal side of
+this interface (`withdraw(address aToken, uint256 amount, address recipient)`). Route B becomes a
+plan once the selector and the conditions are identified and read back; until then it is a
+direction to investigate, and Route A is the only candidate route.
 
 **MON for gas** comes from the official Monad testnet faucet at `testnet.monad.xyz`: 0.5 MON for a
 new developer wallet, 10 MON with mainnet-balance eligibility, once per 24 hours. Either amount
@@ -80,9 +99,13 @@ covers the ~0.0326 MON this transfer costs, with a wide margin.
 
 ## Phase 0: bootstrap, all writes, none authorized
 
-1. **Generate two wallets locally.** Keys go to `.env` only, which is git-ignored. Never printed,
-   never committed, never passed on a command line. Roles `HOLDER_A` (sender) and `HOLDER_B`
-   (recipient), set as `MORDANT_KEY_HOLDER_A` / `MORDANT_ADDRESS_HOLDER_A` and the B equivalents.
+1. **The wallet owner generates two wallets.** The developer never generates, receives, requests or
+   handles the keys used for a live run, and no key is ever pasted into a chat, a command line or a
+   commit. The owner writes them into `.env`, which is git-ignored, as `MORDANT_KEY_HOLDER_A` and
+   `MORDANT_KEY_HOLDER_B`, with the matching public `MORDANT_ADDRESS_HOLDER_A` and
+   `MORDANT_ADDRESS_HOLDER_B`. Only the addresses are shared. The runner reads the keys from the
+   environment at broadcast time and refuses to sign if the key does not derive the configured
+   sender.
 2. **Fund the sender with MON** from `testnet.monad.xyz`. Only the sender pays gas; the recipient
    needs no MON to receive.
 3. **Issue an A-Pass to both wallets** with `POST /generate_apass`. This is the step most likely to
@@ -106,37 +129,65 @@ endpoint can never reach the point where secret material is loaded.
    and the token is registered and not paused;
 4. `decimals()` is still 6, since the amount arithmetic depends on it;
 5. sender and recipient are configured and distinct, because a self-transfer proves nothing;
-6. both hold a valid, unexpired A-Pass, on chain and per `/query_apass`;
+6. both hold a usable A-Pass. `/query_apass` must return a successful envelope **and** a present
+   record **and** an active status **and** an expiration that is present, non-zero and strictly in
+   the future, **and** `isValidAPass` must be `true` on chain. An absent expiration is not read as
+   unlimited, and a truthy non-boolean does not satisfy the on-chain check;
 7. `/verify_apass` returns code 4 for both, against this exact token;
 8. `policy().canTransfer(aUSDC, sender, recipient, 1)` returns `true` for the exact tuple and the
    exact amount that will be sent.
 
 Then funding: the sender holds at least one atomic unit of aUSDC, gas is estimated against real
-state, and the sender holds enough MON. The run stops if the estimate exceeds 400,000 gas or the
-price exceeds 200 gwei, so an abnormal cost halts rather than silently spends.
+state, and the sender holds enough MON.
+
+Gas is **fail-closed**. An estimate that cannot be produced, a price that cannot be read, a
+non-`bigint` or zero value on either, or a computed budget of zero all stop the run. Nothing is
+broadcast on a guessed or absent cost. The run also stops above 400,000 gas or 200 gwei, so an
+abnormal cost halts rather than silently spends.
 
 **Any mismatch stops the run and sends nothing.** A rail that changed since M-06 must be
 re-observed, not transacted against.
 
 ## Phase 2: broadcast, requires explicit authorization
 
-    node --env-file=.env scripts/m07-ausdc-transfer.mjs --broadcast
+    node --env-file=.env scripts/m07-ausdc-transfer.mjs --broadcast --out docs/evidence/<prefix>
 
-Requires **both** the `--broadcast` flag and `MORDANT_M07_BROADCAST_AUTHORIZED=yes`, so neither a
-stray flag nor a stale variable can send a transaction alone. The runner also re-derives the sender
-address from its key and refuses if it is not the configured sender.
+Requires **all three** of the `--broadcast` flag, `MORDANT_M07_BROADCAST_AUTHORIZED=yes`, and
+`--out`, so neither a stray flag nor a stale variable can send a transaction alone, and a run that
+can move value always leaves an artifact. The runner re-derives the sender address from its key and
+refuses to sign if it is not the configured sender.
 
-Order: all Phase 1 gates, then `simulateContract` against current state, then one `transfer`, then
-wait for the receipt.
+Order: all Phase 1 gates, then `simulateContract` against current state, then one `transfer`.
 
-Recorded: balances before and after for sender, recipient and the fee receiver; the transaction
-hash, status, block number and hash; gas used, effective gas price and fee paid; every decoded log
-with the `Transfer` event identified; and `canTransfer` read again afterwards, because a rail that
-stops accepting immediately after a transfer is a finding rather than a detail.
+**The hash is checkpointed atomically the moment `writeContract` returns, with status `PENDING`,
+before the receipt is awaited.** From that point the transaction exists whether or not the process
+survives, so the artifact must say so. The receipt, readbacks and reconciliation are filled in
+afterwards. Any stop, at any point, writes a `STOPPED` artifact recording how far the run got: a
+stop after broadcast is classified `AUSDC LIVE TRANSFER ATTEMPT — RECEIPT UNCONFIRMED`, never as
+nothing having happened. Every write is a temporary file renamed into place, so a reader never
+observes a partial artifact.
 
-The result is `AUSDC LIVE TRANSFER` only when the receipt succeeded, the sender paid exactly one
-atomic unit, and value is conserved across sender, recipient and fee receiver. Otherwise it is
-`AUSDC LIVE TRANSFER ATTEMPT`.
+Recorded: the transaction hash, status, block number and hash; gas used, effective gas price and fee
+paid; every aUSDC `Transfer` event decoded, plus the addresses of any other logs; balances before
+and after for **every address the events touched**, read at the parent block and the receipt block;
+and `canTransfer` read again afterwards, because a rail that stops accepting immediately after a
+transfer is a finding rather than a detail.
+
+**Counterparties are discovered from the events.** No address is assumed to be the fee receiver.
+`0x7f7098632b0258Af07e527015D65e6bc743f4CF5` holding 0.5 aUSDC is a prior worth noting, not a
+constant to reconcile against, and there may be several such addresses or none. Burns are read as
+transfers to the zero address, and an unexpected mint fails reconciliation.
+
+The result is `AUSDC LIVE TRANSFER` only when **all** of the following hold:
+
+- the receipt succeeded;
+- at least one aUSDC `Transfer` event was emitted;
+- the events debit the sender by exactly the intended amount;
+- the events credit the recipient by a strictly positive amount;
+- the events balance, so no log was missed;
+- and the measured balance delta of every touched address equals what the events say happened to it.
+
+Otherwise the result is `AUSDC LIVE TRANSFER ATTEMPT`, with the failing reasons recorded.
 
 ## What this will and will not prove
 
