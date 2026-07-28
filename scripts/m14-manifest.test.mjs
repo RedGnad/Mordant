@@ -3,7 +3,8 @@ import { test } from "node:test";
 
 import {
   CONTRACTS, FROZEN_COMMIT, LIVE_PATH, PARTICIPANTS, PHASES, REQUIRED_GATES, STOP_MATRIX,
-  STRUCTURAL_PARAMETERS, assertFrozenVersion, assertGatesComplete, assertNoWriteMode,
+  PUBLIC_SCHEDULE, REHEARSAL, STRUCTURAL_PARAMETERS, assertFrozenVersion, assertGatesComplete,
+  assertNoWriteMode, classifyManifest, computeProtectionEnd, parameterSetHash,
 } from "./m14-manifest.mjs";
 import { ControlError } from "./runner-controls.mjs";
 
@@ -110,7 +111,6 @@ test("every phase ends at a stop, so none can trigger the next", () => {
   for (const phase of PHASES.slice(0, -1)) {
     assert.equal(phase.steps.at(-1), "STOP", `phase ${phase.id} does not end at a stop`);
   }
-  assert.deepEqual(PHASES.map((phase) => phase.id), ["A", "B", "C", "D", "E", "F"]);
 });
 
 test("phase B forbids an automatic retry of the Cleanverse request", () => {
@@ -129,7 +129,7 @@ test("phase D refuses to bind unless the adapter is the only minter", () => {
 test("the factory is recorded as exceeding EIP-170", () => {
   // It only deploys because Monad documents 128 KB; that is a deployment precondition, not a detail.
   const factory = CONTRACTS.find((entry) => entry.name === "MordantFactory");
-  assert.equal(factory.phase, "C");
+  assert.equal(factory.phase, "C1");
   assert.equal(factory.addressPredictable, false);
 });
 
@@ -171,5 +171,108 @@ test("states past binding are marked non-redeployable", () => {
   for (const after of ["supply minted, not bound", "adapter bound, vault not activated",
     "activated, conflict not started"]) {
     assert.equal(STOP_MATRIX.find((entry) => entry.after === after).redeployable, false, after);
+  }
+});
+
+// --- the 24 hour protection window ---
+
+test("protectionEnd is computed from the creation block, never fixed in advance", () => {
+  assert.equal(computeProtectionEnd(1_785_000_000n), 1_785_000_000n + 86_400n);
+});
+
+test("a caller with no creation timestamp is refused rather than given a guess", () => {
+  stops(() => computeProtectionEnd(undefined));
+  stops(() => computeProtectionEnd(0n));
+  stops(() => computeProtectionEnd(1_785_000_000));
+});
+
+test("the public protection duration is 24 hours", () => {
+  assert.equal(STRUCTURAL_PARAMETERS.protectionDurationSeconds, 86_400);
+});
+
+test("the parameter set hash is stable and order-independent", () => {
+  assert.equal(parameterSetHash(), parameterSetHash({ ...STRUCTURAL_PARAMETERS }));
+  const reordered = Object.fromEntries(Object.entries(STRUCTURAL_PARAMETERS).reverse());
+  assert.equal(parameterSetHash(reordered), parameterSetHash());
+});
+
+test("any parameter change moves the hash, so a drift cannot be argued away", () => {
+  assert.notEqual(parameterSetHash({ ...STRUCTURAL_PARAMETERS, protectionDurationSeconds: 3_600 }),
+    parameterSetHash());
+  assert.notEqual(parameterSetHash({ ...STRUCTURAL_PARAMETERS, faceValue: "1" }), parameterSetHash());
+});
+
+test("the rehearsal records both commits separately", () => {
+  // The contracts are frozen at one commit; the rehearsal that proved these parameters is another.
+  assert.equal(REHEARSAL.contractsCommit, FROZEN_COMMIT);
+  assert.notEqual(REHEARSAL.rehearsalCommit, FROZEN_COMMIT);
+  assert.match(REHEARSAL.verdict, /PROVEN/);
+});
+
+// --- phase C is split so the window is not spent waiting ---
+
+test("phase C is split into C1 and C2", () => {
+  const ids = PHASES.map((phase) => phase.id);
+  assert.deepEqual(ids, ["A", "B", "C1", "C2", "D", "E", "F"]);
+});
+
+test("the vault is created only when the rest can follow immediately", () => {
+  const c2 = PHASES.find((phase) => phase.id === "C2");
+  assert.ok(c2.steps[0].includes("ONLY when phases D and E can run immediately"));
+  assert.ok(c2.steps.some((step) => step.includes("never a date fixed earlier")));
+});
+
+test("known participants are credentialed before the vault exists", () => {
+  const c1 = PHASES.find((phase) => phase.id === "C1");
+  assert.ok(c1.steps.some((step) => step.includes("addresses already known")));
+  assert.ok(c1.steps.some((step) => step.includes("verify funding")));
+});
+
+// --- status while inputs are missing ---
+
+test("a complete structure with missing addresses is not a ready manifest", () => {
+  const statuses = classifyManifest({ structureComplete: true, unsuppliedAddresses: 6 });
+  assert.equal(statuses["MANIFEST STRUCTURE"], "READY");
+  assert.equal(statuses["EXECUTION INPUTS"], "INCOMPLETE");
+  assert.equal(statuses["LIVE DEPLOYMENT MANIFEST"], undefined);
+});
+
+test("only a complete structure with every address is a ready manifest", () => {
+  const statuses = classifyManifest({ structureComplete: true, unsuppliedAddresses: 0 });
+  assert.equal(statuses["LIVE DEPLOYMENT MANIFEST"], "READY");
+  assert.equal(statuses["EXECUTION INPUTS"], undefined);
+});
+
+test("public writes stay unauthorized in every status combination", () => {
+  for (const structureComplete of [true, false]) {
+    for (const unsuppliedAddresses of [0, 6]) {
+      assert.equal(classifyManifest({ structureComplete, unsuppliedAddresses })["PUBLIC WRITES"],
+        "NOT AUTHORIZED");
+    }
+  }
+});
+
+// --- the public schedule ---
+
+test("the schedule creates and activates in one sitting, then waits the real windows", () => {
+  const slots = PUBLIC_SCHEDULE.map((entry) => entry.slot);
+  assert.ok(slots.some((slot) => slot.includes("T0, one sitting")));
+  assert.ok(slots.some((slot) => slot.includes("1 hour")));
+  assert.ok(slots.some((slot) => slot.includes("24 hours")));
+  assert.equal(PUBLIC_SCHEDULE[0].does.includes("activation"), true);
+});
+
+// --- address vocabulary ---
+
+test("CREATE addresses are called deterministic but not stable before confirmation", () => {
+  const adapter = CONTRACTS.find((entry) => entry.name === "CleanverseCvaAdapter");
+  assert.match(adapter.addressNote, /deterministic/);
+  assert.match(adapter.addressNote, /not treated as stable until the deployment is confirmed/);
+  assert.match(adapter.addressNote, /No A-Pass is requested on the strength of a computed address/);
+});
+
+test("no contract note claims addresses are unpredictable", () => {
+  for (const contract of CONTRACTS) {
+    assert.equal(/not predictable|unpredictable/i.test(contract.addressNote ?? ""), false, contract.name);
   }
 });

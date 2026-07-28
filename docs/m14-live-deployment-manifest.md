@@ -1,14 +1,19 @@
 # M-14: live deployment manifest
 
-    LIVE DEPLOYMENT MANIFEST: READY
+    MANIFEST STRUCTURE: READY
+    EXECUTION INPUTS: INCOMPLETE
     PUBLIC WRITES: NOT AUTHORIZED
     MORDANT SETTLEMENT: NOT PROVEN LIVE
+
+Six of the nine participant addresses have not been supplied. The structure is complete; the inputs
+it will act on are not, and those are different claims. Once every address is supplied and verified,
+the status becomes `LIVE DEPLOYMENT MANIFEST: READY`.
 
 What a public deployment would consist of, verified as far as it can be without performing any of
 it. No runner in this mission accepts a write mode: `--run`, `--broadcast`, `--deploy`, `--execute`
 and `--send` all stop the process.
 
-    pnpm m14:manifest --out docs/evidence/monad-m14-manifest-2026-07-28
+    pnpm m14:manifest --out docs/evidence/monad-m14-manifest-2026-07-29
 
 ## The frozen version
 
@@ -30,6 +35,26 @@ before deployment. The manifest refuses to generate otherwise, naming what moved
 | net proceeds | 90000 |
 | holder allocation / share | 50000 / 55000 |
 | `revealPeriod` / `curePeriod` | 3600 / 3600 |
+| `protectionDurationSeconds` | **86400** |
+
+`protectionEnd` is **computed at creation** as the vault's creation block timestamp plus 86400. It
+is never a date written in advance: one fixed earlier would drift against whenever the deployment
+actually happens, and could be stale or already past before the vault exists.
+
+Parameter set hash: `0x0e41517292b37dddeeb7b3e6279ff6b7c2f009a82fae2045efcc0a7b50228c8b`.
+
+### The rehearsal that proved this set
+
+| | |
+| --- | --- |
+| contracts commit | `4285f622c238f9663dfcdb3dd0a5e5b01e8c081d` |
+| rehearsal commit | `3b2454072eee3f98800522d5b8995392d9066b83` |
+| artifact | `docs/evidence/monad-m13c-terminal-paths-2026-07-29.json` |
+| verdict | `M-13 PINNED MONAD FORK REHEARSAL: PROVEN` |
+
+The two commits are recorded separately on purpose. The contracts are frozen at the first; the
+rehearsal proving *these parameters* is the second. Changing the duration invalidated the earlier
+rehearsal by our own rule, so it was replayed in full and both branches pass again.
 
 ## The live path
 
@@ -46,16 +71,17 @@ Runtime hashes are from the frozen artifacts and are what each deployment must b
 | Contract | Phase | Creation | Runtime | Within EIP-170 | Gas cap |
 | --- | --- | --- | --- | --- | --- |
 | `CleanverseCvaAdapter` | A | 9,621 B | 8,904 B | yes | 2,000,000 |
-| `CleanverseAPassVerifier` | C | 3,334 B | 2,902 B | yes | 2,000,000 |
-| `MordantFactory` | C | 40,833 B | 40,382 B | **no** | 8,000,000 |
-| `MordantInvoiceVault` | C | 35,248 B | 31,312 B | **no** | 8,000,000 |
+| `CleanverseAPassVerifier` | C1 | 3,334 B | 2,902 B | yes | 2,000,000 |
+| `MordantFactory` | C1 | 40,833 B | 40,382 B | **no** | 8,000,000 |
+| `MordantInvoiceVault` | C2 | 35,248 B | 31,312 B | **no** | 8,000,000 |
 
 Two contracts exceed EIP-170 and deploy only because Monad documents a 128 KB limit. That is a
 deployment precondition, not a footnote: on a chain enforcing 24,576 bytes neither would deploy.
 
-**No address is predictable.** The adapter is created by `CREATE`, so it depends on the deployer
-nonce; the vault comes from the factory and is only known from its `InvoiceVaultCreated` event.
-Both A-Passes therefore **follow** creation and cannot be requested in advance.
+**On addresses.** `CREATE` addresses are deterministic from the deployer and nonce, but they are not
+treated as stable until the deployment is confirmed, the bytecode verified and the readbacks pass.
+**No A-Pass is requested on the strength of a computed address alone.** The vault's address is read
+from the `InvoiceVaultCreated` event under the same rule.
 
 ## Participants
 
@@ -93,12 +119,19 @@ an accepted-but-unconfirmed request is how you get two credentials. Verify throu
 chain, then verify the MINV01 policy for zero to adapter, adapter to zero, and adapter to each
 holder. Stop.
 
-**Phase C, Mordant infrastructure.** Deploy the verifier and factory, configure roles then
-allowlists, the buyer creates the vault, request the vault's A-Pass and any missing participant
-A-Pass, verify the nine exact policy tuples. Stop.
+**Phase C1, infrastructure and known participants.** Deploy the verifier and factory, configure
+roles then allowlists, request every A-Pass for addresses already known (all of them except the
+vault), and verify funding and that each operator can sign what its phase requires. Stop.
 
 Ordering constraint proven in M-13C: `setFacility` asks the verifier, which asks the live A-Pass, so
 a credential must exist **before** the allowlist entry.
+
+**Phase C2, just-in-time vault creation.** Create the vault **only when D and E can run immediately
+afterwards**, compute `protectionEnd` from that block, request the vault's A-Pass at once, and
+verify the nine tuples. Stop.
+
+The split exists so the 24 hour window is not spent waiting on prerequisites that were knowable in
+advance. Everything that can be prepared before the clock starts is prepared in C1.
 
 **Phase D, supply ceremony and binding.** Grant `MINTER_ROLE` to the temporary issuance wallet, mint
 exactly `initialUnits` to the adapter, revoke immediately, grant to the adapter, reconstruct every
@@ -114,6 +147,18 @@ window, `finalizeConflict`, wait out the **real** `protectionEnd`, `markDefault`
 calls `releaseDefaultCva`. Verify every invariant and balance.
 
 Phase F is the only one with real waiting. On a fork the clock was moved; publicly it is not.
+
+## Target public schedule
+
+| Slot | What runs |
+| --- | --- |
+| T0, one sitting | C2 creation, vault credential, D binding, E activation |
+| T0 + minutes | F commit and reveal, immediately after activation |
+| T0 + 1 hour | `finalizeConflict`, once the cure window has really passed |
+| T0 + 24 hours | `markDefault`, then `releaseDefaultCva` by each holder |
+
+The first slot is one sitting on purpose: the vault's creation starts the 24 hours, so binding and
+activation follow it without a gap.
 
 ## Mandatory gates
 

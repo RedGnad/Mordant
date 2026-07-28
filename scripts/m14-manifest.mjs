@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createPublicClient, http, keccak256 } from "viem";
+import { createPublicClient, http, keccak256, toBytes } from "viem";
 
 import { ControlError, assertChainId, scrub, writeArtifact } from "./runner-controls.mjs";
 
@@ -44,6 +44,36 @@ export const STRUCTURAL_PARAMETERS = Object.freeze({
   initialUnits: "100000", advanceAmount: "100000", faceValue: "110000",
   bondBps: 1_000, bond: "10000", netProceeds: "90000", holderAllocation: "50000",
   holderShare: "55000", revealPeriod: 3_600, curePeriod: 3_600,
+  /**
+   * Protection runs 24 hours from the vault's creation BLOCK. The runner computes
+   * protectionEnd = creation block timestamp + this, at creation time. An absolute date written in
+   * advance would drift against whenever the deployment actually happens, and could be stale or
+   * already past before the vault exists.
+   */
+  protectionDurationSeconds: 86_400,
+});
+
+/** Identifies the exact parameter set a rehearsal exercised, so a drift is visible rather than argued. */
+export function parameterSetHash(parameters = STRUCTURAL_PARAMETERS) {
+  const canonical = JSON.stringify(Object.fromEntries(
+    Object.entries(parameters).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, String(v)])));
+  return keccak256(toBytes(canonical));
+}
+
+/** Never a date: always the creation block's own timestamp plus the duration. */
+export function computeProtectionEnd(creationBlockTimestamp, durationSeconds = STRUCTURAL_PARAMETERS.protectionDurationSeconds) {
+  if (typeof creationBlockTimestamp !== "bigint" || creationBlockTimestamp <= 0n) {
+    stop("protectionEnd must be computed from the creation block timestamp, which was not supplied.");
+  }
+  return creationBlockTimestamp + BigInt(durationSeconds);
+}
+
+/** The rehearsal that proved this exact parameter set. */
+export const REHEARSAL = Object.freeze({
+  contractsCommit: FROZEN_COMMIT,
+  rehearsalCommit: "3b2454072eee3f98800522d5b8995392d9066b83",
+  artifact: "docs/evidence/monad-m13c-terminal-paths-2026-07-29.json",
+  verdict: "M-13 PINNED MONAD FORK REHEARSAL: PROVEN",
 });
 
 /**
@@ -60,23 +90,25 @@ export const CONTRACTS = Object.freeze([
     phase: "A", constructorSignature: "constructor(address initialOwner, ICleanverseAToken token, ICleanverseAPass apass)",
     constructorArgs: ["<owner>", MINV01, APASS_REGISTRY], owner: "<owner>",
     addressPredictable: false,
-    addressNote: "CREATE, so the address depends on the deployer nonce and is only known after the"
-      + " transaction. Its A-Pass therefore cannot be requested in advance.",
+    addressNote: "CREATE, so the address is deterministic from the deployer and nonce, but it is"
+      + " not treated as stable until the deployment is confirmed, the bytecode verified and the"
+      + " readbacks pass. No A-Pass is requested on the strength of a computed address alone.",
     gasCap: 2_000_000 },
   { name: "CleanverseAPassVerifier", artifact: "CleanverseAPassVerifier.sol/CleanverseAPassVerifier",
-    phase: "C", constructorSignature: "constructor(address initialOwner, ICleanverseAPass apass, uint256 openRoleMask)",
+    phase: "C1", constructorSignature: "constructor(address initialOwner, ICleanverseAPass apass, uint256 openRoleMask)",
     constructorArgs: ["<owner>", APASS_REGISTRY, "16"], owner: "<owner>",
     addressPredictable: false, gasCap: 2_000_000 },
   { name: "MordantFactory", artifact: "MordantFactory.sol/MordantFactory",
-    phase: "C", constructorSignature: "constructor(address initialOwner, ICviVerifier verifier)",
+    phase: "C1", constructorSignature: "constructor(address initialOwner, ICviVerifier verifier)",
     constructorArgs: ["<owner>", "<verifier>"], owner: "<owner>",
     addressPredictable: false, gasCap: 8_000_000 },
   { name: "MordantInvoiceVault", artifact: "MordantInvoiceVault.sol/MordantInvoiceVault",
-    phase: "C", constructorSignature: "deployed by MordantFactory.createInvoiceVault(Init)",
+    phase: "C2", constructorSignature: "deployed by MordantFactory.createInvoiceVault(Init)",
     constructorArgs: ["<Init struct>"], owner: "the factory creates it; the buyer calls",
     addressPredictable: false,
-    addressNote: "Created by the factory, so the address is only known from the"
-      + " InvoiceVaultCreated event. Its A-Pass follows creation, never precedes it.",
+    addressNote: "Created by the factory and read from the InvoiceVaultCreated event. Not treated"
+      + " as stable until creation is confirmed and the readbacks pass; its A-Pass follows that,"
+      + " never a computed address.",
     gasCap: 8_000_000 },
 ]);
 
@@ -128,13 +160,18 @@ export const PHASES = Object.freeze([
     "verify through the API and on chain that the credential exists",
     "verify the MINV01 policy permits zero to adapter, adapter to zero, and adapter to each holder",
     "STOP"] },
-  { id: "C", name: "Mordant infrastructure", steps: [
+  { id: "C1", name: "infrastructure and known participants", steps: [
     "deploy CleanverseAPassVerifier(owner, A-Pass registry, openRoleMask 16)",
     "deploy MordantFactory(owner, verifier)",
     "configure role eligibility, then the facility, adapter and settlement token allowlists",
-    "the buyer creates the vault through the factory",
-    "request the vault's A-Pass, which its address only permits after creation",
-    "request any missing participant A-Pass",
+    "request every A-Pass for addresses already known, which is all of them except the vault",
+    "verify funding: the funder holds the advance, every signer holds MON",
+    "verify each operator can sign what its phase requires",
+    "STOP"] },
+  { id: "C2", name: "just-in-time vault creation", steps: [
+    "create the vault ONLY when phases D and E can run immediately afterwards",
+    "compute protectionEnd as the creation block timestamp plus 86400, never a date fixed earlier",
+    "request the vault's A-Pass immediately, since its address only exists now",
     "verify the nine exact policy tuples",
     "STOP"] },
   { id: "D", name: "supply ceremony and binding", steps: [
@@ -251,6 +288,34 @@ export function assertFrozenVersion({ contractsChanged, contractsDirty, paramete
 }
 
 /** The gates every future public command must carry, recorded so they can be checked against. */
+/**
+ * The manifest can be structurally complete while still missing the addresses it will act on. Those
+ * are different claims, and collapsing them into one READY would overstate readiness.
+ */
+export function classifyManifest({ structureComplete, unsuppliedAddresses }) {
+  if (structureComplete !== true) {
+    return { "MANIFEST STRUCTURE": "INCOMPLETE", "EXECUTION INPUTS": "INCOMPLETE",
+      "PUBLIC WRITES": "NOT AUTHORIZED" };
+  }
+  if (unsuppliedAddresses > 0) {
+    return { "MANIFEST STRUCTURE": "READY", "EXECUTION INPUTS": "INCOMPLETE",
+      "PUBLIC WRITES": "NOT AUTHORIZED", "MORDANT SETTLEMENT": "NOT PROVEN LIVE" };
+  }
+  return { "LIVE DEPLOYMENT MANIFEST": "READY", "PUBLIC WRITES": "NOT AUTHORIZED",
+    "MORDANT SETTLEMENT": "NOT PROVEN LIVE" };
+}
+
+/**
+ * The target public schedule. Written down because the windows interact: the vault is created only
+ * when the rest can follow immediately, so the 24 hours are not spent waiting on prerequisites.
+ */
+export const PUBLIC_SCHEDULE = Object.freeze([
+  { slot: "T0, one sitting", does: "C2 creation, vault credential, D binding, E activation" },
+  { slot: "T0 + minutes", does: "F commit and reveal, immediately after activation" },
+  { slot: "T0 + 1 hour", does: "finalizeConflict, once the cure window has really passed" },
+  { slot: "T0 + 24 hours", does: "markDefault, then releaseDefaultCva by each holder" },
+]);
+
 export const REQUIRED_GATES = Object.freeze([
   "requires --run and --out",
   "verifies chain id 10143",
@@ -341,14 +406,20 @@ async function main() {
   process.stdout.write(`  participants               ${participants.length} roles,`
     + ` ${unsupplied.length} address(es) not supplied yet\n`);
 
+  const statuses = classifyManifest({ structureComplete: true,
+    unsuppliedAddresses: unsupplied.length });
   const report = {
-    schemaVersion: 1, generatedAt: new Date().toISOString(),
-    classification: "LIVE DEPLOYMENT MANIFEST: READY",
-    statuses: {
-      "LIVE DEPLOYMENT MANIFEST": "READY",
-      "PUBLIC WRITES": "NOT AUTHORIZED",
-      "MORDANT SETTLEMENT": "NOT PROVEN LIVE",
-    },
+    schemaVersion: 2, generatedAt: new Date().toISOString(),
+    classification: statuses["LIVE DEPLOYMENT MANIFEST"]
+      ? "LIVE DEPLOYMENT MANIFEST: READY"
+      : "MANIFEST STRUCTURE: READY / EXECUTION INPUTS: INCOMPLETE",
+    statuses,
+    rehearsal: REHEARSAL,
+    parameterSetHash: parameterSetHash(),
+    publicSchedule: PUBLIC_SCHEDULE,
+    protectionEndRule: "computed as the vault creation block timestamp plus"
+      + ` ${STRUCTURAL_PARAMETERS.protectionDurationSeconds} seconds, at creation time. Never a`
+      + " date fixed in advance.",
     frozenCommit: FROZEN_COMMIT, head,
     freezeScope: "contracts/src and contracts/foundry.toml, plus the structural parameters. Scripts"
       + " and documents may move without invalidating the rehearsal; contracts and parameters may not.",
@@ -364,8 +435,10 @@ async function main() {
     zeroAddress: ZERO,
   };
 
-  process.stdout.write(`\n${"CLASSIFICATION".padEnd(30)} ${report.classification}\n`);
-  process.stdout.write(`${"PUBLIC WRITES".padEnd(30)} NOT AUTHORIZED\n`);
+  process.stdout.write("\n");
+  for (const [key, value] of Object.entries(statuses)) {
+    process.stdout.write(`${key.padEnd(30)} ${value}\n`);
+  }
   if (out) { writeArtifact(out, report, process.env); process.stdout.write(`\nWrote ${out}.json\n`); }
 }
 
