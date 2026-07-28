@@ -152,9 +152,14 @@ This runbook is currently externally blocked. Re-measured on 27 July 2026 at Mon
   `0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea`, whose dispatch table contains the ten-argument
   launch selector `0xeff21872`. Issuance health itself remains untested;
 - live gateway issuance of an A-Pass to a contract address is still unobserved;
-- **new blocker:** the deployed aUSDC policy reverted with `ComplianceFailed(address)` for all
-  three probed `canTransfer` tuples, including one between two valid A-Pass holders. Step 9 of the
-  sequence above cannot pass until a policy-accepted sender/recipient pair is known.
+- the deployed aUSDC policy reverted with `ComplianceFailed(address)` for all three probed
+  `canTransfer` tuples, including one between two valid A-Pass holders.
+
+**That blocker was lifted on 28 July 2026** by a Cleanverse configuration transaction, with no
+contract upgrade (`pnpm revalidate:ausdc`, artifact
+`docs/evidence/monad-ausdc-revalidation-2026-07-28.*`). A policy-accepted holder-to-holder pair is
+now known, so step 9 has a viable path. It remains untested: no aUSDC transfer has been broadcast,
+and the settlement rail stays `NOT PROVEN` until one is.
 
 Read-only calls prove the on-chain contract path, but they do not authorize skipping any live
 dependency, and a reverting policy must never be worked around by weakening the precheck.
