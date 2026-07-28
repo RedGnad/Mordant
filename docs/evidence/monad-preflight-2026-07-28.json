@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T10:48:59.751Z",
+  "repositoryCommit": "509c6827f1b804d95356ef7f52c524be36de63e8",
+  "compiler": "0.8.28+commit.7893614a",
+  "network": {
+    "rpcEndpoint": "https://testnet-rpc.monad.xyz",
+    "chainId": 10143,
+    "blockNumber": "48802500",
+    "blockHash": "0x17b37157c8c130a1e715ba3e25016ec2a968c52cc8e4da350e226b4c984b2e0a"
+  },
+  "statuses": {
+    "MONAD SIZE LIMIT": "WITHIN DOCUMENTED LIMIT",
+    "MONAD RPC PREFLIGHT": "PASSED",
+    "MONAD FACTORY CREATION": "READ-ONLY RPC SIMULATION",
+    "MONAD FACTORY → VAULT CREATION": "FORK",
+    "MONAD DEPLOYMENT": "NOT PROVEN — NO TRANSACTION BROADCAST",
+    "STANDARD EVM PORTABILITY": "BLOCKED BY EIP-170"
+  },
+  "contracts": [
+    {
+      "contract": "CleanverseAPassVerifier",
+      "constructorArguments": "0x000000000000000000000000000000000000d341, 0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9, 16",
+      "argumentNote": "Owner is the simulation caller; the A-Pass argument is the live Monad A-Pass, which the constructor requires to carry bytecode.",
+      "initCodeBytes": 3430,
+      "runtimeBytes": 2902,
+      "initCodeHash": "0x7be85a0e54620eadc6ea76699ce887a5e2ca51bea3fc58318f4cac7042ba6ba4",
+      "withinMonadLimit": true,
+      "withinEip170": true,
+      "estimatedGas": "731686",
+      "probes": [
+        {
+          "method": "eth_estimateGas",
+          "ok": true,
+          "result": "731686 gas",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "eth_call",
+          "ok": true,
+          "result": "returned 2902 bytes of runtime code, matching the compiled runtime",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "debug_traceCall",
+          "ok": true,
+          "result": "trace returned",
+          "classification": "READ-ONLY RPC SIMULATION"
+        }
+      ],
+      "status": "PASSED"
+    },
+    {
+      "contract": "CleanverseCvaAdapter",
+      "constructorArguments": "0x000000000000000000000000000000000000d341, 0x6cbA1135f61BA24867Ef125eFcA46fC7f9FDa835, 0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "argumentNote": "The token argument is an existing Monad A-Token used only because the constructor requires a code-bearing address. The judged deployment will use the freshly issued invoice A-Token.",
+      "initCodeBytes": 9717,
+      "runtimeBytes": 8904,
+      "initCodeHash": "0x9faa3d45dd06e32fe64bb5fc43ee909995bc7575c3aa1b074c01f003a51e35d1",
+      "withinMonadLimit": true,
+      "withinEip170": true,
+      "estimatedGas": "2061135",
+      "probes": [
+        {
+          "method": "eth_estimateGas",
+          "ok": true,
+          "result": "2061135 gas",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "eth_call",
+          "ok": true,
+          "result": "returned 8904 bytes of runtime code, matching the compiled runtime",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "debug_traceCall",
+          "ok": true,
+          "result": "trace returned",
+          "classification": "READ-ONLY RPC SIMULATION"
+        }
+      ],
+      "status": "PASSED"
+    },
+    {
+      "contract": "MordantFactory",
+      "constructorArguments": "0x000000000000000000000000000000000000d341, 0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "argumentNote": "The verifier argument is a placeholder that only satisfies the constructor's code-length check. The real deployment passes the CleanverseAPassVerifier deployed one step earlier, whose address cannot exist before that deployment.",
+      "initCodeBytes": 40897,
+      "runtimeBytes": 40382,
+      "initCodeHash": "0x7f8ca41bcf39fd075c7f616016a4661e94c2981b3dc9e7cecea3f0282cc8f07c",
+      "withinMonadLimit": true,
+      "withinEip170": false,
+      "estimatedGas": "8828004",
+      "probes": [
+        {
+          "method": "eth_estimateGas",
+          "ok": true,
+          "result": "8828004 gas",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "eth_call",
+          "ok": true,
+          "result": "returned 40382 bytes of runtime code, matching the compiled runtime",
+          "classification": "READ-ONLY RPC SIMULATION"
+        },
+        {
+          "method": "debug_traceCall",
+          "ok": true,
+          "result": "trace returned",
+          "classification": "READ-ONLY RPC SIMULATION"
+        }
+      ],
+      "status": "PASSED"
+    },
+    {
+      "contract": "MordantInvoiceVault",
+      "constructorArguments": "not directly constructible",
+      "argumentNote": "Not directly constructible against a remote RPC: the constructor calls asset() on a CVA adapter that is not deployed on Monad, and inventing one would fabricate state. The vault is created by the factory, which is covered separately.",
+      "initCodeBytes": 35248,
+      "runtimeBytes": 31312,
+      "initCodeHash": "0x866021e3860933845b8f02d3956c3b58db9a99bf96a5285cb8ea16ba150947e4",
+      "withinMonadLimit": true,
+      "withinEip170": false,
+      "estimatedGas": null,
+      "probes": [
+        {
+          "method": "not-attempted",
+          "ok": false,
+          "result": "Not directly constructible against a remote RPC: the constructor calls asset() on a CVA adapter that is not deployed on Monad, and inventing one would fabricate state. The vault is created by the factory, which is covered separately.",
+          "classification": "FAILED"
+        }
+      ],
+      "status": "NOT DIRECTLY CONSTRUCTIBLE"
+    }
+  ]
+}
