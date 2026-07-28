@@ -165,8 +165,20 @@ anvil --port 8547 --code-size-limit 131072 --silent &
 node scripts/m05-dryrun-local.mjs                 # configuration and journey gas
 ```
 
-The broadcasting script does not exist yet and must not be written until this plan is approved. When
-it is, it must:
+The runner exists at `scripts/m05-runner.mjs`. **It has never broadcast anything.** Sending requires
+both `--broadcast` and `MORDANT_BROADCAST_AUTHORIZED` set to an exact ceremony string; without both
+it refuses, whatever else is on the command line.
+
+```bash
+pnpm m05:check    # chain gate, balance readbacks, creation-gas estimates. Sends nothing
+pnpm m05:fork     # the whole sequence on a disposable Monad fork, every readback exercised
+```
+
+The fork run executes 34 of the 39 transactions: Phase 0's five funding transfers are unnecessary
+there because the fork's accounts start funded. On a real network they are required, and the Phase 0
+gate refuses to continue if any wallet is short.
+
+It satisfies the constraints set for it:
 
 - refuse any chain id other than 10143;
 - read each key from its own environment variable at run time, never from a file in the repository,

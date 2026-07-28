@@ -1,0 +1,526 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T12:21:55.407Z",
+  "mode": "fork",
+  "status": "FORK RUN COMPLETE",
+  "classification": "FORK",
+  "warning": "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. No private key, seed phrase or other secret material is recorded here.",
+  "chainId": 10143,
+  "startBlock": "48820501",
+  "contracts": {
+    "eligibility": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+    "settlement": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075",
+    "cva": "0x9d3da37d36bb0b825cd319ed129c2872b893f538",
+    "adapter": "0x59c4e2c6a6dc27c259d6d067a039c831e1ff4947",
+    "factory": "0x9d136eea063ede5418a6bc7beaff009bbb6cfa70",
+    "vault": "0x4D035D3634Ff2dD3c7C69754e6DE586444D6A710"
+  },
+  "steps": [
+    {
+      "phase": "gate",
+      "label": "chain id",
+      "detail": "10143 at block 48820501"
+    },
+    {
+      "phase": "gate",
+      "label": "address deployer",
+      "detail": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    {
+      "phase": "gate",
+      "label": "address buyer",
+      "detail": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityA",
+      "detail": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityB",
+      "detail": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderA",
+      "detail": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderB",
+      "detail": "0x976EA74026E726554dB657fA54763abd0C3a0aa9"
+    },
+    {
+      "phase": "gate",
+      "label": "address originator",
+      "detail": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (signs only, no MON)"
+    },
+    {
+      "phase": "P0",
+      "label": "balance deployer",
+      "detail": "10000 MON, budget 2.486, ok",
+      "ok": true
+    },
+    {
+      "phase": "P0",
+      "label": "balance buyer",
+      "detail": "10000 MON, budget 1.3654, ok",
+      "ok": true
+    },
+    {
+      "phase": "P0",
+      "label": "balance facilityA",
+      "detail": "10000 MON, budget 0.1074, ok",
+      "ok": true
+    },
+    {
+      "phase": "P0",
+      "label": "balance facilityB",
+      "detail": "10000 MON, budget 0.1032, ok",
+      "ok": true
+    },
+    {
+      "phase": "P0",
+      "label": "balance holderA",
+      "detail": "10000 MON, budget 0.1431, ok",
+      "ok": true
+    },
+    {
+      "phase": "P0",
+      "label": "balance holderB",
+      "detail": "10000 MON, budget 0.0693, ok",
+      "ok": true
+    },
+    {
+      "phase": "P1",
+      "label": "MockEligibility",
+      "detail": "0xc0bf43a4ca27e0976195e6661b099742f10507e5, 1415 B, gas 359214",
+      "hash": "0x5ba5ab7d0a181f0bd68c3e57461c3d84de274280611f5638e1ff18a6f7df77c1",
+      "address": "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    },
+    {
+      "phase": "P1",
+      "label": "settlement double",
+      "detail": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075, 2692 B, gas 712215",
+      "hash": "0x2447bea0d6ee626cc129a2da699c8108cb9f48e9a7b50219d2ed7ed14771b254",
+      "address": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075"
+    },
+    {
+      "phase": "P1",
+      "label": "CVA double",
+      "detail": "0x9d3da37d36bb0b825cd319ed129c2872b893f538, 2692 B, gas 734522",
+      "hash": "0xd8db8e5d17d8a7ae3ad15540c82761a85800e20b49ae892fc52bf570f20500aa",
+      "address": "0x9d3da37d36bb0b825cd319ed129c2872b893f538"
+    },
+    {
+      "phase": "P1",
+      "label": "MockCvaAdapter",
+      "detail": "0x59c4e2c6a6dc27c259d6d067a039c831e1ff4947, 2813 B, gas 657247",
+      "hash": "0x300cd7c8ec8ffac25882878b76ff00cf5a1e238c1c1769b8568173cc7a195b69",
+      "address": "0x59c4e2c6a6dc27c259d6d067a039c831e1ff4947"
+    },
+    {
+      "phase": "P1",
+      "label": "MordantFactory",
+      "detail": "0x9d136eea063ede5418a6bc7beaff009bbb6cfa70, 40382 B, gas 8744315",
+      "hash": "0xa8685256c831c31f942cbf73cd0ddc736838ec1b80040f98d936f56c6394763c",
+      "address": "0x9d136eea063ede5418a6bc7beaff009bbb6cfa70"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible buyer",
+      "detail": "gas 44500, block 48820507",
+      "hash": "0x526d604d7a1a83b1dbe546f9e7fdcc3369e70eaf78aac8473ef2e9677771c1c8"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible originator",
+      "detail": "gas 44488, block 48820508",
+      "hash": "0x2b6bb032007daa4b3efeb7d2afe7ee0d661238e36bda562e65341d644de76fe8"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible facilityA",
+      "detail": "gas 44500, block 48820509",
+      "hash": "0x2675582f338d1cb356c49d8237be5a8d947f948a63da5d755c3695fe1323bb9a"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible facilityB",
+      "detail": "gas 44500, block 48820510",
+      "hash": "0x44e8b781c5c51bdef2427ad3aa493b0ff788808f74eb6edc842965e188578698"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible holderA",
+      "detail": "gas 44500, block 48820511",
+      "hash": "0x4e1cf356ea488a3f28e7f7c5ced4a9da4af759f55ae745fd98eb62cdbd99af2c"
+    },
+    {
+      "phase": "P2",
+      "label": "setEligible holderB",
+      "detail": "gas 44500, block 48820512",
+      "hash": "0x9a584757f5282f684413f2319c0e53c8f7a19ff2fa5e35c67535503604255081"
+    },
+    {
+      "phase": "P2",
+      "label": "setFacility facilityA",
+      "detail": "gas 53579, block 48820513",
+      "hash": "0x3c8ced9c6c98a42b9a93ce2c20f6f2ae4f4883ebe62e7112983b0191abd5a567"
+    },
+    {
+      "phase": "P2",
+      "label": "setFacility facilityB",
+      "detail": "gas 53579, block 48820514",
+      "hash": "0xafe5bf5b6d6789f01bd107fe4d80e5f13ba0dcf9b16cbf8a24801f1535d28c99"
+    },
+    {
+      "phase": "P2",
+      "label": "setCvaAdapter",
+      "detail": "gas 51230, block 48820515",
+      "hash": "0xd15317676c9f83958f602f5ad222c3713a1c3efe2769652d0c6451da4c591f35"
+    },
+    {
+      "phase": "P2",
+      "label": "setSettlementToken",
+      "detail": "gas 50547, block 48820516",
+      "hash": "0x8e71a7161c78fc86c0e43f250c34b4425dc5786348c6c425c6e2f482f5ae18aa"
+    },
+    {
+      "phase": "P2",
+      "label": "createInvoiceVault",
+      "detail": "gas 6516147, block 48820517",
+      "hash": "0x943c4003f663594ffa4189d4d49c4d8683a5f0213d709ac1cbf35e359fda40e4"
+    },
+    {
+      "phase": "P2",
+      "label": "vault",
+      "detail": "0x4D035D3634Ff2dD3c7C69754e6DE586444D6A710"
+    },
+    {
+      "phase": "P2",
+      "label": "setIdentityValid(vault)",
+      "detail": "gas 44197, block 48820518",
+      "hash": "0x8333fb3e0e606eb98a0ffc4515292d52c57aee6c8d7a756274099f7eab689c55"
+    },
+    {
+      "phase": "P2",
+      "label": "mint CVA supply",
+      "detail": "gas 68362, block 48820519",
+      "hash": "0xcf6f0e8f6e82563cb4b26439e3432edcaac1d295c250c0d7a6b4f65f87cf5c28"
+    },
+    {
+      "phase": "P2",
+      "label": "approve adapter",
+      "detail": "gas 46281, block 48820520",
+      "hash": "0x57e334ee0f8083b8294632eda0009f0f6211a935030e3e04200b2522cda82e0b"
+    },
+    {
+      "phase": "P2",
+      "label": "creditVault",
+      "detail": "gas 74819, block 48820521",
+      "hash": "0x8d4d090aee9f9ed6b2953f8029b425a8e9a514a744d32d3fc2f86fd4b4df24d3"
+    },
+    {
+      "phase": "P2",
+      "label": "mint settlement funder",
+      "detail": "gas 68362, block 48820522",
+      "hash": "0x83cbf19ae3cd127695043a83e4c6117a2f1e8437f38a40a54a6f642e110763dd"
+    },
+    {
+      "phase": "P2",
+      "label": "mint settlement buyer",
+      "detail": "gas 51274, block 48820523",
+      "hash": "0x9f874b6d6ae682b686aaf804562b2250b5f06a4377656d02432865dc29dbbc1c"
+    },
+    {
+      "phase": "P3",
+      "label": "approve funding",
+      "detail": "gas 46281, block 48820524",
+      "hash": "0x5119f34a2d3ba170071e6189de8de21a0fcd627b89344b156974859f0431dbf1"
+    },
+    {
+      "phase": "P3",
+      "label": "activate 90/10",
+      "detail": "gas 526533, block 48820525",
+      "hash": "0xe269b3dc5ac386b76ab8b98f776537dc7f29dfa1088325f7886eb9321e07c884"
+    },
+    {
+      "phase": "P3",
+      "label": "transfer 40 units",
+      "detail": "gas 211522, block 48820526",
+      "hash": "0x4086e590969b02ef6c817808d476a2d2879e4adc905d8767d62f6fb051a5d25e"
+    },
+    {
+      "phase": "P3",
+      "label": "commitConflict",
+      "detail": "gas 184248, block 48820527",
+      "hash": "0x0710c336e882cf0ee9f63dc0818222a732bf723d0613373f46a5af82d1da9f02"
+    },
+    {
+      "phase": "P3",
+      "label": "revealConflict",
+      "detail": "gas 180830, block 48820528",
+      "hash": "0x595ff659f8e44e8317e7fb2d304ca6185de46d43a269e9f84dc56a1440afacd9"
+    },
+    {
+      "phase": "P3",
+      "label": "cure window",
+      "detail": "advanced on the fork"
+    },
+    {
+      "phase": "P3",
+      "label": "finalizeConflict",
+      "detail": "gas 140851, block 48820530",
+      "hash": "0x6c316c277d1e979aba59b45b8cde756ed237f25f864dafbf01c26ecc31df1c89"
+    },
+    {
+      "phase": "P3",
+      "label": "claimBond holderA",
+      "detail": "gas 195100, block 48820531",
+      "hash": "0x4e7c5d57ce57ca23c1d7cf99cb5df5b9251bfdaee923073415e4b2965d958d0d"
+    },
+    {
+      "phase": "P3",
+      "label": "claimBond holderB",
+      "detail": "gas 155951, block 48820532",
+      "hash": "0x0681956472551c7170055ac43cf8402244755a87aa79448ad52400a8b7fed4a8"
+    },
+    {
+      "phase": "P3",
+      "label": "approve redemption",
+      "detail": "gas 46293, block 48820533",
+      "hash": "0xd69413fb9c61a8ddc9418d0478f5c6d40172787b220c35cbb7a34697cb419084"
+    },
+    {
+      "phase": "P3",
+      "label": "fundRedemption",
+      "detail": "gas 130563, block 48820534",
+      "hash": "0xa304017b0c9390c41b3ac4cff9626857e2e67083e3e5257278c1db8347d7e343"
+    },
+    {
+      "phase": "P3",
+      "label": "redeem holderA",
+      "detail": "gas 248566, block 48820535",
+      "hash": "0x48d049bf3845fee31970eb2cd8bb8ea5bafa074941dc303fb53745f98512d1d2"
+    },
+    {
+      "phase": "P3",
+      "label": "redeem holderB",
+      "detail": "gas 183917, block 48820536",
+      "hash": "0x57b5f0b5a2da8e0b5c4cc49c9183a475c99ab36e4fd1b2f9daf3d60e4163f219"
+    },
+    {
+      "phase": "done",
+      "label": "transactions sent",
+      "detail": "34"
+    }
+  ],
+  "transactions": [
+    {
+      "label": "MockEligibility",
+      "hash": "0x5ba5ab7d0a181f0bd68c3e57461c3d84de274280611f5638e1ff18a6f7df77c1",
+      "block": "48820502",
+      "gas": "359214"
+    },
+    {
+      "label": "settlement double",
+      "hash": "0x2447bea0d6ee626cc129a2da699c8108cb9f48e9a7b50219d2ed7ed14771b254",
+      "block": "48820503",
+      "gas": "712215"
+    },
+    {
+      "label": "CVA double",
+      "hash": "0xd8db8e5d17d8a7ae3ad15540c82761a85800e20b49ae892fc52bf570f20500aa",
+      "block": "48820504",
+      "gas": "734522"
+    },
+    {
+      "label": "MockCvaAdapter",
+      "hash": "0x300cd7c8ec8ffac25882878b76ff00cf5a1e238c1c1769b8568173cc7a195b69",
+      "block": "48820505",
+      "gas": "657247"
+    },
+    {
+      "label": "MordantFactory",
+      "hash": "0xa8685256c831c31f942cbf73cd0ddc736838ec1b80040f98d936f56c6394763c",
+      "block": "48820506",
+      "gas": "8744315"
+    },
+    {
+      "label": "setEligible buyer",
+      "hash": "0x526d604d7a1a83b1dbe546f9e7fdcc3369e70eaf78aac8473ef2e9677771c1c8",
+      "block": "48820507",
+      "gas": "44500"
+    },
+    {
+      "label": "setEligible originator",
+      "hash": "0x2b6bb032007daa4b3efeb7d2afe7ee0d661238e36bda562e65341d644de76fe8",
+      "block": "48820508",
+      "gas": "44488"
+    },
+    {
+      "label": "setEligible facilityA",
+      "hash": "0x2675582f338d1cb356c49d8237be5a8d947f948a63da5d755c3695fe1323bb9a",
+      "block": "48820509",
+      "gas": "44500"
+    },
+    {
+      "label": "setEligible facilityB",
+      "hash": "0x44e8b781c5c51bdef2427ad3aa493b0ff788808f74eb6edc842965e188578698",
+      "block": "48820510",
+      "gas": "44500"
+    },
+    {
+      "label": "setEligible holderA",
+      "hash": "0x4e1cf356ea488a3f28e7f7c5ced4a9da4af759f55ae745fd98eb62cdbd99af2c",
+      "block": "48820511",
+      "gas": "44500"
+    },
+    {
+      "label": "setEligible holderB",
+      "hash": "0x9a584757f5282f684413f2319c0e53c8f7a19ff2fa5e35c67535503604255081",
+      "block": "48820512",
+      "gas": "44500"
+    },
+    {
+      "label": "setFacility facilityA",
+      "hash": "0x3c8ced9c6c98a42b9a93ce2c20f6f2ae4f4883ebe62e7112983b0191abd5a567",
+      "block": "48820513",
+      "gas": "53579"
+    },
+    {
+      "label": "setFacility facilityB",
+      "hash": "0xafe5bf5b6d6789f01bd107fe4d80e5f13ba0dcf9b16cbf8a24801f1535d28c99",
+      "block": "48820514",
+      "gas": "53579"
+    },
+    {
+      "label": "setCvaAdapter",
+      "hash": "0xd15317676c9f83958f602f5ad222c3713a1c3efe2769652d0c6451da4c591f35",
+      "block": "48820515",
+      "gas": "51230"
+    },
+    {
+      "label": "setSettlementToken",
+      "hash": "0x8e71a7161c78fc86c0e43f250c34b4425dc5786348c6c425c6e2f482f5ae18aa",
+      "block": "48820516",
+      "gas": "50547"
+    },
+    {
+      "label": "createInvoiceVault",
+      "hash": "0x943c4003f663594ffa4189d4d49c4d8683a5f0213d709ac1cbf35e359fda40e4",
+      "block": "48820517",
+      "gas": "6516147"
+    },
+    {
+      "label": "setIdentityValid(vault)",
+      "hash": "0x8333fb3e0e606eb98a0ffc4515292d52c57aee6c8d7a756274099f7eab689c55",
+      "block": "48820518",
+      "gas": "44197"
+    },
+    {
+      "label": "mint CVA supply",
+      "hash": "0xcf6f0e8f6e82563cb4b26439e3432edcaac1d295c250c0d7a6b4f65f87cf5c28",
+      "block": "48820519",
+      "gas": "68362"
+    },
+    {
+      "label": "approve adapter",
+      "hash": "0x57e334ee0f8083b8294632eda0009f0f6211a935030e3e04200b2522cda82e0b",
+      "block": "48820520",
+      "gas": "46281"
+    },
+    {
+      "label": "creditVault",
+      "hash": "0x8d4d090aee9f9ed6b2953f8029b425a8e9a514a744d32d3fc2f86fd4b4df24d3",
+      "block": "48820521",
+      "gas": "74819"
+    },
+    {
+      "label": "mint settlement funder",
+      "hash": "0x83cbf19ae3cd127695043a83e4c6117a2f1e8437f38a40a54a6f642e110763dd",
+      "block": "48820522",
+      "gas": "68362"
+    },
+    {
+      "label": "mint settlement buyer",
+      "hash": "0x9f874b6d6ae682b686aaf804562b2250b5f06a4377656d02432865dc29dbbc1c",
+      "block": "48820523",
+      "gas": "51274"
+    },
+    {
+      "label": "approve funding",
+      "hash": "0x5119f34a2d3ba170071e6189de8de21a0fcd627b89344b156974859f0431dbf1",
+      "block": "48820524",
+      "gas": "46281"
+    },
+    {
+      "label": "activate 90/10",
+      "hash": "0xe269b3dc5ac386b76ab8b98f776537dc7f29dfa1088325f7886eb9321e07c884",
+      "block": "48820525",
+      "gas": "526533"
+    },
+    {
+      "label": "transfer 40 units",
+      "hash": "0x4086e590969b02ef6c817808d476a2d2879e4adc905d8767d62f6fb051a5d25e",
+      "block": "48820526",
+      "gas": "211522"
+    },
+    {
+      "label": "commitConflict",
+      "hash": "0x0710c336e882cf0ee9f63dc0818222a732bf723d0613373f46a5af82d1da9f02",
+      "block": "48820527",
+      "gas": "184248"
+    },
+    {
+      "label": "revealConflict",
+      "hash": "0x595ff659f8e44e8317e7fb2d304ca6185de46d43a269e9f84dc56a1440afacd9",
+      "block": "48820528",
+      "gas": "180830"
+    },
+    {
+      "label": "finalizeConflict",
+      "hash": "0x6c316c277d1e979aba59b45b8cde756ed237f25f864dafbf01c26ecc31df1c89",
+      "block": "48820530",
+      "gas": "140851"
+    },
+    {
+      "label": "claimBond holderA",
+      "hash": "0x4e7c5d57ce57ca23c1d7cf99cb5df5b9251bfdaee923073415e4b2965d958d0d",
+      "block": "48820531",
+      "gas": "195100"
+    },
+    {
+      "label": "claimBond holderB",
+      "hash": "0x0681956472551c7170055ac43cf8402244755a87aa79448ad52400a8b7fed4a8",
+      "block": "48820532",
+      "gas": "155951"
+    },
+    {
+      "label": "approve redemption",
+      "hash": "0xd69413fb9c61a8ddc9418d0478f5c6d40172787b220c35cbb7a34697cb419084",
+      "block": "48820533",
+      "gas": "46293"
+    },
+    {
+      "label": "fundRedemption",
+      "hash": "0xa304017b0c9390c41b3ac4cff9626857e2e67083e3e5257278c1db8347d7e343",
+      "block": "48820534",
+      "gas": "130563"
+    },
+    {
+      "label": "redeem holderA",
+      "hash": "0x48d049bf3845fee31970eb2cd8bb8ea5bafa074941dc303fb53745f98512d1d2",
+      "block": "48820535",
+      "gas": "248566"
+    },
+    {
+      "label": "redeem holderB",
+      "hash": "0x57b5f0b5a2da8e0b5c4cc49c9183a475c99ab36e4fd1b2f9daf3d60e4163f219",
+      "block": "48820536",
+      "gas": "183917"
+    }
+  ]
+}

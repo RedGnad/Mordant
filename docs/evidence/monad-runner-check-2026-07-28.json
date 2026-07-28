@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T12:21:39.580Z",
+  "mode": "check",
+  "status": "CHECK PASSED",
+  "classification": "READ-ONLY RPC SIMULATION",
+  "warning": "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. No private key, seed phrase or other secret material is recorded here.",
+  "chainId": 10143,
+  "startBlock": "48820453",
+  "contracts": null,
+  "steps": [
+    {
+      "phase": "gate",
+      "label": "chain id",
+      "detail": "10143 at block 48820453"
+    },
+    {
+      "phase": "gate",
+      "label": "address deployer",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address buyer",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityA",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityB",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderA",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderB",
+      "detail": "NOT CONFIGURED"
+    },
+    {
+      "phase": "gate",
+      "label": "address originator",
+      "detail": "NOT CONFIGURED (signs only, no MON)"
+    },
+    {
+      "phase": "P0",
+      "label": "balance deployer",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P0",
+      "label": "balance buyer",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P0",
+      "label": "balance facilityA",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P0",
+      "label": "balance facilityB",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P0",
+      "label": "balance holderA",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P0",
+      "label": "balance holderB",
+      "detail": "NOT CONFIGURED, cannot check",
+      "ok": false
+    },
+    {
+      "phase": "P1",
+      "label": "estimate MockEligibility",
+      "detail": "363115 gas"
+    },
+    {
+      "phase": "P1",
+      "label": "estimate settlement double",
+      "detail": "736949 gas"
+    },
+    {
+      "phase": "P1",
+      "label": "estimate CVA double",
+      "detail": "765480 gas"
+    },
+    {
+      "phase": "P1",
+      "label": "estimate MockCvaAdapter",
+      "detail": "663394 gas"
+    },
+    {
+      "phase": "P1",
+      "label": "estimate MordantFactory",
+      "detail": "8828004 gas"
+    },
+    {
+      "phase": "P1",
+      "label": "deployment gas subtotal",
+      "detail": "11356942 gas"
+    },
+    {
+      "phase": "check",
+      "label": "result",
+      "detail": "read-only check complete, nothing was sent"
+    }
+  ],
+  "transactions": []
+}
