@@ -34,8 +34,8 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import {
   DEFAULT_MAX_GAS_PRICE_WEI, MONAD_CHAIN_ID, RunnerError, assertBroadcastAuthorized,
-  assertChainId, assertFunded, assertGasPriceUnderCap, loadAccounts, waitForCureDeadline,
-  writeCheckpoint,
+  assertChainId, assertDistinctRoles, assertFunded, assertGasPriceUnderCap, classifyRun,
+  loadAccounts, waitForCureDeadline, writeCheckpoint,
 } from "./m05-runner-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -78,9 +78,8 @@ async function main() {
     generatedAt: new Date().toISOString(),
     mode,
     status,
-    classification: mode === "fork" ? "FORK"
-      : mode === "check" ? "READ-ONLY RPC SIMULATION"
-        : "MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE",
+    // A stopped or partial broadcast is an attempt, never a live deployment.
+    classification: classifyRun(mode, status, sent.filter((tx) => tx.status === "CONFIRMED").length),
     warning:
       "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. The five"
       + " prefunding transfers are external to this runner; it executes 34 of the 39 ceremony"
@@ -161,6 +160,10 @@ async function main() {
     }
     record("gate", "address originator", `${originator.address} (signs only, sends nothing)`);
 
+    // --- gate 5: every role is a distinct wallet ---
+    const distinct = assertDistinctRoles(accounts, originator);
+    record("gate", "role uniqueness", `${distinct} roles, all distinct addresses`);
+
     // --- Phase 0 gate: balances. The five transfers themselves are external. ---
     const funding = await assertFunded(publicClient, accounts);
     for (const entry of funding) {
@@ -207,16 +210,27 @@ async function main() {
     const deploy = async (role, art, args, label) => {
       const hash = await createWalletClient({ account: accounts[role], chain, transport })
         .deployContract({ abi: art.abi, bytecode: art.bytecode, args });
+      // Checkpoint the hash the instant it exists. An interruption between broadcast and receipt
+      // must still leave a record of what was sent.
+      const entry = { label, role, hash, status: "PENDING", block: null, gas: null, readback: null };
+      sent.push(entry);
+      checkpoint();
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      sent.push({ label, role, hash, block: receipt.blockNumber.toString(), gas: receipt.gasUsed.toString() });
+      entry.block = receipt.blockNumber.toString();
+      entry.gas = receipt.gasUsed.toString();
+      entry.status = receipt.status === "success" ? "CONFIRMED" : "REVERTED";
       checkpoint();
       if (receipt.status !== "success") throw new RunnerError(`${label} reverted`);
       const code = await publicClient.getCode({ address: receipt.contractAddress });
       const size = (code.length - 2) / 2;
       const expected = (art.runtime.length - 2) / 2;
       if (size !== expected) {
+        entry.readback = "FAILED";
+        checkpoint();
         throw new RunnerError(`${label} readback failed: ${size} B installed, expected ${expected} B`);
       }
+      entry.readback = "PASSED";
+      entry.address = receipt.contractAddress;
       record("P1", label, `${receipt.contractAddress}, ${size} B, gas ${receipt.gasUsed}`);
       checkpoint();
       return receipt.contractAddress;
@@ -225,13 +239,24 @@ async function main() {
     const send = async (phase, role, address, abi, fn, args, label, readback) => {
       const hash = await createWalletClient({ account: accounts[role], chain, transport })
         .writeContract({ address, abi, functionName: fn, args });
+      // Same rule as deployments: the hash is recorded before the receipt is awaited.
+      const entry = { label, role, hash, status: "PENDING", block: null, gas: null, readback: null };
+      sent.push(entry);
+      checkpoint();
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      sent.push({ label, role, hash, block: receipt.blockNumber.toString(), gas: receipt.gasUsed.toString() });
+      entry.block = receipt.blockNumber.toString();
+      entry.gas = receipt.gasUsed.toString();
+      entry.status = receipt.status === "success" ? "CONFIRMED" : "REVERTED";
       checkpoint();
       if (receipt.status !== "success") throw new RunnerError(`${label} reverted`);
       if (readback) {
         const problem = await readback(receipt);
-        if (problem) throw new RunnerError(`${label} readback failed: ${problem}`);
+        if (problem) {
+          entry.readback = "FAILED";
+          checkpoint();
+          throw new RunnerError(`${label} readback failed: ${problem}`);
+        }
+        entry.readback = "PASSED";
       }
       record(phase, label, `gas ${receipt.gasUsed}, block ${receipt.blockNumber}`);
       checkpoint();
@@ -458,6 +483,10 @@ async function main() {
     }
     record("done", "final readback", "redeemedFace 110e6, receivable Redeemed");
     record("done", "transactions sent", `${sent.length} of the 34 the runner owns`);
+    const confirmed = sent.filter((tx) => tx.status === "CONFIRMED").length;
+    if (confirmed !== sent.length) {
+      throw new RunnerError(`final readback: ${sent.length - confirmed} transaction(s) not confirmed`);
+    }
     status = mode === "fork" ? "FORK RUN COMPLETE" : "MONAD RUN COMPLETE";
     checkpoint();
     return { status, out: checkpointPath };

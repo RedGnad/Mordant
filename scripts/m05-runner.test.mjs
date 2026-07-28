@@ -6,8 +6,9 @@ import { test } from "node:test";
 
 import {
   BROADCAST_CEREMONY, BUDGET, DEFAULT_MAX_GAS_PRICE_WEI, MONAD_CHAIN_ID, RunnerError,
-  assertBroadcastAuthorized, assertChainId, assertFunded, assertGasPriceUnderCap, loadAccounts,
-  scrubReport, waitForCureDeadline, writeCheckpoint,
+  assertBroadcastAuthorized, assertChainId, assertDistinctRoles, assertFunded,
+  assertGasPriceUnderCap, classifyRun, loadAccounts, scrubReport, waitForCureDeadline,
+  writeCheckpoint,
 } from "./m05-runner-lib.mjs";
 
 /**
@@ -253,4 +254,75 @@ test("writing refuses outright if a known secret survives scrubbing", () => {
     () => writeCheckpoint(join(directory, "run"), { note: `prefix-${KEY}-suffix` }, [KEY]),
     /refusing to write an artifact containing secret material/,
   );
+});
+
+// --- 8. role collisions ---
+
+test("two roles sharing an address are refused", () => {
+  const accounts = Object.fromEntries(
+    Object.keys(BUDGET).map((role, index) => [role, { address: address(index + 1) }]),
+  );
+  const originator = { address: address(9) };
+  assert.equal(assertDistinctRoles(accounts, originator), 7, "seven roles, all distinct");
+
+  // The exact collision the first check artifact shipped with.
+  assert.throws(
+    () => assertDistinctRoles(accounts, { address: accounts.facilityA.address }),
+    (error) => {
+      assert.ok(error instanceof RunnerError);
+      assert.match(error.message, /facilityA.*originator|originator.*facilityA/);
+      assert.match(error.message, /seven distinct wallets/);
+      return true;
+    },
+  );
+
+  // Case differences must not slip through.
+  const collided = { ...accounts, holderB: { address: accounts.buyer.address.toUpperCase() } };
+  assert.throws(() => assertDistinctRoles(collided, originator), /share the same address/);
+});
+
+// --- 9. classification of a partial run ---
+
+test("a stopped or partial broadcast is an attempt, never live", () => {
+  const attempt = "MONAD BROADCAST ATTEMPT / PROTOCOL DOUBLE / NOT CLEANVERSE";
+  const live = "MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE";
+
+  assert.equal(classifyRun("broadcast", "STOPPED", 0), attempt);
+  assert.equal(classifyRun("broadcast", "STOPPED", 33), attempt);
+  assert.equal(classifyRun("broadcast", "MONAD RUN COMPLETE", 33), attempt,
+    "one transaction short is not live");
+  assert.equal(classifyRun("broadcast", "MONAD RUN COMPLETE", 34), live);
+
+  // Other modes never claim either label.
+  assert.equal(classifyRun("fork", "FORK RUN COMPLETE", 34), "FORK");
+  assert.equal(classifyRun("check", "CHECK PASSED", 0), "READ-ONLY RPC SIMULATION");
+});
+
+// --- 10. interruption between broadcast and receipt ---
+
+test("a hash broadcast but not yet mined survives an interruption", () => {
+  const directory = mkdtempSync(join(tmpdir(), "m05-"));
+  const prefix = join(directory, "run");
+  const pending = {
+    label: "createInvoiceVault", role: "buyer", hash: `0x${"7f".repeat(32)}`,
+    status: "PENDING", block: null, gas: null, readback: null,
+  };
+  // Exactly the state the runner checkpoints between writeContract and waitForTransactionReceipt.
+  const report = {
+    status: "STOPPED",
+    classification: classifyRun("broadcast", "STOPPED", 21),
+    transactions: [
+      { label: "MordantFactory", role: "deployer", hash: `0x${"ab".repeat(32)}`, status: "CONFIRMED", block: "10", gas: "8744315", readback: "PASSED" },
+      pending,
+    ],
+  };
+  const written = writeCheckpoint(prefix, report, []);
+  const parsed = JSON.parse(readFileSync(written, "utf8"));
+
+  assert.equal(parsed.transactions.length, 2);
+  assert.equal(parsed.transactions[1].status, "PENDING");
+  assert.equal(parsed.transactions[1].hash, `0x${"7f".repeat(32)}`,
+    "the broadcast hash is recoverable even though no receipt arrived");
+  assert.equal(parsed.transactions[1].block, null);
+  assert.equal(parsed.classification, "MONAD BROADCAST ATTEMPT / PROTOCOL DOUBLE / NOT CLEANVERSE");
 });

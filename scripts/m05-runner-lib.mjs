@@ -157,6 +157,44 @@ export function loadAccounts(mode, env, toAccount) {
   return { accounts, originator: toAccount(originatorKey), secrets };
 }
 
+/**
+ * Every role must be a distinct address. Two roles sharing one wallet would silently break the
+ * separation the vault relies on, and some pairs are not rejected by the contracts themselves.
+ */
+export function assertDistinctRoles(accounts, originator) {
+  const seen = new Map();
+  const entries = [...Object.entries(accounts), ["originator", originator]];
+  for (const [role, entry] of entries) {
+    const address = entry?.address;
+    if (!address) {
+      continue;
+    }
+    const key = address.toLowerCase();
+    const previous = seen.get(key);
+    if (previous !== undefined) {
+      throw new RunnerError(
+        `BLOCKED — "${previous}" and "${role}" share the same address. The ceremony needs seven`
+        + " distinct wallets.",
+      );
+    }
+    seen.set(key, role);
+  }
+  return entries.length;
+}
+
+/**
+ * A run that stopped is not a live deployment. Only a complete broadcast, with every transaction
+ * sent and every readback passed, earns the LIVE classification.
+ */
+export function classifyRun(mode, status, executed, expected = 34) {
+  if (mode === "fork") return "FORK";
+  if (mode === "check") return "READ-ONLY RPC SIMULATION";
+  const complete = status === "MONAD RUN COMPLETE" && executed === expected;
+  return complete
+    ? "MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE"
+    : "MONAD BROADCAST ATTEMPT / PROTOCOL DOUBLE / NOT CLEANVERSE";
+}
+
 /** Every spending wallet must hold its budget before Phase 1 starts. */
 export async function assertFunded(publicClient, accounts, budgets = BUDGET) {
   const results = [];

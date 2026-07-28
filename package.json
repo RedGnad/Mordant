@@ -21,7 +21,7 @@
     "test:e2e": "playwright test",
     "evidence:cleanverse": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/cli.js",
     "test": "tsc --noEmit && pnpm test:unit && forge test --root contracts -vvv",
-    "validate": "eslint . && tsc --noEmit && pnpm test:unit && forge test --root contracts -vvv && forge fmt --root contracts --check && pnpm evidence:cleanverse && pnpm secret:scan && next build --webpack",
+    "validate": "eslint . && tsc --noEmit && pnpm test:unit && pnpm test:runner && forge test --root contracts -vvv && forge fmt --root contracts --check && pnpm evidence:cleanverse && pnpm secret:scan && next build --webpack",
     "secret:scan": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/secret-scan-cli.js",
     "localnet": "node scripts/localnet.mjs",
     "localnet:deploy": "node scripts/localnet.mjs --once",
