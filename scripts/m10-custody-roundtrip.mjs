@@ -17,8 +17,10 @@
  * This is NOT a Mordant settlement and must never be described as one. No vault, no adapter, no
  * pledge, no invoice A-Token.
  *
- * If the outbound transfer succeeds and the return does not, the run stops and records the balance
- * left in the probe plus the recovery command. It never retries or improvises a second send.
+ * If the outbound transfer succeeds and the return does not, the run records what is stranded and
+ * what a recovery would need, as data rather than as a runnable command, and sends nothing further.
+ * If the return's hash exists but its receipt never resolved, it offers no recovery at all: the
+ * transaction may still land, and acting on a snapshot would risk sending the same unit twice.
  *
  * The signing key belongs to the wallet owner. This runner reads it from the environment and never
  * generates, derives, requests or persists one.
@@ -30,7 +32,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createPublicClient, createWalletClient, http, keccak256, parseEventLogs } from "viem";
+import {
+  createPublicClient, createWalletClient, encodeFunctionData, http, keccak256, parseEventLogs,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { reconcileTransfer } from "./m07-ausdc-transfer.mjs";
@@ -175,17 +179,45 @@ export function assertApassUsable(label, address, envelope, onchainValid, blockT
 /**
  * The verdict.
  *
- * A round trip is proven only when value went out, came back, and the probe ends empty. The
- * partial state is called out explicitly because it is the one with a consequence: an atomic unit
- * sitting in a contract, needing a decision rather than an automatic retry.
+ * A round trip is proven only when value went out, came back, and the probe ends empty.
+ *
+ * `RETURN PENDING` is separated from `FUNDS IN PROBE` because they call for opposite responses. A
+ * return whose hash exists but whose receipt never resolved may still land: the balance reading as
+ * stranded is a snapshot, not a conclusion, and proposing a recovery against a transaction that is
+ * still in flight invites sending the same unit twice. So that state offers no recovery at all
+ * until the receipt is resolved.
  */
-export function classifyRoundTrip({ outbound, inbound, probeFinalBalance }) {
+export function classifyRoundTrip({ outbound, inbound, probeFinalBalance, inboundHash, inboundReceiptResolved }) {
   if (!outbound?.ok) return "CONTRACT AUSDC CUSTODY ROUND-TRIP: OUTBOUND FAILED";
+  if (inboundHash && !inboundReceiptResolved) {
+    return "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — RETURN PENDING";
+  }
   if (!inbound?.ok) return "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — FUNDS IN PROBE";
   if (probeFinalBalance !== 0n) {
     return "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — FUNDS IN PROBE";
   }
   return "CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN";
+}
+
+/**
+ * What a recovery would need, recorded as data rather than as a runnable command.
+ *
+ * A shell line containing `--private-key $MORDANT_KEY_...` puts the key into the arguments of a
+ * process, where it is visible to anything that can list processes and lands in shell history. The
+ * artifact therefore records the target, function, arguments and calldata, and says plainly that a
+ * recovery must read the key from the environment through a dedicated mode.
+ */
+export function describeRecovery({ probe, token, owner, strandedUnits, encodeCalldata }) {
+  return {
+    strandedAtomicUnits: strandedUnits.toString(),
+    target: probe,
+    signature: "sweep(address,address,uint256)",
+    arguments: [token, owner, strandedUnits.toString()],
+    calldata: encodeCalldata(),
+    mustBeSignedBy: owner,
+    note: "Not executed automatically, and deliberately not expressed as a runnable command: a"
+      + " recovery must read the signing key from the environment, never from process arguments.",
+  };
 }
 
 /** Read endpoints only. This mission makes no Cleanverse write call. */
@@ -468,6 +500,36 @@ async function main() {
     stop(`the outbound transfer did not settle cleanly. Hash ${outbound.hash}. No sweep was attempted.`);
   }
 
+  // --- cost the sweep for real, now that the probe holds the unit ---
+  // The preflight could only bound this at the ceiling, because estimating a sweep of a balance the
+  // probe did not yet hold reverts. Now it is measurable, so it is measured rather than assumed.
+  let sweepGas;
+  let sweepGasPrice;
+  try {
+    sweepGas = await client.estimateContractGas({
+      address: PROBE, abi: PROBE_ABI, functionName: "sweep",
+      args: [aUsdc, ownerAddress, AMOUNT], account: ownerAddress });
+  } catch (error) {
+    stop(`the sweep could not be estimated after funding the probe:`
+      + ` ${(error.shortMessage ?? error.message).slice(0, 140)}.`
+      + ` One atomic unit is now held at ${PROBE}; no further transaction was sent.`);
+  }
+  try {
+    sweepGasPrice = await client.getGasPrice();
+  } catch (error) {
+    stop(`the gas price could not be re-read before the sweep:`
+      + ` ${(error.shortMessage ?? error.message).slice(0, 140)}.`
+      + ` One atomic unit is now held at ${PROBE}; no further transaction was sent.`);
+  }
+  const sweepBudget = assertGasUsable(sweepGas, sweepGasPrice, GAS_LIMIT_CEILING);
+  const remainingNative = await client.getBalance({ address: ownerAddress });
+  assertFundedFor(ownerAddress, remainingNative, sweepBudget);
+  report.gas = { ...report.gas, sweepEstimateMeasured: sweepGas.toString(),
+    sweepPrice: sweepGasPrice.toString(), sweepBudgetWei: sweepBudget.toString(),
+    ownerNativeBeforeSweepWei: remainingNative.toString() };
+  checkpoint();
+  note("sweep gas, measured", `${sweepGas} at ${sweepGasPrice} wei, budget ${sweepBudget} wei`);
+
   // --- transaction 2: probe -> owner, through the probe's own sweep ---
   let inbound = null;
   let inboundError = null;
@@ -483,6 +545,10 @@ async function main() {
     inboundError = (error.shortMessage ?? error.message).slice(0, 300);
     note("sweep back", `did not complete: ${inboundError}`);
   }
+  // A hash that exists without a resolved receipt is not a failure, it is an unknown. The
+  // checkpoint wrote it before the wait, so it survives here.
+  const inboundHash = report.inbound?.hash ?? null;
+  const inboundReceiptResolved = report.inbound?.receipt === true;
 
   // --- final readbacks ---
   const finalOwner = await balanceOf(ownerAddress);
@@ -502,21 +568,33 @@ async function main() {
   report.balances = { ...report.balances,
     final: { owner: finalOwner.toString(), probe: finalProbe.toString() } };
   report.readbackAfter = { canTransfer: afterPrecheck, verifyApass: verifyAfter };
-  report.classification = classifyRoundTrip({ outbound, inbound, probeFinalBalance: finalProbe });
+  report.classification = classifyRoundTrip({
+    outbound, inbound, probeFinalBalance: finalProbe, inboundHash, inboundReceiptResolved });
   report.status = "COMPLETE";
+  if (inboundError) report.inboundError = inboundError;
 
-  if (report.classification.includes("PARTIAL")) {
-    // The unit is in a contract. That needs a decision, not an automatic retry, so the run records
-    // what is stranded and how to recover it and sends nothing further.
-    report.recovery = {
-      strandedAtomicUnits: finalProbe.toString(),
-      strandedHuman: format(finalProbe),
-      owner: ownerAddress,
-      note: "Not executed automatically. Review before running.",
-      command: `cast send ${PROBE} "sweep(address,address,uint256)" ${aUsdc} ${ownerAddress}`
-        + ` ${finalProbe} --rpc-url ${"$MONAD_RPC_URL"} --private-key ${"$MORDANT_KEY_" + ownerRole}`,
+  if (report.classification.includes("RETURN PENDING")) {
+    // The return may still land. Treating this balance as stranded and acting on it risks sending
+    // the same unit twice, so no recovery is offered until the receipt resolves.
+    report.pendingReturn = {
+      hash: inboundHash,
+      probeBalanceAtSnapshot: finalProbe.toString(),
+      note: "The return transaction exists but its receipt was not resolved. No recovery is"
+        + " offered and none may be attempted until this receipt is resolved: the balance above"
+        + " is a snapshot, not a conclusion.",
       inboundError,
     };
+    process.stdout.write(`\n  RETURN PENDING: ${inboundHash}\n`);
+    process.stdout.write("  Resolve this receipt before considering any recovery.\n");
+  } else if (report.classification.includes("FUNDS IN PROBE")) {
+    // The unit is in the contract and the return is known not to have landed. What a recovery
+    // needs is recorded as data; it is deliberately not a runnable command.
+    report.recovery = describeRecovery({
+      probe: PROBE, token: aUsdc, owner: ownerAddress, strandedUnits: finalProbe,
+      encodeCalldata: () => encodeFunctionData({
+        abi: PROBE_ABI, functionName: "sweep", args: [aUsdc, ownerAddress, finalProbe] }),
+    });
+    report.recovery.strandedHuman = format(finalProbe);
     process.stdout.write(`\n  FUNDS IN PROBE: ${format(finalProbe)} at ${PROBE}\n`);
     process.stdout.write("  No further transaction was sent. See report.recovery.\n");
   }

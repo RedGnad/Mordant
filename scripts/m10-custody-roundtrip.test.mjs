@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   assertApassUsable, assertProbeCodeMatches, assertProbeOwnedBy, assertUnchanged, classifyRoundTrip,
+  describeRecovery,
 } from "./m10-custody-roundtrip.mjs";
 import { ControlError } from "./runner-controls.mjs";
 
@@ -134,12 +135,80 @@ test("only a completed round trip leaving the probe empty is proven", () => {
     "CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN");
 });
 
+test("a return whose receipt never resolved is pending, never stranded", () => {
+  // The transaction may still land, so this must not be reported as funds sitting in the probe.
+  const verdict = classifyRoundTrip({
+    outbound: ok, inbound: null, probeFinalBalance: 1n,
+    inboundHash: "0xdead", inboundReceiptResolved: false });
+  assert.equal(verdict, "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — RETURN PENDING");
+});
+
+test("pending takes precedence even when the snapshot balance looks settled", () => {
+  assert.equal(
+    classifyRoundTrip({ outbound: ok, inbound: null, probeFinalBalance: 0n,
+      inboundHash: "0xdead", inboundReceiptResolved: false }),
+    "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — RETURN PENDING");
+});
+
+test("a resolved receipt is judged on its result, not on the hash existing", () => {
+  assert.equal(
+    classifyRoundTrip({ outbound: ok, inbound: bad, probeFinalBalance: 1n,
+      inboundHash: "0xdead", inboundReceiptResolved: true }),
+    "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — FUNDS IN PROBE");
+  assert.equal(
+    classifyRoundTrip({ outbound: ok, inbound: ok, probeFinalBalance: 0n,
+      inboundHash: "0xdead", inboundReceiptResolved: true }),
+    "CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN");
+});
+
+test("a leg that never produced a hash is stranded, not pending", () => {
+  // Nothing is in flight, so the balance reading is a conclusion rather than a snapshot.
+  assert.equal(
+    classifyRoundTrip({ outbound: ok, inbound: null, probeFinalBalance: 1n, inboundHash: null }),
+    "CONTRACT AUSDC CUSTODY ROUND-TRIP: PARTIAL — FUNDS IN PROBE");
+});
+
 test("no outcome is ever described as a Mordant settlement", () => {
   for (const probeFinalBalance of [0n, 1n]) {
     for (const inbound of [ok, bad, null]) {
-      const verdict = classifyRoundTrip({ outbound: ok, inbound, probeFinalBalance });
-      assert.equal(verdict.includes("MORDANT"), false, verdict);
-      assert.match(verdict, /^CONTRACT AUSDC CUSTODY ROUND-TRIP: /);
+      for (const inboundHash of [null, "0xdead"]) {
+        for (const inboundReceiptResolved of [true, false]) {
+          const verdict = classifyRoundTrip({
+            outbound: ok, inbound, probeFinalBalance, inboundHash, inboundReceiptResolved });
+          assert.equal(verdict.includes("MORDANT"), false, verdict);
+          assert.match(verdict, /^CONTRACT AUSDC CUSTODY ROUND-TRIP: /);
+        }
+      }
     }
   }
+});
+
+// --- recovery is data, never a runnable command carrying a key ---
+
+const recovery = () => describeRecovery({
+  probe: "0xprobe", token: "0xtoken", owner: OWNER, strandedUnits: 7n,
+  encodeCalldata: () => "0xcafebabe",
+});
+
+test("a recovery records the target, function, arguments and calldata", () => {
+  const described = recovery();
+  assert.equal(described.target, "0xprobe");
+  assert.equal(described.signature, "sweep(address,address,uint256)");
+  assert.deepEqual(described.arguments, ["0xtoken", OWNER, "7"]);
+  assert.equal(described.calldata, "0xcafebabe");
+  assert.equal(described.strandedAtomicUnits, "7");
+  assert.equal(described.mustBeSignedBy, OWNER);
+});
+
+test("a recovery never contains a private key flag or a key-bearing variable", () => {
+  const serialized = JSON.stringify(recovery());
+  for (const forbidden of ["--private-key", "MORDANT_KEY_", "privateKey", "cast send"]) {
+    assert.equal(serialized.includes(forbidden), false, `recovery must not contain ${forbidden}`);
+  }
+});
+
+test("a recovery is not expressed as a runnable command at all", () => {
+  const described = recovery();
+  assert.equal("command" in described, false);
+  assert.match(described.note, /never from process arguments/);
 });
