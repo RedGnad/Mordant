@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T21:00:05.743Z",
+  "generatedAt": "2026-07-28T21:09:19.849Z",
   "classification": "M-13B PRODUCTION VAULT BINDING: PROVEN ON FORK",
   "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
   "controlA": {
@@ -34,7 +34,7 @@
     },
     {
       "label": "aUSDC funding",
-      "detail": "210000 moved from a real holder, buyer now holds 210000"
+      "detail": "210000 moved and reconciled, source -210000, buyer +210000"
     },
     {
       "label": "production contracts",
@@ -69,7 +69,7 @@
       "detail": "true"
     },
     {
-      "label": "policy aUSDC advance in",
+      "label": "policy aUSDC activation advance in",
       "detail": "true"
     },
     {
@@ -77,15 +77,15 @@
       "detail": "true"
     },
     {
-      "label": "policy aUSDC settlement to holderA",
+      "label": "policy aUSDC redemption funding in",
       "detail": "true"
     },
     {
-      "label": "policy aUSDC settlement to holderB",
+      "label": "policy aUSDC redemption to holderA",
       "detail": "true"
     },
     {
-      "label": "policy aUSDC cash redemption to buyer",
+      "label": "policy aUSDC redemption to holderB",
       "detail": "true"
     },
     {
@@ -95,6 +95,10 @@
     {
       "label": "bindVault",
       "detail": "bound to 0x3df1E2e6F757E302dbf8b643880483938826968F, availableBalance 100000"
+    },
+    {
+      "label": "VaultBound",
+      "detail": "vault 0x3df1E2e6F757E302dbf8b643880483938826968F, units 100000, block 48901519"
     }
   ],
   "hygiene": {
@@ -129,10 +133,31 @@
   ],
   "aUsdcFunding": {
     "source": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
-    "sourceBalanceBefore": "500000",
-    "moved": "210000",
-    "buyerBalance": "210000",
-    "note": "impersonated a real holder; no balance was invented"
+    "recipient": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "amount": "210000",
+    "hash": "0x4f0077b09ddf40b87dcb35c7ec9474615178c098bddb33ed2b918ff0183881ed",
+    "status": "success",
+    "blockNumber": "48901508",
+    "gasUsed": "131239",
+    "transferEvents": [
+      {
+        "from": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+        "to": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "value": "210000"
+      }
+    ],
+    "balances": {
+      "sourceBefore": "500000",
+      "sourceAfter": "290000",
+      "buyerBefore": "0",
+      "buyerAfter": "210000"
+    },
+    "deltas": {
+      "source": "-210000",
+      "buyer": "210000"
+    },
+    "reconciled": true,
+    "note": "impersonated an address that really holds aUSDC; no balance was invented"
   },
   "bindPreconditions": {
     "ok": true,
@@ -171,7 +196,7 @@
         "answer": true
       },
       {
-        "label": "aUSDC advance in",
+        "label": "aUSDC activation advance in",
         "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
         "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
         "to": "0x3df1E2e6F757E302dbf8b643880483938826968F",
@@ -183,11 +208,19 @@
         "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
         "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
         "to": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
-        "amount": "100000",
+        "amount": "90000",
         "answer": true
       },
       {
-        "label": "aUSDC settlement to holderA",
+        "label": "aUSDC redemption funding in",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "to": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "amount": "110000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC redemption to holderA",
         "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
         "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
         "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
@@ -195,22 +228,93 @@
         "answer": true
       },
       {
-        "label": "aUSDC settlement to holderB",
+        "label": "aUSDC redemption to holderB",
         "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
         "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
         "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
         "amount": "55000",
         "answer": true
-      },
-      {
-        "label": "aUSDC cash redemption to buyer",
-        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
-        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
-        "to": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-        "amount": "110000",
-        "answer": true
       }
     ]
+  },
+  "apassProvenance": {
+    "adapter": {
+      "address": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "isValidAPass": true,
+      "provenance": "issued fork-local by bounded substitution of the observed call"
+    },
+    "vault": {
+      "address": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "isValidAPass": true,
+      "provenance": "issued fork-local after creation, since the address does not exist before"
+    },
+    "buyer": {
+      "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "isValidAPass": true,
+      "provenance": "already valid in the forked state"
+    },
+    "originator": {
+      "address": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "isValidAPass": true,
+      "provenance": "already valid in the forked state"
+    },
+    "facility": {
+      "address": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "isValidAPass": true,
+      "provenance": "issued fork-local"
+    },
+    "holderA": {
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "isValidAPass": true,
+      "provenance": "issued live in M-11, preserved by the fork"
+    },
+    "holderB": {
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "isValidAPass": true,
+      "provenance": "issued live in M-11, preserved by the fork"
+    }
+  },
+  "binding": {
+    "before": {
+      "totalSupply": "100000",
+      "adapterBalance": "100000",
+      "adapterIsMinter": true,
+      "adminIsMinter": false,
+      "issuanceWalletIsMinter": false,
+      "adapterReadback": {
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "apass": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+        "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "boundVault": "0x0000000000000000000000000000000000000000",
+        "issuedSupply": "100000"
+      },
+      "vaultReadback": {
+        "cvaAdapter": "0xC0BF43A4Ca27e0976195E6661b099742f10507e5",
+        "cvaToken": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "initialUnits": "100000",
+        "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "faceValue": "110000",
+        "advanceAmount": "100000"
+      }
+    },
+    "after": {
+      "boundVault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "availableBalance": "100000",
+      "issuedSupply": "100000",
+      "adapterBalance": "100000",
+      "totalSupply": "100000"
+    },
+    "transaction": {
+      "hash": "0x228826bb89f711d4579bf39712cd899d71fa0e9497f69db618d1a674a5a7551b",
+      "status": "success",
+      "blockNumber": "48901519",
+      "blockHash": "0x23d5fa9026e9186416d0f102293aab8cd954f7778781c4e7ff4434e794349355",
+      "gasUsed": "116774"
+    },
+    "vaultBoundEvent": {
+      "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "units": "100000"
+    }
   },
   "vault": {
     "address": "0x3df1E2e6F757E302dbf8b643880483938826968F",
@@ -221,7 +325,7 @@
     "advanceAmount": "100000",
     "faceValue": "110000",
     "bondBps": 1000,
-    "protectionEnd": "1787858622"
+    "protectionEnd": "1787858623"
   },
   "statuses": {
     "FORK APASS REGISTRY ISSUE": "PROVEN",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  checkBindPreconditions, checkBurnPath, checkReleasePath,
+  checkBindPreconditions, validateBurnTokenDeltaShape, validateReleaseTokenDeltaShape,
 } from "./m13b-vault-binding.mjs";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -79,23 +79,23 @@ test("cross-link comparison ignores checksum casing", () => {
   assert.equal(checkBindPreconditions(goodBind({ adapterToken: TOKEN.toLowerCase() })).ok, true);
 });
 
-// --- the two terminal paths differ, and the checks must not be interchangeable ---
+// --- delta-shape validators: they check the token movements, not the vault's invariants ---
 
 test("a clean burn falls in both supply and adapter balance", () => {
-  assert.equal(checkBurnPath({ supplyBefore: 100_000n, supplyAfter: 90_000n,
+  assert.equal(validateBurnTokenDeltaShape({ supplyBefore: 100_000n, supplyAfter: 90_000n,
     adapterBefore: 100_000n, adapterAfter: 90_000n, units: 10_000n }).ok, true);
 });
 
 test("a burn that did not reduce supply fails", () => {
   // This is what a release looks like, and it must not pass as a burn.
-  const result = checkBurnPath({ supplyBefore: 100_000n, supplyAfter: 100_000n,
+  const result = validateBurnTokenDeltaShape({ supplyBefore: 100_000n, supplyAfter: 100_000n,
     adapterBefore: 100_000n, adapterAfter: 90_000n, units: 10_000n });
   assert.equal(result.ok, false);
   assert.match(result.reasons.join(), /supply fell by 0/);
 });
 
 test("a burn of the wrong size fails", () => {
-  assert.equal(checkBurnPath({ supplyBefore: 100_000n, supplyAfter: 91_000n,
+  assert.equal(validateBurnTokenDeltaShape({ supplyBefore: 100_000n, supplyAfter: 91_000n,
     adapterBefore: 100_000n, adapterAfter: 90_000n, units: 10_000n }).ok, false);
 });
 
@@ -108,27 +108,27 @@ const goodRelease = (overrides = {}) => ({
 });
 
 test("a clean release transfers without burning the token", () => {
-  assert.equal(checkReleasePath(goodRelease()).ok, true);
+  assert.equal(validateReleaseTokenDeltaShape(goodRelease()).ok, true);
 });
 
 test("a release that reduced token supply fails", () => {
   // The token moves; only the vault receipt is burned. Confusing the two is the mistake.
-  const result = checkReleasePath(goodRelease({ supplyAfter: 90_000n }));
+  const result = validateReleaseTokenDeltaShape(goodRelease({ supplyAfter: 90_000n }));
   assert.equal(result.ok, false);
   assert.match(result.reasons.join(), /transfers, it does not burn/);
 });
 
 test("a release where the holder received nothing fails", () => {
-  assert.equal(checkReleasePath(goodRelease({ holderAfter: 0n })).ok, false);
+  assert.equal(validateReleaseTokenDeltaShape(goodRelease({ holderAfter: 0n })).ok, false);
 });
 
 test("a release that burned no receipt units fails", () => {
-  const result = checkReleasePath(goodRelease({ receiptAfter: 100_000n }));
+  const result = validateReleaseTokenDeltaShape(goodRelease({ receiptAfter: 100_000n }));
   assert.equal(result.ok, false);
   assert.match(result.reasons.join(), /receipt units burned 0/);
 });
 
 test("the holder must receive exactly the units the adapter lost", () => {
-  assert.equal(checkReleasePath(goodRelease({ holderAfter: 9_000n })).ok, false);
-  assert.equal(checkReleasePath(goodRelease({ adapterAfter: 95_000n })).ok, false);
+  assert.equal(validateReleaseTokenDeltaShape(goodRelease({ holderAfter: 9_000n })).ok, false);
+  assert.equal(validateReleaseTokenDeltaShape(goodRelease({ adapterAfter: 95_000n })).ok, false);
 });

@@ -60,8 +60,13 @@ const INITIAL_UNITS = 100_000n;
 const ADVANCE_AMOUNT = 100_000n;
 const FACE_VALUE = 110_000n;
 const BOND_BPS = 1_000;
-/** Advance plus face value, so the buyer can both fund and later redeem. */
+/** Advance plus face value, so the buyer can both fund activation and later fund redemption. */
 const BUYER_FUNDING = ADVANCE_AMOUNT + FACE_VALUE;
+/** The vault retains the bond out of the advance, so the originator receives the remainder. */
+const BOND = (ADVANCE_AMOUNT * BigInt(BOND_BPS)) / 10_000n;
+const NET_PROCEEDS = ADVANCE_AMOUNT - BOND;
+/** Two holders, each allocated half, so each is owed half the face value. */
+const HOLDER_SHARE = FACE_VALUE / 2n;
 
 const MINTER_ROLE = keccak256(toBytes("MINTER_ROLE"));
 const CURRENCY = `0x${Buffer.from("USD").toString("hex").padEnd(64, "0")}`;
@@ -141,8 +146,15 @@ export function checkBindPreconditions({
   return { ok: reasons.length === 0, reasons };
 }
 
-/** Scenario A: the burn path. Supply and the adapter's balance must both fall by exactly the units. */
-export function checkBurnPath({ supplyBefore, supplyAfter, adapterBefore, adapterAfter, units }) {
+/**
+ * Validates the SHAPE of the token deltas a burn should produce: supply and the adapter's balance
+ * both falling by exactly the units.
+ *
+ * This is a delta-shape validator, not a proof of the vault's invariants. It says nothing about
+ * custodyCredit, cvaAccounted, cvaBurned, the redemption escrow or the settlement leg; those are
+ * checked when the scenario actually runs, in M-13C.
+ */
+export function validateBurnTokenDeltaShape({ supplyBefore, supplyAfter, adapterBefore, adapterAfter, units }) {
   const reasons = [];
   const expected = BigInt(units);
   if (BigInt(supplyBefore) - BigInt(supplyAfter) !== expected) {
@@ -155,10 +167,14 @@ export function checkBurnPath({ supplyBefore, supplyAfter, adapterBefore, adapte
 }
 
 /**
- * Scenario B: the release path. The adapter's balance falls and the holder's rises, but the token
- * supply does NOT: this is a transfer, not a burn. What is burned is the vault's receipt unit.
+ * Validates the SHAPE of the token deltas a default release should produce: the adapter's balance
+ * falls and the holder's rises, but the token supply does NOT, because this is a transfer. What is
+ * burned is the vault's receipt unit.
+ *
+ * A delta-shape validator, not a proof of the vault's invariants. cvaReleasedFace, cvaAccounted and
+ * the escrow refund are checked when the scenario runs, in M-13C.
  */
-export function checkReleasePath({
+export function validateReleaseTokenDeltaShape({
   supplyBefore, supplyAfter, adapterBefore, adapterAfter, holderBefore, holderAfter,
   receiptBefore, receiptAfter, units,
 }) {
@@ -308,14 +324,53 @@ async function main() {
       stop(`the aUSDC source holds ${sourceBalance}, less than the ${BUYER_FUNDING} the buyer needs.`
         + " Amounts are derived from what exists and nothing is minted to make them work.");
     }
-    const sourceWallet = await impersonate(AUSDC_SOURCE);
-    await send(sourceWallet, AUSDC, ERC20_ABI, "transfer", [accounts.buyer.address, BUYER_FUNDING]);
-    const buyerAUsdc = await client.readContract({
+    const buyerBefore = await client.readContract({
       address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.buyer.address] });
-    note("aUSDC funding", `${BUYER_FUNDING} moved from a real holder, buyer now holds ${buyerAUsdc}`);
-    report.aUsdcFunding = { source: AUSDC_SOURCE, sourceBalanceBefore: sourceBalance.toString(),
-      moved: BUYER_FUNDING.toString(), buyerBalance: buyerAUsdc.toString(),
-      note: "impersonated a real holder; no balance was invented" };
+    const sourceWallet = await impersonate(AUSDC_SOURCE);
+    const fundingReceipt = await send(sourceWallet, AUSDC, ERC20_ABI, "transfer",
+      [accounts.buyer.address, BUYER_FUNDING]);
+
+    // Reconciled against the receipt, the events and the exact deltas of every touched address.
+    // A final balance alone would not distinguish this transfer from anything else that moved.
+    const transferEvents = parseEventLogs({
+      abi: [{ type: "event", name: "Transfer", inputs: [
+        { name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true },
+        { name: "value", type: "uint256", indexed: false }] }],
+      eventName: "Transfer",
+      logs: fundingReceipt.logs.filter((log) => String(log.address).toLowerCase() === AUSDC.toLowerCase()),
+    }).map((event) => ({ from: event.args.from, to: event.args.to, value: event.args.value.toString() }));
+    const sourceAfter = await client.readContract({
+      address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [AUSDC_SOURCE] });
+    const buyerAfter = await client.readContract({
+      address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.buyer.address] });
+    const sourceDelta = sourceAfter - sourceBalance;
+    const buyerDelta = buyerAfter - buyerBefore;
+    const fundingReasons = [];
+    if (fundingReceipt.status !== "success") fundingReasons.push(`receipt status ${fundingReceipt.status}`);
+    if (transferEvents.length !== 1) fundingReasons.push(`${transferEvents.length} aUSDC Transfer events, expected 1`);
+    const [only] = transferEvents;
+    if (only && (String(only.from).toLowerCase() !== AUSDC_SOURCE.toLowerCase()
+      || String(only.to).toLowerCase() !== accounts.buyer.address.toLowerCase()
+      || BigInt(only.value) !== BUYER_FUNDING)) {
+      fundingReasons.push("the Transfer event does not match the intended source, recipient and amount");
+    }
+    if (sourceDelta !== -BUYER_FUNDING) fundingReasons.push(`source delta ${sourceDelta}, expected -${BUYER_FUNDING}`);
+    if (buyerDelta !== BUYER_FUNDING) fundingReasons.push(`buyer delta ${buyerDelta}, expected ${BUYER_FUNDING}`);
+    if (fundingReasons.length > 0) stop(`the aUSDC funding did not reconcile: ${fundingReasons.join("; ")}`);
+    note("aUSDC funding", `${BUYER_FUNDING} moved and reconciled, source -${BUYER_FUNDING},`
+      + ` buyer +${BUYER_FUNDING}`);
+
+    report.aUsdcFunding = {
+      source: AUSDC_SOURCE, recipient: accounts.buyer.address, amount: BUYER_FUNDING.toString(),
+      hash: fundingReceipt.transactionHash, status: fundingReceipt.status,
+      blockNumber: fundingReceipt.blockNumber.toString(), gasUsed: fundingReceipt.gasUsed.toString(),
+      transferEvents,
+      balances: { sourceBefore: sourceBalance.toString(), sourceAfter: sourceAfter.toString(),
+        buyerBefore: buyerBefore.toString(), buyerAfter: buyerAfter.toString() },
+      deltas: { source: sourceDelta.toString(), buyer: buyerDelta.toString() },
+      reconciled: true,
+      note: "impersonated an address that really holds aUSDC; no balance was invented",
+    };
 
     // --- production Mordant contracts ---
     const verifierArtifact = artifact("CleanverseAPassVerifier.sol", "CleanverseAPassVerifier");
@@ -380,11 +435,15 @@ async function main() {
       await can(MINV01, adapter, ZERO, INITIAL_UNITS, "MINV01 burn from adapter"),
       await can(MINV01, adapter, HOLDER_A, INITIAL_UNITS / 2n, "MINV01 release to holderA"),
       await can(MINV01, adapter, HOLDER_B, INITIAL_UNITS / 2n, "MINV01 release to holderB"),
-      await can(AUSDC, accounts.buyer.address, vault, ADVANCE_AMOUNT, "aUSDC advance in"),
-      await can(AUSDC, vault, accounts.originator.address, ADVANCE_AMOUNT, "aUSDC net proceeds out"),
-      await can(AUSDC, vault, HOLDER_A, FACE_VALUE / 2n, "aUSDC settlement to holderA"),
-      await can(AUSDC, vault, HOLDER_B, FACE_VALUE / 2n, "aUSDC settlement to holderB"),
-      await can(AUSDC, vault, accounts.buyer.address, FACE_VALUE, "aUSDC cash redemption to buyer"),
+      // The buyer pays twice: the advance at activation, then the face value to fund redemption.
+      await can(AUSDC, accounts.buyer.address, vault, ADVANCE_AMOUNT, "aUSDC activation advance in"),
+      // Net proceeds are the advance less the bond the vault retains, not the whole advance.
+      await can(AUSDC, vault, accounts.originator.address, NET_PROCEEDS, "aUSDC net proceeds out"),
+      await can(AUSDC, accounts.buyer.address, vault, FACE_VALUE, "aUSDC redemption funding in"),
+      // Cash redemption pays the HOLDERS. There is no vault-to-buyer leg here: a flow back to the
+      // buyer could only be a refund of genuine excess, with its own amount, and none arises.
+      await can(AUSDC, vault, HOLDER_A, HOLDER_SHARE, "aUSDC redemption to holderA"),
+      await can(AUSDC, vault, HOLDER_B, HOLDER_SHARE, "aUSDC redemption to holderB"),
     ];
     for (const tuple of policyTuples) note(`policy ${tuple.label}`, String(tuple.answer));
 
@@ -409,12 +468,75 @@ async function main() {
     note("bind preconditions", preconditions.ok ? "all pass" : preconditions.reasons.join("; "));
     if (!preconditions.ok) stop(`bindVault preconditions unmet: ${preconditions.reasons.join("; ")}`);
 
-    await send(adminWallet, adapter, ADAPTER_ABI, "bindVault", [vault, INITIAL_UNITS]);
+    // Everything the preconditions were computed from, recorded rather than summarised, so the
+    // artifact can be re-checked without rerunning the fork.
+    const apassProvenance = {
+      adapter: { address: adapter, isValidAPass: await validApass(adapter),
+        provenance: "issued fork-local by bounded substitution of the observed call" },
+      vault: { address: vault, isValidAPass: await validApass(vault),
+        provenance: "issued fork-local after creation, since the address does not exist before" },
+      buyer: { address: accounts.buyer.address, isValidAPass: await validApass(accounts.buyer.address),
+        provenance: issued.some((entry) => entry.subject === accounts.buyer.address)
+          ? "issued fork-local" : "already valid in the forked state" },
+      originator: { address: accounts.originator.address,
+        isValidAPass: await validApass(accounts.originator.address),
+        provenance: issued.some((entry) => entry.subject === accounts.originator.address)
+          ? "issued fork-local" : "already valid in the forked state" },
+      facility: { address: accounts.facility.address,
+        isValidAPass: await validApass(accounts.facility.address),
+        provenance: issued.some((entry) => entry.subject === accounts.facility.address)
+          ? "issued fork-local" : "already valid in the forked state" },
+      holderA: { address: HOLDER_A, isValidAPass: await validApass(HOLDER_A),
+        provenance: "issued live in M-11, preserved by the fork" },
+      holderB: { address: HOLDER_B, isValidAPass: await validApass(HOLDER_B),
+        provenance: "issued live in M-11, preserved by the fork" },
+    };
+    const beforeBind = {
+      totalSupply: (await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "totalSupply" })).toString(),
+      adapterBalance: (await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [adapter] })).toString(),
+      adapterIsMinter: await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "hasRole", args: [MINTER_ROLE, adapter] }),
+      adminIsMinter: await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "hasRole", args: [MINTER_ROLE, MINV01_ADMIN] }),
+      issuanceWalletIsMinter: await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "hasRole", args: [MINTER_ROLE, accounts.issuanceMinter.address] }),
+      adapterReadback: { token: await readAdapter("token"), apass: await readAdapter("apass"),
+        owner: await readAdapter("owner"), boundVault: await readAdapter("boundVault"),
+        issuedSupply: (await readAdapter("issuedSupply")).toString() },
+      vaultReadback: { cvaAdapter: await readVault("cvaAdapter"), cvaToken: await readVault("cvaToken"),
+        initialUnits: (await readVault("initialUnits")).toString(),
+        settlementToken: await readVault("settlementToken"),
+        faceValue: (await readVault("faceValue")).toString(),
+        advanceAmount: (await readVault("advanceAmount")).toString() },
+    };
+
+    const bindReceipt = await send(adminWallet, adapter, ADAPTER_ABI, "bindVault", [vault, INITIAL_UNITS]);
+    const [bound] = parseEventLogs({ abi: adapterArtifact.abi, eventName: "VaultBound",
+      logs: bindReceipt.logs });
     const boundTo = await readAdapter("boundVault");
     if (String(boundTo).toLowerCase() !== String(vault).toLowerCase()) {
       stop(`bindVault did not bind to the vault; boundVault is ${boundTo}.`);
     }
-    note("bindVault", `bound to ${boundTo}, availableBalance ${await readAdapter("availableBalance", [vault])}`);
+    if (!bound || String(bound.args.vault).toLowerCase() !== String(vault).toLowerCase()
+      || BigInt(bound.args.units) !== INITIAL_UNITS) {
+      stop("bindVault emitted no VaultBound event matching the intended vault and units.");
+    }
+    const afterBind = {
+      boundVault: boundTo,
+      availableBalance: (await readAdapter("availableBalance", [vault])).toString(),
+      issuedSupply: (await readAdapter("issuedSupply")).toString(),
+      adapterBalance: (await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [adapter] })).toString(),
+      totalSupply: (await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "totalSupply" })).toString(),
+    };
+    note("bindVault", `bound to ${boundTo}, availableBalance ${afterBind.availableBalance}`);
+    note("VaultBound", `vault ${bound.args.vault}, units ${bound.args.units},`
+      + ` block ${bindReceipt.blockNumber}`);
+
+    report.apassProvenance = apassProvenance;
+    report.binding = {
+      before: beforeBind, after: afterBind,
+      transaction: { hash: bindReceipt.transactionHash, status: bindReceipt.status,
+        blockNumber: bindReceipt.blockNumber.toString(), blockHash: bindReceipt.blockHash,
+        gasUsed: bindReceipt.gasUsed.toString() },
+      vaultBoundEvent: { vault: bound.args.vault, units: bound.args.units.toString() },
+    };
 
     report.vault = { address: vault, verifier, factory, boundVault: boundTo,
       initialUnits: INITIAL_UNITS.toString(), advanceAmount: ADVANCE_AMOUNT.toString(),
