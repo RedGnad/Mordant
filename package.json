@@ -26,7 +26,8 @@
     "localnet": "node scripts/localnet.mjs",
     "localnet:deploy": "node scripts/localnet.mjs --once",
     "preflight:monad": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/preflight/cli.js",
-    "preflight:monad:fork": "node scripts/monad-fork-vault-check.mjs"
+    "preflight:monad:fork": "node scripts/monad-fork-vault-check.mjs",
+    "m05:dryrun": "node scripts/m05-dryrun-monad.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",
