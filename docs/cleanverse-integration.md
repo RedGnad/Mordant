@@ -69,15 +69,33 @@ A-Token, faucet transfer, pool registration, role grant or transaction was creat
 - `POST /validator/is_register` returns business error `12027` (`returned no data`) for Monad
   addresses, while the same endpoint returns `registered: false` normally on Base.
 
-The launch failure now has a concrete on-chain explanation. The shared factory proxy is
+The launch failure had a concrete on-chain explanation. The shared factory proxy is
 `0xd1ad67ca3b7da5934813f4bd005812ebb3b43ff6`. A successful official Base launch calls selector
 `0xeff21872` with ten arguments; the Base implementation
-`0x45c365cb6ee32dfc65efc55636273cc329c91fed` contains it. On Monad, the same proxy points to
-implementation `0x31759eff15291a5e36bb5625b55c49107dc0ee71`, which lacks that selector and exposes
-the older eight-argument `0xef84b94a`. Replaying the successful Base calldata against the Monad
-factory with `eth_call` reverts without data. This is strong evidence of a Cleanverse
-backend/factory ABI version skew, rather than a Mordant payload error. It still means a fresh
-end-to-end Monad issuance cannot honestly be claimed healthy today.
+`0x45c365cb6ee32dfc65efc55636273cc329c91fed` contains it. On Monad, the same proxy pointed to
+implementation `0x31759eff15291a5e36bb5625b55c49107dc0ee71`, which lacked that selector and exposed
+only the older eight-argument `0xef84b94a`.
+
+**Superseded on 27 July 2026 by a re-measurement.** At Monad testnet block 48667706 the same proxy
+resolves to implementation `0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea`, whose dispatch table
+contains **both** `0xeff21872` and `0xef84b94a`. **No backend/factory selector skew was observable
+at block 48667706.** The ABI-skew explanation above therefore no longer describes the deployment,
+and this document must not be cited as evidence that the Monad launcher is on an older ABI. It is
+equally not evidence that Monad issuance is fixed: that would require a `/atoken/launch`
+application, which stays `NOT PROVEN — WRITE ACTION REQUIRED`.
+
+A dispatch-table selector scan proves the selector is routable, not that an end-to-end issuance
+succeeds. Whether the observed `ISSUE_FAILED` applications are cleared by this upgrade is untested:
+launching an A-Token is a write action. Re-run `pnpm evidence:cleanverse --live` before making any
+claim about Monad issuance health, and read
+`docs/evidence/cleanverse-monad-2026-07-28.md` for the pinned readings.
+
+The v5.6 changelog gives the likely reason for the upgrade: **v5.5 (2026-07-13) added
+`is_black_list` and `countries` to the A-Token compliance rule** for `/atoken/launch`. That is
+exactly two additional rule fields, matching the move from the eight-argument `0xef84b94a` to the
+ten-argument `0xeff21872`. The July `ISSUE_FAILED` results are consistent with a backend already
+sending the v5.5 rule shape to a Monad factory that had not yet been upgraded. This is a coherent
+correlation, not a proof: the documentation publishes no on-chain factory ABI to compare against.
 
 ## Contract-custody proof
 
@@ -105,8 +123,46 @@ deployed rail. Validator registration alone still does not confer custody eligib
 needed its own A-Pass in the proof.
 
 A separate live, read-only probe resolved the deployed A-Token's `policy()` and called
-`canTransfer(token, adapter, prospectiveHolder, 1)` without submitting a transaction. It confirms
-that the policy surface can answer an adapter-to-holder question. The runtime check uses a holder's
+`canTransfer(token, adapter, prospectiveHolder, 1)` without submitting a transaction.
+
+**Corrected on 27 July 2026.** The earlier wording claimed this "confirms that the policy surface
+can answer an adapter-to-holder question". At block 48667706 the policy
+`0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd` returned no boolean for any probed tuple: three
+`canTransfer(aUSDC, from, to, 1)` calls, including one between two addresses whose `isValidAPass`
+is `true`, each reverted with `ComplianceFailed(address)` (`0x8a4e1859`) carrying the aUSDC address.
+
+That is a refusal, not a broken interface: `CleanverseAPassVerifier._isAssetTransferAllowed`
+catches the revert and returns `false`, so the design still fails closed. The consequence is
+concrete: with these participants, every aUSDC settlement path in Mordant (activation net proceeds,
+bond claims, cash redemption, credit pulls) would revert with `SettlementNotReady`.
+
+The v5.6 documentation offers a consistent reading. Each A-Token carries a compliance `rule`
+(`allowed_group`, `allowed_sub_group`, `min_tier`, `min_sub_tier`, plus `is_black_list`/`countries`
+since v5.5), and the platform evaluates that rule against the holder's A-Pass attributes to decide
+whether a wallet may receive or transfer the token.
+
+Stated precisely, and no further: **the probed tuples were rejected with `ComplianceFailed`, which
+is consistent with a compliance rule that is not satisfied.** We did not read back the rule values
+of the aUSDC token, so we do not assert which attribute is unsatisfied, that the policy refuses
+every participant, that the policy is faulty, or that holding a valid A-Pass is sufficient. The
+finding is bounded to the three tuples actually probed:
+
+    BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED
+
+Two consequences for Mordant:
+
+1. For the **dedicated invoice A-Token**, Mordant supplies `rule` at `/atoken/launch` and can
+   therefore choose a rule its own participants satisfy. This is under our control.
+2. For **aUSDC**, the settlement token, the rule belongs to Cleanverse. Every Mordant participant
+   that must receive aUSDC (originator, holders, buyer) needs an A-Pass profile the aUSDC rule
+   admits. Which profile that is has not been established, and identifying it is the remaining
+   dependency.
+
+Note also that the documentation publishes **no Solidity interface**. `canTransfer(address,address,
+address,uint256)` appears nowhere in v5.6, so `ICleanversePolicy` is inferred from deployed
+bytecode, not from a documented ABI, and must not be described as a documented surface.
+
+The runtime check uses a holder's
 complete future mINV position: its allocation at activation, `recipientBalance + amount` on transfer,
 and its complete remaining balance before default release. The exact holder-to-holder transfer delta
 receives a separate pair check. This observation does not prove stable ABI or universal policy
@@ -126,13 +182,34 @@ not observed. The documented request accepts a generic wallet address and does n
 restriction, while the deployed contract accepts the operation. This is an operational authorization
 blocker for the live rail, not an on-chain feasibility blocker.
 
-The other live blocker is issuance health for the invoice-specific CVA. The current Monad
-`/atoken/launch` applications are failing or stale. AccessCore's documented aUSDC withdrawal path
-does not replace issuance and lifecycle semantics for a dedicated invoice A-Token. Until Cleanverse
-repairs the observed Monad backend/factory version skew and the gateway accepts both contract A-Pass
+The other live blocker is issuance health for the invoice-specific CVA. The Monad `/atoken/launch`
+applications observed in July were failing or stale. AccessCore's documented aUSDC withdrawal path
+does not replace issuance and lifecycle semantics for a dedicated invoice A-Token.
+
+As of 27 July 2026 the blocker list is re-ordered by the evidence run:
+
+1. **Transfer policy acceptance (new, highest).** No probed `canTransfer` tuple is accepted, so the
+   settlement rail would fail closed even if issuance worked.
+2. **Gateway A-Pass issuance to contract addresses.** Unchanged and still unobserved.
+3. **Monad issuance health.** The factory ABI skew that explained the failures is gone; whether
+   issuance now succeeds is untested and needs one authorized application.
+
+Until a policy-accepted counterparty pair exists and the gateway accepts both contract A-Pass
 requests, Mordant must remain synthetic/local and must not describe the CVA/aUSDC rail as live.
 
-The v5.6 docs do not publish:
+Re-read on 27 July 2026 against the v5.6 page itself, the documented answers are:
+
+- `POST /generate_apass` describes `wallet.address` generically as the "A-Pass receiving wallet
+  address" and states **no EOA-only restriction**; `monad` is a documented chain slug. Acceptance
+  of a contract address is neither granted nor refused in writing.
+- The Validator chapter **does** contemplate contract addresses: signed `grant`/`register` use an
+  EIP-191 `owner_signature` over lowercase `chain + address` and are "intended for smart contract
+  addresses that expose `Ownable.owner()`".
+- `MINTER_ROLE` is documented **only** for minting ("only after that role is granted may the minter
+  mint"). Burn authority on a standard A-Token is never documented, so the aUSDC burn selector we
+  observe on chain remains an undocumented behavior.
+
+The v5.6 docs still do not publish:
 
 - the Monad Validator contract address and Solidity ABI that an on-chain `ICviVerifier` should call;
 - whether the `/generate_apass` gateway accepts a contract wallet controlled by the verified legal

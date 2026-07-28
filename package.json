@@ -14,13 +14,15 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:cleanverse": "tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js",
-    "test:unit": "tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js",
+    "test:unit": "pnpm build:contracts && tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/abi-parity.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/evidence/chain-config.test.js .cleanverse-test-dist/src/lib/evidence/evidence.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js",
     "build:contracts": "forge build --root contracts",
     "fmt:contracts": "forge fmt --root contracts --check",
     "test:contracts": "forge test --root contracts -vvv",
     "test:e2e": "playwright test",
-    "test": "tsc --noEmit && tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js && forge test --root contracts -vvv",
-    "validate": "eslint . && tsc --noEmit && tsc -p tsconfig.cleanverse-tests.json && NODE_PATH=./test/stubs node --test .cleanverse-test-dist/src/lib/cleanverse/cleanverse.test.js .cleanverse-test-dist/src/lib/contracts/pledge.test.js .cleanverse-test-dist/src/lib/contracts/read-vault.test.js .cleanverse-test-dist/src/lib/mordant/scenario.test.js && forge test --root contracts -vvv && forge fmt --root contracts --check && next build --webpack"
+    "evidence:cleanverse": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/cli.js",
+    "test": "tsc --noEmit && pnpm test:unit && forge test --root contracts -vvv",
+    "validate": "eslint . && tsc --noEmit && pnpm test:unit && forge test --root contracts -vvv && forge fmt --root contracts --check && pnpm evidence:cleanverse && pnpm secret:scan && next build --webpack",
+    "secret:scan": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/secret-scan-cli.js"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

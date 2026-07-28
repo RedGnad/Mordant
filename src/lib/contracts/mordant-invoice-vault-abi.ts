@@ -159,6 +159,20 @@ export const mordantInvoiceVaultReadAbi = [
   },
   {
     type: "function",
+    name: "cvaReleasedFace",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "settlementCreditTotal",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "defaultCvaReleaseStarted",
     inputs: [],
     outputs: [{ name: "", type: "bool", internalType: "bool" }],

@@ -107,12 +107,25 @@ originator inline, and a failure reverts the entire activation before funds can 
 The permissionless redemption-dust P0 is fixed and regression-tested. Contract A-Pass custody,
 direct CVI reads and aUSDC burn authority are now proven without changing public state. The remaining
 integration gate is narrower and not hidden in a mock: the live spike must prove gateway issuance to
-both the adapter and vault and the dedicated invoice A-Token lifecycle. Read-only probes on 27 July
-traced the current Monad launcher failure to a Cleanverse backend/factory ABI version skew. Cleanverse
-gateway acceptance of contract-address A-Pass issuance has not been observed either. Those two
-external dependencies currently block an honest live rail even though contract custody is feasible
-on-chain. Validator reads also remain unhealthy but are not required for the direct CVI path. See
-[`docs/cleanverse-integration.md`](docs/cleanverse-integration.md).
+both the adapter and vault and the dedicated invoice A-Token lifecycle.
+
+A reproducible read-only evidence run (`pnpm evidence:cleanverse --live`, pinned to Monad testnet
+block 48667706 on 27 July 2026) updates that picture:
+
+- **no backend/factory selector skew was observable at block 48667706**: the Monad factory proxy
+  resolves to an implementation carrying the ten-argument launch selector. That is a read-only
+  bytecode fact and not a claim that Monad issuance is fixed, which would need a `/atoken/launch`
+  application and stays `NOT PROVEN — WRITE ACTION REQUIRED`;
+- the probed `canTransfer` tuples were **rejected with `ComplianceFailed(address)`, consistent with
+  a compliance rule that is not satisfied**. Mordant fails closed on that. Bounded to those tuples:
+  we do not assert which attribute is unsatisfied, that the policy refuses everyone, or that a
+  valid A-Pass suffices. Status: `BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED`;
+- gateway acceptance of contract-address A-Pass issuance is still unobserved.
+
+Those external dependencies continue to block an honest live rail even though contract custody is
+feasible on-chain. Validator reads also remain unhealthy but are not required for the direct CVI
+path. See [`docs/cleanverse-integration.md`](docs/cleanverse-integration.md) and the pinned
+artifacts in [`docs/evidence/`](docs/evidence/).
 
 ## Local development
 
@@ -140,6 +153,28 @@ Browser flow (desktop and mobile Chromium):
 pnpm exec playwright install chromium
 pnpm test:e2e
 ```
+
+### Cleanverse / Monad evidence gate
+
+Re-derives what is actually true on chain, rather than trusting any note in this repository. The
+default run replays a recorded fixture chain and writes nothing:
+
+```bash
+pnpm evidence:cleanverse
+```
+
+A live run is strictly read-only. It refuses every state-changing JSON-RPC method, aborts if the
+chain id is not Monad testnet, pins one block for all readings, and writes a Markdown plus JSON
+report:
+
+```bash
+pnpm evidence:cleanverse -- --live \
+  --rpc-url "$MONAD_RPC_URL" \
+  --out docs/evidence/cleanverse-monad-$(date +%F)
+```
+
+Fixture output is labelled `mode: fixture` and is never a live observation. Reports are scanned for
+secret patterns before being written; a match aborts the write.
 
 Never put Cleanverse credentials in Git. The sandbox key originally delivered for the event must be
 rotated before durable use because it was pasted into a chat transcript.

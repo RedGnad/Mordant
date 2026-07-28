@@ -9,12 +9,19 @@
     "outDir": ".cleanverse-test-dist",
     "rootDir": ".",
     "plugins": [],
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/lib/cleanverse/cleanverse.test.ts",
+    "src/lib/contracts/abi-parity.test.ts",
     "src/lib/contracts/read-vault.test.ts",
     "src/lib/contracts/pledge.test.ts",
+    "src/lib/evidence/chain-config.test.ts",
+    "src/lib/evidence/evidence.test.ts",
+    "src/lib/evidence/cli.ts",
+    "src/lib/evidence/secret-scan-cli.ts",
     "src/lib/mordant/scenario.test.ts",
     "test/stubs/server-only.d.ts"
   ]

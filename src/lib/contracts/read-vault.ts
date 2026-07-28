@@ -66,6 +66,8 @@ export type RawMordantInvoiceVaultSnapshot = Readonly<{
   entitlementSnapshotSupply: bigint;
   redemptionEscrow: bigint;
   redeemedFace: bigint;
+  cvaReleasedFace: bigint;
+  settlementCreditTotal: bigint;
   defaultCvaReleaseStarted: boolean;
   accountedSettlementBalance: bigint;
   pendingConflict: RawPendingConflict | null;
@@ -119,15 +121,23 @@ export type MordantInvoiceVaultSnapshot = Readonly<{
     faceValue: SixDecimalAmount;
     escrow: SixDecimalAmount;
     redeemed: SixDecimalAmount;
+    /** Face value discharged through CVA release after default. */
+    cvaReleased: SixDecimalAmount;
+    /** Face value still owed in cash: faceValue - redeemedFace - cvaReleasedFace. */
     remainingFace: SixDecimalAmount;
+    /** Cash the buyer must still escrow: remainingFace - redemptionEscrow. */
+    unfundedLiability: SixDecimalAmount;
     defaultCvaReleaseStarted: boolean;
   }>;
   accounting: Readonly<{
     settlementAccounted: SixDecimalAmount;
+    /** Accrued pull-payment credit still owed to buyer/originator beneficiaries. */
+    settlementCreditTotal: SixDecimalAmount;
     bondLifecycleTotal: SixDecimalAmount;
     contractAssertionPassed: true;
     supplyMatchesCva: boolean;
     bondMatchesInitial: boolean;
+    settlementAccountedMatchesComponents: boolean;
   }>;
   pendingConflict: Readonly<{
     commitment: Hex;
@@ -224,6 +234,8 @@ export async function readRawMordantInvoiceVaultSnapshot(
     entitlementSnapshotSupply,
     redemptionEscrow,
     redeemedFace,
+    cvaReleasedFace,
+    settlementCreditTotal,
     defaultCvaReleaseStarted,
     accountedSettlementBalance,
     pending,
@@ -249,6 +261,8 @@ export async function readRawMordantInvoiceVaultSnapshot(
     client.readContract({ ...contract, functionName: "entitlementSnapshotSupply" }),
     client.readContract({ ...contract, functionName: "redemptionEscrow" }),
     client.readContract({ ...contract, functionName: "redeemedFace" }),
+    client.readContract({ ...contract, functionName: "cvaReleasedFace" }),
+    client.readContract({ ...contract, functionName: "settlementCreditTotal" }),
     client.readContract({ ...contract, functionName: "defaultCvaReleaseStarted" }),
     client.readContract({ ...contract, functionName: "accountedSettlementBalance" }),
     client.readContract({ ...contract, functionName: "pendingConflict" }),
@@ -308,6 +322,8 @@ export async function readRawMordantInvoiceVaultSnapshot(
     entitlementSnapshotSupply,
     redemptionEscrow,
     redeemedFace,
+    cvaReleasedFace,
+    settlementCreditTotal,
     defaultCvaReleaseStarted,
     accountedSettlementBalance,
     pendingConflict,
@@ -322,8 +338,18 @@ export function toHumanMordantInvoiceVaultSnapshot(
     raw.entitlementClaimed,
     "entitlement",
   );
-  const remainingFace = checkedDifference(raw.faceValue, raw.redeemedFace, "redemption");
+  // The contract discharges face value through two independent paths, so cash liability has to
+  // net both. See MordantInvoiceVault._refundExcessRedemptionEscrow / _faceAmount.
+  const remainingFace = checkedDifference(
+    raw.faceValue,
+    raw.redeemedFace + raw.cvaReleasedFace,
+    "redemption",
+  );
+  // The vault refunds any escrow above the remaining cash liability, so escrow can never exceed it.
+  const unfundedLiability = checkedDifference(remainingFace, raw.redemptionEscrow, "escrow");
   const bondLifecycleTotal = raw.bondLocked + raw.bondReturned + raw.entitlementAllocated;
+  const settlementComponents =
+    raw.bondLocked + unclaimedEntitlement + raw.redemptionEscrow + raw.settlementCreditTotal;
 
   return Object.freeze({
     chain: Object.freeze({
@@ -362,15 +388,20 @@ export function toHumanMordantInvoiceVaultSnapshot(
       faceValue: formatSixDecimalAmount(raw.faceValue),
       escrow: formatSixDecimalAmount(raw.redemptionEscrow),
       redeemed: formatSixDecimalAmount(raw.redeemedFace),
+      cvaReleased: formatSixDecimalAmount(raw.cvaReleasedFace),
       remainingFace: formatSixDecimalAmount(remainingFace),
+      unfundedLiability: formatSixDecimalAmount(unfundedLiability),
       defaultCvaReleaseStarted: raw.defaultCvaReleaseStarted,
     }),
     accounting: Object.freeze({
       settlementAccounted: formatSixDecimalAmount(raw.accountedSettlementBalance),
+      settlementCreditTotal: formatSixDecimalAmount(raw.settlementCreditTotal),
       bondLifecycleTotal: formatSixDecimalAmount(bondLifecycleTotal),
       contractAssertionPassed: true,
       supplyMatchesCva: raw.totalSupply === raw.cvaAccounted,
       bondMatchesInitial: bondLifecycleTotal === raw.initialBond,
+      settlementAccountedMatchesComponents:
+        raw.accountedSettlementBalance === settlementComponents,
     }),
     pendingConflict: raw.pendingConflict === null
       ? null
