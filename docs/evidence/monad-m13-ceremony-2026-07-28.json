@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T20:39:59.391Z",
+  "classification": "M-13 SUPPLY AND ROLE CEREMONY: PROVEN ON FORK",
+  "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
+  "steps": [
+    {
+      "label": "fork",
+      "detail": "anvil/v1.5.0, chain 10143, block 48901500"
+    },
+    {
+      "label": "adapter deployed",
+      "detail": "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    },
+    {
+      "label": "substitution",
+      "detail": "only word 0 differs, 8 words, same selector and length"
+    },
+    {
+      "label": "adapter A-Pass",
+      "detail": "isValidAPass false -> true, 2 logs"
+    },
+    {
+      "label": "policy mint to adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy burn from adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy release to holderA",
+      "detail": "true"
+    },
+    {
+      "label": "policy release to holderB",
+      "detail": "true"
+    },
+    {
+      "label": "grant temporary minter",
+      "detail": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8 at block 48901503"
+    },
+    {
+      "label": "mint",
+      "detail": "1000000 to the adapter at block 48901504"
+    },
+    {
+      "label": "revoke temporary minter",
+      "detail": "at block 48901505"
+    },
+    {
+      "label": "grant adapter minter",
+      "detail": "at block 48901506"
+    },
+    {
+      "label": "role state",
+      "detail": "admin false, issuance false, adapter true"
+    },
+    {
+      "label": "supply",
+      "detail": "total 1000000, adapter holds 1000000"
+    },
+    {
+      "label": "minter exclusivity",
+      "detail": "PROVEN, active: 0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    }
+  ],
+  "hygiene": {
+    "writeRpc": "http://127.0.0.1:8548",
+    "loopback": true,
+    "upstreamSeparate": true,
+    "clientVersion": "anvil/v1.5.0",
+    "chainId": 10143,
+    "forkBlock": "48901500",
+    "forkBlockHash": "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03"
+  },
+  "substitution": {
+    "original": "0xb8dd36640000000000000000000000000f8b9a0c064306f938912658c96c681d8655140b0000000000000000000000000000000000000000000000000000000000000032000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006c4a2686854d0f1a7fd0ef2ee7815a823bb7e95207222aa0abd1cb4294c93b4a27eeb6990000000000000000000000000000000000000000000000000000000000000000",
+    "substituted": "0xb8dd3664000000000000000000000000c0bf43a4ca27e0976195e6661b099742f10507e50000000000000000000000000000000000000000000000000000000000000032000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006c4a2686854d0f1a7fd0ef2ee7815a823bb7e95207222aa0abd1cb4294c93b4a27eeb6990000000000000000000000000000000000000000000000000000000000000000",
+    "originalHash": "0x8fcbd11df41761a83a61173275bda62d09bab2e711db1d52faf0799213f547ac",
+    "substitutedHash": "0x3b048d58aecf29779ef68e44ee258eae18e80ee75d4e0b4f76d7134086b631a2",
+    "selector": "0xb8dd3664",
+    "registry": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+    "issuer": "0xbd8428761efb5384c4945d16de56817caa6903df",
+    "diff": {
+      "sameSelector": true,
+      "sameLength": true,
+      "wordCount": 8,
+      "differingWords": [
+        0
+      ],
+      "onlySubjectAddressChanged": true,
+      "originalWord0": "0000000000000000000000000f8b9a0c064306f938912658c96c681d8655140b",
+      "substitutedWord0": "000000000000000000000000c0bf43a4ca27e0976195e6661b099742f10507e5",
+      "unchangedWords": [
+        "0000000000000000000000000000000000000000000000000000000000000032",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "000000000000000000000000000000000000000000000000000000006c4a2686",
+        "854d0f1a7fd0ef2ee7815a823bb7e95207222aa0abd1cb4294c93b4a27eeb699",
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    "selectorNaming": "observed issuance call selector; its ABI is unpublished and not claimed"
+  },
+  "adapterApass": {
+    "adapter": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+    "before": false,
+    "after": true,
+    "hash": "0xd209ad7fe582f4c38993f5bd16044c78d6406820ebc7a00009909425d81683e3",
+    "logCount": 2,
+    "logs": [
+      {
+        "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+        "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+      },
+      {
+        "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+        "topic0": "0xb64285e323e4ca76af6ff0385ba431957d290a39abf2d506af99b1ceb5365ad4"
+      }
+    ]
+  },
+  "adapterPolicyTuples": [
+    {
+      "label": "mint to adapter",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "amount": "1000000",
+      "answer": true
+    },
+    {
+      "label": "burn from adapter",
+      "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "to": "0x0000000000000000000000000000000000000000",
+      "amount": "1000000",
+      "answer": true
+    },
+    {
+      "label": "release to holderA",
+      "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "amount": "500000",
+      "answer": true
+    },
+    {
+      "label": "release to holderB",
+      "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "amount": "500000",
+      "answer": true
+    }
+  ],
+  "roleCeremony": {
+    "issuanceWallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "initialUnits": "1000000",
+    "grantTemp": "0x57e561b4a5028b3b92512d25fb066d7cc96d1304d6b42e0073a1d1506851c90f",
+    "mint": "0xef94e41e4ee90f57271a35f8b71cbc650e3e3882c6ce9c9c51d153415efd8bd0",
+    "revokeTemp": "0x63b2935fdf2f0ab9d052ec5ac18d0333c0967e65c0918a20709db1980df2fb14",
+    "grantAdapter": "0x3dbfbfada9df27cb3772804c2c79c6f79bb42538ff9cf7d86d1c6ee806ba3979",
+    "adminIsMinter": false,
+    "issuanceWalletIsMinter": false,
+    "adapterIsMinter": true,
+    "totalSupply": "1000000",
+    "adapterBalance": "1000000"
+  },
+  "minterExclusivity": {
+    "reconstructionComplete": true,
+    "eventCount": 4,
+    "events": [
+      {
+        "name": "RoleGranted",
+        "role": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "account": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "sender": "0xd1aD67CA3B7da5934813f4BD005812eBB3b43fF6",
+        "blockNumber": "48901234",
+        "logIndex": 2
+      },
+      {
+        "name": "RoleGranted",
+        "role": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+        "account": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "sender": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "blockNumber": "48901503",
+        "logIndex": 0
+      },
+      {
+        "name": "RoleRevoked",
+        "role": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+        "account": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "sender": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "blockNumber": "48901505",
+        "logIndex": 0
+      },
+      {
+        "name": "RoleGranted",
+        "role": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+        "account": "0xC0BF43A4Ca27e0976195E6661b099742f10507e5",
+        "sender": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "blockNumber": "48901506",
+        "logIndex": 0
+      }
+    ],
+    "activeMinters": [
+      "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    ],
+    "classification": "PROVEN"
+  },
+  "assumptions": [
+    {
+      "premise": "The A-Pass issuer address",
+      "value": "0xbd8428761efb5384c4945d16de56817caa6903df",
+      "grade": "ON-CHAIN OBSERVED",
+      "basis": "sender of 0x4693a9afbcf4ce3401de6ce7f095afe309e8de33836a8d0443d96bf1dca16fd8, a successful call into the registry"
+    },
+    {
+      "premise": "The issuance calldata shape",
+      "value": "0xb8dd3664, 8 argument words",
+      "grade": "ON-CHAIN OBSERVED",
+      "basis": "the exact bytes of that transaction. No ABI is published and none is claimed"
+    },
+    {
+      "premise": "Word 0 of the calldata is the subject address",
+      "value": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "grade": "INFERRED",
+      "basis": "word 0 equals the address whose A-Pass that call created. One observation, so the substitution is bounded to this word and diffed before sending"
+    },
+    {
+      "premise": "Replaying the observed call on a fork issues an A-Pass",
+      "value": "control A",
+      "grade": "FORK-PROVEN",
+      "basis": "exact byte-for-byte replay at the parent block, verified by readback"
+    },
+    {
+      "premise": "The same shape issues to a new contract address",
+      "value": "step B",
+      "grade": "FORK-PROVEN",
+      "basis": "the bounded substitution, verified by readback and by the policy"
+    },
+    {
+      "premise": "MINV01 authorities: admin holds DEFAULT_ADMIN_ROLE, not MINTER_ROLE",
+      "value": "admin cannot mint",
+      "grade": "ON-CHAIN OBSERVED",
+      "basis": "hasRole is false and a read-only mint simulation reverts, recorded in M-12"
+    },
+    {
+      "premise": "No unexpected active minter on MINV01",
+      "value": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "grade": "FORK-PROVEN",
+      "basis": "requires reconstructing RoleGranted and RoleRevoked since issuance"
+    },
+    {
+      "premise": "The nine policy tuples pass for the real participants",
+      "value": "4 adapter tuples pass",
+      "grade": "FORK-PROVEN",
+      "basis": "read from the policy on the fork once every address exists"
+    },
+    {
+      "premise": "The production adapter is the contract the vault binds",
+      "value": "CleanverseCvaAdapter",
+      "grade": "REPOSITORY-PROVEN",
+      "basis": "21 passing tests; the mock is referenced only from tests"
+    },
+    {
+      "premise": "Deployment ordering: adapter, A-Pass, roles, supply, vault, bind",
+      "value": "bindVault is the only one-shot step",
+      "grade": "REPOSITORY-PROVEN",
+      "basis": "read from bindVault's own require set in the adapter source"
+    },
+    {
+      "premise": "Cleanverse API can read a fork-local A-Pass",
+      "value": "no",
+      "grade": "NOT PROVEN",
+      "basis": "fork-local state never reaches Cleanverse; classified NOT APPLICABLE rather than failed"
+    }
+  ],
+  "statuses": {
+    "FORK APASS REGISTRY ISSUE": "PROVEN",
+    "FORK APASS ISSUE TO NEW CONTRACT": "PROVEN VIA OBSERVED CALL SHAPE",
+    "APASS ISSUANCE ABI": "UNPUBLISHED / NOT CLAIMED",
+    "APASS ON-CHAIN FORK READBACK": "PROVEN",
+    "CLEANVERSE API READBACK": "NOT APPLICABLE TO FORK-LOCAL STATE",
+    "TEMPORARY ISSUANCE MINTER": "GRANTED / REVOKED",
+    "ADAPTER MINTER ROLE": "GRANTED ON FORK",
+    "EXACT SUPPLY CEREMONY": "PROVEN",
+    "MINTER EXCLUSIVITY": "PROVEN",
+    "PUBLIC ADAPTER DEPLOYMENT": "NOT DONE",
+    "LIVE ADAPTER APASS": "NOT PROVEN FOR THIS ADDRESS",
+    "LIVE CLEANVERSE GATEWAY ISSUE FOR ADAPTER": "NOT PROVEN",
+    "LIVE MINTER ROLE / MINT / BIND": "NOT DONE",
+    "MORDANT SETTLEMENT": "NOT PROVEN LIVE"
+  },
+  "adapter": {
+    "address": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+    "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "apass": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "boundVault": "0x0000000000000000000000000000000000000000"
+  }
+}
