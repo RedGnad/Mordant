@@ -51,8 +51,12 @@ const PROTECTION_WINDOW = 30n * 24n * 3_600n;
 const CURRENCY = `0x${Buffer.from("USD").toString("hex").padEnd(64, "0")}`;
 const INVOICE_ROOT = `0x${"a1".repeat(32)}`;
 
-/** Raised only on this local chain. See the note where Anvil is spawned. */
-const CODE_SIZE_LIMIT = 80_000;
+/**
+ * Monad's documented maximum contract code size: 128 KB, against Ethereum's 24.5 KB. The local
+ * chain is configured to that figure so the deployment budget here matches the target network
+ * rather than an arbitrary value. Anvil remains a local chain, not a Monad simulation.
+ */
+const MONAD_DOCUMENTED_CODE_SIZE_LIMIT = 131_072;
 
 function artifact(file, name) {
   const path = join(ROOT, "contracts", "out", file, `${name}.json`);
@@ -233,15 +237,16 @@ async function main() {
   }
 
   process.stdout.write("Starting deterministic local chain (Anvil)\n");
-  // MordantFactory (40382 bytes) and MordantInvoiceVault (31312 bytes) both exceed the EIP-170
-  // 24576-byte runtime limit as currently compiled, so a default chain refuses to deploy them.
-  // The local chain raises the limit purely so the deal room can run end to end. This is a real
-  // deployability blocker for any standard chain and is tracked as such, not papered over.
+  // MordantFactory (40382 bytes) and MordantInvoiceVault (31312 bytes) exceed Ethereum's EIP-170
+  // 24576-byte runtime limit, so a default Anvil refuses to deploy them. They are well inside
+  // Monad's documented 128 KB limit, so this is a standard-EVM portability constraint and not a
+  // Monad blocker. Anvil is configured to the Monad figure to keep the local budget aligned with
+  // the target network; it stays a local chain and does not simulate Monad.
   const chain = spawn(
     "anvil",
     [
       "--host", "127.0.0.1", "--port", "8545", "--chain-id", String(anvil.id),
-      "--code-size-limit", String(CODE_SIZE_LIMIT), "--silent",
+      "--code-size-limit", String(MONAD_DOCUMENTED_CODE_SIZE_LIMIT), "--silent",
     ],
     { stdio: ["ignore", "ignore", "inherit"] },
   );
