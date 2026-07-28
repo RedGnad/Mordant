@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T21:24:53.810Z",
+  "generatedAt": "2026-07-28T22:02:51.018Z",
   "classification": "M-13 PINNED MONAD FORK REHEARSAL: PROVEN",
   "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
   "controlA": {
@@ -418,7 +418,7 @@
       "hash": "0xf8800d654076a1de011003ade9281dd1848fe6c10409cd70c5a7eaf008b85ae7",
       "status": "success",
       "blockNumber": "48901521",
-      "blockHash": "0x4136a9cd7b2f136374269c1604ab466152387e0989674ce2a2082846af10c075",
+      "blockHash": "0x067dfebb5396019a5fb72c29c503b3a36dc367d8c3d8818963dcad85a30637d3",
       "gasUsed": "116774"
     },
     "vaultBoundEvent": {
@@ -435,7 +435,7 @@
     "advanceAmount": "100000",
     "faceValue": "110000",
     "bondBps": 1000,
-    "protectionEnd": "1787858622"
+    "protectionEnd": "1785353023"
   },
   "statuses": {
     "FORK APASS REGISTRY ISSUE": "PROVEN",
@@ -548,10 +548,10 @@
   },
   "receipts": {
     "activate": {
-      "hash": "0x0acc6233e8a1afdd2dc38a644909dfc19dca4a6ab1b98f85141b805cf832de2c",
+      "hash": "0x9a4ba940ed2f00efbf956259f9f002f9f0c73b33dcb7c9212f340ec70b0e21f9",
       "status": "success",
       "blockNumber": "48901526",
-      "blockHash": "0x1cd6621b58be6943b2a40d2a7e924b3a944003535faf74679ed36a303332ec46",
+      "blockHash": "0x8a720234fbbd21eee15fb36c9f647485b7304778416cc21358f56559c257b5b7",
       "gasUsed": "1068034",
       "adapterEvents": []
     },
@@ -559,7 +559,7 @@
       "hash": "0x539f060ac387ec517514271237b844f8380db730fef64002507146698522f32d",
       "status": "success",
       "blockNumber": "48901528",
-      "blockHash": "0xbec989f77c82ebebc120bd87ca96f4d4389157ae7a47e753b1bd60c8cdf3bccf",
+      "blockHash": "0x74654b0e41ab9f4dae79295912d11db3df7b2c4f009450795572dfa08bd3467c",
       "gasUsed": "237989",
       "adapterEvents": []
     },
@@ -567,7 +567,7 @@
       "hash": "0xebb20ff24047f366264e14250acf3b0d4e0d7c088141d443e4b6ce4b3a52a909",
       "status": "success",
       "blockNumber": "48901529",
-      "blockHash": "0x9397a52f5239dced5f92b892a2f7f7bec380edd9ea1610bb4e65b4801899a57c",
+      "blockHash": "0xfd954d9d20348f9e39894f5456ea0fef1ed5aaddd108eb78b573e9723df08d43",
       "gasUsed": "527722",
       "adapterEvents": [
         {
@@ -583,7 +583,7 @@
       "hash": "0x70844faf84d9687b2be4d2284854c4dd6232c575b3f5a4994deb3275f5911a28",
       "status": "success",
       "blockNumber": "48901530",
-      "blockHash": "0x3056f6dc3c9fe3eb9bbeb087b0a1d1513a2688103ab3ae51d91c1d52062df7bc",
+      "blockHash": "0x6f3f4b6d00f67782c9a25bd96abdd42c45398c0f6a8446c42a0ee0c7a22e345a",
       "gasUsed": "411997",
       "adapterEvents": [
         {
@@ -596,18 +596,18 @@
       ]
     },
     "commitConflict": {
-      "hash": "0x0437b3dc049f2b7e503461c9f1e62624b87e7c162f469e468be7bb92d3a668f5",
+      "hash": "0x4ea99ec9d5bccc7c1948044f4c0a2e863ccc84d6b58c0c97ddbe9a33a8c8b3a1",
       "status": "success",
       "blockNumber": "48901527",
-      "blockHash": "0x075cc3179426e090389e4275cabb89de418acc05cd226eb0fd3505be6ba00863",
+      "blockHash": "0xf4a7ccb99e81de10512e316a7742701a72dd29440e4e1f5cc599972c75e70d7b",
       "gasUsed": "219927",
       "adapterEvents": []
     },
     "revealConflict": {
-      "hash": "0x04975364d982c668d3fccd3de747403c2d1d414548c75315e76894be97e418a5",
+      "hash": "0xfd42a9ffa0b0b6156c86c97662f9a35f05f5bdcd7757c4593cc199dc6889a090",
       "status": "success",
       "blockNumber": "48901528",
-      "blockHash": "0x586ecbff136c45b6a3c74414e119dba7f32b75e0b5d748b83b3d5212f6105133",
+      "blockHash": "0x28925a4dedd096f29ba840eb5513d61f95d3d4b5aeecf10740766ecc0c59b470",
       "gasUsed": "230498",
       "adapterEvents": []
     },
@@ -615,7 +615,7 @@
       "hash": "0xac1c8dda43e59588e3903f85075bc325258e8a0b4590d53e6b3c8d3f2f58dc56",
       "status": "success",
       "blockNumber": "48901530",
-      "blockHash": "0x63568e3f9db099956f8d8544b91286d4cbfc9e1e1a1e009d3ca10f2d338ea639",
+      "blockHash": "0x139fa9c6037a6518ff866eed79fec40c925a7033ab02c2b8f147a625c9fa044b",
       "gasUsed": "157659",
       "adapterEvents": []
     },
@@ -623,7 +623,7 @@
       "hash": "0xfbfcb0acef122559f2cc31ff1896db57fae18926e5edbf6016b3bf91435e7a7b",
       "status": "success",
       "blockNumber": "48901532",
-      "blockHash": "0x0f6002a68fdf27b0203371018abc6653230756c97dbb969c0ffde7c42f6d182b",
+      "blockHash": "0xf7b7eeaf41321a3f360a80ebb9296d32a2f5aae3f03dfe4014eff0a62b60b917",
       "gasUsed": "101308",
       "adapterEvents": []
     },
@@ -631,7 +631,7 @@
       "hash": "0x918d610254cccae0bb382e076c4e949a1bf706cba35a15552314815940a26481",
       "status": "success",
       "blockNumber": "48901533",
-      "blockHash": "0x9ec430e528aacf02a0eeed895aa6d6dd3001937c907c4c64be9f6960244b7554",
+      "blockHash": "0x333c0625ca37ec8f70dfbf1e00a2d10c3c9c192af11e8981d1940df8dad6759c",
       "gasUsed": "429513",
       "adapterEvents": [
         {
@@ -648,7 +648,7 @@
       "hash": "0xee637c78cb058baa4e063c5502134c77d9e803b67c9d887ce514635b584434b6",
       "status": "success",
       "blockNumber": "48901534",
-      "blockHash": "0xbacfdfbf48a1f855fd034a50a41de476d69fc99836a5a4476d74de4ce7adb03d",
+      "blockHash": "0x5da3857dc83ca094a386e646e611702837ed6b71b4bc3345f8b087406a496616",
       "gasUsed": "375603",
       "adapterEvents": [
         {

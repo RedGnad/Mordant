@@ -1,0 +1,455 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-28T22:06:23.770Z",
+  "classification": "MANIFEST STRUCTURE: READY / EXECUTION INPUTS: INCOMPLETE",
+  "statuses": {
+    "MANIFEST STRUCTURE": "READY",
+    "EXECUTION INPUTS": "INCOMPLETE",
+    "PUBLIC WRITES": "NOT AUTHORIZED",
+    "MORDANT SETTLEMENT": "NOT PROVEN LIVE"
+  },
+  "rehearsal": {
+    "contractsCommit": "4285f622c238f9663dfcdb3dd0a5e5b01e8c081d",
+    "rehearsalCommit": "3b2454072eee3f98800522d5b8995392d9066b83",
+    "artifact": "docs/evidence/monad-m13c-terminal-paths-2026-07-29.json",
+    "verdict": "M-13 PINNED MONAD FORK REHEARSAL: PROVEN"
+  },
+  "parameterSetHash": "0x0e41517292b37dddeeb7b3e6279ff6b7c2f009a82fae2045efcc0a7b50228c8b",
+  "publicSchedule": [
+    {
+      "slot": "T0, one sitting",
+      "does": "C2 creation, vault credential, D binding, E activation"
+    },
+    {
+      "slot": "T0 + minutes",
+      "does": "F commit and reveal, immediately after activation"
+    },
+    {
+      "slot": "T0 + 1 hour",
+      "does": "finalizeConflict, once the cure window has really passed"
+    },
+    {
+      "slot": "T0 + 24 hours",
+      "does": "markDefault, then releaseDefaultCva by each holder"
+    }
+  ],
+  "protectionEndRule": "computed as the vault creation block timestamp plus 86400 seconds, at creation time. Never a date fixed in advance.",
+  "frozenCommit": "4285f622c238f9663dfcdb3dd0a5e5b01e8c081d",
+  "head": "3b2454072eee3f98800522d5b8995392d9066b83",
+  "freezeScope": "contracts/src and contracts/foundry.toml, plus the structural parameters. Scripts and documents may move without invalidating the rehearsal; contracts and parameters may not.",
+  "contractsUnchangedSinceFreeze": true,
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48933244"
+  },
+  "livePath": [
+    "activation",
+    "conflict commit",
+    "conflict reveal",
+    "finalisation",
+    "default",
+    "MINV01 release"
+  ],
+  "livePathNote": "Cash redemption stays fork-proven. A second public vault to reproduce a branch already proven on a fork would cost real deployments to demonstrate nothing new.",
+  "structuralParameters": {
+    "initialUnits": "100000",
+    "advanceAmount": "100000",
+    "faceValue": "110000",
+    "bondBps": 1000,
+    "bond": "10000",
+    "netProceeds": "90000",
+    "holderAllocation": "50000",
+    "holderShare": "55000",
+    "revealPeriod": 3600,
+    "curePeriod": 3600,
+    "protectionDurationSeconds": 86400
+  },
+  "tokens": {
+    "invoiceAToken": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "apassRegistry": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd"
+  },
+  "contracts": [
+    {
+      "name": "CleanverseCvaAdapter",
+      "artifact": "CleanverseCvaAdapter.sol/CleanverseCvaAdapter",
+      "phase": "A",
+      "constructorSignature": "constructor(address initialOwner, ICleanverseAToken token, ICleanverseAPass apass)",
+      "constructorArgs": [
+        "<owner>",
+        "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9"
+      ],
+      "owner": "<owner>",
+      "addressPredictable": false,
+      "addressNote": "CREATE, so the address is deterministic from the deployer and nonce, but it is not treated as stable until the deployment is confirmed, the bytecode verified and the readbacks pass. No A-Pass is requested on the strength of a computed address alone.",
+      "gasCap": 2000000,
+      "creationBytecodeHash": "0x95a939e9410cb07aa1ddbfbd485bc10225b92a44f0c6669fa75d821dbd72e816",
+      "expectedRuntimeHash": "0xd43a4a16ef3fe7fd0898eea8621f9737f03f5e9909270109ea57d120282573f8",
+      "creationBytes": 9621,
+      "runtimeBytes": 8904,
+      "withinEip170": true,
+      "withinMonadLimit": true
+    },
+    {
+      "name": "CleanverseAPassVerifier",
+      "artifact": "CleanverseAPassVerifier.sol/CleanverseAPassVerifier",
+      "phase": "C1",
+      "constructorSignature": "constructor(address initialOwner, ICleanverseAPass apass, uint256 openRoleMask)",
+      "constructorArgs": [
+        "<owner>",
+        "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+        "16"
+      ],
+      "owner": "<owner>",
+      "addressPredictable": false,
+      "gasCap": 2000000,
+      "creationBytecodeHash": "0x8145b6bc790ef2ed7e3e691209f38e5f0e160106ad4e051537fffc60c61963d5",
+      "expectedRuntimeHash": "0x31cb7c5c4b68de8fe57911fce6ffec99472527cbd296ba0ce34b6f00296f5054",
+      "creationBytes": 3334,
+      "runtimeBytes": 2902,
+      "withinEip170": true,
+      "withinMonadLimit": true
+    },
+    {
+      "name": "MordantFactory",
+      "artifact": "MordantFactory.sol/MordantFactory",
+      "phase": "C1",
+      "constructorSignature": "constructor(address initialOwner, ICviVerifier verifier)",
+      "constructorArgs": [
+        "<owner>",
+        "<verifier>"
+      ],
+      "owner": "<owner>",
+      "addressPredictable": false,
+      "gasCap": 8000000,
+      "creationBytecodeHash": "0x23f303d6370013846f18a742aa3f35be83e5866c4d94c6ecde977490fb57137d",
+      "expectedRuntimeHash": "0x8b2138436e1b4785201153bdfba20c2b14e1787315582f89e48846051f44d0ac",
+      "creationBytes": 40833,
+      "runtimeBytes": 40382,
+      "withinEip170": false,
+      "withinMonadLimit": true
+    },
+    {
+      "name": "MordantInvoiceVault",
+      "artifact": "MordantInvoiceVault.sol/MordantInvoiceVault",
+      "phase": "C2",
+      "constructorSignature": "deployed by MordantFactory.createInvoiceVault(Init)",
+      "constructorArgs": [
+        "<Init struct>"
+      ],
+      "owner": "the factory creates it; the buyer calls",
+      "addressPredictable": false,
+      "addressNote": "Created by the factory and read from the InvoiceVaultCreated event. Not treated as stable until creation is confirmed and the readbacks pass; its A-Pass follows that, never a computed address.",
+      "gasCap": 8000000,
+      "creationBytecodeHash": "0x866021e3860933845b8f02d3956c3b58db9a99bf96a5285cb8ea16ba150947e4",
+      "expectedRuntimeHash": "0x5cf1d0da435b06382cfd3502dd757b0e15324521e945e8d6023a233481a18254",
+      "creationBytes": 35248,
+      "runtimeBytes": 31312,
+      "withinEip170": false,
+      "withinMonadLimit": true
+    }
+  ],
+  "participants": [
+    {
+      "role": "owner/deployer",
+      "env": "MORDANT_ADDRESS_HOLDER_A",
+      "mordantRole": "none, deploys and administers",
+      "signs": [
+        "adapter deployment",
+        "verifier deployment",
+        "factory deployment",
+        "role configuration",
+        "MINTER_ROLE grant and revoke",
+        "bindVault"
+      ],
+      "needsAUsdc": "0",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "isValidAPass": true,
+      "apassExpiration": 1816796031,
+      "cleanverseEligible": true,
+      "monBalance": "19866318392000000000",
+      "aUsdcBalance": "9999",
+      "status": "READY"
+    },
+    {
+      "role": "holderA",
+      "env": "MORDANT_ADDRESS_HOLDER_A",
+      "mordantRole": "ROLE_HOLDER (4)",
+      "signs": [
+        "releaseDefaultCva"
+      ],
+      "needsAUsdc": "0",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "isValidAPass": true,
+      "apassExpiration": 1816796031,
+      "cleanverseEligible": true,
+      "monBalance": "19866318392000000000",
+      "aUsdcBalance": "9999",
+      "status": "READY"
+    },
+    {
+      "role": "holderB",
+      "env": "MORDANT_ADDRESS_HOLDER_B",
+      "mordantRole": "ROLE_HOLDER (4)",
+      "signs": [
+        "releaseDefaultCva"
+      ],
+      "needsAUsdc": "0",
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "isValidAPass": true,
+      "apassExpiration": 1816796031,
+      "cleanverseEligible": true,
+      "monBalance": "19997835995085908000",
+      "aUsdcBalance": "1",
+      "status": "READY"
+    },
+    {
+      "role": "buyer",
+      "env": "MORDANT_ADDRESS_BUYER",
+      "mordantRole": "ROLE_BUYER (1)",
+      "signs": [
+        "createInvoiceVault"
+      ],
+      "needsAUsdc": "0",
+      "note": "the live path stops at the release, so the buyer never funds redemption",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    },
+    {
+      "role": "funder",
+      "env": "MORDANT_ADDRESS_FUNDER",
+      "mordantRole": "ROLE_HOLDER (4), as the advancing party",
+      "signs": [
+        "aUSDC approve",
+        "advance at activation"
+      ],
+      "needsAUsdc": "100000",
+      "note": "must not be the buyer; the vault rejects a funder that is also the buyer",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    },
+    {
+      "role": "originator",
+      "env": "MORDANT_ADDRESS_ORIGINATOR",
+      "mordantRole": "ROLE_ORIGINATOR (2)",
+      "signs": [
+        "EIP-712 pledge",
+        "EIP-712 conflicting pledge"
+      ],
+      "needsAUsdc": "0",
+      "note": "receives the net proceeds; signs but sends no transaction",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    },
+    {
+      "role": "facilityProtected",
+      "env": "MORDANT_ADDRESS_FACILITY_A",
+      "mordantRole": "ROLE_FACILITY (3)",
+      "signs": [
+        "activate"
+      ],
+      "needsAUsdc": "0",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    },
+    {
+      "role": "facilityChallenger",
+      "env": "MORDANT_ADDRESS_FACILITY_B",
+      "mordantRole": "ROLE_FACILITY (3)",
+      "signs": [
+        "commitConflict",
+        "revealConflict"
+      ],
+      "needsAUsdc": "0",
+      "note": "must be distinct from the protected facility, which cannot challenge itself",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    },
+    {
+      "role": "issuanceMinter",
+      "env": "MORDANT_ADDRESS_ISSUANCE_MINTER",
+      "mordantRole": "none, temporary MINTER_ROLE",
+      "signs": [
+        "mint the exact supply to the adapter"
+      ],
+      "needsAUsdc": "0",
+      "note": "holds MINTER_ROLE only between the grant and the revoke, both in phase D",
+      "address": null,
+      "status": "ADDRESS NOT SUPPLIED",
+      "isValidAPass": null,
+      "apassExpiration": null,
+      "monBalance": null,
+      "aUsdcBalance": null
+    }
+  ],
+  "phases": [
+    {
+      "id": "A",
+      "name": "adapter",
+      "steps": [
+        "deploy CleanverseCvaAdapter(owner, MINV01, A-Pass registry)",
+        "verify the runtime bytecode hash against the frozen artifact",
+        "verify owner(), token(), apass() and boundVault() == zero",
+        "STOP"
+      ]
+    },
+    {
+      "id": "B",
+      "name": "adapter credential",
+      "steps": [
+        "request the live A-Pass for the adapter address through the Cleanverse gateway",
+        "on an ambiguous or timed-out response, STOP and reconcile by hand; never retry automatically",
+        "verify through the API and on chain that the credential exists",
+        "verify the MINV01 policy permits zero to adapter, adapter to zero, and adapter to each holder",
+        "STOP"
+      ]
+    },
+    {
+      "id": "C1",
+      "name": "infrastructure and known participants",
+      "steps": [
+        "deploy CleanverseAPassVerifier(owner, A-Pass registry, openRoleMask 16)",
+        "deploy MordantFactory(owner, verifier)",
+        "configure role eligibility, then the facility, adapter and settlement token allowlists",
+        "request every A-Pass for addresses already known, which is all of them except the vault",
+        "verify funding: the funder holds the advance, every signer holds MON",
+        "verify each operator can sign what its phase requires",
+        "STOP"
+      ]
+    },
+    {
+      "id": "C2",
+      "name": "just-in-time vault creation",
+      "steps": [
+        "create the vault ONLY when phases D and E can run immediately afterwards",
+        "compute protectionEnd as the creation block timestamp plus 86400, never a date fixed earlier",
+        "request the vault's A-Pass immediately, since its address only exists now",
+        "verify the nine exact policy tuples",
+        "STOP"
+      ]
+    },
+    {
+      "id": "D",
+      "name": "supply ceremony and binding",
+      "steps": [
+        "grant MINTER_ROLE to the temporary issuance wallet",
+        "mint exactly initialUnits to the adapter",
+        "revoke MINTER_ROLE from the issuance wallet immediately",
+        "grant MINTER_ROLE to the adapter",
+        "reconstruct every RoleGranted and RoleRevoked since MINV01 was deployed",
+        "verify the adapter is the only active minter, else STOP without binding",
+        "bindVault(vault, initialUnits)",
+        "STOP"
+      ]
+    },
+    {
+      "id": "E",
+      "name": "activation",
+      "steps": [
+        "the originator signs the EIP-712 pledge",
+        "the funder approves aUSDC to the vault",
+        "the protected facility calls activate",
+        "verify net proceeds, bond, receipts and assertAccounting()",
+        "STOP"
+      ]
+    },
+    {
+      "id": "F",
+      "name": "recourse demonstration",
+      "steps": [
+        "the challenger facility commits the conflict",
+        "the challenger facility reveals the conflicting signed pledge",
+        "wait out the real cure window",
+        "finalizeConflict",
+        "wait out the real protectionEnd",
+        "markDefault",
+        "each holder calls releaseDefaultCva",
+        "verify every invariant and balance"
+      ]
+    }
+  ],
+  "requiredGates": [
+    "requires --run and --out",
+    "verifies chain id 10143",
+    "verifies the address derived from the signing key",
+    "simulates or estimates before sending",
+    "applies the gas ceilings",
+    "writes the hash as PENDING before awaiting the receipt",
+    "distinguishes PENDING, STOPPED and SUCCESS",
+    "refuses any state that differs from the preceding manifest"
+  ],
+  "stopMatrix": [
+    {
+      "after": "adapter deployed, no A-Pass",
+      "state": "an adapter exists holding nothing and bound to nothing",
+      "action": "resume at phase B with the deployed address. It is inert: it holds no supply and no vault points at it, so nothing is at risk while it waits.",
+      "redeployable": true
+    },
+    {
+      "after": "adapter A-Pass issued, no infrastructure",
+      "state": "a credentialed adapter, still unbound",
+      "action": "resume at phase C. The credential does not expire for a year, so there is no rush; re-verify it rather than assuming it survived.",
+      "redeployable": true
+    },
+    {
+      "after": "vault created, no A-Pass",
+      "state": "a vault that cannot settle, since _requireSettlementIdentity would fail",
+      "action": "resume at phase C step 5 with the created address. Do not create a second vault: the first would remain allowlisted and could be bound by mistake.",
+      "redeployable": false
+    },
+    {
+      "after": "temporary minter granted, not revoked",
+      "state": "an address other than the adapter can mint MINV01",
+      "action": "REVOKE FIRST, before anything else. An open minter breaks the supply invariant bindVault depends on, and the exclusivity check will refuse to bind while it stands.",
+      "redeployable": false,
+      "urgent": true
+    },
+    {
+      "after": "supply minted, not bound",
+      "state": "the adapter holds the whole supply, no vault claims it",
+      "action": "resume at phase D step 7. Do not mint more: bindVault compares the supply exactly, and burning back requires MINTER_ROLE, which the revoke removed.",
+      "redeployable": false,
+      "urgent": true
+    },
+    {
+      "after": "adapter bound, vault not activated",
+      "state": "custody committed to a vault that has issued nothing",
+      "action": "resume at phase E. bindVault is one-shot, so this adapter and vault are now married: a new vault would need a new adapter and a new supply.",
+      "redeployable": false
+    },
+    {
+      "after": "activated, conflict not started",
+      "state": "a live receivable with holders and a bond, inside the protection window",
+      "action": "resume at phase F before protectionEnd. If the window closes first, closeProtection reaches default without the conflict path, which demonstrates less.",
+      "redeployable": false
+    }
+  ],
+  "codeSizeLimits": {
+    "eip170": 24576,
+    "monadDocumented": 131072
+  },
+  "zeroAddress": "0x0000000000000000000000000000000000000000"
+}

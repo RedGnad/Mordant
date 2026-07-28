@@ -60,6 +60,8 @@ const INITIAL_UNITS = 100_000n;
 const ADVANCE_AMOUNT = 100_000n;
 const FACE_VALUE = 110_000n;
 const BOND_BPS = 1_000;
+/** The public protection window: 24 hours from the vault's creation block. */
+const PROTECTION_DURATION_SECONDS = 86_400n;
 /** Advance plus face value, so the buyer can both fund activation and later fund redemption. */
 const BUYER_FUNDING = ADVANCE_AMOUNT + FACE_VALUE;
 /** The vault retains the bond out of the advance, so the originator receives the remainder. */
@@ -508,7 +510,9 @@ async function main() {
     note("factory configured", "roles, facility, adapter and settlement token allowlisted");
 
     const now = (await client.getBlock()).timestamp;
-    const protectionEnd = now + 30n * 24n * 3_600n;
+    // Protection runs 24 hours from the vault's creation block, computed at creation time. A date
+    // written in advance would drift against whenever the deployment actually happens.
+    const protectionEnd = now + PROTECTION_DURATION_SECONDS;
     const createReceipt = await send(walletFor(accounts.buyer), factory, factoryArtifact.abi,
       "createInvoiceVault", [{
         cvaAdapter: adapter, settlementToken: AUSDC, invoiceRoot: INVOICE_ROOT, currency: CURRENCY,
