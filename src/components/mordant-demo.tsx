@@ -66,9 +66,10 @@ export function MordantDemo() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <p className="kicker">Protection that already has the money</p>
-          <h1>One invoice.<br />Two pledges.<br /><em>One consequence.</em></h1>
-          <p className="lede">When an originator pledges one invoice twice, its holders inherit the bond.</p>
+          <p className="kicker">Tokenized assets automate ownership. Mordant automates recourse.</p>
+          <h1>The programmable<br />recourse layer for<br /><em>tokenized receivables.</em></h1>
+          <p className="lede">When a tokenized receivable becomes ineligible after funding, Mordant turns a pre-funded reserve into protection for the compliant investors carrying the exposure.</p>
+          <p className="lede-secondary">First implemented policy: a confirmed conflicting pledge. When an originator pledges one invoice twice, its holders inherit the bond.</p>
           <div className="primitive-row" aria-label="Cleanverse integration points">
             <span><Fingerprint size={16} /> CVI identities</span>
             <span><ShieldCheck size={16} /> CVA invoice claim</span>
@@ -79,7 +80,9 @@ export function MordantDemo() {
         <div className="demo-card" aria-live="polite">
           <div className="demo-head">
             <div>
-              <span className="micro">LIVE FLOW · SYNTHETIC ASSET</span>
+              {/* This walkthrough advances local component state. It executes nothing on chain,
+                  so it is labelled SYNTHETIC rather than LIVE. */}
+              <span className="micro">SYNTHETIC · SCENARIO WALKTHROUGH, NO TRANSACTION</span>
               <h2>{current.eyebrow}</h2>
             </div>
             <span className="step-count">0{step + 1} / 05</span>
@@ -129,10 +132,12 @@ export function MordantDemo() {
 
           <div className="demo-actions">
             <div className="progress" aria-hidden="true">{phases.map((item, index) => <span className={index <= step ? "done" : ""} key={item} />)}</div>
+            {/* Labels say "show", not "finance"/"register": this control advances the walkthrough
+                and must not read as if it executed the operation. */}
             {phase === "settled" ? (
               <button type="button" className="secondary" onClick={() => setPhase("ready")}><RotateCcw size={17} /> Replay</button>
             ) : (
-              <button type="button" className="primary" onClick={advance}>{step === 0 ? "Finance the invoice" : step === 1 ? "Register second pledge" : step === 2 ? "Finalize protection" : "Settle the invoice"}<ArrowRight size={17} /></button>
+              <button type="button" className="primary" onClick={advance}>{step === 0 ? "Show funding" : step === 1 ? "Show the second pledge" : step === 2 ? "Show recourse activation" : "Show settlement"}<ArrowRight size={17} /></button>
             )}
           </div>
         </div>
@@ -140,7 +145,7 @@ export function MordantDemo() {
 
       <section className="proof-band">
         <p>Registries stop at the alert.</p>
-        <h2>Mordant makes the breach financially legible.</h2>
+        <h2>Mordant turns a confirmed incident into funded recourse.</h2>
         <div className="proof-grid">
           <div><span>01</span><strong>Pre-funded</strong><p>No promise to chase later. The reserve is already locked.</p></div>
           <div><span>02</span><strong>Record-date fair</strong><p>Transfers after the hidden commit cannot steal the protection.</p></div>

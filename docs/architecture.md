@@ -2,10 +2,24 @@
 
 ## Product kernel
 
-One buyer-accepted invoice is financed inside a mandatory multi-funder workflow. Part of an existing
-originator reserve is locked against an exclusive-pledge covenant. If another registered facility
-reveals a confirmed overlapping exclusive pledge, the still-required reserve becomes an entitlement
-of the beneficial holders at the hidden-commit record date. The invoice claim remains intact.
+Mordant is a programmable recourse kernel for tokenized receivables. The kernel turns an attested
+off-chain incident on a funded receivable into pre-funded, traceable recourse, attributable to the
+compliant investors who carry the exposure. Its lifecycle is: receive an incident attested by an
+authorized source, seal a record date before full disclosure, open a cure or dispute window,
+identify the compliant holders bearing the exposure, assign a pre-funded reserve to their
+protection, retain verifiable proof, and leave their original claim on the receivable intact.
+
+## First implemented policy: confirmed conflicting pledge
+
+Exactly one policy is implemented. One buyer-accepted invoice is financed inside a mandatory
+multi-funder workflow. Part of an existing originator reserve is locked against an exclusive-pledge
+covenant. If another registered facility reveals a confirmed overlapping exclusive pledge, the
+still-required reserve becomes an entitlement of the beneficial holders at the hidden-commit record
+date. The invoice claim remains intact.
+
+Other incident classes (buyer disputes, credit notes, invalid documents) are future extensions of
+the same kernel. They are **not implemented**, and the contracts below are deliberately specialised
+on the conflicting-pledge policy rather than generalised into a multi-incident engine.
 
 ## Contracts
 

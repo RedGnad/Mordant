@@ -5,8 +5,10 @@ import "@fontsource/space-mono/700.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mordant — funded protection for tokenized invoices",
-  description: "A conflicting pledge turns the originator reserve into protection for invoice holders.",
+  title: "Mordant: the programmable recourse layer for tokenized receivables",
+  description:
+    "When a tokenized receivable becomes ineligible after funding, Mordant turns a pre-funded"
+    + " reserve into protection for the compliant investors carrying the exposure.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

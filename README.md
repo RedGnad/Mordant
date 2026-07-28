@@ -1,16 +1,42 @@
 # Mordant
 
-> **When an originator pledges one invoice twice, its holders inherit the bond.**
+> **The programmable recourse layer for tokenized receivables.**
 
-Mordant is a programmable breach reserve for buyer-accepted, tokenized receivables inside a
-participating multi-funder platform. A verified invoice is financed once, part of the existing
-originator reserve remains locked, and a confirmed conflicting pledge converts the still-required
-reserve into a protection right for the holders at the record date. Their invoice claim remains
-intact.
+Tokenized assets automate ownership. Mordant automates recourse.
+
+When a tokenized receivable becomes ineligible after funding, Mordant turns a pre-funded reserve
+into protection for the compliant investors carrying the exposure. Tokenized platforms already
+automate issuance, ownership and transfers; Mordant automates the remedy when a funded receivable
+later breaks its rules.
+
+The product gap is not duplicate financing alone. It is turning an attested off-chain incident on a
+receivable into pre-funded, traceable recourse, attributable to the compliant investors who really
+carry the risk. On a confirmed incident Mordant receives an attestation from an authorized source,
+seals a record date before full disclosure, opens a cure or dispute window, identifies the compliant
+holders bearing the exposure, assigns a pre-funded reserve to their protection, keeps verifiable
+proof of the recourse, and does **not** destroy their original claim on the receivable.
+
+Cleanverse verifies the asset, participants and transfer policies. Monad executes the recourse and
+preserves the audit trail.
+
+## First implemented policy
+
+Mordant is a programmable recourse kernel whose **first implemented policy handles a confirmed
+conflicting pledge**:
+
+> When an originator pledges one invoice twice, its holders inherit the bond.
+
+The record date is sealed before disclosure, the seller has a cure window, and an unresolved
+conflict assigns the funded reserve to the exposed holders without cancelling their receivable
+claim.
+
+Buyer disputes, credit notes, invalid documents and other post-funding breaches are **future
+extensions of the same product category**. They are not implemented. Only the conflicting-pledge
+policy exists in this repository.
 
 This repository is a Cleanverse Build: Trusted Assets hackathon prototype. It uses synthetic invoice
-data and test assets only. The idea and product architecture are frozen; production deployment is
-not authorized.
+data and test assets only. The hackathon scope is deliberately frozen to the single policy above;
+the product category is broader than that scope. Production deployment is not authorized.
 
 ## What the demo proves
 
@@ -32,11 +58,33 @@ confirmed conflicting pledge
 The reserve amortizes with outstanding protected principal. If only 50 of the original 100 units
 remain before the conflict record date, at most 5 of the initial 10 reserve remains exposed.
 
+What this demonstrates, in one sentence: **a confirmed incident turns a pre-funded reserve into
+protection, without automatically cancelling the underlying claim.**
+
 ## Boundaries
 
-Mordant does **not** claim to detect off-network financing, prove invoice truth, establish legal
-assignment priority, insure debtor default, or replace a legal registry. It settles a contractually
-defined consequence for a registered conflicting pledge inside a mandatory workflow.
+Mordant is **not**:
+
+- a universal duplicate-financing detector;
+- a proof that an invoice is authentic;
+- a legal registry of assignment priority;
+- insurance against debtor default;
+- a generic platform for tokenizing every kind of RWA;
+- a fully trustless system;
+- a product ready to handle real funds without audit, governance and an operational framework.
+
+The product stays centred on receivables and asset-backed private credit, not on all RWA. It settles
+a contractually defined consequence for an attested incident inside a mandatory workflow.
+
+## Who it is for
+
+The initial customer is an operator of a tokenized receivables platform, an issuer, a pool manager
+or an SPV that already has several funders or investors, transferable positions, a reserve or
+holdback or repurchase obligation, a mandatory servicing workflow, an authorized source able to
+attest an incident, and identity and transfer constraints. Whether Mordant is best delivered as
+independent infrastructure, an embedded platform module, a brick distributed with Cleanverse or an
+internal risk function is an open commercial question. This hackathon proves the mechanism; it does
+not claim validated product/market fit.
 
 ## Stack
 
@@ -119,8 +167,22 @@ block 48667706 on 27 July 2026) updates that picture:
 - the probed `canTransfer` tuples were **rejected with `ComplianceFailed(address)`, consistent with
   a compliance rule that is not satisfied**. Mordant fails closed on that. Bounded to those tuples:
   we do not assert which attribute is unsatisfied, that the policy refuses everyone, or that a
-  valid A-Pass suffices. Status: `BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED`;
+  valid A-Pass suffices;
 - gateway acceptance of contract-address A-Pass issuance is still unobserved.
+
+An authenticated read-only sandbox check then narrowed that last point. Several existing Monad
+A-Tokens accept our test wallets, while **Monad aUSDC specifically fails with `ComplianceFailed`**.
+A question is open with Cleanverse on whether aUSDC is due an upgrade and which settlement token to
+use during the hackathon. Until that answer arrives, no settlement rail is presented as live and no
+substitute settlement token is adopted.
+
+### Not yet proven end to end, live
+
+- issuance of a dedicated invoice A-Token on Monad reaching `ISSUED`;
+- the implementation, policy, decimals and burn authority of the token actually issued;
+- gateway delivery of an A-Pass to the adapter and to the vault;
+- the complete settlement rail on Monad;
+- the full transactional journey from the interface.
 
 Those external dependencies continue to block an honest live rail even though contract custody is
 feasible on-chain. Validator reads also remain unhealthy but are not required for the direct CVI

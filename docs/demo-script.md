@@ -1,10 +1,22 @@
 # 80-second demo spine
 
+**Category framing, stated once at the start.** Tokenized platforms automate issuance, ownership and
+transfers. Mordant automates the remedy when a funded receivable later breaks its rules. The policy
+demonstrated below, a confirmed conflicting pledge, is the first implemented one, not the whole
+product.
+
+**Settlement-token caveat, binding until Cleanverse answers.** Monad aUSDC currently rejects our
+test wallets with `ComplianceFailed` while other Monad A-Tokens accept them. A question is open with
+the sponsor. Until it is answered, no step below may be narrated as a live settlement rail, and no
+substitute settlement token is adopted. Steps that depend on the rail must be labelled `SYNTHETIC`,
+`READ-ONLY` or `NOT PROVEN` as applicable.
+
 1. **0–10s — Human problem.** One verified invoice has already financed real working capital. The
    first holders should not receive only an alert if the originator breaks exclusivity.
 2. **10–25s — Issuance.** Show valid adapter and vault A-Passes plus the funder's holder role/A-Pass,
-   then show the real aUSDC policy permit 100 aUSDC of funder-to-vault funding: 90 reaches the
-   originator, 10 enters the reserve, and 100 custom CVA units are held 1:1 for two holders.
+   then show the aUSDC policy decision on 100 aUSDC of funder-to-vault funding: 90 reaches the
+   originator, 10 enters the reserve, and 100 custom CVA units are held 1:1 for two holders. Label
+   the settlement leg honestly; it is not proven live today.
 3. **25–38s — Transfer.** Move the beneficial units to a 60/40 holder split. Show both wallets pass
    direct A-Pass and adapter-deliverability checks, then show the CVA policy approve the exact
    holder-to-holder pair and amount; the adapter and vault fail as holder destinations.
@@ -15,8 +27,8 @@
    delivery probe.
 6. **68–76s — Principal continuity.** Their 60 and 40 invoice units remain. Fund 110 redemption and
    show 66/44 cash redemption independently under the aUSDC policy after the 6/4 bond payout.
-7. **76–80s — Compression.** “Registries detect the second pledge. Mordant gives it a funded
-   consequence.”
+7. **76–80s — Compression.** “Tokenized assets automate ownership. Mordant automates recourse. A
+   confirmed incident turns a pre-funded reserve into protection, without cancelling the claim.”
 
 ## Liveness appendix
 

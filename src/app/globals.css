@@ -45,6 +45,8 @@ button { cursor: pointer; }
 .hero h1 { margin: 30px 0 24px; font-size: clamp(54px, 6.4vw, 92px); line-height: .91; letter-spacing: -.075em; }
 .hero h1 em { color: var(--signal); font-style: normal; }
 .lede { max-width: 530px; color: #41433e; font-size: 20px; line-height: 1.5; letter-spacing: -.025em; }
+/* Subordinate line: names the first implemented policy without competing with the category lede. */
+.lede-secondary { max-width: 530px; margin-top: 14px; color: var(--muted); font-size: 15px; line-height: 1.5; }
 .primitive-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 34px; }
 .primitive-row span { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 9px 12px; background: #ffffff70; color: #4f524a; font-size: 12px; }
 
