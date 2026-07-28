@@ -149,6 +149,38 @@ finding is bounded to the three tuples actually probed:
 
     BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED
 
+**Resolved on 28 July 2026, on the Cleanverse side.** Confirmation from a Cleanverse internal
+developer in the community channel that Monad aUSDC now works prompted an immediate replay of the
+same matrix (`pnpm revalidate:ausdc`, artifact
+`docs/evidence/monad-ausdc-revalidation-2026-07-28.*`). At block 48859236 aUSDC returns `true` for
+the same holder-to-holder tuples that had reverted, and `/verify_apass` returns code 4 for the same
+three wallets. The controls SPT0001, mXAUt0 and CCUSD2 still pass, so the run discriminates.
+
+Three read-only facts establish what happened, and rule out a probe error on our side:
+
+1. the M-01C failure **reproduces exactly** when the identical call is replayed against historical
+   state at the M-01C block, so the earlier result was correct when recorded;
+2. both implementation code hashes are **unchanged**, so no contract was upgraded;
+3. `canTransfer` flips between blocks 48823698 and 48823699, and transaction
+   `0xbffeda811e919a0205580b950039ace6dc8b7c388c49412452cd34546b2f5c59` in block 48823699 is a
+   configuration call sent to the policy carrying aUSDC as its indexed argument.
+
+So the change is Cleanverse configuration state, not code. Its six scalar arguments
+(`0, 0, 5, 0, 0, 0`) match the documented rule shape with `min_tier = 5`, which would admit all
+three probed wallets (tiers 20, 20 and 5). That mapping is INFERRED: the selector `0x3762dd01` was
+not decoded from a published ABI. `getRules(aUSDC)` returns an empty array before and after, so the
+accepting configuration is not readable through `getRules`, and the earlier reading that an empty
+rule set implies refusal remains invalid.
+
+The status is therefore:
+
+    AUSDC READ-ONLY COMPATIBILITY: RESTORED
+    AUSDC SETTLEMENT TRANSFER: NOT PROVEN — NO TRANSACTION SENT
+    CLEANVERSE SETTLEMENT RAIL: NOT PROVEN
+
+Passing a precheck is not settling. No aUSDC transfer has been broadcast, so the settlement rail
+stays unproven, and the two consequences below still describe the design.
+
 Two consequences for Mordant:
 
 1. For the **dedicated invoice A-Token**, Mordant supplies `rule` at `/atoken/launch` and can

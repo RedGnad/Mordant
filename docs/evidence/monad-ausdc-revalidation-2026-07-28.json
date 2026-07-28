@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T16:09:02.609Z",
+  "classification": "READ-ONLY",
+  "warning": "Read-only revalidation. No key, no signature, no transfer and no broadcast. A passing read is not a settlement: no transfer has been sent, so the rail stays NOT PROVEN.",
+  "trigger": "Confirmation from a Cleanverse internal developer in the community channel that Monad aUSDC now works. Every statement in this artifact is independently re-observed on chain.",
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48863446",
+    "blockHash": "0x378b7c8696c3df368f76dfc215f84eb268b122d4722a9d5f123ad6a761550be7"
+  },
+  "discovery": {
+    "source": "cleanverse query_deposit_atoken_list",
+    "aUsdc": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "addressChanged": false,
+    "baselineAddress": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "depositATokenList": [
+      {
+        "symbol": "ausdc",
+        "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D"
+      }
+    ]
+  },
+  "contract": {
+    "aUsdc": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+    "implementationChanged": false,
+    "proxyCodeHash": "0xa403fa29cda49311b973967ea91292c75ab23dd093a8444ae680d9099fac817a",
+    "implementationCodeHash": "0xa7e47de33dd9e5e112d0d116588d45342ab3b062dedee17fd1215017a43d4173",
+    "implementationBytes": 6631,
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "policyImplementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+    "policyImplementationChanged": false,
+    "decimals": 6,
+    "isTokenRegistered": true,
+    "isPaused": false,
+    "rulesLength": 0
+  },
+  "baseline": {
+    "block": "48672798",
+    "aUsdc": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "aUsdcImplementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "policyImplementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+    "workingTokenImplementation": "0xce4446801356e7d8acbdfef93816bf62b05d3ebf",
+    "rulesLength": 0,
+    "verifyApass": "ComplianceFailed",
+    "canTransfer": "revert ComplianceFailed(0x8a4e1859)",
+    "controlsPassed": true
+  },
+  "transition": {
+    "txHash": "0xbffeda811e919a0205580b950039ace6dc8b7c388c49412452cd34546b2f5c59",
+    "blockNumber": "48823699",
+    "selector": "0x3762dd01",
+    "eventTopic0": "0xb7cc3c365a7dadeaffc54d94652c8debb70d977b178e0291fbfe350f952f94ca",
+    "indexedArgument": "0xac0893567d43c3e7e6e35a72803df05416c1f20d",
+    "verified": true,
+    "observed": "A configuration call sent to the policy, not a code upgrade: both implementation code hashes are unchanged and canTransfer flips at exactly this block.",
+    "inferred": "The six scalar arguments (0, 0, 5, 0, 0, 0) match the documented validator rule shape with min_tier = 5. The selector was not decoded from a published ABI, so the field mapping is INFERRED, not proven.",
+    "notExposed": "getRules(aUSDC) returns an empty array before and after, so the accepting configuration is not readable through getRules."
+  },
+  "historicalReplay": [
+    {
+      "label": "aUSDC at the M-01C block",
+      "blockTag": "0x2e6b01e",
+      "verdict": "revert ComplianceFailed(address)",
+      "passed": false
+    },
+    {
+      "label": "aUSDC one block before the transition",
+      "blockTag": "0x2e8fd92",
+      "verdict": "revert ComplianceFailed(address)",
+      "passed": false
+    },
+    {
+      "label": "aUSDC at the transition block",
+      "blockTag": "0x2e8fd93",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "label": "SPT0001 at the M-01C block",
+      "blockTag": "0x2e6b01e",
+      "verdict": "returned true",
+      "passed": true
+    }
+  ],
+  "apass": [
+    {
+      "label": "burn address",
+      "address": "0x000000000000000000000000000000000000dead",
+      "onchainValid": true,
+      "status": 1,
+      "tier": "20",
+      "subTier": 0,
+      "countries": [],
+      "expiration": 1813232978,
+      "expired": false,
+      "queryApassEnvelope": "0000"
+    },
+    {
+      "label": "tier 20 / subTier 50",
+      "address": "0x1111111111111111111111111111111111111111",
+      "onchainValid": true,
+      "status": 1,
+      "tier": "20",
+      "subTier": 50,
+      "countries": [],
+      "expiration": 1876052540,
+      "expired": false,
+      "queryApassEnvelope": "0000"
+    },
+    {
+      "label": "fee receiver, tier 5",
+      "address": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "onchainValid": true,
+      "status": 1,
+      "tier": "5",
+      "subTier": 0,
+      "countries": [],
+      "expiration": 0,
+      "expired": null,
+      "queryApassEnvelope": "0000"
+    }
+  ],
+  "verifyApass": [
+    {
+      "token": "aUSDC",
+      "address": "0x000000000000000000000000000000000000dead",
+      "wallet": "burn address",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "aUSDC",
+      "address": "0x1111111111111111111111111111111111111111",
+      "wallet": "tier 20 / subTier 50",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "aUSDC",
+      "address": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "wallet": "fee receiver, tier 5",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "SPT0001",
+      "address": "0x000000000000000000000000000000000000dead",
+      "wallet": "burn address",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "SPT0001",
+      "address": "0x1111111111111111111111111111111111111111",
+      "wallet": "tier 20 / subTier 50",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "SPT0001",
+      "address": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "wallet": "fee receiver, tier 5",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "mXAUt0",
+      "address": "0x000000000000000000000000000000000000dead",
+      "wallet": "burn address",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "mXAUt0",
+      "address": "0x1111111111111111111111111111111111111111",
+      "wallet": "tier 20 / subTier 50",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "mXAUt0",
+      "address": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "wallet": "fee receiver, tier 5",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "CCUSD2",
+      "address": "0x000000000000000000000000000000000000dead",
+      "wallet": "burn address",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "CCUSD2",
+      "address": "0x1111111111111111111111111111111111111111",
+      "wallet": "tier 20 / subTier 50",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    },
+    {
+      "token": "CCUSD2",
+      "address": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "wallet": "fee receiver, tier 5",
+      "verdict": "code 4 \"apass verify success\"",
+      "passed": true
+    }
+  ],
+  "canTransfer": [
+    {
+      "token": "aUSDC",
+      "tuple": "A-Pass holder to A-Pass holder",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x1111111111111111111111111111111111111111",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "aUSDC",
+      "tuple": "A-Pass holder to fee receiver",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "aUSDC",
+      "tuple": "AccessCore to A-Pass holder",
+      "from": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "to": "0x000000000000000000000000000000000000dead",
+      "amount": "1",
+      "verdict": "revert NoAPass(address)",
+      "passed": false
+    },
+    {
+      "token": "SPT0001",
+      "tuple": "A-Pass holder to A-Pass holder",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x1111111111111111111111111111111111111111",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "SPT0001",
+      "tuple": "A-Pass holder to fee receiver",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "SPT0001",
+      "tuple": "AccessCore to A-Pass holder",
+      "from": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "to": "0x000000000000000000000000000000000000dead",
+      "amount": "1",
+      "verdict": "revert NoAPass(address)",
+      "passed": false
+    },
+    {
+      "token": "mXAUt0",
+      "tuple": "A-Pass holder to A-Pass holder",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x1111111111111111111111111111111111111111",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "mXAUt0",
+      "tuple": "A-Pass holder to fee receiver",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "mXAUt0",
+      "tuple": "AccessCore to A-Pass holder",
+      "from": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "to": "0x000000000000000000000000000000000000dead",
+      "amount": "1",
+      "verdict": "revert NoAPass(address)",
+      "passed": false
+    },
+    {
+      "token": "CCUSD2",
+      "tuple": "A-Pass holder to A-Pass holder",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x1111111111111111111111111111111111111111",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "CCUSD2",
+      "tuple": "A-Pass holder to fee receiver",
+      "from": "0x000000000000000000000000000000000000dead",
+      "to": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+      "amount": "1",
+      "verdict": "returned true",
+      "passed": true
+    },
+    {
+      "token": "CCUSD2",
+      "tuple": "AccessCore to A-Pass holder",
+      "from": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "to": "0x000000000000000000000000000000000000dead",
+      "amount": "1",
+      "verdict": "revert NoAPass(address)",
+      "passed": false
+    }
+  ],
+  "controlsPassed": true,
+  "statuses": {
+    "AUSDC ADDRESS": "DISCOVERED",
+    "AUSDC IMPLEMENTATION": "UNCHANGED",
+    "AUSDC VERIFY_APASS": "PASSED",
+    "AUSDC CAN_TRANSFER": "PASSED",
+    "AUSDC READ-ONLY COMPATIBILITY": "RESTORED",
+    "AUSDC SETTLEMENT TRANSFER": "NOT PROVEN — NO TRANSACTION SENT",
+    "CLEANVERSE SETTLEMENT RAIL": "NOT PROVEN"
+  },
+  "comparison": {
+    "before": "verify_apass ComplianceFailed, canTransfer revert ComplianceFailed(0x8a4e1859)",
+    "after": "verify_apass PASSED, canTransfer PASSED",
+    "changed": true,
+    "historicalFailureReproduced": true
+  },
+  "notes": [
+    "The AccessCore-as-sender tuple reverts NoAPass(address) for aUSDC and for all three control tokens alike, so it is a property of that sender holding no A-Pass, not of aUSDC.",
+    "The two implementation code hashes are unchanged since M-01C. Behaviour changed without any code changing."
+  ]
+}

@@ -101,10 +101,13 @@ Not proven end to end against the live network:
 - the complete settlement rail on Monad.
 
 A read-only evidence run pinned to Monad testnet block 48667706 found no backend/factory selector
-skew, and an authenticated sandbox check found that several Monad A-Tokens accept our test wallets
-while Monad aUSDC specifically fails with `ComplianceFailed`. A question is open with Cleanverse on
-which settlement token to use. Until it is answered, no settlement rail is described as live and no
-substitute token is adopted.
+skew, and an authenticated sandbox check found that several Monad A-Tokens accepted our test wallets
+while Monad aUSDC specifically failed with `ComplianceFailed`. That refusal was lifted on 28 July
+2026 by a Cleanverse configuration transaction, not by a contract upgrade: aUSDC now returns `true`
+for the same tuples, while the historical call still reverts when replayed at the original block.
+
+Passing a compliance precheck is not settling. No aUSDC transfer has been broadcast, so the
+settlement rail is still not described as live.
 
 Evidence, with every claim classified: [`docs/evidence/`](docs/evidence/) and
 [`docs/cleanverse-integration.md`](docs/cleanverse-integration.md).
