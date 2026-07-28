@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T21:00:05.743Z",
+  "classification": "M-13B PRODUCTION VAULT BINDING: PROVEN ON FORK",
+  "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
+  "controlA": {
+    "classification": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN",
+    "proven": true
+  },
+  "steps": [
+    {
+      "label": "control A",
+      "detail": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN"
+    },
+    {
+      "label": "fork",
+      "detail": "anvil/v1.5.0, chain 10143, block 48901500"
+    },
+    {
+      "label": "adapter deployed",
+      "detail": "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    },
+    {
+      "label": "adapter A-Pass",
+      "detail": "issued, isValidAPass true"
+    },
+    {
+      "label": "participant A-Passes",
+      "detail": "1 issued fork-local"
+    },
+    {
+      "label": "supply ceremony",
+      "detail": "100000 units minted to the adapter, roles settled"
+    },
+    {
+      "label": "aUSDC funding",
+      "detail": "210000 moved from a real holder, buyer now holds 210000"
+    },
+    {
+      "label": "production contracts",
+      "detail": "verifier 0x43ca9bae8df108684e5eaaa720c25e1b32b0a075, factory 0x9d3da37d36bb0b825cd319ed129c2872b893f538"
+    },
+    {
+      "label": "factory configured",
+      "detail": "roles, facility, adapter and settlement token allowlisted"
+    },
+    {
+      "label": "vault created",
+      "detail": "0x3df1E2e6F757E302dbf8b643880483938826968F"
+    },
+    {
+      "label": "vault A-Pass",
+      "detail": "issued fork-local"
+    },
+    {
+      "label": "policy MINV01 mint to adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 burn from adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 release to holderA",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 release to holderB",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC advance in",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC net proceeds out",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC settlement to holderA",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC settlement to holderB",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC cash redemption to buyer",
+      "detail": "true"
+    },
+    {
+      "label": "bind preconditions",
+      "detail": "all pass"
+    },
+    {
+      "label": "bindVault",
+      "detail": "bound to 0x3df1E2e6F757E302dbf8b643880483938826968F, availableBalance 100000"
+    }
+  ],
+  "hygiene": {
+    "writeRpc": "http://127.0.0.1:8549",
+    "loopback": true,
+    "upstreamSeparate": true,
+    "clientVersion": "anvil/v1.5.0",
+    "chainId": 10143,
+    "forkBlock": "48901500",
+    "forkBlockHash": "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03",
+    "pinnedByNumberAndHash": true
+  },
+  "apassIssued": [
+    {
+      "subject": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "label": "adapter",
+      "hash": "0xd209ad7fe582f4c38993f5bd16044c78d6406820ebc7a00009909425d81683e3",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "label": "facility",
+      "hash": "0x8ef0340d3c55d998833967b085d66f6c6b072326dfaef234d0546cf378ba6bcc",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "label": "vault",
+      "hash": "0x14a9fc68906e0e1afc0ab47e3341e9f52cbaff7a3fd177d0908a9c55cb5ea72b",
+      "isValidAPass": true
+    }
+  ],
+  "aUsdcFunding": {
+    "source": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+    "sourceBalanceBefore": "500000",
+    "moved": "210000",
+    "buyerBalance": "210000",
+    "note": "impersonated a real holder; no balance was invented"
+  },
+  "bindPreconditions": {
+    "ok": true,
+    "reasons": [],
+    "policyTuples": [
+      {
+        "label": "MINV01 mint to adapter",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0x0000000000000000000000000000000000000000",
+        "to": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 burn from adapter",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x0000000000000000000000000000000000000000",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 release to holderA",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "amount": "50000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 release to holderB",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "amount": "50000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC advance in",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "to": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC net proceeds out",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC settlement to holderA",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "amount": "55000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC settlement to holderB",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "amount": "55000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC cash redemption to buyer",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "amount": "110000",
+        "answer": true
+      }
+    ]
+  },
+  "vault": {
+    "address": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+    "verifier": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075",
+    "factory": "0x9d3da37d36bb0b825cd319ed129c2872b893f538",
+    "boundVault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+    "initialUnits": "100000",
+    "advanceAmount": "100000",
+    "faceValue": "110000",
+    "bondBps": 1000,
+    "protectionEnd": "1787858622"
+  },
+  "statuses": {
+    "FORK APASS REGISTRY ISSUE": "PROVEN",
+    "PRODUCTION VAULT BINDING": "PROVEN ON FORK",
+    "ADAPTER BURN PATH": "NOT ATTEMPTED YET",
+    "ADAPTER DEFAULT RELEASE": "NOT ATTEMPTED YET",
+    "PUBLIC ADAPTER DEPLOYMENT": "NOT DONE",
+    "MORDANT SETTLEMENT": "NOT PROVEN LIVE"
+  }
+}
