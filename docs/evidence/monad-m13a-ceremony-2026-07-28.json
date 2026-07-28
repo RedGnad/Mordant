@@ -1,12 +1,35 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T20:39:59.391Z",
-  "classification": "M-13 SUPPLY AND ROLE CEREMONY: PROVEN ON FORK",
+  "generatedAt": "2026-07-28T20:52:42.848Z",
+  "classification": "M-13A SUPPLY AND ROLE CEREMONY: PROVEN ON FORK",
+  "controlA": {
+    "classification": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN",
+    "proven": true,
+    "forkBlock": "48889104",
+    "forkBlockHash": "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83",
+    "replayHash": "0xeb994d284a9017bc379855036ee8562909b6b4ab55f44f8a7f8bf9dce96dafca",
+    "mintEvent": {
+      "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+      "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "topicCount": 4,
+      "tokenId": "88748084528698636913423817179856862522178343947"
+    }
+  },
   "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
   "steps": [
     {
       "label": "fork",
       "detail": "anvil/v1.5.0, chain 10143, block 48901500"
+    },
+    {
+      "label": "pinned",
+      "detail": "number and hash match 0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03"
+    },
+    {
+      "label": "MINV01 deployment",
+      "detail": "block 48901234, no code at parent, 122 bytes at receipt"
     },
     {
       "label": "adapter deployed",
@@ -15,6 +38,10 @@
     {
       "label": "substitution",
       "detail": "only word 0 differs, 8 words, same selector and length"
+    },
+    {
+      "label": "mint event",
+      "detail": "Transfer from zero to 0xc0bf43a4ca27e0976195e6661b099742f10507e5, 4 topics"
     },
     {
       "label": "adapter A-Pass",
@@ -72,7 +99,17 @@
     "clientVersion": "anvil/v1.5.0",
     "chainId": 10143,
     "forkBlock": "48901500",
-    "forkBlockHash": "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03"
+    "forkBlockHash": "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03",
+    "pinnedByNumberAndHash": true
+  },
+  "tokenDeployment": {
+    "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "issuingTxHash": "0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c",
+    "blockNumber": "48901234",
+    "verified": {
+      "blockNumber": "48901234",
+      "codeBytes": 122
+    }
   },
   "substitution": {
     "original": "0xb8dd36640000000000000000000000000f8b9a0c064306f938912658c96c681d8655140b0000000000000000000000000000000000000000000000000000000000000032000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006c4a2686854d0f1a7fd0ef2ee7815a823bb7e95207222aa0abd1cb4294c93b4a27eeb6990000000000000000000000000000000000000000000000000000000000000000",
@@ -109,6 +146,14 @@
     "before": false,
     "after": true,
     "hash": "0xd209ad7fe582f4c38993f5bd16044c78d6406820ebc7a00009909425d81683e3",
+    "mintEvent": {
+      "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+      "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "topicCount": 4,
+      "tokenId": "1100391562929273250622671164681762308208525117413"
+    },
     "logCount": 2,
     "logs": [
       {
@@ -166,6 +211,8 @@
   },
   "minterExclusivity": {
     "reconstructionComplete": true,
+    "scannedFromBlock": "48901234",
+    "scanStartJustification": "MINV01's deployment block, derived from its issuing transaction and confirmed by the absence of code at the parent. The history is complete from the token's first block.",
     "eventCount": 4,
     "events": [
       {
@@ -296,5 +343,10 @@
     "apass": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
     "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
     "boundVault": "0x0000000000000000000000000000000000000000"
+  },
+  "notProvenHere": {
+    "PRODUCTION VAULT BINDING": "NOT ATTEMPTED IN M-13A",
+    "ADAPTER BURN PATH": "NOT ATTEMPTED IN M-13A",
+    "ADAPTER DEFAULT RELEASE": "NOT ATTEMPTED IN M-13A"
   }
 }

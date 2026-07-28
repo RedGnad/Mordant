@@ -1,5 +1,5 @@
 /**
- * M-13 shared internals: fork hygiene, calldata substitution and the assumption register.
+ * M-13A shared internals: fork hygiene, calldata substitution and the assumption register.
  *
  * The rehearsal writes to a local fork and must never be able to reach the public network, so the
  * hygiene checks below are gates rather than logging: a run that cannot prove it is talking to a
@@ -24,6 +24,8 @@ export const OBSERVED_ISSUANCE = Object.freeze({
   txHash: "0x4693a9afbcf4ce3401de6ce7f095afe309e8de33836a8d0443d96bf1dca16fd8",
   blockNumber: 48_889_105n,
   parentBlockNumber: 48_889_104n,
+  /** Both forks are pinned by number AND hash, so a reorg cannot silently move the ground. */
+  parentBlockHash: "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83",
   selector: "0xb8dd3664",
   subject: "0x0f8b9a0c064306f938912658c96c681d8655140b",
   calldata:
@@ -157,6 +159,84 @@ export function assertSubstitutionBounded(diff) {
   }
   return true;
 }
+
+/** The ceremony fork, pinned by number and hash. */
+export const M13_FORK_BLOCK = 48_901_500n;
+export const M13_FORK_BLOCK_HASH =
+  "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03";
+
+/**
+ * MINV01's own deployment, derived from the M-11 issuing transaction rather than guessed.
+ *
+ * The role-history scan starts exactly here. An arbitrary window before the fork block would either
+ * miss earlier grants or pretend to cover blocks it never read, and minter exclusivity is only
+ * meaningful if the history is complete from the token's first block.
+ */
+export const MINV01_DEPLOYMENT = Object.freeze({
+  token: "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+  issuingTxHash: "0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c",
+  blockNumber: 48_901_234n,
+});
+
+/** Confirms a pinned block is the one intended, by hash and not only by height. */
+export function assertPinnedBlock(label, observed, expectedNumber, expectedHash) {
+  if (BigInt(observed.number) !== BigInt(expectedNumber)) {
+    fail(`${label}: the fork head is ${observed.number}, expected ${expectedNumber}.`);
+  }
+  if (String(observed.hash).toLowerCase() !== String(expectedHash).toLowerCase()) {
+    fail(`${label}: block ${expectedNumber} hashes ${observed.hash}, expected ${expectedHash}.`
+      + " The upstream may have reorged; refusing to rehearse against different ground.");
+  }
+  return { number: BigInt(observed.number).toString(), hash: observed.hash };
+}
+
+/**
+ * Confirms the token really came into existence at the block derived from its issuing transaction:
+ * no code at the parent, code at the receipt. Without both, the scan start is a guess.
+ */
+export function assertDeploymentBlock(label, codeAtParent, codeAtReceipt, blockNumber) {
+  const empty = (code) => !code || code === "0x";
+  if (!empty(codeAtParent)) {
+    fail(`${label}: code already exists at block ${BigInt(blockNumber) - 1n}, so ${blockNumber} is`
+      + " not the deployment block.");
+  }
+  if (empty(codeAtReceipt)) {
+    fail(`${label}: no code at block ${blockNumber}, so the deployment block is wrong.`);
+  }
+  return { blockNumber: BigInt(blockNumber).toString(), codeBytes: (codeAtReceipt.length - 2) / 2 };
+}
+
+/** ERC-721 and ERC-20 share this topic. Here it is the registry minting the A-Pass. */
+export const TRANSFER_TOPIC0 =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+/**
+ * Requires the registry to have emitted a Transfer from the zero address to the subject.
+ *
+ * A successful receipt says the call did not revert; this says an A-Pass was actually minted to the
+ * intended address. Only this event is decoded: the second one the registry emits is left alone,
+ * since nothing here knows its shape.
+ */
+export function assertIssuanceMintEvent(logs, registry, subject) {
+  const pad = (address) => `0x000000000000000000000000${String(address).slice(2).toLowerCase()}`;
+  const candidates = (logs ?? []).filter((log) =>
+    String(log.address).toLowerCase() === String(registry).toLowerCase()
+    && String(log.topics?.[0]).toLowerCase() === TRANSFER_TOPIC0);
+  if (candidates.length === 0) {
+    fail("the registry emitted no Transfer event, so no A-Pass was minted.");
+  }
+  const minted = candidates.find((log) =>
+    String(log.topics[1]).toLowerCase() === pad(ZERO_ADDRESS)
+    && String(log.topics[2]).toLowerCase() === pad(subject));
+  if (!minted) {
+    fail(`no Transfer from the zero address to ${subject} was emitted by the registry.`);
+  }
+  return { address: minted.address, topic0: minted.topics[0], from: ZERO_ADDRESS, to: subject,
+    topicCount: minted.topics.length,
+    tokenId: minted.topics[3] ? BigInt(minted.topics[3]).toString() : null };
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const EVIDENCE_GRADES = Object.freeze([
   "REPOSITORY-PROVEN", "ON-CHAIN OBSERVED", "FORK-PROVEN", "INFERRED", "NOT PROVEN",

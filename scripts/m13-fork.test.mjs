@@ -3,11 +3,12 @@ import { test } from "node:test";
 import { keccak256, toBytes } from "viem";
 
 import {
-  EVIDENCE_GRADES, OBSERVED_ISSUANCE, assertAnvilClient, assertForkChain, assertLoopbackRpc,
+  EVIDENCE_GRADES, OBSERVED_ISSUANCE, TRANSFER_TOPIC0, assertAnvilClient, assertDeploymentBlock,
+  assertForkChain, assertIssuanceMintEvent, assertLoopbackRpc, assertPinnedBlock,
   assertSubstitutionBounded, assertUpstreamSeparate, assumptionRegister, diffCalldata,
   substituteSubjectAddress,
 } from "./m13-fork-lib.mjs";
-import { classifyMinterExclusivity, deriveActiveMinters } from "./m13-rehearsal.mjs";
+import { classifyMinterExclusivity, deriveActiveMinters } from "./m13a-ceremony.mjs";
 import { ControlError } from "./runner-controls.mjs";
 
 const stops = (fn) => assert.throws(fn, ControlError);
@@ -167,4 +168,89 @@ test("the issuance ABI is never graded above what one observation supports", () 
 test("an unknown grade is refused outright", () => {
   // A typo in a grade must not silently pass as evidence.
   assert.equal(EVIDENCE_GRADES.includes("PROBABLY FINE"), false);
+});
+
+// --- pinning by number and hash ---
+
+const HASH_A = "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83";
+
+test("a block matching both number and hash is accepted", () => {
+  const pinned = assertPinnedBlock("A", { number: 48_889_104n, hash: HASH_A }, 48_889_104n, HASH_A);
+  assert.equal(pinned.number, "48889104");
+});
+
+test("the right height with the wrong hash is refused", () => {
+  // This is the reorg case: same height, different ground.
+  assert.throws(
+    () => assertPinnedBlock("A", { number: 48_889_104n, hash: `0x${"ff".repeat(32)}` }, 48_889_104n, HASH_A),
+    /reorged/);
+});
+
+test("the wrong height is refused even with a plausible hash", () => {
+  stops(() => assertPinnedBlock("A", { number: 1n, hash: HASH_A }, 48_889_104n, HASH_A));
+});
+
+test("hash comparison ignores casing", () => {
+  assert.ok(assertPinnedBlock("A", { number: 1n, hash: HASH_A.toUpperCase().replace("0X", "0x") }, 1n, HASH_A));
+});
+
+// --- deployment block derivation ---
+
+test("no code at the parent and code at the receipt confirms the deployment block", () => {
+  const result = assertDeploymentBlock("MINV01", "0x", `0x${"60".repeat(122)}`, 48_901_234n);
+  assert.equal(result.blockNumber, "48901234");
+  assert.equal(result.codeBytes, 122);
+});
+
+test("code already present at the parent means the block is wrong", () => {
+  // Scanning from here would miss earlier role history.
+  stops(() => assertDeploymentBlock("MINV01", "0x6060", "0x6060", 48_901_234n));
+});
+
+test("no code at the receipt means the block is wrong", () => {
+  stops(() => assertDeploymentBlock("MINV01", "0x", "0x", 48_901_234n));
+  stops(() => assertDeploymentBlock("MINV01", undefined, undefined, 48_901_234n));
+});
+
+// --- the issuance mint event ---
+
+const pad = (address) => `0x000000000000000000000000${address.slice(2).toLowerCase()}`;
+const REGISTRY = "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9";
+const SUBJECT = "0x0f8b9a0c064306f938912658c96c681d8655140b";
+const transferLog = (from, to, address = REGISTRY) => ({
+  address,
+  topics: [TRANSFER_TOPIC0, pad(from), pad(to), `0x${"00".repeat(31)}07`],
+});
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+test("a Transfer from zero to the subject is accepted and its token id read", () => {
+  const event = assertIssuanceMintEvent([transferLog(ZERO_ADDR, SUBJECT)], REGISTRY, SUBJECT);
+  assert.equal(event.to, SUBJECT);
+  assert.equal(event.tokenId, "7");
+  assert.equal(event.topicCount, 4);
+});
+
+test("a receipt with no registry Transfer is refused", () => {
+  stops(() => assertIssuanceMintEvent([], REGISTRY, SUBJECT));
+  stops(() => assertIssuanceMintEvent([{ address: REGISTRY, topics: ["0xdead"] }], REGISTRY, SUBJECT));
+});
+
+test("a Transfer to somebody else does not count as issuance to the subject", () => {
+  stops(() => assertIssuanceMintEvent([transferLog(ZERO_ADDR, OTHER)], REGISTRY, SUBJECT));
+});
+
+test("a Transfer that is not a mint does not count", () => {
+  // An existing A-Pass moving between holders is not an issuance.
+  stops(() => assertIssuanceMintEvent([transferLog(OTHER, SUBJECT)], REGISTRY, SUBJECT));
+});
+
+test("a Transfer from another contract does not count", () => {
+  stops(() => assertIssuanceMintEvent(
+    [transferLog(ZERO_ADDR, SUBJECT, "0x1111111111111111111111111111111111111111")], REGISTRY, SUBJECT));
+});
+
+test("the correct mint is found among unrelated registry logs", () => {
+  const event = assertIssuanceMintEvent(
+    [{ address: REGISTRY, topics: ["0xb64285e3"] }, transferLog(ZERO_ADDR, SUBJECT)], REGISTRY, SUBJECT);
+  assert.equal(event.to, SUBJECT);
 });

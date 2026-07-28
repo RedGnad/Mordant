@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * M-13: pinned Monad fork rehearsal.
+ * M-13A: A-Pass call shape and supply/role ceremony, on a pinned Monad fork.
  *
- * Everything Mordant needs before it can settle, rehearsed against real deployed Cleanverse
- * contracts on a local fork: adapter deployment, A-Pass issuance to that adapter, the supply and
- * role ceremony, vault binding, and both the burn and default-release paths.
+ * What this DOES prove: the observed issuance call reproduces, a bounded substitution of it issues
+ * an A-Pass to a freshly deployed production adapter, and the supply and role ceremony leaves
+ * exactly the intended minter holding exactly the intended supply.
  *
- *   node scripts/m13-rehearsal.mjs [--out <prefix>]
+ * What this does NOT prove, and does not attempt: vault binding, the burn path, or the default
+ * release. Those are M-13B.
+ *
+ *   node scripts/m13a-ceremony.mjs [--out <prefix>]
  *
  * Nothing public is touched. Writes go only to a loopback Anvil; the Monad endpoint is a fork
  * source and receives no transaction; no Cleanverse endpoint is called. No anvil_setStorageAt: the
@@ -27,10 +30,12 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { runControlA } from "./m13-control-a.mjs";
 import {
-  APASS_REGISTRY, OBSERVED_ISSUANCE, OBSERVED_ISSUER, assertAnvilClient, assertForkChain,
-  assertLoopbackRpc, assertSubstitutionBounded, assertUpstreamSeparate, assumptionRegister,
-  diffCalldata, substituteSubjectAddress,
+  APASS_REGISTRY, M13_FORK_BLOCK, M13_FORK_BLOCK_HASH, MINV01_DEPLOYMENT, OBSERVED_ISSUANCE,
+  OBSERVED_ISSUER, assertAnvilClient, assertDeploymentBlock, assertForkChain,
+  assertIssuanceMintEvent, assertLoopbackRpc, assertPinnedBlock, assertSubstitutionBounded,
+  assertUpstreamSeparate, assumptionRegister, diffCalldata, substituteSubjectAddress,
 } from "./m13-fork-lib.mjs";
 import { ControlError, writeArtifact } from "./runner-controls.mjs";
 
@@ -43,9 +48,6 @@ const MINV01 = "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b";
 const MINV01_ADMIN = "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45";
 const POLICY = "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd";
 const ZERO = "0x0000000000000000000000000000000000000000";
-
-/** MINV01's issuing block, so the fork starts after the token exists. */
-const MINV01_ISSUE_BLOCK = 48_901_500n;
 
 /** Anvil's published development keys. A fork only, never a real wallet. */
 const FORK_KEYS = Object.freeze({
@@ -140,17 +142,31 @@ async function main() {
   assertLoopbackRpc(FORK_RPC);
   assertUpstreamSeparate(UPSTREAM, FORK_RPC);
 
+  // Control A is a precondition, not a suggestion. The substitution is an inference from one
+  // observed call, so it may only be attempted after the exact replay has passed in this same
+  // sequence. Running B alone is impossible by construction.
+  process.stdout.write("  running control A first, as a precondition\n");
+  const controlA = await runControlA({});
+  if (!controlA.proven) {
+    stop("control A did not prove the exact replay, so the bounded substitution must not be"
+      + " attempted. The call shape is not reproducible.");
+  }
+  process.stdout.write(`  control A                      ${controlA.classification}\n`);
+
   const report = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     classification: "PENDING",
+    controlA: { classification: controlA.classification, proven: controlA.proven,
+      forkBlock: controlA.hygiene.forkBlock, forkBlockHash: controlA.hygiene.forkBlockHash,
+      replayHash: controlA.replay.hash, mintEvent: controlA.readback.mintEvent },
     scope: "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt."
       + " Nothing here is a live Mordant settlement.",
     steps,
   };
 
   const fork = spawn("anvil", [
-    "--fork-url", UPSTREAM, "--fork-block-number", String(MINV01_ISSUE_BLOCK),
+    "--fork-url", UPSTREAM, "--fork-block-number", String(M13_FORK_BLOCK),
     "--port", String(FORK_PORT), "--host", "127.0.0.1", "--chain-id", "10143",
     "--code-size-limit", "131072", "--silent",
   ], { stdio: ["ignore", "ignore", "inherit"] });
@@ -174,9 +190,23 @@ async function main() {
     const chainId = assertForkChain(await client.getChainId());
     const head = await client.getBlockNumber();
     const block = await client.getBlock({ blockNumber: head });
+    const pinned = assertPinnedBlock("ceremony", block, M13_FORK_BLOCK, M13_FORK_BLOCK_HASH);
     report.hygiene = { writeRpc: FORK_RPC, loopback: true, upstreamSeparate: true, clientVersion,
-      chainId, forkBlock: head.toString(), forkBlockHash: block.hash };
+      chainId, forkBlock: pinned.number, forkBlockHash: pinned.hash, pinnedByNumberAndHash: true };
     note("fork", `${clientVersion}, chain ${chainId}, block ${head}`);
+    note("pinned", `number and hash match ${pinned.hash}`);
+
+    // The role-history scan starts at MINV01's real deployment block, derived from the M-11 issuing
+    // transaction and confirmed by the absence of code at its parent.
+    const deployment = assertDeploymentBlock("MINV01",
+      await client.getCode({ address: MINV01, blockNumber: MINV01_DEPLOYMENT.blockNumber - 1n }),
+      await client.getCode({ address: MINV01, blockNumber: MINV01_DEPLOYMENT.blockNumber }),
+      MINV01_DEPLOYMENT.blockNumber);
+    report.tokenDeployment = { ...MINV01_DEPLOYMENT,
+      blockNumber: MINV01_DEPLOYMENT.blockNumber.toString(),
+      issuingTxHash: MINV01_DEPLOYMENT.issuingTxHash, verified: deployment };
+    note("MINV01 deployment", `block ${deployment.blockNumber}, no code at parent,`
+      + ` ${deployment.codeBytes} bytes at receipt`);
 
     const deployer = privateKeyToAccount(FORK_KEYS.deployer);
     const issuanceMinter = privateKeyToAccount(FORK_KEYS.issuanceMinter);
@@ -217,12 +247,15 @@ async function main() {
     const issueReceipt = await client.waitForTransactionReceipt({ hash: issueHash });
     const apassAfter = await client.readContract({
       address: APASS_REGISTRY, abi: APASS_ABI, functionName: "isValidAPass", args: [adapter] });
+    // The registry must have minted to the adapter, not merely not reverted.
+    const mintEvent = assertIssuanceMintEvent(issueReceipt.logs, APASS_REGISTRY, adapter);
+    note("mint event", `Transfer from zero to ${mintEvent.to}, ${mintEvent.topicCount} topics`);
     if (issueReceipt.status !== "success" || apassBefore !== false || apassAfter !== true) {
       stop(`the substituted issuance did not produce an A-Pass for the adapter`
         + ` (before ${apassBefore}, after ${apassAfter}, status ${issueReceipt.status}).`);
     }
     report.adapterApass = { adapter, before: apassBefore, after: apassAfter, hash: issueHash,
-      logCount: issueReceipt.logs.length,
+      mintEvent, logCount: issueReceipt.logs.length,
       logs: issueReceipt.logs.map((entry) => ({ address: entry.address, topic0: entry.topics[0] })) };
     note("adapter A-Pass", `isValidAPass ${apassBefore} -> ${apassAfter}, ${issueReceipt.logs.length} logs`);
 
@@ -296,7 +329,7 @@ async function main() {
     const roleEvents = [];
     let reconstructionComplete = true;
     try {
-      const fromBlock = MINV01_ISSUE_BLOCK - 400n;
+      const fromBlock = MINV01_DEPLOYMENT.blockNumber;
       for (let start = fromBlock; start <= await client.getBlockNumber(); start += 100n) {
         const logs = await client.getLogs({ address: MINV01, fromBlock: start,
           toBlock: start + 99n });
@@ -314,7 +347,12 @@ async function main() {
     const activeMinters = reconstructionComplete ? deriveActiveMinters(roleEvents) : null;
     const exclusivity = reconstructionComplete
       ? classifyMinterExclusivity(activeMinters, adapter) : "NOT PROVEN";
-    report.minterExclusivity = { reconstructionComplete, eventCount: roleEvents.length,
+    report.minterExclusivity = { reconstructionComplete,
+      scannedFromBlock: MINV01_DEPLOYMENT.blockNumber.toString(),
+      scanStartJustification: "MINV01's deployment block, derived from its issuing transaction and"
+        + " confirmed by the absence of code at the parent. The history is complete from the"
+        + " token's first block.",
+      eventCount: roleEvents.length,
       events: roleEvents.map((entry) => ({ ...entry, blockNumber: entry.blockNumber.toString() })),
       activeMinters, classification: exclusivity };
     note("minter exclusivity", `${exclusivity}, active: ${(activeMinters ?? []).join(", ") || "none"}`);
@@ -348,9 +386,14 @@ async function main() {
       owner: await client.readContract({ address: adapter, abi: ADAPTER_ABI_VIEW, functionName: "owner" }),
       boundVault: await client.readContract({ address: adapter, abi: ADAPTER_ABI_VIEW, functionName: "boundVault" }) };
 
+    report.notProvenHere = {
+      "PRODUCTION VAULT BINDING": "NOT ATTEMPTED IN M-13A",
+      "ADAPTER BURN PATH": "NOT ATTEMPTED IN M-13A",
+      "ADAPTER DEFAULT RELEASE": "NOT ATTEMPTED IN M-13A",
+    };
     report.classification = exclusivity === "PROVEN"
-      ? "M-13 SUPPLY AND ROLE CEREMONY: PROVEN ON FORK"
-      : "M-13 SUPPLY AND ROLE CEREMONY: PROVEN ON FORK, MINTER EXCLUSIVITY NOT PROVEN";
+      ? "M-13A SUPPLY AND ROLE CEREMONY: PROVEN ON FORK"
+      : "M-13A SUPPLY AND ROLE CEREMONY: PROVEN ON FORK, MINTER EXCLUSIVITY NOT PROVEN";
     process.stdout.write(`\n${"CLASSIFICATION".padEnd(30)} ${report.classification}\n`);
     if (out) { writeArtifact(out, report, process.env); process.stdout.write(`\nWrote ${out}.json\n`); }
   } finally {
@@ -358,9 +401,9 @@ async function main() {
   }
 }
 
-const invokedDirectly = process.argv[1]?.endsWith("m13-rehearsal.mjs");
+const invokedDirectly = process.argv[1]?.endsWith("m13a-ceremony.mjs");
 if (invokedDirectly) {
-  process.stdout.write("M-13 pinned Monad fork rehearsal\n\n");
+  process.stdout.write("M-13A: A-Pass call shape and supply/role ceremony\n\n");
   main().catch((error) => {
     process.stderr.write(`\n${error instanceof ControlError ? error.message : `STOP — ${error.message}`}\n`);
     process.exitCode = 1;

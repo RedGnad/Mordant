@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * M-13 control A: replay the observed A-Pass issuance call, byte for byte.
+ * M-13A control A: replay the observed A-Pass issuance call, byte for byte.
  *
  * The gate for everything after it. If the exact recorded calldata, sent from the impersonated
  * issuer at the parent block, does not reproduce the A-Pass, then the call shape is not
@@ -20,7 +20,7 @@ import { createPublicClient, createTestClient, createWalletClient, http, keccak2
 
 import {
   APASS_REGISTRY, OBSERVED_ISSUANCE, OBSERVED_ISSUER, assertAnvilClient, assertForkChain,
-  assertLoopbackRpc, assertUpstreamSeparate,
+  assertIssuanceMintEvent, assertLoopbackRpc, assertPinnedBlock, assertUpstreamSeparate,
 } from "./m13-fork-lib.mjs";
 import { ControlError, writeArtifact } from "./runner-controls.mjs";
 
@@ -69,12 +69,11 @@ export async function runControlA({ out = null, log = () => {} } = {}) {
     const chainId = assertForkChain(await client.getChainId());
     const head = await client.getBlockNumber();
     const block = await client.getBlock({ blockNumber: head });
+    // Pinned by number AND hash: a reorg upstream must not silently change the ground.
+    const pinned = assertPinnedBlock("control A", block, OBSERVED_ISSUANCE.parentBlockNumber,
+      OBSERVED_ISSUANCE.parentBlockHash);
     log("fork", `${clientVersion}, chain ${chainId}, block ${head} ${block.hash}`);
-
-    if (head !== OBSERVED_ISSUANCE.parentBlockNumber) {
-      stop(`the fork head is ${head}, expected the parent block`
-        + ` ${OBSERVED_ISSUANCE.parentBlockNumber}.`);
-    }
+    log("pinned", `number and hash match ${pinned.hash}`);
 
     // The A-Pass must not exist yet, or the replay would prove nothing.
     const before = await client.readContract({
@@ -101,7 +100,13 @@ export async function runControlA({ out = null, log = () => {} } = {}) {
       args: [OBSERVED_ISSUANCE.subject] });
     log("after replay", `isValidAPass(subject) = ${after}`);
 
-    const proven = receipt.status === "success" && before === false && after === true;
+    // A successful receipt only says the call did not revert. This says an A-Pass was minted to
+    // the intended subject. The registry's second event is deliberately left undecoded.
+    const mintEvent = assertIssuanceMintEvent(receipt.logs, APASS_REGISTRY, OBSERVED_ISSUANCE.subject);
+    log("mint event", `Transfer from zero to ${mintEvent.to}, ${mintEvent.topicCount} topics`);
+
+    const proven = receipt.status === "success" && before === false && after === true
+      && mintEvent.to.toLowerCase() === OBSERVED_ISSUANCE.subject.toLowerCase();
     const report = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -111,7 +116,8 @@ export async function runControlA({ out = null, log = () => {} } = {}) {
         : "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: NOT PROVEN",
       scope: "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt.",
       hygiene: { writeRpc: FORK_RPC, loopback: true, upstreamSeparate: true,
-        clientVersion, chainId, forkBlock: head.toString(), forkBlockHash: block.hash },
+        clientVersion, chainId, forkBlock: pinned.number, forkBlockHash: pinned.hash,
+        pinnedByNumberAndHash: true },
       observedCall: {
         sourceTransaction: OBSERVED_ISSUANCE.txHash,
         issuer: OBSERVED_ISSUER, registry: APASS_REGISTRY,
@@ -126,7 +132,8 @@ export async function runControlA({ out = null, log = () => {} } = {}) {
         logCount: receipt.logs.length,
         logs: receipt.logs.map((entry) => ({ address: entry.address, topic0: entry.topics[0],
           topicCount: entry.topics.length })) },
-      readback: { subject: OBSERVED_ISSUANCE.subject, isValidAPassBefore: before, isValidAPassAfter: after },
+      readback: { subject: OBSERVED_ISSUANCE.subject, isValidAPassBefore: before,
+        isValidAPassAfter: after, mintEvent },
       proven,
     };
     if (out) writeArtifact(out, report, process.env);

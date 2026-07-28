@@ -40,7 +40,7 @@
     "m12:apass": "node --env-file=.env scripts/m12-adapter-path.mjs --apass",
     "m12:grant": "node --env-file=.env scripts/m12-adapter-path.mjs --grant",
     "m13:control-a": "node scripts/m13-control-a.mjs",
-    "m13:rehearsal": "node scripts/m13-rehearsal.mjs"
+    "m13a:ceremony": "node scripts/m13a-ceremony.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

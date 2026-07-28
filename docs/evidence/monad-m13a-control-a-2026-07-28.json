@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T20:38:03.107Z",
+  "generatedAt": "2026-07-28T20:51:47.255Z",
   "control": "A",
   "classification": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN",
   "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt.",
@@ -11,7 +11,8 @@
     "clientVersion": "anvil/v1.5.0",
     "chainId": 10143,
     "forkBlock": "48889104",
-    "forkBlockHash": "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83"
+    "forkBlockHash": "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83",
+    "pinnedByNumberAndHash": true
   },
   "observedCall": {
     "sourceTransaction": "0x4693a9afbcf4ce3401de6ce7f095afe309e8de33836a8d0443d96bf1dca16fd8",
@@ -44,7 +45,15 @@
   "readback": {
     "subject": "0x0f8b9a0c064306f938912658c96c681d8655140b",
     "isValidAPassBefore": false,
-    "isValidAPassAfter": true
+    "isValidAPassAfter": true,
+    "mintEvent": {
+      "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+      "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "topicCount": 4,
+      "tokenId": "88748084528698636913423817179856862522178343947"
+    }
   },
   "proven": true
 }
