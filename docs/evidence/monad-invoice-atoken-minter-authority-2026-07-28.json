@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T19:34:29.261Z",
+  "mode": "authority",
+  "classification": "MINTER ROLE AUTHORITY: ADMIN CAN GRANT",
+  "scope": "Read-only. No role was granted, nothing was minted and no transaction was sent. This establishes only whether a future grant is possible.",
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48903626"
+  },
+  "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+  "adminRole": "HOLDER_A",
+  "adminAddress": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+  "minterRole": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+  "roleAdmin": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "adminHoldsRoleAdmin": true,
+  "adminHoldsMinterRole": false,
+  "statuses": {
+    "MINTER ROLE": "NOT GRANTED",
+    "MINT/BURN VIA MORDANT ADAPTER": "NOT PROVEN",
+    "MORDANT SETTLEMENT": "NOT PROVEN"
+  }
+}

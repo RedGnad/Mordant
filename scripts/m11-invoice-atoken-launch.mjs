@@ -20,14 +20,22 @@
  * nothing on chain: the launch is an authenticated API call and Cleanverse deploys the token.
  */
 import { createCipheriv, createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, keccak256, toBytes } from "viem";
 
 import {
   ControlError, assertChainId, assertWriteAllowed, scrub, writeArtifact,
 } from "./runner-controls.mjs";
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const EVIDENCE_DIR = join(ROOT, "docs/evidence");
 const MONAD_RPC = process.env.MONAD_RPC_URL ?? "https://testnet-rpc.monad.xyz";
+
+/** The token M-11 issued, used by the read-only authority mode. */
+const ISSUED_INVOICE_ATOKEN = "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b";
 
 /** Rediscovered at run time and compared against these, never trusted from here. */
 const EXPECTED = Object.freeze({
@@ -80,6 +88,13 @@ const POLICY_ABI = [
     inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "isPaused", stateMutability: "view",
     inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
+];
+
+const ACCESS_CONTROL_ABI = [
+  { type: "function", name: "getRoleAdmin", stateMutability: "view",
+    inputs: [{ type: "bytes32" }], outputs: [{ type: "bytes32" }] },
+  { type: "function", name: "hasRole", stateMutability: "view",
+    inputs: [{ type: "bytes32" }, { type: "address" }], outputs: [{ type: "bool" }] },
 ];
 
 const ERC20_ABI = [
@@ -181,6 +196,31 @@ export function launchKey(request) {
 }
 
 /**
+ * Makes the launch key actually binding.
+ *
+ * The key alone only makes a repeat detectable; this is what refuses it. Any prior artifact
+ * carrying the same key together with a `launchAttemptedAt` proves a launch was already sent, and
+ * the run stops regardless of how that attempt ended. A PENDING one may still be issuing, an
+ * ambiguous failure may have been accepted anyway, and an ISSUED one already exists: in all three
+ * cases sending again risks a second token, which is the outcome this mission must never produce.
+ *
+ * @param artifacts parsed evidence artifacts, [{ path, report }]
+ */
+export function assertLaunchKeyUnused(key, artifacts) {
+  const priors = artifacts.filter(
+    (entry) => entry.report?.launchKey === key && entry.report?.launchAttemptedAt);
+  if (priors.length > 0) {
+    const detail = priors
+      .map((entry) => `${entry.path} at ${entry.report.launchAttemptedAt}`
+        + ` (${entry.report.classification ?? entry.report.status ?? "unknown outcome"})`)
+      .join("; ");
+    stop(`launch key ${key} was already submitted: ${detail}.`
+      + " Sending it again risks a second token. Reconcile with /atoken/list_my_atokens instead.");
+  }
+  return true;
+}
+
+/**
  * Uniqueness, against every A-Token already launched under this identity. A name or symbol
  * collision is refused outright: two tokens differing only by address is exactly the ambiguity this
  * mission must not create.
@@ -218,6 +258,40 @@ export function classifyLaunch({ submitted, applyStatus, readback }) {
   return "INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN";
 }
 
+/**
+ * Whether the admin wallet could grant MINTER_ROLE later, established without writing anything.
+ *
+ * Knowing that a grant is possible before planning around it is the point: discovering the admin
+ * cannot grant would change M-12's design, and finding that out from a reverted transaction would
+ * be the expensive way.
+ */
+export function classifyMinterAuthority({ minterRole, roleAdmin, adminHoldsRoleAdmin }) {
+  if (!minterRole || !roleAdmin) return "MINTER ROLE AUTHORITY: NOT READABLE";
+  if (adminHoldsRoleAdmin !== true) return "MINTER ROLE AUTHORITY: ADMIN CANNOT GRANT";
+  return "MINTER ROLE AUTHORITY: ADMIN CAN GRANT";
+}
+
+/** Every evidence artifact on disk, so a prior launch attempt cannot be missed. */
+function readEvidenceArtifacts() {
+  let names;
+  try {
+    names = readdirSync(EVIDENCE_DIR).filter((name) => name.endsWith(".json"));
+  } catch (error) {
+    stop(`the evidence directory could not be read (${error.message}), so a prior launch attempt`
+      + " cannot be ruled out.");
+  }
+  return names.map((name) => {
+    const path = join(EVIDENCE_DIR, name);
+    try {
+      return { path: `docs/evidence/${name}`, report: JSON.parse(readFileSync(path, "utf8")) };
+    } catch (error) {
+      // A corrupt artifact might be the very record of a prior attempt, so it is never skipped.
+      stop(`the evidence artifact ${name} could not be parsed (${error.message}).`);
+    }
+    return null;
+  });
+}
+
 const base = () => process.env.CLEANVERSE_API_BASE_URL?.replace(/\/+$/, "");
 const headers = () => ({ "api-id": process.env.CLEANVERSE_API_ID, "X-Request-ID": crypto.randomUUID() });
 
@@ -243,24 +317,102 @@ function encryptBody(payload) {
     cipher.update(Buffer.from(JSON.stringify(payload), "utf8")), cipher.final()]).toString("base64") };
 }
 
+const MAX_LIST_PAGES = 25;
+
+/**
+ * Enumerates every A-Token under this identity, fail-closed.
+ *
+ * A partial listing would silently weaken the uniqueness check into "no collision among the pages
+ * we happened to read", so falling short of the declared total stops the run rather than
+ * proceeding on an incomplete view.
+ */
 async function listMyATokens() {
   const all = [];
-  for (let page = 1; page <= 10; page += 1) {
+  let total = null;
+  for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
     const response = await apiGet(`/atoken/list_my_atokens?page=${page}&pageSize=20`);
     if (response?.code !== "0000") {
       stop(`list_my_atokens failed with ${response?.code}: ${String(response?.message).slice(0, 120)}.`
         + " Uniqueness could not be established, so no launch is attempted.");
     }
+    total = Number(response.data?.total ?? Number.NaN);
     const items = response.data?.items ?? [];
     all.push(...items);
-    if (all.length >= (response.data?.total ?? 0) || items.length === 0) break;
+    if (items.length === 0 || all.length >= total) break;
+  }
+  if (!Number.isInteger(total) || total < 0) {
+    stop("list_my_atokens did not report a usable total, so uniqueness cannot be established.");
+  }
+  if (all.length < total) {
+    stop(`list_my_atokens reported ${total} A-Tokens but only ${all.length} were retrieved within`
+      + ` ${MAX_LIST_PAGES} pages. Uniqueness cannot be established from a partial listing.`);
   }
   return all;
 }
 
+/**
+ * Read-only: proves whether the admin wallet holds the role that administers MINTER_ROLE.
+ *
+ * Writes its own artifact and never touches the launch one, which stays exactly as produced.
+ */
+async function runAuthorityMode(out) {
+  const client = createPublicClient({ transport: http(MONAD_RPC) });
+  const chainId = await assertChainId(client);
+  const blockNumber = await client.getBlockNumber();
+  const adminRole = process.env.MORDANT_M11_ADMIN_ROLE ?? "HOLDER_A";
+  const adminAddress = process.env[`MORDANT_ADDRESS_${adminRole}`];
+  if (!adminAddress) stop(`MORDANT_ADDRESS_${adminRole} must be set.`);
+  const token = process.env.MORDANT_INVOICE_ATOKEN ?? ISSUED_INVOICE_ATOKEN;
+
+  const minterRole = keccak256(toBytes("MINTER_ROLE"));
+  const read = (functionName, args) => client.readContract({
+    address: token, abi: ACCESS_CONTROL_ABI, functionName, args }).catch(() => null);
+  const roleAdmin = await read("getRoleAdmin", [minterRole]);
+  const adminHoldsRoleAdmin = roleAdmin ? await read("hasRole", [roleAdmin, adminAddress]) : null;
+  const adminHoldsMinter = await read("hasRole", [minterRole, adminAddress]);
+
+  const classification = classifyMinterAuthority({ minterRole, roleAdmin, adminHoldsRoleAdmin });
+  const report = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    mode: "authority",
+    classification,
+    scope: "Read-only. No role was granted, nothing was minted and no transaction was sent."
+      + " This establishes only whether a future grant is possible.",
+    network: { name: "monad-testnet", chainId, blockNumber: blockNumber.toString() },
+    token,
+    adminRole,
+    adminAddress,
+    minterRole,
+    roleAdmin,
+    adminHoldsRoleAdmin,
+    adminHoldsMinterRole: adminHoldsMinter,
+    statuses: {
+      "MINTER ROLE": adminHoldsMinter === true ? "HELD BY ADMIN" : "NOT GRANTED",
+      "MINT/BURN VIA MORDANT ADAPTER": "NOT PROVEN",
+      "MORDANT SETTLEMENT": "NOT PROVEN",
+    },
+  };
+  process.stdout.write(`M-11 minter authority, read-only\n\n`);
+  process.stdout.write(`  token           ${token}\n`);
+  process.stdout.write(`  MINTER_ROLE     ${minterRole}\n`);
+  process.stdout.write(`  getRoleAdmin    ${roleAdmin}\n`);
+  process.stdout.write(`  admin holds it  ${adminHoldsRoleAdmin}\n`);
+  process.stdout.write(`  admin is minter ${adminHoldsMinter}\n`);
+  process.stdout.write(`\n${"CLASSIFICATION".padEnd(30)} ${classification}\n`);
+  if (out) {
+    writeArtifact(out, report, process.env);
+    process.stdout.write(`\nWrote ${out}.json\n`);
+  }
+  if (adminHoldsRoleAdmin !== true) {
+    stop("the admin wallet does not hold the role that administers MINTER_ROLE."
+      + " A future grant would revert, so M-12 must be designed around that.");
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2).filter((value) => value !== "--");
-  const mode = argv.includes("--run") ? "run" : "check";
+  const mode = argv.includes("--run") ? "run" : argv.includes("--authority") ? "authority" : "check";
   const outIndex = argv.indexOf("--out");
   const out = outIndex === -1 ? null : argv[outIndex + 1] ?? null;
   const steps = [];
@@ -292,6 +444,11 @@ async function main() {
     report.stopReason = message;
     checkpoint();
   };
+
+  if (mode === "authority") {
+    await runAuthorityMode(out);
+    return;
+  }
 
   process.stdout.write(`M-11 invoice A-Token launch, mode=${mode}\n\n`);
   const client = createPublicClient({ transport: http(MONAD_RPC) });
@@ -365,6 +522,11 @@ async function main() {
   const key = launchKey(request);
   note("admin", `${adminRole} ${adminAddress}`);
   note("launch key", key);
+
+  // Binding, and checked in every mode: a prior artifact recording an attempt with this key means
+  // a launch already went out, whatever it returned, so a second one must not follow.
+  assertLaunchKeyUnused(key, readEvidenceArtifacts());
+  note("launch key check", "no prior artifact records an attempt with this key");
 
   report.network = { name: "monad-testnet", chainId, blockNumber: blockNumber.toString(),
     blockHash: block.hash };
@@ -448,11 +610,43 @@ async function main() {
     const reasons = [];
     const code = await client.getCode({ address: atokenAddress });
     if (!code || code === "0x") reasons.push("the issued address has no code");
+
+    // A proxy pointing at nothing, or at an address with no code, is not a working token.
     const implementation = await readImplementation(atokenAddress);
+    let implementationCodeBytes = null;
+    if (!implementation) {
+      reasons.push("no implementation is set behind the token proxy");
+    } else {
+      const implementationCode = await client.getCode({ address: implementation });
+      implementationCodeBytes = implementationCode ? (implementationCode.length - 2) / 2 : 0;
+      if (implementationCodeBytes === 0) reasons.push(`implementation ${implementation} has no code`);
+    }
+
+    // The issuing transaction is what Cleanverse says created this token. If it cannot be fetched
+    // or did not succeed, the issued state is unverified whatever the API reports.
+    let issuingReceipt = null;
+    const issuingTxHash = statusRecord?.txHash ?? null;
+    if (!issuingTxHash) {
+      reasons.push("no issuing transaction hash was reported");
+    } else {
+      issuingReceipt = await client.getTransactionReceipt({ hash: issuingTxHash }).catch(() => null);
+      if (!issuingReceipt) reasons.push(`the issuing receipt for ${issuingTxHash} could not be fetched`);
+      else if (issuingReceipt.status !== "success") {
+        reasons.push(`the issuing transaction ${issuingTxHash} has status ${issuingReceipt.status}`);
+      }
+    }
+
     const read = async (functionName) => client.readContract({
       address: atokenAddress, abi: ERC20_ABI, functionName }).catch(() => null);
     const [onchainName, onchainSymbol, onchainDecimals, tokenPolicy] =
       await Promise.all([read("name"), read("symbol"), read("decimals"), read("policy")]);
+    // The chain must agree it is the token we asked for, not merely a token.
+    if (onchainName !== TOKEN.token_name) {
+      reasons.push(`name "${onchainName}", expected "${TOKEN.token_name}"`);
+    }
+    if (onchainSymbol !== TOKEN.token_symbol) {
+      reasons.push(`symbol "${onchainSymbol}", expected "${TOKEN.token_symbol}"`);
+    }
     if (Number(onchainDecimals) !== TOKEN.decimals) {
       reasons.push(`decimals ${onchainDecimals}, expected ${TOKEN.decimals}`);
     }
@@ -481,7 +675,10 @@ async function main() {
         if (answer !== true) reasons.push(`canTransfer ${from.label} -> ${to.label} is ${answer}`);
       }
     }
-    readback = { atokenAddress, implementation, codeBytes: code ? (code.length - 2) / 2 : 0,
+    readback = { atokenAddress, implementation, implementationCodeBytes,
+      codeBytes: code ? (code.length - 2) / 2 : 0,
+      issuingTxHash, issuingReceiptStatus: issuingReceipt?.status ?? null,
+      issuingBlockNumber: issuingReceipt?.blockNumber?.toString() ?? null,
       name: onchainName, symbol: onchainSymbol, decimals: onchainDecimals === null ? null : Number(onchainDecimals),
       policy: tokenPolicy, isTokenRegistered: registered, isPaused: paused,
       controlTuples: control, ok: reasons.length === 0, reasons };

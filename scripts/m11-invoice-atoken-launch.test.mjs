@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  assertNameAndSymbolFree, classifyLaunch, launchKey, profilesSatisfying, resolveRule,
+  assertLaunchKeyUnused, assertNameAndSymbolFree, classifyLaunch, classifyMinterAuthority, launchKey,
+  profilesSatisfying, resolveRule,
 } from "./m11-invoice-atoken-launch.mjs";
 import { ControlError } from "./runner-controls.mjs";
 
@@ -107,6 +108,79 @@ test("any defining change produces a different key", () => {
   assert.notEqual(baseline, launchKey(request({ decimals: 18 })));
   assert.notEqual(baseline, launchKey(request({
     rule: { allowed_group: "", allowed_sub_group: "", min_tier: 20, min_sub_tier: 0 } })));
+});
+
+// --- the key is binding, not merely informative ---
+
+const KEY = "a".repeat(64);
+const artifact = (overrides = {}) => ({
+  path: "docs/evidence/prior.json",
+  report: { launchKey: KEY, launchAttemptedAt: "2026-07-28T19:22:21.502Z", ...overrides },
+});
+
+test("an unused key passes, including against an empty evidence directory", () => {
+  assert.equal(assertLaunchKeyUnused(KEY, []), true);
+  assert.equal(assertLaunchKeyUnused(KEY, [artifact({ launchKey: "b".repeat(64) })]), true);
+});
+
+test("a prior attempt blocks the key whatever its outcome", () => {
+  // All three outcomes must block: PENDING may still be issuing, an ambiguous failure may have been
+  // accepted anyway, and an issued one already exists.
+  for (const classification of [
+    "INVOICE A-TOKEN LAUNCH: SUBMITTED / PENDING",
+    "INVOICE A-TOKEN LAUNCH: FAILED",
+    "INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN",
+  ]) {
+    stops(() => assertLaunchKeyUnused(KEY, [artifact({ classification })]));
+  }
+});
+
+test("a stopped run that had already sent still blocks the key", () => {
+  stops(() => assertLaunchKeyUnused(KEY, [artifact({ status: "STOPPED", classification: undefined })]));
+});
+
+test("an artifact carrying the key but no attempt does not block", () => {
+  // A check-mode artifact records the key without having sent anything.
+  assert.equal(assertLaunchKeyUnused(KEY, [artifact({ launchAttemptedAt: undefined })]), true);
+});
+
+test("the blocking message names the artifact and the time, so it can be reconciled", () => {
+  assert.throws(() => assertLaunchKeyUnused(KEY, [artifact()]),
+    /docs\/evidence\/prior\.json at 2026-07-28T19:22:21\.502Z/);
+});
+
+// --- minter authority, read only ---
+
+const MINTER = `0x${"9f".repeat(32)}`;
+const ADMIN_ROLE = `0x${"00".repeat(32)}`;
+
+test("an admin holding the administering role can grant", () => {
+  assert.equal(
+    classifyMinterAuthority({ minterRole: MINTER, roleAdmin: ADMIN_ROLE, adminHoldsRoleAdmin: true }),
+    "MINTER ROLE AUTHORITY: ADMIN CAN GRANT");
+});
+
+test("an admin without the administering role cannot grant", () => {
+  for (const adminHoldsRoleAdmin of [false, null, undefined, "true"]) {
+    assert.equal(
+      classifyMinterAuthority({ minterRole: MINTER, roleAdmin: ADMIN_ROLE, adminHoldsRoleAdmin }),
+      "MINTER ROLE AUTHORITY: ADMIN CANNOT GRANT");
+  }
+});
+
+test("an unreadable role is reported as unreadable, not as a refusal", () => {
+  assert.equal(classifyMinterAuthority({ minterRole: MINTER, roleAdmin: null, adminHoldsRoleAdmin: true }),
+    "MINTER ROLE AUTHORITY: NOT READABLE");
+  assert.equal(classifyMinterAuthority({ minterRole: null, roleAdmin: ADMIN_ROLE, adminHoldsRoleAdmin: true }),
+    "MINTER ROLE AUTHORITY: NOT READABLE");
+});
+
+test("authority is never described as a granted role", () => {
+  for (const adminHoldsRoleAdmin of [true, false]) {
+    const verdict = classifyMinterAuthority({ minterRole: MINTER, roleAdmin: ADMIN_ROLE, adminHoldsRoleAdmin });
+    assert.match(verdict, /^MINTER ROLE AUTHORITY: /);
+    assert.equal(verdict.includes("GRANTED"), false);
+  }
 });
 
 // --- uniqueness ---
