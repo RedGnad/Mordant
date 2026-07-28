@@ -29,7 +29,8 @@
     "preflight:monad:fork": "node scripts/monad-fork-vault-check.mjs",
     "m05:dryrun": "node scripts/m05-dryrun-monad.mjs",
     "m05:check": "node scripts/m05-runner.mjs --check",
-    "m05:fork": "node scripts/m05-runner.mjs --fork"
+    "m05:fork": "node scripts/m05-runner.mjs --fork",
+    "test:runner": "node --test scripts/m05-runner.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

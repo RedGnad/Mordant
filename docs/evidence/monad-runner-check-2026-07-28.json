@@ -1,124 +1,66 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T12:21:39.580Z",
+  "generatedAt": "2026-07-28T12:57:55.464Z",
   "mode": "check",
-  "status": "CHECK PASSED",
+  "status": "STOPPED",
   "classification": "READ-ONLY RPC SIMULATION",
-  "warning": "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. No private key, seed phrase or other secret material is recorded here.",
-  "chainId": 10143,
-  "startBlock": "48820453",
-  "contracts": null,
+  "warning": "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. The five prefunding transfers are external to this runner; it executes 34 of the 39 ceremony transactions.",
+  "transactionAccounting": {
+    "externalPrefundingTransfers": 5,
+    "executedByRunner": 0,
+    "runnerOwns": 34,
+    "fullCeremony": 39
+  },
   "steps": [
     {
       "phase": "gate",
       "label": "chain id",
-      "detail": "10143 at block 48820453"
+      "detail": "10143 at block 48827521"
+    },
+    {
+      "phase": "gate",
+      "label": "gas price",
+      "detail": "102000000000 wei, cap 200000000000 wei"
     },
     {
       "phase": "gate",
       "label": "address deployer",
-      "detail": "NOT CONFIGURED"
+      "detail": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     },
     {
       "phase": "gate",
       "label": "address buyer",
-      "detail": "NOT CONFIGURED"
+      "detail": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
     },
     {
       "phase": "gate",
       "label": "address facilityA",
-      "detail": "NOT CONFIGURED"
+      "detail": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
     },
     {
       "phase": "gate",
       "label": "address facilityB",
-      "detail": "NOT CONFIGURED"
+      "detail": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
     },
     {
       "phase": "gate",
       "label": "address holderA",
-      "detail": "NOT CONFIGURED"
+      "detail": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
     },
     {
       "phase": "gate",
       "label": "address holderB",
-      "detail": "NOT CONFIGURED"
+      "detail": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
     },
     {
       "phase": "gate",
       "label": "address originator",
-      "detail": "NOT CONFIGURED (signs only, no MON)"
+      "detail": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (signs only, sends nothing)"
     },
     {
-      "phase": "P0",
-      "label": "balance deployer",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P0",
-      "label": "balance buyer",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P0",
-      "label": "balance facilityA",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P0",
-      "label": "balance facilityB",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P0",
-      "label": "balance holderA",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P0",
-      "label": "balance holderB",
-      "detail": "NOT CONFIGURED, cannot check",
-      "ok": false
-    },
-    {
-      "phase": "P1",
-      "label": "estimate MockEligibility",
-      "detail": "363115 gas"
-    },
-    {
-      "phase": "P1",
-      "label": "estimate settlement double",
-      "detail": "736949 gas"
-    },
-    {
-      "phase": "P1",
-      "label": "estimate CVA double",
-      "detail": "765480 gas"
-    },
-    {
-      "phase": "P1",
-      "label": "estimate MockCvaAdapter",
-      "detail": "663394 gas"
-    },
-    {
-      "phase": "P1",
-      "label": "estimate MordantFactory",
-      "detail": "8828004 gas"
-    },
-    {
-      "phase": "P1",
-      "label": "deployment gas subtotal",
-      "detail": "11356942 gas"
-    },
-    {
-      "phase": "check",
-      "label": "result",
-      "detail": "read-only check complete, nothing was sent"
+      "phase": "stop",
+      "label": "run stopped",
+      "detail": "BLOCKED — underfunded or unconfigured wallet(s): deployer, buyer, facilityA, facilityB, holderA, holderB. Fund them externally before running Phase 1."
     }
   ],
   "transactions": []
