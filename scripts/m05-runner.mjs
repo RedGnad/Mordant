@@ -7,7 +7,7 @@
  * balances before Phase 1.
  *
  * BROADCASTING IS OFF BY DEFAULT AND DOUBLE-GATED. Sending requires `--broadcast` and
- * MORDANT_BROADCAST_AUTHORIZED set to the exact ceremony string. The chain gate runs first, before
+ * the explicit --broadcast flag together with --out. The chain gate runs first, before
  * authorization is examined and before any private key is read.
  *
  * Modes:
@@ -97,10 +97,6 @@ async function main() {
     if (checkpointPath) writeCheckpoint(checkpointPath, snapshot(), secrets);
   };
 
-  if (mode === "broadcast" && !out) {
-    throw new RunnerError("BLOCKED — --out is mandatory in broadcast mode: an unrecorded run is not permitted.");
-  }
-
   let fork = null;
   let rpcUrl = MONAD_RPC;
   if (mode === "fork") {
@@ -138,7 +134,7 @@ async function main() {
     record("gate", "chain id", `${chainId} at block ${head.number}`);
 
     // --- gate 2: authorization ---
-    assertBroadcastAuthorized(mode, process.env);
+    assertBroadcastAuthorized(mode, process.env, out);
     if (mode === "broadcast") {
       process.stdout.write("\n*** BROADCAST MODE. Transactions will be sent to Monad. ***\n\n");
     }

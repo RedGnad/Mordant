@@ -9,10 +9,8 @@
  *   node --env-file=.env scripts/m07-ausdc-transfer.mjs --check       read-only, the default
  *   node --env-file=.env scripts/m07-ausdc-transfer.mjs --broadcast --out <prefix>
  *
- * --broadcast additionally requires MORDANT_M07_BROADCAST_AUTHORIZED=yes in the environment. Both
- * the flag and the variable are required, so neither a stray flag nor a stale variable can send a
- * transaction on its own. In broadcast mode --out is mandatory: a run that can send value must
- * leave an artifact behind, including when it stops.
+ * In broadcast mode --out is mandatory: a run that can send value must leave an artifact behind,
+ * including when it stops. The shared controls in ./runner-controls.mjs enforce the rest.
  *
  * Every gate below is fail-closed and runs before any key is read. If the aUSDC address, the policy,
  * either implementation, the A-Pass state or the precheck differs from what M-06 recorded, the run
@@ -24,13 +22,14 @@
  * No private key, seed phrase or other secret material is logged or persisted. Public addresses,
  * signatures, transaction hashes, blocks and readbacks may be recorded where required.
  */
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-
 import { createPublicClient, createWalletClient, http, parseEventLogs } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const MONAD_CHAIN_ID = 10_143;
+import {
+  ControlError, DEFAULT_MAX_GAS_PRICE_WEI, assertChainId, assertFundedFor, assertGasUsable,
+  assertKeyMatchesAddress, assertWriteAllowed, checkpointPending, scrub, writeArtifact,
+} from "./runner-controls.mjs";
+
 const MONAD_RPC = process.env.MONAD_RPC_URL ?? "https://testnet-rpc.monad.xyz";
 
 /**
@@ -64,7 +63,6 @@ const TRANSFER_AMOUNT = 1n;
  * unexpected code path.
  */
 const GAS_LIMIT_CEILING = 400_000n;
-const GAS_PRICE_CEILING_WEI = 200_000_000_000n; // 200 gwei
 
 /** The A-Pass status value observed on every accepted wallet in M-01C and M-06. */
 const APASS_STATUS_ACTIVE = 1;
@@ -99,15 +97,11 @@ const APASS_ABI = [
 
 const APASS_ADDRESS = "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9";
 
-export class StopError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "StopError";
-  }
-}
+/** Re-exported so callers and tests have one error type to catch across every runner. */
+export { ControlError as StopError } from "./runner-controls.mjs";
 
 const stop = (message) => {
-  throw new StopError(`STOP — ${message}`);
+  throw new ControlError(`STOP — ${message}`);
 };
 
 /** Fail-closed comparison. Anything other than an exact match halts the run. */
@@ -118,52 +112,12 @@ export function assertUnchanged(label, observed, expected) {
   }
 }
 
-/**
- * Both the flag and the environment variable are required. Neither alone can send a transaction.
- * In broadcast mode an output prefix is required too: a run that can move value must be able to
- * record what it did, including when it stops partway.
- */
-export function assertBroadcastAuthorized(mode, env, out = null) {
-  if (mode !== "broadcast") return;
-  if (env.MORDANT_M07_BROADCAST_AUTHORIZED !== "yes") {
-    stop("broadcast is not authorized. --broadcast additionally requires"
-      + " MORDANT_M07_BROADCAST_AUTHORIZED=yes, set deliberately by the owner.");
-  }
-  if (!out) {
-    stop("--out <prefix> is required in broadcast mode, so the transaction hash is checkpointed"
-      + " before the receipt is awaited and a stop still leaves an artifact.");
-  }
-}
-
 /** A transfer to yourself would satisfy every gate and prove nothing about the policy. */
 export function assertDistinct(sender, recipient) {
   if (!sender || !recipient) stop("sender and recipient must both be configured.");
   if (sender.toLowerCase() === recipient.toLowerCase()) {
     stop("sender and recipient are the same wallet. A self-transfer proves nothing.");
   }
-}
-
-/**
- * Fail-closed gas. An estimate that could not be produced, a zero or missing price, or a budget of
- * zero all stop the run: proceeding would mean broadcasting without knowing the cost.
- */
-export function assertGasUsable(gas, gasPrice) {
-  if (typeof gas !== "bigint" || gas <= 0n) {
-    stop("gas could not be estimated. A broadcast must never proceed on an absent or zero estimate.");
-  }
-  if (typeof gasPrice !== "bigint" || gasPrice <= 0n) {
-    stop("gas price could not be read. A broadcast must never proceed on an absent or zero price.");
-  }
-  if (gas > GAS_LIMIT_CEILING) {
-    stop(`estimated gas ${gas} exceeds the ${GAS_LIMIT_CEILING} ceiling.`
-      + " An ERC-20 transfer costing this much is not the transaction this run intends to send.");
-  }
-  if (gasPrice > GAS_PRICE_CEILING_WEI) {
-    stop(`gas price ${gasPrice} wei exceeds the ${GAS_PRICE_CEILING_WEI} wei ceiling.`);
-  }
-  const budget = gas * gasPrice;
-  if (budget <= 0n) stop("the computed MON budget is zero, which cannot be right.");
-  return budget;
 }
 
 /**
@@ -279,40 +233,7 @@ async function cleanverse(path, payload) {
   return response.json();
 }
 
-/** Drops anything credential-shaped, including the magickLink verify_apass returns. */
-export function scrub(value) {
-  if (value === null || typeof value !== "object") return value;
-  const out = Array.isArray(value) ? [] : {};
-  for (const [key, item] of Object.entries(value)) {
-    out[key] = /magick?link|token|secret|apikey|api_key|authorization|cookie|privatekey|password/i.test(key)
-      ? (item ? "[REDACTED]" : item)
-      : scrub(item);
-  }
-  return out;
-}
-
 const format = (units) => `${(Number(units) / 10 ** EXPECTED.decimals).toFixed(EXPECTED.decimals)} aUSDC`;
-
-/**
- * Atomic write. The temporary file is renamed into place, so a reader never observes a partial
- * artifact and a crash mid-write cannot destroy the previous one.
- */
-function writeArtifact(out, report) {
-  const serialized = `${JSON.stringify(report, null, 2)}\n`;
-  // Compare against the actual secret values rather than a shape: transaction hashes and log topics
-  // are also 64 hex characters, so a shape rule would either miss keys or block hashes. The values
-  // are only ever compared, never written or printed.
-  const secrets = Object.entries(process.env)
-    .filter(([name]) => /^MORDANT_KEY_|^DEPLOYER_PRIVATE_KEY$|^CLEANVERSE_API_KEY$/.test(name))
-    .map(([, value]) => value)
-    .filter((value) => typeof value === "string" && value.length >= 16);
-  if (secrets.some((secret) => serialized.includes(secret))) {
-    throw new StopError("STOP — refusing to write an artifact containing secret material.");
-  }
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(`${out}.json.tmp`, serialized, "utf8");
-  renameSync(`${out}.json.tmp`, `${out}.json`);
-}
 
 async function main() {
   const argv = process.argv.slice(2).filter((value) => value !== "--");
@@ -343,7 +264,7 @@ async function main() {
   const checkpoint = () => {
     if (!out) return;
     report.generatedAt = new Date().toISOString();
-    writeArtifact(out, report);
+    writeArtifact(out, report, process.env);
   };
   // Made available to the failure handler so a stop is recorded rather than only printed.
   main.checkpointOnFailure = (message) => {
@@ -363,11 +284,8 @@ async function main() {
   const client = createPublicClient({ transport: http(MONAD_RPC) });
 
   // Gate 1: the network, before anything else and before any key is read.
-  const chainId = await client.getChainId();
-  if (chainId !== MONAD_CHAIN_ID) {
-    stop(`wrong network. Expected chain ${MONAD_CHAIN_ID}, the RPC answered ${chainId}.`);
-  }
-  assertBroadcastAuthorized(mode, process.env, out);
+  const chainId = await assertChainId(client);
+  assertWriteAllowed(mode, "broadcast", out);
   note("network", `chain ${chainId}`);
 
   // Gate 2: rediscover the address rather than trusting the constant.
@@ -500,15 +418,13 @@ async function main() {
   } catch (error) {
     stop(`gas price could not be read: ${(error.shortMessage ?? error.message).slice(0, 160)}.`);
   }
-  const budget = assertGasUsable(gasEstimate, gasPrice);
+  const budget = assertGasUsable(gasEstimate, gasPrice, GAS_LIMIT_CEILING);
   note("gas", `estimate ${gasEstimate}, price ${gasPrice} wei, budget ${budget} wei`);
-  if (before.senderNative < budget) {
-    stop(`sender holds ${before.senderNative} wei MON, needs at least ${budget} wei for gas.`);
-  }
+  assertFundedFor(senderAddress, before.senderNative, budget);
 
   report.gas = { estimate: gasEstimate.toString(), price: gasPrice.toString(),
     budgetWei: budget.toString(), ceilingGas: GAS_LIMIT_CEILING.toString(),
-    ceilingPriceWei: GAS_PRICE_CEILING_WEI.toString() };
+    ceilingPriceWei: DEFAULT_MAX_GAS_PRICE_WEI.toString() };
   report.balances = { before: { sender: before.sender.toString(),
     recipient: before.recipient.toString(), senderNativeWei: before.senderNative.toString() } };
   checkpoint();
@@ -518,21 +434,14 @@ async function main() {
     report.status = "COMPLETE";
     report.generatedAt = new Date().toISOString();
     process.stdout.write(`\n${"CLASSIFICATION".padEnd(38)} ${report.classification}\n`);
-    process.stdout.write(`${"BROADCAST".padEnd(38)} NOT AUTHORIZED, nothing was sent\n`);
+    process.stdout.write(`${"BROADCAST".padEnd(38)} check mode does not send; pass --broadcast --out to send\n`);
     if (out) { checkpoint(); process.stdout.write(`\nWrote ${out}.json\n`); }
     return;
   }
 
   const key = process.env[`MORDANT_KEY_${senderRole}`];
-  if (!key) {
-    stop(`MORDANT_KEY_${senderRole} is required to sign the transfer. It is supplied by the wallet`
-      + " owner; this runner never generates or derives one.");
-  }
+  assertKeyMatchesAddress(senderRole, key, senderAddress, privateKeyToAccount);
   const account = privateKeyToAccount(key);
-  if (account.address.toLowerCase() !== senderAddress.toLowerCase()) {
-    stop(`MORDANT_KEY_${senderRole} derives a different address from the configured sender`
-      + ` ${senderAddress}. Refusing to sign for an unintended wallet.`);
-  }
   // Simulate against current state first: a revert here costs nothing.
   await client.simulateContract({
     address: aUsdc, abi: ERC20_ABI, functionName: "transfer",
@@ -545,9 +454,8 @@ async function main() {
 
   // Checkpoint the hash before awaiting anything. From here on the transaction exists whether or
   // not this process survives, so the artifact must say so.
-  report.execution = { hash, status: "PENDING", receipt: null };
   report.classification = "AUSDC LIVE TRANSFER ATTEMPT — RECEIPT PENDING";
-  checkpoint();
+  checkpointPending(report, hash, out, process.env);
   process.stdout.write(`\n  broadcast hash ${hash}, checkpointed PENDING, awaiting receipt\n`);
 
   const receipt = await client.waitForTransactionReceipt({ hash });
@@ -639,7 +547,7 @@ async function main() {
 const invokedDirectly = process.argv[1]?.endsWith("m07-ausdc-transfer.mjs");
 if (invokedDirectly) {
   main().catch((error) => {
-    const message = error instanceof StopError ? error.message : `STOP — ${error.message}`;
+    const message = error instanceof ControlError ? error.message : `STOP — ${error.message}`;
     try {
       main.checkpointOnFailure?.(message);
     } catch (writeError) {

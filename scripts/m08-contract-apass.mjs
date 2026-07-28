@@ -13,9 +13,9 @@
  *   node --env-file=.env scripts/m08-contract-apass.mjs --check       read-only, the default
  *   node --env-file=.env scripts/m08-contract-apass.mjs --run --out <prefix>
  *
- * --run deploys the probe and requests an A-Pass for it. It additionally requires
- * MORDANT_M08_BROADCAST_AUTHORIZED=yes, so neither a stray flag nor a stale variable acts alone,
- * and --out is mandatory so a run that spends gas always leaves an artifact, including when it stops.
+ * --run deploys the probe and requests an A-Pass for it, and --out is mandatory with it, so a run
+ * that spends gas always leaves an artifact, including when it stops. The shared controls in
+ * ./runner-controls.mjs enforce the rest.
  *
  * The signing key belongs to the wallet owner. This runner reads it from the environment and never
  * generates, derives, requests or persists one.
@@ -24,17 +24,21 @@
  * signatures, transaction hashes, blocks and readbacks may be recorded where required.
  */
 import { createCipheriv } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createPublicClient, createWalletClient, encodeDeployData, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import {
+  ControlError, assertChainId, assertFundedFor, assertGasUsable, assertKeyMatchesAddress,
+  assertWriteAllowed, checkpointPending, scrub, writeArtifact,
+} from "./runner-controls.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACT = join(ROOT, "contracts/out/CleanverseAPassProbe.sol/CleanverseAPassProbe.json");
 
-const MONAD_CHAIN_ID = 10_143;
 const MONAD_RPC = process.env.MONAD_RPC_URL ?? "https://testnet-rpc.monad.xyz";
 
 const APASS_ADDRESS = "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9";
@@ -46,7 +50,6 @@ const APASS_LIFETIME_SECONDS = 365 * 24 * 3600;
 
 /** A deployment costs more than a transfer, so the ceiling is higher, and still bounded. */
 const GAS_LIMIT_CEILING = 2_000_000n;
-const GAS_PRICE_CEILING_WEI = 200_000_000_000n; // 200 gwei
 
 const APASS_ABI = [
   { type: "function", name: "isValidAPass", stateMutability: "view",
@@ -59,49 +62,13 @@ const POLICY_ABI = [
     outputs: [{ type: "bool" }] },
 ];
 
-export class StopError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "StopError";
-  }
-}
+/** Re-exported so callers and tests have one error type to catch across every runner. */
+export { ControlError as StopError } from "./runner-controls.mjs";
 
 const stop = (message) => {
-  throw new StopError(`STOP — ${message}`);
+  throw new ControlError(`STOP — ${message}`);
 };
 
-/**
- * Both the flag and the environment variable are required, and a run that spends gas must be able
- * to record what it did.
- */
-export function assertRunAuthorized(mode, env, out = null) {
-  if (mode !== "run") return;
-  if (env.MORDANT_M08_BROADCAST_AUTHORIZED !== "yes") {
-    stop("this run is not authorized. --run additionally requires"
-      + " MORDANT_M08_BROADCAST_AUTHORIZED=yes, set deliberately by the owner.");
-  }
-  if (!out) {
-    stop("--out <prefix> is required with --run, so the deployment is checkpointed before the"
-      + " A-Pass request and a stop still leaves an artifact.");
-  }
-}
-
-/** Fail-closed gas, matching M-07: nothing is spent on an absent, zero or abnormal cost. */
-export function assertGasUsable(gas, gasPrice) {
-  if (typeof gas !== "bigint" || gas <= 0n) {
-    stop("gas could not be estimated. Nothing is deployed on an absent or zero estimate.");
-  }
-  if (typeof gasPrice !== "bigint" || gasPrice <= 0n) {
-    stop("gas price could not be read. Nothing is deployed on an absent or zero price.");
-  }
-  if (gas > GAS_LIMIT_CEILING) stop(`estimated gas ${gas} exceeds the ${GAS_LIMIT_CEILING} ceiling.`);
-  if (gasPrice > GAS_PRICE_CEILING_WEI) {
-    stop(`gas price ${gasPrice} wei exceeds the ${GAS_PRICE_CEILING_WEI} wei ceiling.`);
-  }
-  const budget = gas * gasPrice;
-  if (budget <= 0n) stop("the computed MON budget is zero, which cannot be right.");
-  return budget;
-}
 
 /**
  * Reads the A-Pass verdict for an address without deciding the mission outcome: unlike M-07, a
@@ -174,31 +141,6 @@ function encryptBody(payload) {
     cipher.update(Buffer.from(JSON.stringify(payload), "utf8")), cipher.final()]).toString("base64") };
 }
 
-export function scrub(value) {
-  if (value === null || typeof value !== "object") return value;
-  const out = Array.isArray(value) ? [] : {};
-  for (const [key, item] of Object.entries(value)) {
-    out[key] = /magick?link|token|secret|apikey|api_key|authorization|cookie|privatekey|password/i.test(key)
-      ? (item ? "[REDACTED]" : item)
-      : scrub(item);
-  }
-  return out;
-}
-
-function writeArtifact(out, report) {
-  const serialized = `${JSON.stringify(report, null, 2)}\n`;
-  const secrets = Object.entries(process.env)
-    .filter(([name]) => /^MORDANT_KEY_|^DEPLOYER_PRIVATE_KEY$|^CLEANVERSE_API_KEY$/.test(name))
-    .map(([, value]) => value)
-    .filter((value) => typeof value === "string" && value.length >= 16);
-  if (secrets.some((secret) => serialized.includes(secret))) {
-    throw new StopError("STOP — refusing to write an artifact containing secret material.");
-  }
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(`${out}.json.tmp`, serialized, "utf8");
-  renameSync(`${out}.json.tmp`, `${out}.json`);
-}
-
 async function main() {
   const argv = process.argv.slice(2).filter((value) => value !== "--");
   const mode = argv.includes("--run") ? "run" : "check";
@@ -227,7 +169,7 @@ async function main() {
   const checkpoint = () => {
     if (!out) return;
     report.generatedAt = new Date().toISOString();
-    writeArtifact(out, report);
+    writeArtifact(out, report, process.env);
   };
   main.checkpointOnFailure = (message) => {
     if (!out) return;
@@ -239,11 +181,8 @@ async function main() {
   process.stdout.write(`M-08 contract A-Pass probe, mode=${mode}\n\n`);
   const client = createPublicClient({ transport: http(MONAD_RPC) });
 
-  const chainId = await client.getChainId();
-  if (chainId !== MONAD_CHAIN_ID) {
-    stop(`wrong network. Expected chain ${MONAD_CHAIN_ID}, the RPC answered ${chainId}.`);
-  }
-  assertRunAuthorized(mode, process.env, out);
+  const chainId = await assertChainId(client);
+  assertWriteAllowed(mode, "run", out);
   note("network", `chain ${chainId}`);
 
   const blockNumber = await client.getBlockNumber();
@@ -296,10 +235,10 @@ async function main() {
   } catch (error) {
     stop(`gas price could not be read: ${(error.shortMessage ?? error.message).slice(0, 160)}`);
   }
-  const budget = assertGasUsable(gasEstimate, gasPrice);
+  const budget = assertGasUsable(gasEstimate, gasPrice, GAS_LIMIT_CEILING);
   const ownerNative = await client.getBalance({ address: ownerAddress });
   note("deployment gas", `estimate ${gasEstimate}, price ${gasPrice} wei, budget ${budget} wei`);
-  if (ownerNative < budget) stop(`owner holds ${ownerNative} wei MON, needs at least ${budget} wei.`);
+  assertFundedFor(ownerAddress, ownerNative, budget);
   report.gas = { estimate: gasEstimate.toString(), price: gasPrice.toString(),
     budgetWei: budget.toString(), ownerNativeWei: ownerNative.toString() };
   checkpoint();
@@ -307,34 +246,30 @@ async function main() {
   if (mode !== "run") {
     report.status = "COMPLETE";
     process.stdout.write(`\n${"OUTCOME".padEnd(34)} ${report.outcome}\n`);
-    process.stdout.write(`${"DEPLOYMENT".padEnd(34)} NOT AUTHORIZED, nothing was sent\n`);
+    process.stdout.write(`${"DEPLOYMENT".padEnd(34)} check mode does not deploy; pass --run --out to deploy\n`);
     if (out) { checkpoint(); process.stdout.write(`\nWrote ${out}.json\n`); }
     return;
   }
 
   // --- deploy the probe ---
   const key = process.env[`MORDANT_KEY_${ownerRole}`];
-  if (!key) {
-    stop(`MORDANT_KEY_${ownerRole} is required to deploy. It is supplied by the wallet owner;`
-      + " this runner never generates or derives one.");
-  }
+  assertKeyMatchesAddress(ownerRole, key, ownerAddress, privateKeyToAccount);
   const account = privateKeyToAccount(key);
-  if (account.address.toLowerCase() !== ownerAddress.toLowerCase()) {
-    stop(`MORDANT_KEY_${ownerRole} derives a different address from the configured owner`
-      + ` ${ownerAddress}. Refusing to sign for an unintended wallet.`);
-  }
   const wallet = createWalletClient({ account, transport: http(MONAD_RPC) });
   const deployHash = await wallet.deployContract({
     abi: compiled.abi, bytecode, args: [ownerAddress], chain: null });
-  report.deployment = { hash: deployHash, status: "PENDING", probeAddress: null };
-  checkpoint();
+  // This run deploys rather than transfers, so the checkpoint targets `deployment`. Writing to the
+  // default `execution` would leave a stale PENDING beside the settled deployment.
+  report.deployment = { probeAddress: null };
+  checkpointPending(report, deployHash, out, process.env, { field: "deployment" });
   process.stdout.write(`\n  deploy hash ${deployHash}, checkpointed PENDING\n`);
 
   const receipt = await client.waitForTransactionReceipt({ hash: deployHash });
   const probeAddress = receipt.contractAddress;
+  // Replaces the PENDING checkpoint in place, so the artifact never carries two states at once.
   report.deployment = { hash: deployHash, status: receipt.status,
     blockNumber: receipt.blockNumber.toString(), blockHash: receipt.blockHash,
-    gasUsed: receipt.gasUsed.toString(), probeAddress };
+    gasUsed: receipt.gasUsed.toString(), probeAddress, receipt: true };
   checkpoint();
   if (receipt.status !== "success" || !probeAddress) stop(`the probe deployment failed. Hash ${deployHash}.`);
   const probeCode = await client.getCode({ address: probeAddress });
@@ -413,7 +348,7 @@ async function main() {
 const invokedDirectly = process.argv[1]?.endsWith("m08-contract-apass.mjs");
 if (invokedDirectly) {
   main().catch((error) => {
-    const message = error instanceof StopError ? error.message : `STOP — ${error.message}`;
+    const message = error instanceof ControlError ? error.message : `STOP — ${error.message}`;
     try {
       main.checkpointOnFailure?.(message);
     } catch (writeError) {

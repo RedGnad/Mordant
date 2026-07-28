@@ -152,10 +152,11 @@ re-observed, not transacted against.
 
     node --env-file=.env scripts/m07-ausdc-transfer.mjs --broadcast --out docs/evidence/<prefix>
 
-Requires **all three** of the `--broadcast` flag, `MORDANT_M07_BROADCAST_AUTHORIZED=yes`, and
-`--out`, so neither a stray flag nor a stale variable can send a transaction alone, and a run that
-can move value always leaves an artifact. The runner re-derives the sender address from its key and
-refuses to sign if it is not the configured sender.
+Requires the explicit `--broadcast` flag together with `--out`, so a run that can move value always
+leaves an artifact. The runner re-derives the sender address from its key and refuses to sign if it
+is not the configured sender.
+
+The controls are shared with M-05 and M-08 in `scripts/runner-controls.mjs`.
 
 Order: all Phase 1 gates, then `simulateContract` against current state, then one `transfer`.
 
