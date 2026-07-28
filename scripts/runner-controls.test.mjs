@@ -162,7 +162,7 @@ test("a short environment value is not treated as a secret to match on", () => {
   assert.equal(JSON.parse(readFileSync(path, "utf8")).note, "ab");
 });
 
-test("a hash is checkpointed as PENDING with no receipt", () => {
+test("a hash is checkpointed as PENDING with no receipt, in execution by default", () => {
   const out = scratch();
   const report = { status: "RUNNING" };
   checkpointPending(report, "0xdead", out, {});
@@ -171,11 +171,51 @@ test("a hash is checkpointed as PENDING with no receipt", () => {
   assert.equal(written.execution.status, "PENDING");
   assert.equal(written.execution.receipt, null);
   assert.ok(written.generatedAt);
+  // The default must not also stamp a field it was not asked to write.
+  assert.equal(written.deployment, undefined);
 });
 
-test("checkpointing preserves execution fields already recorded", () => {
+test("an explicit field targets deployment and leaves execution untouched", () => {
+  const out = scratch();
+  const report = { status: "RUNNING" };
+  checkpointPending(report, "0xdead", out, {}, { field: "deployment" });
+  const written = JSON.parse(readFileSync(`${out}.json`, "utf8"));
+  assert.equal(written.deployment.hash, "0xdead");
+  assert.equal(written.deployment.status, "PENDING");
+  assert.equal(written.deployment.receipt, null);
+  // The regression this parameter exists to prevent: no stale PENDING beside the real field.
+  assert.equal(written.execution, undefined);
+});
+
+test("checkpointing preserves fields already recorded in the target", () => {
   const report = { execution: { intent: "transfer" } };
   checkpointPending(report, "0xdead", null, {});
   assert.equal(report.execution.intent, "transfer");
   assert.equal(report.execution.status, "PENDING");
+
+  const deploying = { deployment: { probeAddress: null, intent: "deploy probe" } };
+  checkpointPending(deploying, "0xbeef", null, {}, { field: "deployment" });
+  assert.equal(deploying.deployment.intent, "deploy probe");
+  assert.equal(deploying.deployment.hash, "0xbeef");
+  assert.equal(deploying.deployment.status, "PENDING");
+});
+
+test("an M-08 shaped run settles deployment with no residual PENDING execution", () => {
+  const out = scratch();
+  const report = { status: "RUNNING", deployment: { probeAddress: null } };
+
+  // Before the receipt.
+  checkpointPending(report, "0xdead", out, {}, { field: "deployment" });
+  assert.equal(JSON.parse(readFileSync(`${out}.json`, "utf8")).deployment.status, "PENDING");
+
+  // After the receipt, exactly as the runner replaces it.
+  report.deployment = { hash: "0xdead", status: "success", probeAddress: "0xprobe", receipt: true };
+  report.status = "COMPLETE";
+  writeArtifact(out, report, {});
+
+  const written = JSON.parse(readFileSync(`${out}.json`, "utf8"));
+  assert.equal(written.deployment.status, "success");
+  assert.equal(written.deployment.probeAddress, "0xprobe");
+  assert.equal(written.execution, undefined, "no stale execution.status = PENDING may survive");
+  assert.equal(JSON.stringify(written).includes("PENDING"), false);
 });

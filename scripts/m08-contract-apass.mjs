@@ -258,15 +258,18 @@ async function main() {
   const wallet = createWalletClient({ account, transport: http(MONAD_RPC) });
   const deployHash = await wallet.deployContract({
     abi: compiled.abi, bytecode, args: [ownerAddress], chain: null });
-  report.deployment = { hash: deployHash, status: "PENDING", probeAddress: null };
-  checkpointPending(report, deployHash, out, process.env);
+  // This run deploys rather than transfers, so the checkpoint targets `deployment`. Writing to the
+  // default `execution` would leave a stale PENDING beside the settled deployment.
+  report.deployment = { probeAddress: null };
+  checkpointPending(report, deployHash, out, process.env, { field: "deployment" });
   process.stdout.write(`\n  deploy hash ${deployHash}, checkpointed PENDING\n`);
 
   const receipt = await client.waitForTransactionReceipt({ hash: deployHash });
   const probeAddress = receipt.contractAddress;
+  // Replaces the PENDING checkpoint in place, so the artifact never carries two states at once.
   report.deployment = { hash: deployHash, status: receipt.status,
     blockNumber: receipt.blockNumber.toString(), blockHash: receipt.blockHash,
-    gasUsed: receipt.gasUsed.toString(), probeAddress };
+    gasUsed: receipt.gasUsed.toString(), probeAddress, receipt: true };
   checkpoint();
   if (receipt.status !== "success" || !probeAddress) stop(`the probe deployment failed. Hash ${deployHash}.`);
   const probeCode = await client.getCode({ address: probeAddress });

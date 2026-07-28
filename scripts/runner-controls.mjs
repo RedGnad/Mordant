@@ -171,9 +171,15 @@ export function writeArtifact(out, report, env = process.env) {
  * Control 7. Records a hash the moment it exists, before anything is awaited. From that point the
  * transaction exists whether or not this process survives, so the artifact has to say so: a run
  * that dies here must never look like a run that never sent.
+ *
+ * The target field is a parameter because runners name this differently: M-07 sends a transfer and
+ * calls it `execution`, M-08 deploys a contract and calls it `deployment`. Writing to a fixed field
+ * left M-08 with a settled `deployment` beside a stale `execution: PENDING`, an artifact that
+ * contradicted itself. Whatever the field already holds is preserved, so a caller can record its
+ * intent before the hash exists and still have it after.
  */
-export function checkpointPending(report, hash, out, env = process.env) {
-  report.execution = { ...(report.execution ?? {}), hash, status: "PENDING", receipt: null };
+export function checkpointPending(report, hash, out, env = process.env, { field = "execution" } = {}) {
+  report[field] = { ...(report[field] ?? {}), hash, status: "PENDING", receipt: null };
   report.generatedAt = new Date().toISOString();
   if (out) writeArtifact(out, report, env);
   return report;
