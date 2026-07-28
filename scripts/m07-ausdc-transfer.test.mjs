@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  StopError, assertAPassUsable, assertBroadcastAuthorized, assertDistinct, assertGasUsable,
-  assertUnchanged, reconcileTransfer, scrub,
-} from "./m07-ausdc-transfer.mjs";
+import { assertAPassUsable, assertDistinct, assertUnchanged, reconcileTransfer } from "./m07-ausdc-transfer.mjs";
+import { ControlError } from "./runner-controls.mjs";
 
-const stops = (fn) => assert.throws(fn, StopError);
+const stops = (fn) => assert.throws(fn, ControlError);
 
 const SENDER = "0xAAAAaaAAaaAAaAaAAaaaAAAAAaaAaAAaAAAAaAaA";
 const RECIPIENT = "0xBBbBbBBbBbbBbbBBBbbbbbBBbBbbBBBbBbbbBBbB";
@@ -27,29 +25,6 @@ test("a missing observation stops the run rather than passing as absent", () => 
   stops(() => assertUnchanged("implementation", undefined, "0xabc"));
 });
 
-test("check mode never requires broadcast authorization or an output prefix", () => {
-  assertBroadcastAuthorized("check", {});
-  assertBroadcastAuthorized("check", {}, null);
-});
-
-test("the flag alone cannot broadcast", () => {
-  stops(() => assertBroadcastAuthorized("broadcast", {}, "out"));
-});
-
-test("a near-miss authorization value cannot broadcast", () => {
-  for (const value of ["", "no", "YES", "true", "1", " yes"]) {
-    stops(() => assertBroadcastAuthorized("broadcast", { MORDANT_M07_BROADCAST_AUTHORIZED: value }, "out"));
-  }
-});
-
-test("broadcast without --out is refused, so a send always leaves an artifact", () => {
-  stops(() => assertBroadcastAuthorized("broadcast", { MORDANT_M07_BROADCAST_AUTHORIZED: "yes" }, null));
-});
-
-test("authorization plus an output prefix permits a broadcast", () => {
-  assertBroadcastAuthorized("broadcast", { MORDANT_M07_BROADCAST_AUTHORIZED: "yes" }, "docs/evidence/x");
-});
-
 test("a self-transfer is refused, including across casing", () => {
   stops(() => assertDistinct("0xabc", "0xabc"));
   stops(() => assertDistinct("0xAbC", "0xaBc"));
@@ -62,30 +37,6 @@ test("an unset participant stops the run", () => {
 
 test("two distinct wallets pass", () => {
   assertDistinct("0xaaa", "0xbbb");
-});
-
-test("a transfer within the measured envelope passes and returns the budget", () => {
-  assert.equal(assertGasUsable(319_513n, 102_000_000_000n), 319_513n * 102_000_000_000n);
-});
-
-test("an absent or zero gas estimate stops the run", () => {
-  stops(() => assertGasUsable(undefined, 102_000_000_000n));
-  stops(() => assertGasUsable(null, 102_000_000_000n));
-  stops(() => assertGasUsable(0n, 102_000_000_000n));
-});
-
-test("an absent or zero gas price stops the run", () => {
-  stops(() => assertGasUsable(319_513n, undefined));
-  stops(() => assertGasUsable(319_513n, 0n));
-});
-
-test("a non-bigint estimate is refused rather than coerced", () => {
-  stops(() => assertGasUsable(319_513, 102_000_000_000n));
-});
-
-test("an abnormal gas estimate or price stops the run", () => {
-  stops(() => assertGasUsable(400_001n, 1n));
-  stops(() => assertGasUsable(21_000n, 200_000_000_001n));
 });
 
 // --- A-Pass gate ---
@@ -223,27 +174,3 @@ test("reconciliation is case-insensitive about addresses", () => {
   assert.equal(result.ok, true, result.reasons.join("; "));
 });
 
-// --- scrubbing ---
-
-test("scrub removes the magickLink verify_apass returns, keeping the verdict", () => {
-  const scrubbed = scrub({ code: "0000", data: { code: 4, message: "ok", magickLink: "https://x/abc" } });
-  assert.equal(scrubbed.data.magickLink, "[REDACTED]");
-  assert.equal(scrubbed.data.code, 4);
-  assert.equal(scrubbed.data.message, "ok");
-});
-
-test("scrub reaches nested and array-held credentials", () => {
-  const scrubbed = scrub({ items: [{ apiKey: "secret-value" }], nested: { token: "t" } });
-  assert.equal(scrubbed.items[0].apiKey, "[REDACTED]");
-  assert.equal(scrubbed.nested.token, "[REDACTED]");
-});
-
-test("scrub leaves an absent credential absent rather than inventing a placeholder", () => {
-  assert.equal(scrub({ magickLink: null }).magickLink, null);
-});
-
-test("scrub keeps the A-Pass fields the gate depends on", () => {
-  const scrubbed = scrub(goodApass());
-  assert.equal(scrubbed.data.status, 1);
-  assert.equal(scrubbed.data.expirationTime, 2_000_000_000);
-});

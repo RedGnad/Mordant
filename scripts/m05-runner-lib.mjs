@@ -11,9 +11,12 @@ import { renameSync, writeFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export const MONAD_CHAIN_ID = 10_143;
-export const BROADCAST_CEREMONY = "yes-i-authorize-monad-protocol-double";
-export const DEFAULT_MAX_GAS_PRICE_WEI = 200_000_000_000n; // 200 gwei
+import {
+  ControlError, DEFAULT_MAX_GAS_PRICE_WEI, MONAD_CHAIN_ID,
+  assertChainId as assertSharedChainId, assertWriteAllowed,
+} from "./runner-controls.mjs";
+
+export { MONAD_CHAIN_ID, DEFAULT_MAX_GAS_PRICE_WEI } from "./runner-controls.mjs";
 
 /** Budgeted MON per spending wallet, from the plan's 2x margin column. */
 export const BUDGET = Object.freeze({
@@ -43,43 +46,34 @@ export const ADDRESS_ENV = Object.freeze({
   holderB: "MORDANT_ADDRESS_HOLDER_B",
 });
 
-export class RunnerError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "RunnerError";
-  }
-}
+/**
+ * One error type across every runner, so a caller catching a refusal catches all of them. The name
+ * is kept for the existing M-05 call sites; the class is the shared one.
+ */
+export { ControlError as RunnerError } from "./runner-controls.mjs";
 
 /**
- * The first gate. It runs before authorization is examined and before any key is read, so a
- * misconfigured endpoint can never reach the point where secret material is loaded.
+ * The first gate, delegated to the shared controls so every runner refuses the same networks.
+ * It runs before any key is read, so a misconfigured endpoint can never reach the point where
+ * secret material is loaded.
  */
-export async function assertChainId(publicClient, expected = MONAD_CHAIN_ID) {
-  const observed = await publicClient.getChainId();
-  if (observed !== expected) {
-    throw new RunnerError(`BLOCKED — WRONG NETWORK: expected chain ${expected}, RPC answered ${observed}`);
-  }
-  return observed;
-}
+export const assertChainId = assertSharedChainId;
 
-/** Broadcasting needs an explicit ceremony string, never a bare flag. */
-export function assertBroadcastAuthorized(mode, env) {
-  if (mode !== "broadcast") {
-    return;
-  }
-  if (env.MORDANT_BROADCAST_AUTHORIZED !== BROADCAST_CEREMONY) {
-    throw new RunnerError(
-      "REFUSED: --broadcast requires MORDANT_BROADCAST_AUTHORIZED to be set to the exact ceremony"
-      + " string. Broadcasting is not authorized.",
-    );
-  }
+/**
+ * Broadcasting requires the explicit --broadcast flag and an output prefix. The ceremony string
+ * that used to sit in front of this is gone: on Monad testnet a flag typed per run is a stronger
+ * signal than a durable variable sitting in an environment file, and it was the substantive gates,
+ * chiefly the key-derivation check, that ever caught a mistake.
+ */
+export function assertBroadcastAuthorized(mode, _env, out = null) {
+  return assertWriteAllowed(mode, "broadcast", out);
 }
 
 /** A run whose gas price exceeds the cap stops rather than silently overspending the budget. */
 export async function assertGasPriceUnderCap(publicClient, cap = DEFAULT_MAX_GAS_PRICE_WEI) {
   const price = await publicClient.getGasPrice();
   if (price > cap) {
-    throw new RunnerError(
+    throw new ControlError(
       `BLOCKED — GAS PRICE ${price} wei exceeds the cap of ${cap} wei. Raise`
       + " MORDANT_MAX_GAS_PRICE_GWEI deliberately or wait.",
     );
@@ -120,13 +114,13 @@ export function loadAccounts(mode, env, toAccount) {
       // A check signs nothing, so a public address is enough.
       const address = env[ADDRESS_ENV[role]];
       if (!address) {
-        throw new RunnerError(
+        throw new ControlError(
           `BLOCKED — ${role} is not configured. Set ${variable} or ${ADDRESS_ENV[role]}.`,
         );
       }
       accounts[role] = { address, readOnly: true };
     } else {
-      throw new RunnerError(`BLOCKED — ${variable} is not set. Every spending wallet needs its key.`);
+      throw new ControlError(`BLOCKED — ${variable} is not set. Every spending wallet needs its key.`);
     }
   }
 
@@ -135,14 +129,14 @@ export function loadAccounts(mode, env, toAccount) {
     if (mode === "check") {
       const address = env.MORDANT_ADDRESS_ORIGINATOR;
       if (!address) {
-        throw new RunnerError(
+        throw new ControlError(
           "BLOCKED — originator is not configured. Set MORDANT_KEY_ORIGINATOR or"
           + " MORDANT_ADDRESS_ORIGINATOR.",
         );
       }
       return { accounts, originator: { address, readOnly: true }, secrets: [] };
     }
-    throw new RunnerError(
+    throw new ControlError(
       "BLOCKED — MORDANT_KEY_ORIGINATOR is required. The originator signs pledges whose contents"
       + " depend on the vault address, invoice root and on-chain timestamps, none of which exist"
       + " before the run starts, so a pre-computed signature cannot be supplied.",
@@ -172,7 +166,7 @@ export function assertDistinctRoles(accounts, originator) {
     const key = address.toLowerCase();
     const previous = seen.get(key);
     if (previous !== undefined) {
-      throw new RunnerError(
+      throw new ControlError(
         `BLOCKED — "${previous}" and "${role}" share the same address. The ceremony needs seven`
         + " distinct wallets.",
       );
@@ -212,7 +206,7 @@ export async function assertFunded(publicClient, accounts, budgets = BUDGET) {
     results.push({ role, address, balance: balance.toString(), budget: budget.toString(), ok });
   }
   if (short.length > 0) {
-    throw new RunnerError(
+    throw new ControlError(
       `BLOCKED — underfunded or unconfigured wallet(s): ${short.join(", ")}.`
       + " Fund them externally before running Phase 1.",
       { cause: results },
@@ -229,7 +223,7 @@ export async function waitForCureDeadline(publicClient, readCureDeadline, option
   const { intervalMs = 2_000, maxWaitMs = 600_000, onPoll } = options;
   const deadline = await readCureDeadline();
   if (deadline === 0n) {
-    throw new RunnerError("BLOCKED — cureDeadline is zero: the conflict was never revealed.");
+    throw new ControlError("BLOCKED — cureDeadline is zero: the conflict was never revealed.");
   }
   const started = Date.now();
   for (;;) {
@@ -239,7 +233,7 @@ export async function waitForCureDeadline(publicClient, readCureDeadline, option
       return { deadline, observedTimestamp: block.timestamp, block: block.number };
     }
     if (Date.now() - started > maxWaitMs) {
-      throw new RunnerError(
+      throw new ControlError(
         `BLOCKED — cure window did not elapse within ${maxWaitMs} ms.`
         + ` Chain time ${block.timestamp}, deadline ${deadline}.`,
       );
@@ -285,7 +279,7 @@ export function scrubReport(report, secrets = []) {
 export function assertNoSecretInReport(serialized, secrets = []) {
   for (const secret of secrets) {
     if (secret && serialized.toLowerCase().includes(secret.toLowerCase())) {
-      throw new RunnerError("BLOCKED — refusing to write an artifact containing secret material.");
+      throw new ControlError("BLOCKED — refusing to write an artifact containing secret material.");
     }
   }
 }

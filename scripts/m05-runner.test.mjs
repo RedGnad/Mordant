@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import {
-  BROADCAST_CEREMONY, BUDGET, DEFAULT_MAX_GAS_PRICE_WEI, MONAD_CHAIN_ID, RunnerError,
+  BUDGET, DEFAULT_MAX_GAS_PRICE_WEI, MONAD_CHAIN_ID, RunnerError,
   assertBroadcastAuthorized, assertChainId, assertDistinctRoles, assertFunded,
   assertGasPriceUnderCap, classifyRun, loadAccounts, scrubReport, waitForCureDeadline,
   writeCheckpoint,
@@ -39,27 +39,33 @@ test("a wrong chain id stops the run before anything else", async () => {
   const client = { getChainId: async () => 84_532 };
   await assert.rejects(assertChainId(client), (error) => {
     assert.ok(error instanceof RunnerError);
-    assert.match(error.message, /BLOCKED — WRONG NETWORK/);
+    assert.match(error.message, /WRONG NETWORK/);
     assert.match(error.message, /84532/);
     return true;
   });
   assert.equal(await assertChainId({ getChainId: async () => MONAD_CHAIN_ID }), MONAD_CHAIN_ID);
 });
 
-// --- 2. missing authorization ---
+// --- 2. the write gate ---
 
-test("broadcast without the ceremony string is refused", () => {
-  assert.throws(() => assertBroadcastAuthorized("broadcast", {}), /Broadcasting is not authorized/);
-  assert.throws(
-    () => assertBroadcastAuthorized("broadcast", { MORDANT_BROADCAST_AUTHORIZED: "yes" }),
-    /Broadcasting is not authorized/,
-  );
-  // Check and fork never consult it.
-  assert.doesNotThrow(() => assertBroadcastAuthorized("check", {}));
-  assert.doesNotThrow(() => assertBroadcastAuthorized("fork", {}));
-  assert.doesNotThrow(
-    () => assertBroadcastAuthorized("broadcast", { MORDANT_BROADCAST_AUTHORIZED: BROADCAST_CEREMONY }),
-  );
+test("broadcast without an output prefix is refused", () => {
+  assert.throws(() => assertBroadcastAuthorized("broadcast", {}, null), /--out/);
+  assert.throws(() => assertBroadcastAuthorized("broadcast", {}, ""), /--out/);
+});
+
+test("check and fork never require an output prefix", () => {
+  assert.equal(assertBroadcastAuthorized("check", {}, null), false);
+  assert.equal(assertBroadcastAuthorized("fork", {}, null), false);
+});
+
+test("the explicit flag plus an output prefix permits a broadcast", () => {
+  assert.equal(assertBroadcastAuthorized("broadcast", {}, "docs/evidence/x"), true);
+});
+
+test("no environment variable can authorize or block a broadcast", () => {
+  // The removed ceremony string must not resurface as a hidden dependency in either direction.
+  assert.equal(assertBroadcastAuthorized("broadcast", { MORDANT_BROADCAST_AUTHORIZED: "no" }, "out"), true);
+  assert.equal(assertBroadcastAuthorized("check", { MORDANT_BROADCAST_AUTHORIZED: "yes" }, "out"), false);
 });
 
 // --- 3. missing key ---

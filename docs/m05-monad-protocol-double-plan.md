@@ -175,8 +175,8 @@ node scripts/m05-dryrun-local.mjs                 # configuration and journey ga
 ```
 
 The runner exists at `scripts/m05-runner.mjs`. **It has never broadcast anything.** Sending requires
-both `--broadcast` and `MORDANT_BROADCAST_AUTHORIZED` set to an exact ceremony string; without both
-it refuses, whatever else is on the command line.
+the explicit `--broadcast` flag together with `--out`; without both it refuses, whatever else is on
+the command line. It shares the controls in `scripts/runner-controls.mjs` with M-07 and M-08.
 
 ```bash
 pnpm m05:check    # chain gate, balance readbacks, creation-gas estimates. Sends nothing
