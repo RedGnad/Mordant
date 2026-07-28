@@ -206,13 +206,26 @@ real settlement, and they are independent, so they can be attempted in parallel.
 **1. A-Pass issuance to contract addresses.** Every Mordant settlement path moves aUSDC to or from
 a contract: the vault, and the CVA adapter. The policy checks both sides of a transfer, so each
 contract needs its own A-Pass. M-01C established that validator registration alone does not confer
-custody eligibility, and that the contract needed its own A-Pass in the proof. Issuance to a
-contract address through the gateway remains **unobserved live**, and it is the single hardest
-dependency: it is the one step where a plausible failure mode (the gateway refusing a non-EOA)
-would force a design change rather than a retry.
+custody eligibility, and that the contract needed its own A-Pass in the proof.
 
-Test it in isolation, before any full integration: deploy one throwaway contract, request an A-Pass
-for it, and read `isValidAPass` back. That is a cheap, decisive experiment.
+**Settled by M-08 on 28 July 2026** against a disposable probe
+(`docs/evidence/monad-contract-apass-2026-07-28.json`):
+
+    CONTRACT APASS ISSUANCE: PROVEN
+    CONTRACT APASS POLICY — RECEIVE: PASSED
+    CONTRACT APASS POLICY — SEND: PASSED
+    CONTRACT AUSDC LIVE ROUND-TRIP: NOT PROVEN
+
+The feared failure mode did not occur: **the issuance route tested did not reject the address for
+being a contract.** Stated no wider than that. It is one route, one call shape, one address, at one
+point in time; it does not establish that every issuance route accepts contracts, that this one will
+keep doing so, or that any contract qualifies.
+
+The A-Pass obtained is not permanent. It expires on 28 July 2027, the lifetime the request asked
+for, so anything depending on it needs a renewal path rather than an assumption of permanence.
+
+The round-trip stays `NOT PROVEN`: `canTransfer` answering in both directions is a read, and no
+aUSDC has been moved to or from the probe.
 
 **2. A dedicated invoice A-Token.** `POST /atoken/launch` with a rule Mordant's own participants
 satisfy, then wait for `ISSUED`, then grant `MINTER_ROLE` to the adapter. Unlike aUSDC, this rule is

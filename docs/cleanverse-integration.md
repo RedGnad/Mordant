@@ -178,8 +178,30 @@ The status is therefore:
     AUSDC SETTLEMENT TRANSFER: NOT PROVEN — NO TRANSACTION SENT
     CLEANVERSE SETTLEMENT RAIL: NOT PROVEN
 
-Passing a precheck is not settling. No aUSDC transfer has been broadcast, so the settlement rail
-stays unproven, and the two consequences below still describe the design.
+Passing a precheck is not settling. The rail has since been exercised for real, twice.
+
+**M-07, 28 July 2026: one live aUSDC transfer.** One atomic unit between two A-Pass holders,
+transaction `0x560be38776ffcbefdebe89ff43d5713795ede6049867901fd2e04b6c75ef9dcd` in block 48886949.
+A single `Transfer` event, sender debited by exactly the amount, recipient credited, no fee
+receiver, no burn, logs reconciled against measured balances. Classified `AUSDC LIVE TRANSFER`, and
+explicitly not a Mordant settlement: no vault, adapter, pledge or invoice A-Token took part.
+
+**M-08, 28 July 2026: an A-Pass issued to a contract address.** Probe
+`0x0f8b9a0c064306f938912658c96c681d8655140b`, artifact
+`docs/evidence/monad-contract-apass-2026-07-28.json`:
+
+    CONTRACT APASS ISSUANCE: PROVEN
+    CONTRACT APASS POLICY — RECEIVE: PASSED
+    CONTRACT APASS POLICY — SEND: PASSED
+    CONTRACT AUSDC LIVE ROUND-TRIP: NOT PROVEN
+
+**The issuance route tested did not reject the address for being a contract.** That is the whole of
+the observation, and it is not generalised: one route, one call shape, one address, one moment. It
+does not establish that every issuance route accepts contracts, nor that this one always will.
+
+The A-Pass is not permanent. It expires on 28 July 2027, so anything relying on it needs a renewal
+path. And the round-trip is `NOT PROVEN`: `canTransfer` answering in both directions is a read, and
+no aUSDC has moved to or from the probe.
 
 Two consequences for Mordant:
 

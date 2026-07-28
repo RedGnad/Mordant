@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 2,
+  "runStartedAt": "2026-07-28T18:10:00.437Z",
+  "generatedAt": "2026-07-28T18:10:05.383Z",
+  "mode": "broadcast",
+  "status": "COMPLETE",
+  "classification": "AUSDC LIVE TRANSFER",
+  "scope": "One aUSDC transfer between two wallets holding a valid A-Pass. This is NOT a Mordant settlement: no vault, adapter, pledge or invoice A-Token is involved, and nothing here may be described as MORDANT SETTLEMENT.",
+  "steps": [
+    {
+      "label": "network",
+      "detail": "chain 10143"
+    },
+    {
+      "label": "aUSDC address",
+      "detail": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D (rediscovered, unchanged)"
+    },
+    {
+      "label": "pinned block",
+      "detail": "48886937 0xfa75c00a8b7848c437ffc3f252c3e3b14cc246cba9202f8c0e70dc9fae25a9d0"
+    },
+    {
+      "label": "implementations",
+      "detail": "aUSDC and policy both unchanged since M-06"
+    },
+    {
+      "label": "token state",
+      "detail": "decimals 6, registered true, paused false"
+    },
+    {
+      "label": "wallets",
+      "detail": "HOLDER_A 0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45 -> HOLDER_B 0x344412229B3b581C19572f9BF1F5d08d4Ae897E6"
+    },
+    {
+      "label": "A-Pass HOLDER_A",
+      "detail": "isValidAPass=true status=1 tier=50 subTier=0 expires in 31533830s"
+    },
+    {
+      "label": "A-Pass HOLDER_B",
+      "detail": "isValidAPass=true status=1 tier=50 subTier=0 expires in 31533830s"
+    },
+    {
+      "label": "verify_apass HOLDER_A",
+      "detail": "code 4 \"apass verify success\""
+    },
+    {
+      "label": "verify_apass HOLDER_B",
+      "detail": "code 4 \"apass verify success\""
+    },
+    {
+      "label": "canTransfer",
+      "detail": "true for (aUSDC, HOLDER_A, HOLDER_B, 1)"
+    },
+    {
+      "label": "balances before",
+      "detail": "sender 0.010000 aUSDC, recipient 0.000000 aUSDC"
+    },
+    {
+      "label": "sender MON",
+      "detail": "20000000000000000000 wei"
+    },
+    {
+      "label": "gas",
+      "detail": "estimate 319513, price 102000000000 wei, budget 32590326000000000 wei"
+    },
+    {
+      "label": "transfer",
+      "detail": "0x560be38776ffcbefdebe89ff43d5713795ede6049867901fd2e04b6c75ef9dcd in block 48886949, gasUsed 319513"
+    },
+    {
+      "label": "balances after",
+      "detail": "sender 0.009999 aUSDC, recipient 0.000001 aUSDC"
+    },
+    {
+      "label": "reconciliation",
+      "detail": "sender -1, recipient +1, 0 other counterparty(ies), logs match balances"
+    }
+  ],
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48886937",
+    "blockHash": "0xfa75c00a8b7848c437ffc3f252c3e3b14cc246cba9202f8c0e70dc9fae25a9d0",
+    "blockTimestamp": "1785262201"
+  },
+  "token": {
+    "aUsdc": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "policyImplementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+    "decimals": 6,
+    "isTokenRegistered": true,
+    "isPaused": false,
+    "rediscovered": true,
+    "unchangedSinceM06": true
+  },
+  "participants": {
+    "senderRole": "HOLDER_A",
+    "senderAddress": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "recipientRole": "HOLDER_B",
+    "recipientAddress": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6"
+  },
+  "apass": [
+    {
+      "role": "HOLDER_A",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "onchainValid": true,
+      "status": 1,
+      "tier": "50",
+      "subTier": 0,
+      "expirationTime": 1816796031,
+      "secondsRemaining": 31533830
+    },
+    {
+      "role": "HOLDER_B",
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "onchainValid": true,
+      "status": 1,
+      "tier": "50",
+      "subTier": 0,
+      "expirationTime": 1816796031,
+      "secondsRemaining": 31533830
+    }
+  ],
+  "verifyApass": [
+    {
+      "role": "HOLDER_A",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "code": 4,
+      "message": "apass verify success"
+    },
+    {
+      "role": "HOLDER_B",
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "code": 4,
+      "message": "apass verify success"
+    }
+  ],
+  "precheck": {
+    "canTransfer": true,
+    "amount": "1",
+    "amountHuman": "0.000001 aUSDC"
+  },
+  "gas": {
+    "estimate": "319513",
+    "price": "102000000000",
+    "budgetWei": "32590326000000000",
+    "ceilingGas": "400000",
+    "ceilingPriceWei": "200000000000"
+  },
+  "balances": {
+    "discoveredFromEvents": true,
+    "parentBlock": "48886948",
+    "before": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "10000",
+      "0x344412229b3b581c19572f9bf1f5d08d4ae897e6": "0",
+      "senderNativeWei": "20000000000000000000"
+    },
+    "after": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "9999",
+      "0x344412229b3b581c19572f9bf1f5d08d4ae897e6": "1"
+    },
+    "deltas": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "-1",
+      "0x344412229b3b581c19572f9bf1f5d08d4ae897e6": "1"
+    }
+  },
+  "execution": {
+    "hash": "0x560be38776ffcbefdebe89ff43d5713795ede6049867901fd2e04b6c75ef9dcd",
+    "status": "success",
+    "blockNumber": "48886949",
+    "blockHash": "0x9b9c3cff9d47f83bf136192b217c36466e161acf8229fdb06294033ec396d6d0",
+    "gasUsed": "319513",
+    "effectiveGasPrice": "102000000000",
+    "feeWei": "32590326000000000",
+    "logCount": 1,
+    "aUsdcTransferEvents": [
+      {
+        "from": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "value": "1"
+      }
+    ],
+    "otherLogs": [],
+    "receipt": true
+  },
+  "reconciliation": {
+    "senderDebit": "1",
+    "recipientCredit": "1",
+    "burned": "0",
+    "counterparties": [],
+    "feeCharged": false,
+    "mismatches": [],
+    "ok": true,
+    "reasons": []
+  },
+  "policyReadbackAfter": "true"
+}
