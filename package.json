@@ -30,7 +30,7 @@
     "m05:dryrun": "node scripts/m05-dryrun-monad.mjs",
     "m05:check": "node scripts/m05-runner.mjs --check",
     "m05:fork": "node scripts/m05-runner.mjs --fork",
-    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs",
+    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs scripts/m14-manifest.test.mjs",
     "revalidate:ausdc": "node --env-file=.env scripts/m06-ausdc-revalidation.mjs",
     "m07:check": "node --env-file=.env scripts/m07-ausdc-transfer.mjs --check",
     "m08:check": "node --env-file=.env scripts/m08-contract-apass.mjs --check",
@@ -42,7 +42,8 @@
     "m13:control-a": "node scripts/m13-control-a.mjs",
     "m13a:ceremony": "node scripts/m13a-ceremony.mjs",
     "m13b:binding": "node scripts/m13b-vault-binding.mjs",
-    "m13c:terminal": "node scripts/m13c-activation-terminal.mjs"
+    "m13c:terminal": "node scripts/m13c-activation-terminal.mjs",
+    "m14:manifest": "node --env-file=.env scripts/m14-manifest.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",
