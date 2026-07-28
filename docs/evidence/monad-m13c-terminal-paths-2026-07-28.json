@@ -1,0 +1,665 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T21:24:53.810Z",
+  "classification": "M-13 PINNED MONAD FORK REHEARSAL: PROVEN",
+  "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt. Nothing here is a live Mordant settlement.",
+  "controlA": {
+    "classification": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN",
+    "proven": true
+  },
+  "steps": [
+    {
+      "label": "control A",
+      "detail": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN"
+    },
+    {
+      "label": "fork",
+      "detail": "anvil/v1.5.0, chain 10143, block 48901500"
+    },
+    {
+      "label": "adapter deployed",
+      "detail": "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    },
+    {
+      "label": "adapter A-Pass",
+      "detail": "issued, isValidAPass true"
+    },
+    {
+      "label": "participant A-Passes",
+      "detail": "2 issued fork-local"
+    },
+    {
+      "label": "supply ceremony",
+      "detail": "100000 units minted to the adapter, roles settled"
+    },
+    {
+      "label": "funding leg funder",
+      "detail": "100000 reconciled, source -100000, funder +100000"
+    },
+    {
+      "label": "funding leg buyer",
+      "detail": "110000 reconciled, source -110000, buyer +110000"
+    },
+    {
+      "label": "funding aggregate",
+      "detail": "source -210000, funder +100000, buyer +110000"
+    },
+    {
+      "label": "production contracts",
+      "detail": "verifier 0x43ca9bae8df108684e5eaaa720c25e1b32b0a075, factory 0x9d3da37d36bb0b825cd319ed129c2872b893f538"
+    },
+    {
+      "label": "factory configured",
+      "detail": "roles, facility, adapter and settlement token allowlisted"
+    },
+    {
+      "label": "vault created",
+      "detail": "0x3df1E2e6F757E302dbf8b643880483938826968F"
+    },
+    {
+      "label": "vault A-Pass",
+      "detail": "issued fork-local"
+    },
+    {
+      "label": "policy MINV01 mint to adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 burn from adapter",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 release to holderA",
+      "detail": "true"
+    },
+    {
+      "label": "policy MINV01 release to holderB",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC activation advance in",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC net proceeds out",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC redemption funding in",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC redemption to holderA",
+      "detail": "true"
+    },
+    {
+      "label": "policy aUSDC redemption to holderB",
+      "detail": "true"
+    },
+    {
+      "label": "bind preconditions",
+      "detail": "all pass"
+    },
+    {
+      "label": "bindVault",
+      "detail": "bound to 0x3df1E2e6F757E302dbf8b643880483938826968F, availableBalance 100000"
+    },
+    {
+      "label": "VaultBound",
+      "detail": "vault 0x3df1E2e6F757E302dbf8b643880483938826968F, units 100000, block 48901521"
+    },
+    {
+      "label": "second facility",
+      "detail": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc, eligible and allowlisted"
+    },
+    {
+      "label": "snapshot",
+      "detail": "post-binding 0x0"
+    },
+    {
+      "label": "activated",
+      "detail": "net proceeds 90000, bond 10000, receipts 50000/50000"
+    },
+    {
+      "label": "snapshot",
+      "detail": "post-activation 0x1"
+    },
+    {
+      "label": "redeem holderA",
+      "detail": "50000 units, received 55000 aUSDC"
+    },
+    {
+      "label": "redeem holderB",
+      "detail": "50000 units, received 55000 aUSDC"
+    },
+    {
+      "label": "scenario A",
+      "detail": "MINV01 supply 0, receipts 0, cvaBurned 100000"
+    },
+    {
+      "label": "reverted",
+      "detail": "to the post-activation snapshot, so neither branch contaminates the other"
+    },
+    {
+      "label": "conflict",
+      "detail": "committed and revealed by the second facility"
+    },
+    {
+      "label": "finalized",
+      "detail": "past the cure deadline"
+    },
+    {
+      "label": "default",
+      "detail": "marked past protectionEnd"
+    },
+    {
+      "label": "release holderA",
+      "detail": "50000 units, received 50000 MINV01"
+    },
+    {
+      "label": "release holderB",
+      "detail": "50000 units, received 50000 MINV01"
+    },
+    {
+      "label": "scenario B",
+      "detail": "MINV01 supply unchanged at 100000, cvaReleasedFace 110000, receipts 0"
+    }
+  ],
+  "hygiene": {
+    "writeRpc": "http://127.0.0.1:8550",
+    "loopback": true,
+    "upstreamSeparate": true,
+    "clientVersion": "anvil/v1.5.0",
+    "chainId": 10143,
+    "forkBlock": "48901500",
+    "forkBlockHash": "0xbb6f2791b8c1393e7ceb2f8f2376303f9edbd4e0ca778a1fc86e122d1b0cbb03",
+    "pinnedByNumberAndHash": true
+  },
+  "apassIssued": [
+    {
+      "subject": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "label": "adapter",
+      "hash": "0xd209ad7fe582f4c38993f5bd16044c78d6406820ebc7a00009909425d81683e3",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "label": "facility",
+      "hash": "0x8ef0340d3c55d998833967b085d66f6c6b072326dfaef234d0546cf378ba6bcc",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+      "label": "funder",
+      "hash": "0x904f1cf82526a8e8a5ef8c884caf459b5e850e46716c75666019f091e5598ef4",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "label": "vault",
+      "hash": "0xfad0e486742ddbbd479a737672ec050587041a5786b984beaefef689ebea95c6",
+      "isValidAPass": true
+    },
+    {
+      "subject": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+      "label": "facilityTwo",
+      "hash": "0xc4eb12b518a5e3a73fe185105e5794affcde9a031705bb9304ac1781d32afb61",
+      "isValidAPass": true
+    }
+  ],
+  "aUsdcFunding": {
+    "source": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+    "legs": [
+      {
+        "label": "funder",
+        "recipient": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+        "amount": "100000",
+        "hash": "0x90889d9448cf8dd9d4e99137b127d06a1481cd112ab9e6e8c89975244184a5ad",
+        "status": "success",
+        "blockNumber": "48901509",
+        "gasUsed": "131251",
+        "transferEvents": [
+          {
+            "from": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+            "to": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+            "value": "100000"
+          }
+        ],
+        "sourceBefore": "500000",
+        "sourceAfter": "400000",
+        "recipientBefore": "0",
+        "recipientAfter": "100000",
+        "sourceDelta": "-100000",
+        "recipientDelta": "100000",
+        "reconciled": true
+      },
+      {
+        "label": "buyer",
+        "recipient": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "amount": "110000",
+        "hash": "0x1d7e572b1905acc6f955246b85bec1c8123bd5e589e452acd9adda8e979bbb92",
+        "status": "success",
+        "blockNumber": "48901510",
+        "gasUsed": "131239",
+        "transferEvents": [
+          {
+            "from": "0x7f7098632b0258Af07e527015D65e6bc743f4CF5",
+            "to": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "value": "110000"
+          }
+        ],
+        "sourceBefore": "400000",
+        "sourceAfter": "290000",
+        "recipientBefore": "0",
+        "recipientAfter": "110000",
+        "sourceDelta": "-110000",
+        "recipientDelta": "110000",
+        "reconciled": true
+      }
+    ],
+    "aggregate": {
+      "sourceDelta": "-210000",
+      "funderDelta": "100000",
+      "buyerDelta": "110000"
+    },
+    "note": "impersonated an address that really holds aUSDC; no balance was invented"
+  },
+  "bindPreconditions": {
+    "ok": true,
+    "reasons": [],
+    "policyTuples": [
+      {
+        "label": "MINV01 mint to adapter",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0x0000000000000000000000000000000000000000",
+        "to": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 burn from adapter",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x0000000000000000000000000000000000000000",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 release to holderA",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "amount": "50000",
+        "answer": true
+      },
+      {
+        "label": "MINV01 release to holderB",
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "from": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+        "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "amount": "50000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC activation advance in",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+        "to": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "amount": "100000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC net proceeds out",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+        "amount": "90000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC redemption funding in",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "to": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "amount": "110000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC redemption to holderA",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "amount": "55000",
+        "answer": true
+      },
+      {
+        "label": "aUSDC redemption to holderB",
+        "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "from": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+        "to": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "amount": "55000",
+        "answer": true
+      }
+    ]
+  },
+  "apassProvenance": {
+    "adapter": {
+      "address": "0xc0bf43a4ca27e0976195e6661b099742f10507e5",
+      "isValidAPass": true,
+      "provenance": "issued fork-local by bounded substitution of the observed call"
+    },
+    "vault": {
+      "address": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "isValidAPass": true,
+      "provenance": "issued fork-local after creation, since the address does not exist before"
+    },
+    "funder": {
+      "address": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+      "isValidAPass": true,
+      "provenance": "issued fork-local; the vault refuses a funder that is also the buyer"
+    },
+    "buyer": {
+      "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "isValidAPass": true,
+      "provenance": "already valid in the forked state"
+    },
+    "originator": {
+      "address": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "isValidAPass": true,
+      "provenance": "already valid in the forked state"
+    },
+    "facility": {
+      "address": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "isValidAPass": true,
+      "provenance": "issued fork-local"
+    },
+    "holderA": {
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "isValidAPass": true,
+      "provenance": "issued live in M-11, preserved by the fork"
+    },
+    "holderB": {
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "isValidAPass": true,
+      "provenance": "issued live in M-11, preserved by the fork"
+    }
+  },
+  "binding": {
+    "before": {
+      "totalSupply": "100000",
+      "adapterBalance": "100000",
+      "adapterIsMinter": true,
+      "adminIsMinter": false,
+      "issuanceWalletIsMinter": false,
+      "adapterReadback": {
+        "token": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "apass": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+        "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "boundVault": "0x0000000000000000000000000000000000000000",
+        "issuedSupply": "100000"
+      },
+      "vaultReadback": {
+        "cvaAdapter": "0xC0BF43A4Ca27e0976195E6661b099742f10507e5",
+        "cvaToken": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+        "initialUnits": "100000",
+        "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+        "faceValue": "110000",
+        "advanceAmount": "100000"
+      }
+    },
+    "after": {
+      "boundVault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "availableBalance": "100000",
+      "issuedSupply": "100000",
+      "adapterBalance": "100000",
+      "totalSupply": "100000"
+    },
+    "transaction": {
+      "hash": "0xf8800d654076a1de011003ade9281dd1848fe6c10409cd70c5a7eaf008b85ae7",
+      "status": "success",
+      "blockNumber": "48901521",
+      "blockHash": "0x4136a9cd7b2f136374269c1604ab466152387e0989674ce2a2082846af10c075",
+      "gasUsed": "116774"
+    },
+    "vaultBoundEvent": {
+      "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+      "units": "100000"
+    }
+  },
+  "vault": {
+    "address": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+    "verifier": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075",
+    "factory": "0x9d3da37d36bb0b825cd319ed129c2872b893f538",
+    "boundVault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+    "initialUnits": "100000",
+    "advanceAmount": "100000",
+    "faceValue": "110000",
+    "bondBps": 1000,
+    "protectionEnd": "1787858622"
+  },
+  "statuses": {
+    "FORK APASS REGISTRY ISSUE": "PROVEN",
+    "TEMPORARY ISSUANCE MINTER": "GRANTED / REVOKED",
+    "ADAPTER MINTER ROLE": "GRANTED ON FORK",
+    "EXACT SUPPLY CEREMONY": "PROVEN",
+    "PRODUCTION VAULT BINDING": "PROVEN ON FORK",
+    "ADAPTER BURN PATH": "PROVEN ON FORK",
+    "ADAPTER DEFAULT RELEASE": "PROVEN ON FORK",
+    "PUBLIC ADAPTER DEPLOYMENT": "NOT DONE",
+    "LIVE ADAPTER APASS": "NOT PROVEN FOR THIS ADDRESS",
+    "LIVE MINTER ROLE / MINT / BIND": "NOT DONE",
+    "MORDANT SETTLEMENT": "NOT PROVEN LIVE"
+  },
+  "activation": {
+    "netProceedsReceived": "90000",
+    "expectedNetProceeds": "90000",
+    "bondLocked": "10000",
+    "expectedBond": "10000",
+    "receiptHolderA": "50000",
+    "receiptHolderB": "50000",
+    "receiptSupply": "100000",
+    "cvaAccounted": "100000",
+    "adapterAvailable": "100000",
+    "protectionState": 1,
+    "receivableState": 1,
+    "assertAccounting": true,
+    "validation": {
+      "ok": true,
+      "reasons": []
+    },
+    "ok": true
+  },
+  "scenarioA": {
+    "supplyBefore": "100000",
+    "supplyAfter": "0",
+    "adapterBefore": "100000",
+    "adapterAfter": "0",
+    "redeemed": [
+      {
+        "label": "holderA",
+        "holder": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "units": "50000",
+        "cashReceived": "55000",
+        "receiptsAfter": "0"
+      },
+      {
+        "label": "holderB",
+        "holder": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "units": "50000",
+        "cashReceived": "55000",
+        "receiptsAfter": "0"
+      }
+    ],
+    "deltaShape": {
+      "ok": true,
+      "reasons": []
+    },
+    "receiptSupplyAfter": "0",
+    "cvaAccounted": "0",
+    "cvaBurned": "100000",
+    "redeemedFace": "110000",
+    "redemptionEscrow": "0",
+    "assertAccounting": true,
+    "validation": {
+      "ok": true,
+      "reasons": []
+    },
+    "ok": true
+  },
+  "scenarioB": {
+    "supplyBefore": "100000",
+    "supplyAfter": "100000",
+    "adapterBefore": "100000",
+    "adapterAfter": "0",
+    "releases": [
+      {
+        "label": "holderA",
+        "holder": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "units": "50000",
+        "tokenReceived": "50000",
+        "receiptsAfter": "0"
+      },
+      {
+        "label": "holderB",
+        "holder": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "units": "50000",
+        "tokenReceived": "50000",
+        "receiptsAfter": "0"
+      }
+    ],
+    "deltaShape": {
+      "ok": true,
+      "reasons": []
+    },
+    "receiptSupplyAfter": "0",
+    "cvaReleasedFace": "110000",
+    "cvaAccounted": "0",
+    "defaultCvaReleaseStarted": true,
+    "assertAccounting": true,
+    "validation": {
+      "ok": true,
+      "reasons": []
+    },
+    "ok": true
+  },
+  "verdict": {
+    "classification": "M-13 PINNED MONAD FORK REHEARSAL: PROVEN",
+    "missing": []
+  },
+  "receipts": {
+    "activate": {
+      "hash": "0x0acc6233e8a1afdd2dc38a644909dfc19dca4a6ab1b98f85141b805cf832de2c",
+      "status": "success",
+      "blockNumber": "48901526",
+      "blockHash": "0x1cd6621b58be6943b2a40d2a7e924b3a944003535faf74679ed36a303332ec46",
+      "gasUsed": "1068034",
+      "adapterEvents": []
+    },
+    "fundRedemption": {
+      "hash": "0x539f060ac387ec517514271237b844f8380db730fef64002507146698522f32d",
+      "status": "success",
+      "blockNumber": "48901528",
+      "blockHash": "0xbec989f77c82ebebc120bd87ca96f4d4389157ae7a47e753b1bd60c8cdf3bccf",
+      "gasUsed": "237989",
+      "adapterEvents": []
+    },
+    "redeem_holderA": {
+      "hash": "0xebb20ff24047f366264e14250acf3b0d4e0d7c088141d443e4b6ce4b3a52a909",
+      "status": "success",
+      "blockNumber": "48901529",
+      "blockHash": "0x9397a52f5239dced5f92b892a2f7f7bec380edd9ea1610bb4e65b4801899a57c",
+      "gasUsed": "527722",
+      "adapterEvents": [
+        {
+          "name": "CreditConsumed",
+          "args": {
+            "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+            "units": "50000"
+          }
+        }
+      ]
+    },
+    "redeem_holderB": {
+      "hash": "0x70844faf84d9687b2be4d2284854c4dd6232c575b3f5a4994deb3275f5911a28",
+      "status": "success",
+      "blockNumber": "48901530",
+      "blockHash": "0x3056f6dc3c9fe3eb9bbeb087b0a1d1513a2688103ab3ae51d91c1d52062df7bc",
+      "gasUsed": "411997",
+      "adapterEvents": [
+        {
+          "name": "CreditConsumed",
+          "args": {
+            "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+            "units": "50000"
+          }
+        }
+      ]
+    },
+    "commitConflict": {
+      "hash": "0x0437b3dc049f2b7e503461c9f1e62624b87e7c162f469e468be7bb92d3a668f5",
+      "status": "success",
+      "blockNumber": "48901527",
+      "blockHash": "0x075cc3179426e090389e4275cabb89de418acc05cd226eb0fd3505be6ba00863",
+      "gasUsed": "219927",
+      "adapterEvents": []
+    },
+    "revealConflict": {
+      "hash": "0x04975364d982c668d3fccd3de747403c2d1d414548c75315e76894be97e418a5",
+      "status": "success",
+      "blockNumber": "48901528",
+      "blockHash": "0x586ecbff136c45b6a3c74414e119dba7f32b75e0b5d748b83b3d5212f6105133",
+      "gasUsed": "230498",
+      "adapterEvents": []
+    },
+    "finalizeConflict": {
+      "hash": "0xac1c8dda43e59588e3903f85075bc325258e8a0b4590d53e6b3c8d3f2f58dc56",
+      "status": "success",
+      "blockNumber": "48901530",
+      "blockHash": "0x63568e3f9db099956f8d8544b91286d4cbfc9e1e1a1e009d3ca10f2d338ea639",
+      "gasUsed": "157659",
+      "adapterEvents": []
+    },
+    "markDefault": {
+      "hash": "0xfbfcb0acef122559f2cc31ff1896db57fae18926e5edbf6016b3bf91435e7a7b",
+      "status": "success",
+      "blockNumber": "48901532",
+      "blockHash": "0x0f6002a68fdf27b0203371018abc6653230756c97dbb969c0ffde7c42f6d182b",
+      "gasUsed": "101308",
+      "adapterEvents": []
+    },
+    "releaseDefaultCva_holderA": {
+      "hash": "0x918d610254cccae0bb382e076c4e949a1bf706cba35a15552314815940a26481",
+      "status": "success",
+      "blockNumber": "48901533",
+      "blockHash": "0x9ec430e528aacf02a0eeed895aa6d6dd3001937c907c4c64be9f6960244b7554",
+      "gasUsed": "429513",
+      "adapterEvents": [
+        {
+          "name": "CreditReleased",
+          "args": {
+            "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+            "holder": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+            "units": "50000"
+          }
+        }
+      ]
+    },
+    "releaseDefaultCva_holderB": {
+      "hash": "0xee637c78cb058baa4e063c5502134c77d9e803b67c9d887ce514635b584434b6",
+      "status": "success",
+      "blockNumber": "48901534",
+      "blockHash": "0xbacfdfbf48a1f855fd034a50a41de476d69fc99836a5a4476d74de4ce7adb03d",
+      "gasUsed": "375603",
+      "adapterEvents": [
+        {
+          "name": "CreditReleased",
+          "args": {
+            "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+            "holder": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+            "units": "50000"
+          }
+        }
+      ]
+    }
+  }
+}
