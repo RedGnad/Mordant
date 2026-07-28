@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "runStartedAt": "2026-07-28T19:03:59.085Z",
+  "generatedAt": "2026-07-28T19:04:05.749Z",
+  "mode": "run",
+  "status": "COMPLETE",
+  "classification": "CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN",
+  "scope": "One atomic unit of aUSDC sent to the probe M-08 deployed, then returned through its own sweep. Nothing is deployed, no A-Pass is issued and no Cleanverse write call is made. This is NOT a Mordant settlement: no vault, adapter, pledge or invoice A-Token is involved, and it may never be described as MORDANT SETTLEMENT.",
+  "probe": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+  "steps": [
+    {
+      "label": "network",
+      "detail": "chain 10143"
+    },
+    {
+      "label": "pinned block",
+      "detail": "48897615 0xc3ea8eeb16f4e079488efaf0d3c9050fd5921f31ec286ca31e3fe79d6b36cfa8"
+    },
+    {
+      "label": "aUSDC",
+      "detail": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D, implementation and policy unchanged"
+    },
+    {
+      "label": "probe code",
+      "detail": "1177 bytes, hash matches the compiled artifact"
+    },
+    {
+      "label": "probe owner",
+      "detail": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45 matches the signer"
+    },
+    {
+      "label": "A-Pass owner",
+      "detail": "valid, status 1, tier 50, verify code 4"
+    },
+    {
+      "label": "A-Pass probe",
+      "detail": "valid, status 1, tier 50, verify code 4"
+    },
+    {
+      "label": "canTransfer",
+      "detail": "owner->probe true, probe->owner true"
+    },
+    {
+      "label": "balances",
+      "detail": "owner 0.009999 aUSDC, probe 0.000000 aUSDC"
+    },
+    {
+      "label": "gas",
+      "detail": "outbound 319513, sweep not estimable before funding, budgeted at the 600000 ceiling, price 102000000000 wei"
+    },
+    {
+      "label": "total MON budget",
+      "detail": "93790326000000000 wei, owner holds 19932185504000000000 wei"
+    },
+    {
+      "label": "outbound transfer",
+      "detail": "success, block 48897630, reconciled"
+    },
+    {
+      "label": "sweep back",
+      "detail": "success, block 48897632, reconciled"
+    },
+    {
+      "label": "final balances",
+      "detail": "owner 0.009999 aUSDC, probe 0.000000 aUSDC"
+    }
+  ],
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48897615",
+    "blockHash": "0xc3ea8eeb16f4e079488efaf0d3c9050fd5921f31ec286ca31e3fe79d6b36cfa8",
+    "blockTimestamp": "1785265439"
+  },
+  "token": {
+    "aUsdc": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da",
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "policyImplementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+    "decimals": 6,
+    "isTokenRegistered": true,
+    "isPaused": false
+  },
+  "probeFacts": {
+    "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+    "codeSize": 1177,
+    "codeHash": "0x4e1e5ee762fbc1b63de6876a5f181a214de0ccb50752e7b3e0054c99a9765452",
+    "matchesCompiledArtifact": true,
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45"
+  },
+  "participants": {
+    "ownerRole": "HOLDER_A",
+    "ownerAddress": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "probe": "0x0f8b9a0c064306f938912658c96c681d8655140b"
+  },
+  "credentials": [
+    {
+      "label": "owner",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "onchainValid": true,
+      "verifyCode": 4,
+      "status": 1,
+      "tier": "50",
+      "subTier": 0,
+      "expirationTime": 1816796031,
+      "secondsRemaining": 31530592
+    },
+    {
+      "label": "probe",
+      "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "onchainValid": true,
+      "verifyCode": 4,
+      "status": 1,
+      "tier": "50",
+      "subTier": 0,
+      "expirationTime": 1816798854,
+      "secondsRemaining": 31533415
+    }
+  ],
+  "precheck": {
+    "canOutbound": true,
+    "canInbound": true,
+    "amount": "1",
+    "amountHuman": "0.000001 aUSDC"
+  },
+  "gas": {
+    "outboundEstimate": "319513",
+    "sweepEstimatePreflight": null,
+    "price": "102000000000",
+    "totalBudgetWei": "93790326000000000",
+    "ceilingGas": "600000",
+    "ceilingPriceWei": "200000000000"
+  },
+  "balances": {
+    "start": {
+      "owner": "9999",
+      "probe": "0"
+    },
+    "final": {
+      "owner": "9999",
+      "probe": "0"
+    }
+  },
+  "outbound": {
+    "hash": "0x436c40b3b19bdb6788e0d426604401df51b477efc348cba33f69ca4f78dd86d2",
+    "status": "success",
+    "blockNumber": "48897630",
+    "blockHash": "0x31fba1b7d7365453c9f66fb427e4e104e8fb7b0b7ec77a186746a63e7b7e3cb9",
+    "gasUsed": "319513",
+    "effectiveGasPrice": "102000000000",
+    "feeWei": "32590326000000000",
+    "aUsdcTransferEvents": [
+      {
+        "from": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "to": "0x0F8b9A0c064306F938912658c96c681D8655140B",
+        "value": "1"
+      }
+    ],
+    "balancesBefore": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "9999",
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "0"
+    },
+    "balancesAfter": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "9998",
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "1"
+    },
+    "deltas": {
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "-1",
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "1"
+    },
+    "reconciliation": {
+      "senderDebit": "1",
+      "recipientCredit": "1",
+      "burned": "0",
+      "counterparties": [],
+      "feeCharged": false,
+      "mismatches": [],
+      "ok": true,
+      "reasons": []
+    },
+    "receipt": true,
+    "ok": true
+  },
+  "inbound": {
+    "hash": "0x268484f53f5b9daa9b202e1a597611c1605b5d22fded6ae78c9be9a3f62d0dab",
+    "status": "success",
+    "blockNumber": "48897632",
+    "blockHash": "0x3dcce1e63a02fb165ae09c17502876886747ce28989c472a7d9844e1546aeabb",
+    "gasUsed": "326243",
+    "effectiveGasPrice": "102000000000",
+    "feeWei": "33276786000000000",
+    "aUsdcTransferEvents": [
+      {
+        "from": "0x0F8b9A0c064306F938912658c96c681D8655140B",
+        "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "value": "1"
+      }
+    ],
+    "balancesBefore": {
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "1",
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "9998"
+    },
+    "balancesAfter": {
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "0",
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "9999"
+    },
+    "deltas": {
+      "0x0f8b9a0c064306f938912658c96c681d8655140b": "-1",
+      "0x79c53151315fad9163f75a65a8bd4d04a10e1e45": "1"
+    },
+    "reconciliation": {
+      "senderDebit": "1",
+      "recipientCredit": "1",
+      "burned": "0",
+      "counterparties": [],
+      "feeCharged": false,
+      "mismatches": [],
+      "ok": true,
+      "reasons": []
+    },
+    "receipt": true,
+    "ok": true
+  },
+  "readbackAfter": {
+    "canTransfer": {
+      "outbound": true,
+      "inbound": true
+    },
+    "verifyApass": [
+      {
+        "label": "owner",
+        "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+        "code": 4
+      },
+      {
+        "label": "probe",
+        "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+        "code": 4
+      }
+    ]
+  }
+}
