@@ -1,0 +1,996 @@
+/**
+ * Aero Fiduciary study: three token sets and the composition each one drives.
+ *
+ * Every decision lives in a token. A value written inline in a component is a decision nobody can
+ * find later, and this study exists to be compared.
+ *
+ * The three variants share primitives (amounts, evidence rows, the recourse line) but not their
+ * composition: the point is to see the same content read differently, not the same layout recoloured.
+ */
+
+/* ---------------------------------------------------------------- shared scale */
+
+.lab {
+  /* Type. Tabular figures everywhere a number can be compared. */
+  --face-sans: "Manrope Variable", system-ui, sans-serif;
+  --face-mono: "Space Mono", ui-monospace, monospace;
+  --size-micro: 0.6875rem;
+  --size-small: 0.8125rem;
+  --size-body: 0.9375rem;
+  --size-lead: 1.125rem;
+  --size-figure: 1.75rem;
+  --size-headline: 2.25rem;
+  --size-hero: 3.25rem;
+  --track-caps: 0.08em;
+
+  /* Space. A single ratio, so macro rooms breathe and micro rows stay tight. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+  --space-9: 112px;
+
+  --radius-tight: 3px;
+  --radius-panel: 10px;
+  --radius-plane: 18px;
+
+  /* Motion. Durations express state, never decoration. */
+  --dur-quick: 140ms;
+  --dur-settle: 320ms;
+  --dur-breathe: 5200ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-material: cubic-bezier(0.4, 0, 0.2, 1);
+
+  font-family: var(--face-sans);
+  color: var(--ink);
+  background: var(--ground);
+  min-height: 100vh;
+}
+
+/* ------------------------------------------------------- 1. Aero Restrained */
+/* Light and depth live in the background and the separators. The data leads. */
+
+.lab[data-variant="restrained"] {
+  --ink: #171c22;
+  --ink-soft: #4a555f;
+  --ink-faint: #6d7883;
+  --ground: #f4f6f7;
+  --plane: #ffffff;
+  --plane-sunk: #eef1f3;
+  --rule: #d9dfe4;
+  --rule-strong: #b9c3cb;
+
+  --sem-stable: #2f6f4f;
+  --sem-cure: #8a5a10;
+  --sem-action: #1c4fa1;
+  --sem-blocked: #7c3030;
+  --sem-proof: #40515f;
+  --sem-stable-wash: #e6f1ea;
+  --sem-cure-wash: #fbf0dc;
+  --sem-action-wash: #e6edf9;
+  --sem-blocked-wash: #f8e9e9;
+
+  --atmos-a: transparent;
+  --atmos-b: transparent;
+  --glass: rgba(255, 255, 255, 0.82);
+  --glass-line: rgba(23, 28, 34, 0.09);
+  --lift-1: 0 1px 2px rgba(23, 28, 34, 0.06);
+  --lift-2: 0 4px 16px rgba(23, 28, 34, 0.07);
+  --lift-3: 0 10px 34px rgba(23, 28, 34, 0.09);
+}
+
+/* ------------------------------------------------------- 2. Aero Fiduciary */
+/* Atmosphere between planes. Glass only where something is sealed or revealed. */
+
+.lab[data-variant="fiduciary"] {
+  --ink: #10222b;
+  --ink-soft: #3d5a66;
+  --ink-faint: #62808c;
+  --ground: #e8f2f4;
+  --plane: rgba(255, 255, 255, 0.9);
+  --plane-sunk: rgba(217, 234, 238, 0.66);
+  --rule: rgba(16, 34, 43, 0.13);
+  --rule-strong: rgba(16, 34, 43, 0.26);
+
+  --sem-stable: #10695a;
+  --sem-cure: #9a5b00;
+  --sem-action: #0b5394;
+  --sem-blocked: #8a2d33;
+  --sem-proof: #33525f;
+  --sem-stable-wash: rgba(16, 105, 90, 0.11);
+  --sem-cure-wash: rgba(154, 91, 0, 0.13);
+  --sem-action-wash: rgba(11, 83, 148, 0.11);
+  --sem-blocked-wash: rgba(138, 45, 51, 0.11);
+
+  --atmos-a: #bfe6ec;
+  --atmos-b: #dff0e6;
+  --atmos-c: #cfe0f2;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.85);
+  --lift-1: 0 1px 2px rgba(16, 34, 43, 0.07);
+  --lift-2: 0 6px 22px rgba(16, 34, 43, 0.1);
+  --lift-3: 0 18px 52px rgba(16, 34, 43, 0.14);
+}
+
+/* --------------------------------------------------------- 3. Aero Radical */
+/* Environmental. The atmosphere carries the state; refraction carries the reveal. */
+
+.lab[data-variant="radical"] {
+  --ink: #06181f;
+  --ink-soft: #2d4f5c;
+  --ink-faint: #4f7683;
+  --ground: #d7ecef;
+  --plane: rgba(255, 255, 255, 0.78);
+  --plane-sunk: rgba(255, 255, 255, 0.42);
+  --rule: rgba(6, 24, 31, 0.14);
+  --rule-strong: rgba(6, 24, 31, 0.3);
+
+  --sem-stable: #06695c;
+  --sem-cure: #8f5000;
+  --sem-action: #0a4f92;
+  --sem-blocked: #8c1f2c;
+  --sem-proof: #23434f;
+  --sem-stable-wash: rgba(6, 105, 92, 0.14);
+  --sem-cure-wash: rgba(143, 80, 0, 0.16);
+  --sem-action-wash: rgba(10, 79, 146, 0.14);
+  --sem-blocked-wash: rgba(140, 31, 44, 0.14);
+
+  --atmos-a: #7fd4e0;
+  --atmos-b: #b9ecd2;
+  --atmos-c: #9cc4f0;
+  --atmos-d: #f4e7c4;
+  --glass: rgba(255, 255, 255, 0.46);
+  --glass-line: rgba(255, 255, 255, 0.92);
+  --lift-1: 0 2px 6px rgba(6, 24, 31, 0.1);
+  --lift-2: 0 10px 30px rgba(6, 24, 31, 0.14);
+  --lift-3: 0 28px 70px rgba(6, 24, 31, 0.2);
+}
+
+/* ------------------------------------------------------------- environment */
+
+.lab-sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.lab[data-variant="restrained"] .lab-sky { display: none; }
+
+.lab[data-variant="fiduciary"] .lab-sky {
+  background:
+    radial-gradient(70% 55% at 12% 0%, var(--atmos-a) 0%, transparent 62%),
+    radial-gradient(60% 50% at 92% 8%, var(--atmos-c) 0%, transparent 58%),
+    radial-gradient(80% 60% at 50% 108%, var(--atmos-b) 0%, transparent 60%);
+  opacity: 0.75;
+}
+
+.lab[data-variant="radical"] .lab-sky {
+  background:
+    radial-gradient(52% 44% at 8% -8%, var(--atmos-a) 0%, transparent 66%),
+    radial-gradient(46% 40% at 96% 4%, var(--atmos-c) 0%, transparent 62%),
+    radial-gradient(64% 52% at 74% 96%, var(--atmos-b) 0%, transparent 64%),
+    radial-gradient(38% 34% at 26% 74%, var(--atmos-d) 0%, transparent 58%);
+}
+
+/*
+ * The cure window is the only thing that moves on its own. A slow, shallow drift reads as tension
+ * rather than decoration, and it stops entirely once the window closes or motion is reduced.
+ */
+.lab[data-variant="radical"][data-cure="open"] .lab-sky {
+  animation: lab-tension var(--dur-breathe) var(--ease-material) infinite alternate;
+}
+
+@keyframes lab-tension {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(0, -1.4%, 0) scale(1.035); }
+}
+
+/* --------------------------------------------------------------- structure */
+
+.lab-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100% - var(--space-6)));
+  margin: 0 auto;
+  padding-block: var(--space-6) var(--space-9);
+}
+
+.lab-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--rule);
+}
+
+.lab-study-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.lab-study-note b {
+  font-family: var(--face-mono);
+  font-weight: 700;
+  color: var(--sem-cure);
+  background: var(--sem-cure-wash);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-tight);
+  letter-spacing: 0.04em;
+}
+
+.lab-switch {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--plane-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+}
+
+.lab-switch button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--size-small);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: 7px;
+  transition: background var(--dur-quick) var(--ease-out), color var(--dur-quick) var(--ease-out);
+}
+
+.lab-switch button[aria-pressed="true"] {
+  background: var(--plane);
+  color: var(--ink);
+  box-shadow: var(--lift-1);
+}
+
+/* Focus is always visible and never removed, on any surface. */
+.lab :is(button, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--sem-action);
+  outline-offset: 2px;
+  border-radius: var(--radius-tight);
+}
+
+/* ------------------------------------------------------------------ header */
+
+.lab-head {
+  padding-block: var(--space-7) var(--space-6);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.lab-eyebrow {
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lab-title {
+  margin: 0;
+  font-size: var(--size-headline);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  max-width: 22ch;
+}
+
+.lab[data-variant="radical"] .lab-title {
+  font-size: var(--size-hero);
+  letter-spacing: -0.045em;
+}
+
+.lab-subtitle {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--size-lead);
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------- the decision band */
+/* Level 1: what is happening, how much is exposed, when, and who. */
+
+.lab-decision {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  align-items: start;
+  margin-block-start: var(--space-6);
+}
+
+.lab-state {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-plane);
+  background: var(--plane);
+  border: 1px solid var(--rule);
+  box-shadow: var(--lift-2);
+}
+
+.lab[data-variant="fiduciary"] .lab-state,
+.lab[data-variant="radical"] .lab-state {
+  backdrop-filter: blur(18px) saturate(1.25);
+  border-color: var(--glass-line);
+}
+
+.lab-state-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-self: start;
+  font-size: var(--size-small);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-tight);
+  color: var(--sem-cure);
+  background: var(--sem-cure-wash);
+  border: 1px solid color-mix(in srgb, var(--sem-cure) 30%, transparent);
+}
+
+/* Status never rests on colour alone: each mark carries a glyph and a word. */
+.lab-state-mark::before {
+  content: attr(data-glyph);
+  font-family: var(--face-mono);
+  font-weight: 700;
+}
+
+.lab-state-title {
+  margin: 0;
+  font-size: var(--size-figure);
+  letter-spacing: -0.02em;
+  font-weight: 750;
+}
+
+.lab-state-detail {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  max-width: 54ch;
+}
+
+/* ------------------------------------------------------------- the counter */
+
+.lab-cure {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-plane);
+  background: var(--plane);
+  border: 1px solid var(--rule);
+  box-shadow: var(--lift-2);
+}
+
+.lab[data-variant="radical"] .lab-cure {
+  background: var(--glass);
+  backdrop-filter: blur(22px) saturate(1.4);
+  border-color: var(--glass-line);
+  box-shadow: var(--lift-3);
+}
+
+.lab-cure-figure {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-headline);
+  letter-spacing: -0.02em;
+  color: var(--sem-cure);
+  line-height: 1;
+}
+
+.lab-cure-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--plane-sunk);
+  overflow: hidden;
+}
+
+.lab-cure-fill {
+  height: 100%;
+  background: var(--sem-cure);
+  transition: width var(--dur-settle) var(--ease-out);
+}
+
+/* ------------------------------------------------------------ the exposure */
+/* Level 1 continued: the figures, aligned so they can be compared at a glance. */
+
+.lab-exposure {
+  margin-block-start: var(--space-7);
+  border-block-start: 1px solid var(--rule);
+}
+
+.lab-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.lab-figure {
+  padding: var(--space-5) var(--space-5) var(--space-5) 0;
+  border-inline-end: 1px solid var(--rule);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lab-figure:last-child { border-inline-end: 0; }
+
+.lab-figure dt {
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lab-figure dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-figure);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lab-figure small {
+  display: block;
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------- the recourse line */
+/* The major visual structure: where the deal is on its way to resolution. */
+
+.lab-recourse {
+  margin-block-start: var(--space-7);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.lab-line {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--space-1);
+  align-items: start;
+}
+
+.lab-step {
+  display: grid;
+  gap: var(--space-2);
+  padding-block-start: var(--space-4);
+  border-block-start: 3px solid var(--rule);
+  color: var(--ink-faint);
+}
+
+.lab-step[data-state="done"] { border-block-start-color: var(--sem-stable); color: var(--ink-soft); }
+.lab-step[data-state="current"] { border-block-start-color: var(--sem-cure); color: var(--ink); }
+.lab-step[data-state="blocked"] { border-block-start-color: var(--sem-blocked); color: var(--ink-soft); }
+
+.lab-step-label {
+  font-size: var(--size-small);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lab-step-label::before {
+  content: attr(data-glyph);
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+}
+
+.lab-step-detail {
+  font-size: var(--size-small);
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+.lab[data-variant="radical"] .lab-step[data-state="current"] {
+  background: linear-gradient(180deg, var(--sem-cure-wash), transparent 78%);
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  padding-inline: var(--space-3);
+  margin-inline: calc(var(--space-3) * -1);
+}
+
+/* --------------------------------------------------------------- the table */
+/* Level 2: operational detail. Dense, aligned, no cards. */
+
+.lab-section {
+  margin-block-start: var(--space-7);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.lab-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--rule-strong);
+}
+
+.lab-section-head h2 {
+  margin: 0;
+  font-size: var(--size-lead);
+  letter-spacing: -0.015em;
+  font-weight: 750;
+}
+
+.lab-section-head p {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--ink-faint);
+}
+
+.lab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-small);
+}
+
+.lab-table th {
+  text-align: start;
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-block-end: 1px solid var(--rule);
+}
+
+.lab-table td {
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
+  border-block-end: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.lab-table .num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--face-mono);
+  padding-inline-end: 0;
+}
+
+.lab-table .mono {
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------------------- the evidence */
+/* Level 3: proof. Always reachable, never competing with the decision. */
+
+.lab-proof-toggle {
+  appearance: none;
+  border: 1px solid var(--rule-strong);
+  background: var(--plane);
+  color: var(--ink);
+  font-size: var(--size-small);
+  font-weight: 650;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-panel);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: box-shadow var(--dur-quick) var(--ease-out);
+}
+
+.lab-proof-toggle:hover { box-shadow: var(--lift-1); }
+
+.lab-proof {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-panel);
+  background: var(--plane-sunk);
+  border: 1px solid var(--rule);
+}
+
+.lab[data-variant="radical"] .lab-proof {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  border-color: var(--glass-line);
+}
+
+.lab-proof-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--rule);
+}
+
+.lab-proof-row:last-child { border-block-end: 0; }
+
+.lab-proof-value {
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.lab-confirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-micro);
+  font-weight: 700;
+  color: var(--sem-proof);
+  white-space: nowrap;
+}
+
+.lab-confirmed::before { content: "✓"; font-family: var(--face-mono); }
+
+/* ---------------------------------------------------------------- the action */
+
+.lab-action {
+  margin-block-start: var(--space-7);
+  padding: var(--space-6);
+  border-radius: var(--radius-plane);
+  border: 1px solid var(--rule-strong);
+  background: var(--plane);
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.lab[data-variant="radical"] .lab-action {
+  background: linear-gradient(120deg, var(--sem-action-wash), transparent 70%), var(--plane);
+  backdrop-filter: blur(20px) saturate(1.3);
+  border-color: var(--glass-line);
+  box-shadow: var(--lift-3);
+}
+
+.lab-action h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-lead);
+  font-weight: 750;
+}
+
+.lab-action p { margin: 0; color: var(--ink-soft); font-size: var(--size-small); max-width: 58ch; }
+
+.lab-cta {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-panel);
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--size-body);
+  font-weight: 700;
+  background: var(--sem-action);
+  color: #fff;
+  min-height: 48px;
+  transition: transform var(--dur-quick) var(--ease-out);
+}
+
+.lab-cta[disabled] {
+  background: var(--plane-sunk);
+  color: var(--ink-faint);
+  border: 1px solid var(--rule-strong);
+  cursor: not-allowed;
+}
+
+.lab-blocked-note {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--size-small);
+  color: var(--sem-blocked);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--rule);
+}
+
+.lab-blocked-note::before {
+  content: "BLOCKED";
+  font-family: var(--face-mono);
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  background: var(--sem-blocked-wash);
+  color: var(--sem-blocked);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-tight);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------- the custody vessel */
+/*
+ * The material the whole screen is about: the units held, and whether they are sealed or released.
+ * In restrained it is a modest bar. In fiduciary it gains depth. In radical it becomes the centre
+ * of the composition, and its glass is doing the work of saying "sealed, but now readable".
+ */
+
+.lab-vessel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-panel);
+  background: var(--plane-sunk);
+  border: 1px solid var(--rule);
+}
+
+.lab-vessel-body {
+  position: relative;
+  height: 76px;
+  border-radius: var(--radius-panel);
+  background: var(--plane);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+/*
+ * The vessel is divided by holder, so the material answers "whose units are these" rather than
+ * being a decorative slab. The divisions are the same figures the table lists.
+ */
+.lab-vessel-body { display: flex; }
+
+.lab-vessel-share {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-3);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sem-stable) 14%, transparent),
+    color-mix(in srgb, var(--sem-stable) 40%, transparent));
+  border-inline-end: 1px solid var(--glass-line);
+  transition: flex-grow var(--dur-settle) var(--ease-out);
+}
+
+.lab-vessel-share:last-of-type { border-inline-end: 0; }
+
+.lab-vessel-share-label {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.lab-vessel-share-label b {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-small);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* The seal: opaque while committed, refracted once revealed. */
+.lab-vessel-seal {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(115deg,
+    rgba(255, 255, 255, 0.5) 0 8px, rgba(255, 255, 255, 0.16) 8px 16px);
+}
+
+.lab-vessel-seal[data-revealed="true"] {
+  background: linear-gradient(115deg,
+    rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.06) 46%, rgba(255, 255, 255, 0.5) 100%);
+}
+
+.lab-vessel figcaption {
+  font-size: var(--size-small);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.lab-vessel figcaption strong {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.lab[data-variant="fiduciary"] .lab-vessel {
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border-color: var(--glass-line);
+  box-shadow: var(--lift-2);
+}
+
+/* --------------------------------------------------- radical: a different room */
+/*
+ * Radical is not the same layout with more colour. The decision band becomes one immersive stage,
+ * the vessel leads it, the recourse line turns into a vertical spine, and glass carries the
+ * distinction between what is sealed and what has been revealed.
+ */
+
+.lab[data-variant="radical"] .lab-shell {
+  width: min(1320px, calc(100% - var(--space-6)));
+}
+
+.lab[data-variant="radical"] .lab-decision {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: var(--space-7);
+  border-radius: 28px;
+  background: var(--glass);
+  backdrop-filter: blur(30px) saturate(1.5);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--lift-3);
+  grid-template-areas:
+    "state"
+    "vessel"
+    "cure";
+}
+
+.lab[data-variant="radical"] .lab-state {
+  grid-area: state;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0 0 var(--space-6);
+  border-block-end: 1px solid var(--rule);
+}
+
+.lab[data-variant="radical"] .lab-state-title {
+  font-size: var(--size-headline);
+  letter-spacing: -0.035em;
+}
+
+.lab[data-variant="radical"] .lab-vessel {
+  grid-area: vessel;
+  background: transparent;
+  border: 0;
+  padding: var(--space-6) 0;
+  border-block-end: 1px solid var(--rule);
+}
+
+.lab[data-variant="radical"] .lab-vessel-body {
+  height: 156px;
+  border-radius: var(--radius-plane);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18));
+  border-color: var(--glass-line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--lift-2);
+}
+
+/* Refraction: the revealed pledge bends what sits behind it instead of hiding it. */
+.lab[data-variant="radical"] .lab-vessel-seal[data-revealed="true"] {
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.62) 0%, transparent 34%, transparent 66%,
+      rgba(255, 255, 255, 0.62) 100%),
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.14) 0 3px, transparent 3px 26px);
+  backdrop-filter: blur(2px) saturate(1.2);
+}
+
+.lab[data-variant="radical"] .lab-cure {
+  grid-area: cure;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: var(--space-6) 0 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  display: grid;
+  gap: var(--space-3) var(--space-6);
+  align-items: center;
+}
+
+.lab[data-variant="radical"] .lab-cure-figure {
+  font-size: var(--size-hero);
+  grid-row: span 2;
+}
+
+/* The recourse line becomes a spine, read top to bottom rather than left to right. */
+.lab[data-variant="radical"] .lab-line {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  gap: 0;
+  border-inline-start: 2px solid var(--rule);
+  padding-inline-start: var(--space-5);
+}
+
+.lab[data-variant="radical"] .lab-step {
+  border-block-start: 0;
+  padding-block: var(--space-4);
+  border-block-end: 1px solid var(--rule);
+  position: relative;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  display: grid;
+  gap: var(--space-5);
+  align-items: baseline;
+}
+
+.lab[data-variant="radical"] .lab-step::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(var(--space-5) * -1 - 6px);
+  inset-block-start: calc(var(--space-4) + 6px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+}
+
+.lab[data-variant="radical"] .lab-step[data-state="done"]::before { background: var(--sem-stable); }
+.lab[data-variant="radical"] .lab-step[data-state="current"]::before { background: var(--sem-cure); }
+.lab[data-variant="radical"] .lab-step[data-state="blocked"]::before { background: var(--sem-blocked); }
+
+/* The current step separates from the spine, which is what a live state looks like here. */
+.lab[data-variant="radical"] .lab-step[data-state="current"] {
+  background: linear-gradient(90deg, var(--sem-cure-wash), transparent 62%);
+  margin-inline: calc(var(--space-4) * -1);
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-panel);
+}
+
+@media (max-width: 640px) {
+  .lab[data-variant="radical"] .lab-step { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .lab[data-variant="radical"] .lab-cure { grid-template-columns: minmax(0, 1fr); }
+  .lab[data-variant="radical"] .lab-cure-figure { grid-row: auto; }
+}
+
+/* ------------------------------------------------------------- refreshing */
+/* A refresh is a state, so it shows as one: the figure dims, it does not spin. */
+
+.lab-refreshing .lab-figure dd,
+.lab-refreshing .lab-cure-figure {
+  opacity: 0.45;
+  transition: opacity var(--dur-settle) var(--ease-out);
+}
+
+.lab-refresh-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1000px) {
+  .lab-decision { grid-template-columns: minmax(0, 1fr); }
+  .lab-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lab-figure:nth-child(2) { border-inline-end: 0; }
+  .lab-line { grid-auto-flow: row; grid-auto-columns: auto; }
+  .lab-step { border-block-start-width: 2px; }
+}
+
+@media (max-width: 640px) {
+  .lab-shell { width: calc(100% - var(--space-4)); padding-block-start: var(--space-4); }
+  .lab-title { font-size: var(--size-figure); }
+  .lab[data-variant="radical"] .lab-title { font-size: var(--size-headline); }
+  .lab-figures { grid-template-columns: minmax(0, 1fr); }
+  .lab-figure { border-inline-end: 0; border-block-end: 1px solid var(--rule); padding-inline-end: 0; }
+  .lab-action { grid-template-columns: minmax(0, 1fr); }
+  .lab-cta { width: 100%; }
+  .lab-table .hide-narrow { display: none; }
+}
+
+/* --------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .lab *,
+  .lab *::before,
+  .lab *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .lab[data-variant="radical"][data-cure="open"] .lab-sky { animation: none; }
+}

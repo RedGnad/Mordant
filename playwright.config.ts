@@ -41,7 +41,8 @@ export default defineConfig({
     {
       command: "next dev --hostname 127.0.0.1 --port 3100",
       url: "http://127.0.0.1:3100",
-      reuseExistingServer: true,
+      // A reused server keeps a stale config, which silently produced screenshots of an older build.
+      reuseExistingServer: false,
       timeout: 30_000,
     },
   ],
