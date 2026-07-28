@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T20:51:47.255Z",
+  "control": "A",
+  "classification": "OBSERVED APASS ISSUANCE CALL — EXACT REPLAY: PROVEN",
+  "scope": "Local fork only. No public transaction, no Cleanverse endpoint, no anvil_setStorageAt.",
+  "hygiene": {
+    "writeRpc": "http://127.0.0.1:8547",
+    "loopback": true,
+    "upstreamSeparate": true,
+    "clientVersion": "anvil/v1.5.0",
+    "chainId": 10143,
+    "forkBlock": "48889104",
+    "forkBlockHash": "0xd0eb4a2826e180c62bd08b387dacfda87665e35ee3b5b4b18412d1629e664b83",
+    "pinnedByNumberAndHash": true
+  },
+  "observedCall": {
+    "sourceTransaction": "0x4693a9afbcf4ce3401de6ce7f095afe309e8de33836a8d0443d96bf1dca16fd8",
+    "issuer": "0xbd8428761efb5384c4945d16de56817caa6903df",
+    "registry": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+    "selector": "0xb8dd3664",
+    "selectorNaming": "observed issuance call selector. Cleanverse publishes no ABI for it and none is claimed here.",
+    "calldata": "0xb8dd36640000000000000000000000000f8b9a0c064306f938912658c96c681d8655140b0000000000000000000000000000000000000000000000000000000000000032000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006c4a2686854d0f1a7fd0ef2ee7815a823bb7e95207222aa0abd1cb4294c93b4a27eeb6990000000000000000000000000000000000000000000000000000000000000000",
+    "calldataHash": "0x8fcbd11df41761a83a61173275bda62d09bab2e711db1d52faf0799213f547ac",
+    "calldataBytes": 260
+  },
+  "replay": {
+    "hash": "0xeb994d284a9017bc379855036ee8562909b6b4ab55f44f8a7f8bf9dce96dafca",
+    "status": "success",
+    "gasUsed": "131030",
+    "logCount": 2,
+    "logs": [
+      {
+        "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+        "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "topicCount": 4
+      },
+      {
+        "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+        "topic0": "0xb64285e323e4ca76af6ff0385ba431957d290a39abf2d506af99b1ceb5365ad4",
+        "topicCount": 2
+      }
+    ]
+  },
+  "readback": {
+    "subject": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+    "isValidAPassBefore": false,
+    "isValidAPassAfter": true,
+    "mintEvent": {
+      "address": "0xba82d189540cac9dc6ff46b6837cac1bfdec58b9",
+      "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "topicCount": 4,
+      "tokenId": "88748084528698636913423817179856862522178343947"
+    }
+  },
+  "proven": true
+}
