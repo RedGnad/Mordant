@@ -150,3 +150,45 @@ footer { min-height: 80px; padding: 0 max(24px, calc((100vw - 1240px) / 2)); dis
   .proof-readings article:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
   footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }
 }
+
+/* ---------- Transaction-driven deal room (local chain) ---------- */
+.deal-room { max-width: 1080px; margin: 0 auto; padding: 32px 22px 80px; }
+.deal-room-empty { border: 1px solid var(--line); border-radius: 18px; padding: 40px; text-align: center; }
+.deal-room-empty pre { display: inline-block; margin-top: 14px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px; font: 13px/1 var(--font-mono); }
+.badge-local { display: inline-block; font: 11px/1 var(--font-mono); letter-spacing: .06em; border: 1px solid var(--ink); border-radius: 999px; padding: 7px 11px; margin-bottom: 14px; }
+.deal-room-head { display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: 22px; }
+.deal-room-head h1 { font-size: 30px; letter-spacing: -.04em; margin: 0 0 8px; }
+.deal-room-head p { max-width: 560px; color: var(--muted); font-size: 14px; margin: 0; }
+.chain-facts { display: grid; gap: 8px; margin: 0; font: 12px/1.4 var(--font-mono); }
+.chain-facts div { display: flex; gap: 10px; }
+.chain-facts dt { color: var(--muted); min-width: 84px; }
+.chain-facts dd { margin: 0; }
+.deal-room-state { margin: 26px 0; }
+.deal-room-state h2 { font-size: 16px; letter-spacing: -.02em; margin: 0 0 12px; }
+.state-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.state-grid article { border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; background: #ffffff70; }
+.state-grid span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 5px; }
+.state-grid strong { font: 15px/1 var(--font-mono); }
+.journey { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.journey-step { border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; background: var(--card); }
+.journey-step.step-done { border-color: #2f7d4f55; }
+.journey-step.step-failed { border-color: #b0403055; }
+.journey-step.step-pending { border-color: var(--ink); }
+.journey-head { display: flex; gap: 14px; align-items: flex-start; }
+.journey-head h3 { font-size: 16px; margin: 0 0 4px; letter-spacing: -.02em; }
+.journey-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.journey-index { font: 12px/1 var(--font-mono); color: var(--muted); padding-top: 4px; }
+.journey-meta { margin-left: auto; display: grid; gap: 6px; justify-items: end; }
+.role-chip, .kind-chip { font: 10px/1 var(--font-mono); letter-spacing: .05em; border-radius: 999px; padding: 6px 9px; border: 1px solid var(--line); white-space: nowrap; }
+.kind-transaction { border-color: var(--ink); }
+.kind-signature, .kind-local-chain { color: var(--muted); }
+.journey-body { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.wallet-line { font: 11px/1 var(--font-mono); color: var(--muted); }
+.tx-line { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font: 11px/1.5 var(--font-mono); }
+.tx-line code { font: inherit; }
+.tx-line.pending { color: var(--muted); }
+.tx-line.failed { color: #9c3a2c; }
+.status-ok { color: #2f7d4f; }
+.event-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; width: 100%; color: var(--muted); }
+.journey-body .primary { margin-left: auto; }
+.journey-body .primary:disabled { opacity: .38; cursor: not-allowed; }

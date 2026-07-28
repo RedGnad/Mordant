@@ -3,6 +3,32 @@
 No address is deployed or claimed during prebuild. The official judged deployment must be fresh and
 must use the discovered Cleanverse configuration and a newly issued invoice A-Token.
 
+## Contract size: Ethereum limit versus Monad limit
+
+These are two different limits and must not be conflated.
+
+| | limit | `MordantFactory` 40382 B | `MordantInvoiceVault` 31312 B |
+| --- | --- | --- | --- |
+| Ethereum, EIP-170 | 24576 B runtime | exceeds by 15806 B | exceeds by 6736 B |
+| Monad, documented | 128 KB runtime, 256 KB init code | within | within |
+
+Status:
+
+- `MONAD SIZE LIMIT: WITHIN DOCUMENTED 128 KB LIMIT`
+- `MONAD DEPLOYABILITY: NOT PROVEN — RPC PREFLIGHT REQUIRED`
+- `STANDARD EVM PORTABILITY: BLOCKED BY EIP-170`
+
+Source: Monad documentation, "Max contract size 128 kb (up from 24.5 kb in Ethereum)", and "the
+maximum contract code size limit is 128 KB (up from 24 KB in Ethereum). Consequently, the max init
+code size limit is 256 KB (up from 48 KB in Ethereum)."
+
+What follows from that, and only that. A default Anvil enforces the Ethereum limit and therefore
+refuses these contracts, which is why `pnpm localnet` configures the local chain to the Monad
+figure. Being inside the documented Monad limit is not the same as a successful Monad deployment:
+that remains `NOT PROVEN` until an RPC preflight confirms it against the live network, without
+broadcasting. Porting these contracts to any standard EVM chain stays blocked by EIP-170 until they
+are split or optimised, which is a separate decision and is not attempted here.
+
 ## Cleanverse boundaries
 
 Deploy the tested boundary implementations only after the invoice A-Token reaches `ISSUED`:
