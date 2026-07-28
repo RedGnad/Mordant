@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T19:56:32.198Z",
+  "mode": "inspect",
+  "classification": "PLAN / READ-ONLY INSPECTION / NO FORK EXECUTION",
+  "scope": "Read-only preparation. No deployment, no MINTER_ROLE grant, no mint, no settlement. MORDANT SETTLEMENT: NOT PROVEN.",
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48907932"
+  },
+  "adapter": {
+    "source": "contracts/src/cleanverse/CleanverseCvaAdapter.sol",
+    "isProduction": true,
+    "creationBytecodeBytes": 9621,
+    "deployedBytecodeBytes": 8904,
+    "constructor": "constructor(address initialOwner, ICleanverseAToken token, ICleanverseAPass apass)",
+    "bindGate": "bindVault refuses unless the vault points back at this adapter and token, decimals are 6, the adapter holds a valid A-Pass and MINTER_ROLE, and the ENTIRE supply sits in the adapter",
+    "mintsEver": false,
+    "burnsUnder": "MINTER_ROLE, in consumeOnRedemption"
+  },
+  "token": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "surface": {
+      "members": [
+        {
+          "member": "decimals",
+          "value": "6",
+          "present": true,
+          "matches": true,
+          "expected": "6, matching EXPECTED_DECIMALS"
+        },
+        {
+          "member": "policy",
+          "value": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+          "present": true,
+          "matches": true,
+          "expected": "the known policy 0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd"
+        },
+        {
+          "member": "MINTER_ROLE",
+          "value": "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+          "present": true,
+          "matches": true,
+          "expected": "keccak256(\"MINTER_ROLE\")"
+        }
+      ],
+      "ok": true
+    },
+    "implementation": "0xce4446801356e7d8acbdfef93816bf62b05d3ebf",
+    "implementationCodeBytes": 6749,
+    "selectors": [
+      {
+        "signature": "mint(address,uint256)",
+        "selector": "0x40c10f19",
+        "present": true
+      },
+      {
+        "signature": "burn(address,uint256)",
+        "selector": "0x9dc29fac",
+        "present": true
+      },
+      {
+        "signature": "hasRole(bytes32,address)",
+        "selector": "0x91d14854",
+        "present": true
+      },
+      {
+        "signature": "getRoleAdmin(bytes32)",
+        "selector": "0x248a9ca3",
+        "present": true
+      },
+      {
+        "signature": "grantRole(bytes32,address)",
+        "selector": "0x2f2ff15d",
+        "present": true
+      },
+      {
+        "signature": "revokeRole(bytes32,address)",
+        "selector": "0xd547741f",
+        "present": true
+      }
+    ],
+    "totalSupply": "0"
+  }
+}
