@@ -28,22 +28,31 @@ The vault is not deployed directly: `MordantFactory.createInvoiceVault` creates 
 Token names carry `(double)` and the symbols are `dSETTLE` and `dINV`, so no explorer view or
 screenshot can suggest a Cleanverse asset.
 
-## 2. Addresses and roles
+## 2. Addresses, roles and keys
 
-Seven distinct addresses. The deployer is the only one that needs MON.
+**Seven distinct signers. Six of them send transactions and need MON. The originator never sends a
+transaction: it only produces EIP-712 pledge signatures, so it needs no MON at all.**
 
-| Role | Needs MON | Purpose |
-| --- | --- | --- |
-| `deployer` | yes | Deploys all five contracts, owns the factory and the eligibility double |
-| `buyer` | yes, small | Calls `createInvoiceVault`, funds the redemption |
-| `originator` | no | Signs pledges off chain, receives the 90 proceeds |
-| `facilityA` | yes, small | Activates the vault |
-| `facilityB` | yes, small | Commits, reveals, finalizes the conflict |
-| `holderA` | yes, small | Funder, then 60-unit holder |
-| `holderB` | yes, small | 40-unit holder |
+| Role | Sends tx | Needs MON | Purpose |
+| --- | --- | --- | --- |
+| `deployer` | 21 | yes | Deploys the five contracts, owns the factory and the eligibility double, mints the doubles |
+| `buyer` | 3 | yes | `createInvoiceVault`, then approves and funds the 110 redemption |
+| `originator` | **0** | **no** | Signs both pledges off chain, EIP-712 only. Receives the 90 proceeds |
+| `facilityA` | 1 | yes | `activate` |
+| `facilityB` | 3 | yes | `commitConflict`, `revealConflict`, `finalizeConflict` |
+| `holderA` | 4 | yes | Funder, 60-unit holder: approve, transfer, claim, redeem |
+| `holderB` | 2 | yes | 40-unit holder: claim, redeem |
 
-Key management is the owner's decision and is out of scope here. No key is stored in this
-repository, and the deployment script must read one from the environment at run time only.
+Key handling for the future runner, which does not exist yet:
+
+- each key is read from its own environment variable at run time, never from a file in this
+  repository and never from a shared blob;
+- the originator key is the one that may stay out of the runner entirely. Because it only signs,
+  it can be held externally: the runner accepts a pre-computed EIP-712 signature for each pledge,
+  which lets the originator sign from a hardware wallet or an isolated machine;
+- no key, and no value derived from a key, is printed to stdout or written into any artifact. The
+  artifacts record addresses, transaction hashes, blocks and readbacks only;
+- `pnpm secret:scan` runs over the artifacts before they are committed.
 
 ## 3. Transaction order
 
@@ -84,33 +93,49 @@ holderA (4), holderB (4)
 32. `vault.fundRedemption(110e6)` from buyer
 33-34. `vault.redeem(60e6)` from holderA, `vault.redeem(40e6)` from holderB
 
-Phase 3 needs real elapsed time for the cure window. On Monad there is no `evm_increaseTime`, so
-`curePeriod` and `revealPeriod` must be set to a value the demo can actually wait out. **Set both to
-60 seconds** at vault creation instead of the 3 600 used locally. This is the one parameter that
-must change between the local run and Monad, and it is a configuration value, not a contract change.
+### Timing on a real network
 
-## 4. Gas and MON
+On Monad there is no `evm_increaseTime`, so any window the demo has to sit through is real elapsed
+time. Only one of the two periods is a wait:
 
-Phase 1 measured against Monad testnet by read-only `eth_estimateGas` at block 48807664. Phases 2
-and 3 measured by executing the same sequence on a local chain, because they need deployed
-contracts. Local measurements, not Monad observations.
-
-| Phase | Transactions | Gas |
+| Parameter | Value | Why |
 | --- | --- | --- |
-| 1, deployments | 5 | 11 356 942 (Monad estimate) |
-| 2, configuration | 17 | 7 195 948 (local measurement) |
-| 3, journey | 12 | 2 250 655 (local measurement) |
-| **Total** | **34** | **20 803 545** |
+| `revealPeriod` | **3 600**, unchanged | A maximum deadline, not a wait. Facility B reveals immediately after committing; the window only bounds how long it may take. Shortening it buys nothing and adds the risk that a legitimate reveal expires |
+| `curePeriod` | **60** | `DEMO-ONLY CONFIGURATION`. This one is a genuine wait: `finalizeConflict` is only callable once it has elapsed. 60 seconds keeps a live demo watchable |
 
-At the observed Monad testnet gas price of 102 gwei:
+`curePeriod = 60` must be labelled `DEMO-ONLY CONFIGURATION` wherever the deployment is presented. A
+real cure window is measured in days, and a 60-second one would give a counterparty no realistic
+chance to resolve or dispute the incident. It is a vault configuration value, not a contract change,
+and the dry run below was re-measured with exactly these two values.
 
-- expected cost: **2.12 MON**
-- recommended funding with a 2x margin for gas-price movement: **5 MON on the deployer**, plus
-  roughly 0.2 MON on each of the five other acting addresses.
+## 4. Gas and MON, per wallet
 
-`MordantFactory` alone is 8.8 M gas and `createInvoiceVault` 6.5 M, so those two transactions are
-about 74% of the total. Both are within Monad's 128 KB code limit and were confirmed acceptable by
-the M-04 preflight.
+Phase 1 comes from read-only `eth_estimateGas` against Monad at block 48807664. Phases 2 and 3 need
+deployed contracts, so they were measured by executing the exact sequence on a local chain. Local
+measurements, not Monad observations. The deployer row below uses the Monad estimate for the five
+deployments rather than the local figure, which is 149 429 gas lower.
+
+| Wallet | Tx | Gas | MON at 102 gwei | Funded, 2x margin |
+| --- | --- | --- | --- | --- |
+| `deployer` | 21 | 12 186 160 | 1.2430 | **2.4860** |
+| `buyer` | 3 | 6 693 003 | 0.6827 | **1.3654** |
+| `originator` | 0 | 0 | 0 | **0, signs only** |
+| `facilityA` | 1 | 526 533 | 0.0537 | **0.1074** |
+| `facilityB` | 3 | 505 929 | 0.0516 | **0.1032** |
+| `holderA` | 4 | 701 469 | 0.0715 | **0.1431** |
+| `holderB` | 2 | 339 868 | 0.0347 | **0.0693** |
+| funding transfers, 5 x 21 000 | 5 | 105 000 | 0.0107 | 0.0214 |
+| **Total** | **39** | **21 057 962** | **2.1479** | **4.2958** |
+
+Two transactions dominate: `MordantFactory` at 8.8 M gas on the deployer, and `createInvoiceVault`
+at 6.5 M on the buyer. The buyer therefore needs **1.37 MON**, not a token amount.
+
+If the deployer distributes MON to the other five spending wallets, fund the deployer with
+**4.30 MON** and let it send the five transfers. Otherwise fund each wallet with its own line above.
+The originator is funded with nothing in either case.
+
+Phase 3 alone is 2.25 M gas, about 0.23 MON, so the journey can be replayed on a fresh vault for
+roughly a quarter of a MON once the contracts are deployed.
 
 ## 5. Exact commands
 
@@ -126,9 +151,11 @@ The broadcasting script does not exist yet and must not be written until this pl
 it is, it must:
 
 - refuse any chain id other than 10143;
-- read its key from the environment, never from a file in the repository;
+- read each key from its own environment variable at run time, never from a file in the repository,
+  and accept a pre-computed EIP-712 signature so the originator key can stay on a separate machine;
+- print no key and write none into any artifact;
 - stop at the first failed readback rather than continuing;
-- write an artifact recording every transaction hash, block and readback.
+- write an artifact recording every transaction hash, block, gas used and readback.
 
 ## 6. Readback after each transaction
 
@@ -165,7 +192,9 @@ There is no rollback. Every transaction is final, so the rule is to stop rather 
 | A readback disagrees with the expectation | Stop immediately. Do not send the next transaction. The mismatch is the finding |
 | `createInvoiceVault` reverts | Stop. The most likely causes are a role overlap or an unapproved adapter or token, all visible in phase 2 readbacks |
 | `activate` reverts | Stop. Usual causes: missing approval, CVA custody not credited, or an ineligible participant |
-| The cure window has not elapsed | Wait. Do not shorten it by redeploying |
+| The cure window has not elapsed | Wait out the 60 seconds. Do not redeploy with a shorter one |
+| A reveal approaches the 3 600 s `revealPeriod` deadline | Reveal now. If it expires, the commitment is dead and the conflict must be re-committed with a fresh salt |
+| A wallet runs out of MON mid-sequence | Stop, top it up from the deployer, then resume at the failed step. No state is lost |
 | A partially configured deployment | Abandon it and start again with a fresh invoice root. Redeploying is cheaper and cleaner than patching, and the factory refuses a duplicate root |
 
 An abandoned deployment costs at most the MON already spent. No user funds and no Cleanverse asset

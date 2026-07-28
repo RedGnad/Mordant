@@ -1,77 +1,225 @@
 #!/usr/bin/env node
 /**
- * M-05 dry run, local side. Measures gas for the configuration and journey transactions that cannot
- * be estimated remotely because they need deployed contracts.
+ * M-05 dry run, local side.
  *
- * Requires a local Anvil on port 8547:
- *   anvil --port 8547 --code-size-limit 131072 --silent
+ * Measures the gas of the configuration and journey transactions that cannot be estimated against a
+ * remote RPC, because they need deployed contracts. Runs the exact sequence the plan describes and
+ * reports gas per wallet, so the funding budget follows from measurement rather than a guess.
  *
- * Local measurement, not a Monad observation. Nothing is broadcast to Monad.
+ * Local measurement, not a Monad observation. Nothing is broadcast to Monad, no Cleanverse endpoint
+ * is called, and the accounts used are Anvil's published development accounts.
+ *
+ * Requires a local chain:
+ *   anvil --port 8547 --code-size-limit 131072 --silent &
+ *   node scripts/m05-dryrun-local.mjs
  */
-import { readFileSync } from "node:fs"; import { join } from "node:path";
-import { createPublicClient, createWalletClient, http, parseEventLogs } from "viem";
-import { privateKeyToAccount } from "viem/accounts"; import { anvil } from "viem/chains";
-const ROOT="/Users/red.g/CascadeProjects/Master/Mordant", RPC="http://127.0.0.1:8547";
-const A=(f,n)=>{const p=JSON.parse(readFileSync(join(ROOT,"contracts","out",f,n+".json"),"utf8"));return{abi:p.abi,bytecode:p.bytecode.object};};
-const K=["0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80","0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d","0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a","0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6","0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a","0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba","0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"];
-const [dep,buyer,orig,fA,fB,hA,hB]=K.map(privateKeyToAccount);
-const t=http(RPC), pc=createPublicClient({chain:anvil,transport:t});
-const w=a=>createWalletClient({account:a,chain:anvil,transport:t});
-const rows=[];
-async function dep_(acct,art,args,label){const h=await w(acct).deployContract({...art,args});const r=await pc.waitForTransactionReceipt({hash:h});rows.push([label,r.gasUsed]);return r.contractAddress;}
-async function tx(acct,address,abi,fn,args,label){const h=await w(acct).writeContract({address,abi,functionName:fn,args});const r=await pc.waitForTransactionReceipt({hash:h});rows.push([label,r.gasUsed]);return r;}
-const EL=A("MockEligibility.sol","MockEligibility"),E20=A("MockERC20.sol","MockERC20"),AD=A("MockCvaAdapter.sol","MockCvaAdapter"),FA=A("MordantFactory.sol","MordantFactory");
-const el=await dep_(dep,EL,[],"deploy MockEligibility");
-const st=await dep_(dep,E20,["Mordant Demo Settlement (double)","dSETTLE",6],"deploy settlement double");
-const cva=await dep_(dep,E20,["Mordant Demo Invoice A-Token (double)","dINV",6],"deploy CVA double");
-const ad=await dep_(dep,AD,[cva],"deploy MockCvaAdapter");
-const fac=await dep_(dep,FA,[dep.address,el],"deploy MordantFactory");
-for(const [a,r,l] of [[buyer.address,1,"buyer"],[orig.address,2,"originator"],[fA.address,3,"facilityA"],[fB.address,3,"facilityB"],[hA.address,4,"holderA"],[hB.address,4,"holderB"]])
-  await tx(dep,el,EL.abi,"setEligible",[a,r,true],`setEligible ${l}`);
-await tx(dep,fac,FA.abi,"setFacility",[fA.address,true],"setFacility A");
-await tx(dep,fac,FA.abi,"setFacility",[fB.address,true],"setFacility B");
-await tx(dep,fac,FA.abi,"setCvaAdapter",[ad,true],"setCvaAdapter");
-await tx(dep,fac,FA.abi,"setSettlementToken",[st,true],"setSettlementToken");
-const blk=await pc.getBlock();
-const rc=await tx(buyer,fac,FA.abi,"createInvoiceVault",[{cvaAdapter:ad,settlementToken:st,invoiceRoot:"0x"+"a1".repeat(32),currency:"0x"+Buffer.from("USD").toString("hex").padEnd(64,"0"),buyer:buyer.address,originatorTreasury:orig.address,initialOriginatorSigner:orig.address,initialUnits:100000000n,advanceAmount:100000000n,faceValue:110000000n,bondBps:1000,protectionEnd:blk.timestamp+2592000n,revealPeriod:3600n,curePeriod:3600n}],"createInvoiceVault");
-const vault=parseEventLogs({abi:FA.abi,eventName:"InvoiceVaultCreated",logs:rc.logs})[0].args.vault;
-await tx(dep,el,EL.abi,"setIdentityValid",[vault,true],"setIdentityValid(vault)");
-await tx(dep,cva,E20.abi,"mint",[dep.address,100000000n],"mint CVA supply");
-await tx(dep,cva,E20.abi,"approve",[ad,100000000n],"approve adapter");
-await tx(dep,ad,AD.abi,"creditVault",[vault,100000000n],"creditVault");
-await tx(dep,st,E20.abi,"mint",[hA.address,100000000n],"mint settlement to funder");
-await tx(dep,st,E20.abi,"mint",[buyer.address,110000000n],"mint settlement to buyer");
-let tot=0n; for(const [l,g] of rows){tot+=g;console.log("  "+l.padEnd(30)+String(g).padStart(9));}
-console.log("\n  TOTAL gas (deploy + config):",tot.toString());
-console.log("  vault:",vault);
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// ---- phase 3: the journey itself ----
-const V=A("MordantInvoiceVault.sol","MordantInvoiceVault");
-const j=[];
-async function jtx(acct,address,abi,fn,args,label){const h=await w(acct).writeContract({address,abi,functionName:fn,args});const r=await pc.waitForTransactionReceipt({hash:h});j.push([label,r.gasUsed]);return r;}
-const dom={name:"Mordant",version:"1",chainId:31337,verifyingContract:vault};
-const types={Pledge:[{name:"invoiceRoot",type:"bytes32"},{name:"originatorSigner",type:"address"},{name:"facility",type:"address"},{name:"obligationId",type:"bytes32"},{name:"amount",type:"uint256"},{name:"currency",type:"bytes32"},{name:"activeFrom",type:"uint64"},{name:"activeUntil",type:"uint64"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint64"},{name:"exclusive",type:"bool"}]};
-const now=(await pc.getBlock()).timestamp;
-const mk=(fac,n)=>({invoiceRoot:"0x"+"a1".repeat(32),originatorSigner:orig.address,facility:fac,obligationId:"0x"+n.toString(16).padStart(64,"0"),amount:110000000n,currency:"0x"+Buffer.from("USD").toString("hex").padEnd(64,"0"),activeFrom:now-1n,activeUntil:blk.timestamp+2592001n,nonce:BigInt(n),deadline:now+172800n,exclusive:true});
-const p1=mk(fA.address,1); const s1=await w(orig).signTypedData({account:orig,domain:dom,types,primaryType:"Pledge",message:p1});
-await jtx(hA,st,E20.abi,"approve",[vault,100000000n],"approve funding");
-await jtx(fA,vault,V.abi,"activate",[p1,s1,hA.address,[hA.address],[100000000n]],"activate 90/10");
-await jtx(hA,vault,V.abi,"transfer",[hB.address,40000000n],"transfer 40 units");
-const p2=mk(fB.address,2); const s2=await w(orig).signTypedData({account:orig,domain:dom,types,primaryType:"Pledge",message:p2});
-const dig=await pc.readContract({address:vault,abi:V.abi,functionName:"hashPledge",args:[p2]});
-const salt="0x"+"5a".repeat(32);
-const cmt=await pc.readContract({address:vault,abi:V.abi,functionName:"conflictCommitment",args:[dig,(await import("viem")).keccak256(s2),fB.address,salt]});
-await jtx(fB,vault,V.abi,"commitConflict",[cmt],"commitConflict");
-await jtx(fB,vault,V.abi,"revealConflict",[p2,s2,salt],"revealConflict");
-await fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify([{jsonrpc:"2.0",id:1,method:"evm_increaseTime",params:[3700]},{jsonrpc:"2.0",id:2,method:"evm_mine",params:[]}])});
-await jtx(fB,vault,V.abi,"finalizeConflict",[],"finalizeConflict");
-await jtx(hA,vault,V.abi,"claimBond",[],"claimBond A");
-await jtx(hB,vault,V.abi,"claimBond",[],"claimBond B");
-await jtx(buyer,st,E20.abi,"approve",[vault,110000000n],"approve redemption");
-await jtx(buyer,vault,V.abi,"fundRedemption",[110000000n],"fundRedemption");
-await jtx(hA,vault,V.abi,"redeem",[60000000n],"redeem A");
-await jtx(hB,vault,V.abi,"redeem",[40000000n],"redeem B");
-let jt=0n; console.log("\n  --- phase 3, journey ---");
-for(const [l,g] of j){jt+=g;console.log("  "+l.padEnd(30)+String(g).padStart(9));}
-console.log("\n  journey gas:",jt.toString());
-console.log("  GRAND TOTAL:",(tot+jt).toString());
+import { createPublicClient, createWalletClient, http, keccak256, parseEventLogs } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { anvil } from "viem/chains";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const RPC = process.env.DRYRUN_RPC_URL ?? "http://127.0.0.1:8547";
+
+/** Vault timing used by the plan. curePeriod is DEMO-ONLY; revealPeriod stays at its real value. */
+const REVEAL_PERIOD = 3_600n;
+const CURE_PERIOD = 60n;
+
+const UNIT = 1_000_000n;
+const CURRENCY = `0x${Buffer.from("USD").toString("hex").padEnd(64, "0")}`;
+const INVOICE_ROOT = `0x${"a1".repeat(32)}`;
+
+const artifact = (file, name) => {
+  const parsed = JSON.parse(readFileSync(join(ROOT, "contracts", "out", file, `${name}.json`), "utf8"));
+  return { abi: parsed.abi, bytecode: parsed.bytecode.object };
+};
+
+const KEYS = [
+  ["deployer", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"],
+  ["buyer", "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"],
+  ["originator", "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"],
+  ["facilityA", "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"],
+  ["facilityB", "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"],
+  ["holderA", "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba"],
+  ["holderB", "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e"],
+];
+
+const account = Object.fromEntries(KEYS.map(([role, key]) => [role, privateKeyToAccount(key)]));
+const transport = http(RPC);
+const publicClient = createPublicClient({ chain: anvil, transport });
+const walletFor = (role) => createWalletClient({ account: account[role], chain: anvil, transport });
+
+const rows = [];
+const note = (phase, role, label, gas) => {
+  rows.push({ phase, role, label, gas });
+  process.stdout.write(`  ${phase}  ${role.padEnd(11)}${label.padEnd(28)}${String(gas).padStart(9)}\n`);
+};
+
+async function deploy(role, art, args, label) {
+  const hash = await walletFor(role).deployContract({ ...art, args });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new Error(`${label} reverted`);
+  note("P1", role, label, receipt.gasUsed);
+  return receipt.contractAddress;
+}
+
+async function send(phase, role, address, abi, functionName, args, label) {
+  const hash = await walletFor(role).writeContract({ address, abi, functionName, args });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new Error(`${label} reverted`);
+  note(phase, role, label, receipt.gasUsed);
+  return receipt;
+}
+
+async function main() {
+  const eligibilityArt = artifact("MockEligibility.sol", "MockEligibility");
+  const erc20Art = artifact("MockERC20.sol", "MockERC20");
+  const adapterArt = artifact("MockCvaAdapter.sol", "MockCvaAdapter");
+  const factoryArt = artifact("MordantFactory.sol", "MordantFactory");
+  const vaultArt = artifact("MordantInvoiceVault.sol", "MordantInvoiceVault");
+
+  process.stdout.write("\nPhase 1, deployments\n");
+  const eligibility = await deploy("deployer", eligibilityArt, [], "MockEligibility");
+  const settlement = await deploy("deployer", erc20Art,
+    ["Mordant Demo Settlement (double)", "dSETTLE", 6], "settlement double");
+  const cva = await deploy("deployer", erc20Art,
+    ["Mordant Demo Invoice A-Token (double)", "dINV", 6], "CVA double");
+  const adapter = await deploy("deployer", adapterArt, [cva], "MockCvaAdapter");
+  const factory = await deploy("deployer", factoryArt,
+    [account.deployer.address, eligibility], "MordantFactory");
+
+  process.stdout.write("\nPhase 2, configuration\n");
+  for (const [role, id] of [["buyer", 1], ["originator", 2], ["facilityA", 3], ["facilityB", 3],
+    ["holderA", 4], ["holderB", 4]]) {
+    await send("P2", "deployer", eligibility, eligibilityArt.abi, "setEligible",
+      [account[role].address, id, true], `setEligible ${role}`);
+  }
+  for (const role of ["facilityA", "facilityB"]) {
+    await send("P2", "deployer", factory, factoryArt.abi, "setFacility",
+      [account[role].address, true], `setFacility ${role}`);
+  }
+  await send("P2", "deployer", factory, factoryArt.abi, "setCvaAdapter", [adapter, true], "setCvaAdapter");
+  await send("P2", "deployer", factory, factoryArt.abi, "setSettlementToken", [settlement, true], "setSettlementToken");
+
+  const opening = await publicClient.getBlock();
+  const protectionEnd = opening.timestamp + 30n * 24n * 3_600n;
+  const created = await send("P2", "buyer", factory, factoryArt.abi, "createInvoiceVault", [{
+    cvaAdapter: adapter,
+    settlementToken: settlement,
+    invoiceRoot: INVOICE_ROOT,
+    currency: CURRENCY,
+    buyer: account.buyer.address,
+    originatorTreasury: account.originator.address,
+    initialOriginatorSigner: account.originator.address,
+    initialUnits: 100n * UNIT,
+    advanceAmount: 100n * UNIT,
+    faceValue: 110n * UNIT,
+    bondBps: 1_000,
+    protectionEnd,
+    revealPeriod: REVEAL_PERIOD,
+    curePeriod: CURE_PERIOD,
+  }], "createInvoiceVault");
+  const vault = parseEventLogs({
+    abi: factoryArt.abi, eventName: "InvoiceVaultCreated", logs: created.logs,
+  })[0].args.vault;
+
+  await send("P2", "deployer", eligibility, eligibilityArt.abi, "setIdentityValid", [vault, true], "setIdentityValid(vault)");
+  await send("P2", "deployer", cva, erc20Art.abi, "mint", [account.deployer.address, 100n * UNIT], "mint CVA supply");
+  await send("P2", "deployer", cva, erc20Art.abi, "approve", [adapter, 100n * UNIT], "approve adapter");
+  await send("P2", "deployer", adapter, adapterArt.abi, "creditVault", [vault, 100n * UNIT], "creditVault");
+  await send("P2", "deployer", settlement, erc20Art.abi, "mint", [account.holderA.address, 100n * UNIT], "mint settlement funder");
+  await send("P2", "deployer", settlement, erc20Art.abi, "mint", [account.buyer.address, 110n * UNIT], "mint settlement buyer");
+
+  process.stdout.write("\nPhase 3, journey\n");
+  const domain = { name: "Mordant", version: "1", chainId: anvil.id, verifyingContract: vault };
+  const types = {
+    Pledge: [
+      { name: "invoiceRoot", type: "bytes32" }, { name: "originatorSigner", type: "address" },
+      { name: "facility", type: "address" }, { name: "obligationId", type: "bytes32" },
+      { name: "amount", type: "uint256" }, { name: "currency", type: "bytes32" },
+      { name: "activeFrom", type: "uint64" }, { name: "activeUntil", type: "uint64" },
+      { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint64" },
+      { name: "exclusive", type: "bool" },
+    ],
+  };
+  const now = (await publicClient.getBlock()).timestamp;
+  const pledge = (facility, nonce) => ({
+    invoiceRoot: INVOICE_ROOT, originatorSigner: account.originator.address, facility,
+    obligationId: `0x${nonce.toString(16).padStart(64, "0")}`, amount: 110n * UNIT,
+    currency: CURRENCY, activeFrom: now - 1n, activeUntil: protectionEnd + 1n,
+    nonce: BigInt(nonce), deadline: now + 172_800n, exclusive: true,
+  });
+  // The originator only ever signs. It sends no transaction and therefore needs no MON.
+  const sign = (message) => walletFor("originator")
+    .signTypedData({ account: account.originator, domain, types, primaryType: "Pledge", message });
+
+  const first = pledge(account.facilityA.address, 1);
+  const firstSignature = await sign(first);
+  await send("P3", "holderA", settlement, erc20Art.abi, "approve", [vault, 100n * UNIT], "approve funding");
+  await send("P3", "facilityA", vault, vaultArt.abi, "activate",
+    [first, firstSignature, account.holderA.address, [account.holderA.address], [100n * UNIT]], "activate 90/10");
+  await send("P3", "holderA", vault, vaultArt.abi, "transfer", [account.holderB.address, 40n * UNIT], "transfer 40 units");
+
+  const second = pledge(account.facilityB.address, 2);
+  const secondSignature = await sign(second);
+  const digest = await publicClient.readContract({
+    address: vault, abi: vaultArt.abi, functionName: "hashPledge", args: [second],
+  });
+  const salt = `0x${"5a".repeat(32)}`;
+  const commitment = await publicClient.readContract({
+    address: vault, abi: vaultArt.abi, functionName: "conflictCommitment",
+    args: [digest, keccak256(secondSignature), account.facilityB.address, salt],
+  });
+  await send("P3", "facilityB", vault, vaultArt.abi, "commitConflict", [commitment], "commitConflict");
+  await send("P3", "facilityB", vault, vaultArt.abi, "revealConflict", [second, secondSignature, salt], "revealConflict");
+
+  // Wait out curePeriod. On Monad this is real elapsed time, which is why curePeriod is short.
+  await fetch(RPC, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify([
+      { jsonrpc: "2.0", id: 1, method: "evm_increaseTime", params: [Number(CURE_PERIOD) + 10] },
+      { jsonrpc: "2.0", id: 2, method: "evm_mine", params: [] },
+    ]),
+  });
+
+  await send("P3", "facilityB", vault, vaultArt.abi, "finalizeConflict", [], "finalizeConflict");
+  await send("P3", "holderA", vault, vaultArt.abi, "claimBond", [], "claimBond A");
+  await send("P3", "holderB", vault, vaultArt.abi, "claimBond", [], "claimBond B");
+  await send("P3", "buyer", settlement, erc20Art.abi, "approve", [vault, 110n * UNIT], "approve redemption");
+  await send("P3", "buyer", vault, vaultArt.abi, "fundRedemption", [110n * UNIT], "fundRedemption");
+  await send("P3", "holderA", vault, vaultArt.abi, "redeem", [60n * UNIT], "redeem A");
+  await send("P3", "holderB", vault, vaultArt.abi, "redeem", [40n * UNIT], "redeem B");
+
+  const byPhase = {};
+  const byWallet = {};
+  for (const row of rows) {
+    byPhase[row.phase] = (byPhase[row.phase] ?? 0n) + row.gas;
+    byWallet[row.role] = (byWallet[row.role] ?? 0n) + row.gas;
+  }
+  const total = rows.reduce((sum, row) => sum + row.gas, 0n);
+
+  process.stdout.write(`\nvault ${vault}\n`);
+  process.stdout.write(`revealPeriod ${REVEAL_PERIOD}  curePeriod ${CURE_PERIOD} (DEMO-ONLY)\n`);
+  process.stdout.write("\nper phase\n");
+  for (const [phase, gas] of Object.entries(byPhase)) {
+    process.stdout.write(`  ${phase}  ${String(gas).padStart(10)}\n`);
+  }
+  process.stdout.write("\nper wallet\n");
+  for (const [role] of KEYS) {
+    const gas = byWallet[role] ?? 0n;
+    const count = rows.filter((row) => row.role === role).length;
+    process.stdout.write(
+      `  ${role.padEnd(11)} ${String(count).padStart(2)} tx  ${String(gas).padStart(10)} gas`
+      + `${gas === 0n ? "   signs only, needs no MON" : ""}\n`,
+    );
+  }
+  process.stdout.write(`\nTOTAL ${total} gas over ${rows.length} transactions\n`);
+}
+
+main().catch((error) => {
+  process.stderr.write(`dry run failed: ${error.message}\n`);
+  process.exitCode = 1;
+});

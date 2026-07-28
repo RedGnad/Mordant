@@ -7,9 +7,10 @@
  * real deployment passes the addresses produced by the preceding step.
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { encodeDeployData } from "viem";
-const ROOT="/Users/red.g/CascadeProjects/Master/Mordant";
+const ROOT=join(dirname(fileURLToPath(import.meta.url)),"..");
 const RPC=process.env.MONAD_RPC_URL ?? "https://testnet-rpc.monad.xyz";
 const CALLER="0x000000000000000000000000000000000000d341";
 let id=0;
