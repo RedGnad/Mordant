@@ -200,6 +200,101 @@ export function validateReleaseTokenDeltaShape({
   return { ok: reasons.length === 0, reasons };
 }
 
+/**
+ * Activation is judged on the settlement it produced, not only on not reverting: the exact net
+ * proceeds and bond, the receipt allocation, the vault's own accounting figures, and the adapter's
+ * view of the credit it now owes the vault.
+ */
+export function validateActivation(observed, expected) {
+  const reasons = [];
+  const eq = (label, actual, want) => {
+    if (BigInt(actual ?? -1n) !== BigInt(want)) reasons.push(`${label} ${actual}, expected ${want}`);
+  };
+  eq("net proceeds", observed.netProceedsReceived, expected.netProceeds);
+  eq("bond locked", observed.bondLocked, expected.bond);
+  eq("holderA receipts", observed.receiptHolderA, expected.allocation);
+  eq("holderB receipts", observed.receiptHolderB, expected.allocation);
+  eq("receipt supply", observed.receiptSupply, expected.units);
+  eq("cvaAccounted", observed.cvaAccounted, expected.units);
+  eq("adapter available", observed.adapterAvailable, expected.units);
+  if (observed.protectionState !== expected.protectionState) {
+    reasons.push(`protectionState ${observed.protectionState}, expected ${expected.protectionState}`);
+  }
+  if (observed.receivableState !== expected.receivableState) {
+    reasons.push(`receivableState ${observed.receivableState}, expected ${expected.receivableState}`);
+  }
+  if (observed.assertAccounting !== true) reasons.push("assertAccounting() did not succeed");
+  return { ok: reasons.length === 0, reasons };
+}
+
+/**
+ * The burn path in full. The token deltas are necessary but nowhere near sufficient: a vault that
+ * burned the right units while leaving escrow or cvaAccounted behind would still be broken.
+ */
+export function validateScenarioA(observed, expected) {
+  const reasons = [];
+  const eq = (label, actual, want) => {
+    if (BigInt(actual ?? -1n) !== BigInt(want)) reasons.push(`${label} ${actual}, expected ${want}`);
+  };
+  for (const holder of observed.redeemed ?? []) {
+    eq(`${holder.label} cash`, holder.cashReceived, expected.holderCash);
+    eq(`${holder.label} receipts after`, holder.receiptsAfter, 0n);
+  }
+  if ((observed.redeemed ?? []).length !== 2) reasons.push(`${(observed.redeemed ?? []).length} redemptions, expected 2`);
+  eq("MINV01 supply", observed.supplyAfter, 0n);
+  eq("adapter balance", observed.adapterAfter, 0n);
+  eq("receipt supply", observed.receiptSupplyAfter, 0n);
+  eq("cvaAccounted", observed.cvaAccounted, 0n);
+  eq("cvaBurned", observed.cvaBurned, expected.units);
+  eq("redeemedFace", observed.redeemedFace, expected.faceValue);
+  eq("redemptionEscrow", observed.redemptionEscrow, 0n);
+  if (observed.deltaShape?.ok !== true) reasons.push("the token delta shape is wrong");
+  if (observed.assertAccounting !== true) reasons.push("assertAccounting() did not succeed");
+  return { ok: reasons.length === 0, reasons };
+}
+
+/**
+ * The release path in full. The supply staying flat is the discriminator, but it is only one of the
+ * conditions: the adapter must be emptied, the receipts burned, and the released face recorded.
+ */
+export function validateScenarioB(observed, expected) {
+  const reasons = [];
+  const eq = (label, actual, want) => {
+    if (BigInt(actual ?? -1n) !== BigInt(want)) reasons.push(`${label} ${actual}, expected ${want}`);
+  };
+  for (const holder of observed.releases ?? []) {
+    eq(`${holder.label} tokens`, holder.tokenReceived, expected.holderUnits);
+    eq(`${holder.label} receipts after`, holder.receiptsAfter, 0n);
+  }
+  if ((observed.releases ?? []).length !== 2) reasons.push(`${(observed.releases ?? []).length} releases, expected 2`);
+  eq("MINV01 supply", observed.supplyAfter, expected.units);
+  if (BigInt(observed.supplyBefore ?? -1n) !== BigInt(observed.supplyAfter ?? -2n)) {
+    reasons.push("the MINV01 supply changed; a default release transfers, it does not burn");
+  }
+  eq("adapter balance", observed.adapterAfter, 0n);
+  eq("receipt supply", observed.receiptSupplyAfter, 0n);
+  eq("cvaAccounted", observed.cvaAccounted, 0n);
+  eq("cvaReleasedFace", observed.cvaReleasedFace, expected.faceValue);
+  if (observed.defaultCvaReleaseStarted !== true) reasons.push("defaultCvaReleaseStarted is not true");
+  if (observed.deltaShape?.ok !== true) reasons.push("the token delta shape is wrong");
+  if (observed.assertAccounting !== true) reasons.push("assertAccounting() did not succeed");
+  return { ok: reasons.length === 0, reasons };
+}
+
+/** The full rehearsal verdict. Every stage must hold; any gap leaves it NOT PROVEN. */
+export function classifyRehearsal({ controlA, forkPinned, binding, activation, scenarioA, scenarioB }) {
+  const missing = [];
+  if (controlA !== true) missing.push("control A");
+  if (forkPinned !== true) missing.push("the pinned fork");
+  if (binding !== true) missing.push("vault binding");
+  if (activation !== true) missing.push("activation");
+  if (scenarioA !== true) missing.push("scenario A");
+  if (scenarioB !== true) missing.push("scenario B");
+  return missing.length === 0
+    ? { classification: "M-13 PINNED MONAD FORK REHEARSAL: PROVEN", missing }
+    : { classification: "M-13 PINNED MONAD FORK REHEARSAL: NOT PROVEN", missing };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const outIndex = argv.indexOf("--out");
@@ -250,7 +345,7 @@ async function main() {
     assertAnvilClient(clientVersion);
     const chainId = assertForkChain(await client.getChainId());
     const block = await client.getBlock({ blockNumber: await client.getBlockNumber() });
-    const pinned = assertPinnedBlock("M-13B", block, M13_FORK_BLOCK, M13_FORK_BLOCK_HASH);
+    const pinned = assertPinnedBlock("M-13C", block, M13_FORK_BLOCK, M13_FORK_BLOCK_HASH);
     report.hygiene = { writeRpc: FORK_RPC, loopback: true, upstreamSeparate: true, clientVersion,
       chainId, forkBlock: pinned.number, forkBlockHash: pinned.hash, pinnedByNumberAndHash: true };
     note("fork", `${clientVersion}, chain ${chainId}, block ${pinned.number}`);
@@ -328,58 +423,65 @@ async function main() {
       stop(`the aUSDC source holds ${sourceBalance}, less than the ${BUYER_FUNDING} the buyer needs.`
         + " Amounts are derived from what exists and nothing is minted to make them work.");
     }
-    const buyerBefore = await client.readContract({
-      address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.funder.address] });
     const sourceWallet = await impersonate(AUSDC_SOURCE);
-    // Two payers, two roles: the funder advances at activation, the buyer settles the face value
-    // at maturity. The vault refuses to let one address do both.
-    const fundingReceipt = await send(sourceWallet, AUSDC, ERC20_ABI, "transfer",
-      [accounts.funder.address, ADVANCE_AMOUNT]);
-    const buyerFundingReceipt = await send(sourceWallet, AUSDC, ERC20_ABI, "transfer",
-      [accounts.buyer.address, FACE_VALUE]);
+    const transferAbi = [{ type: "event", name: "Transfer", inputs: [
+      { name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false }] }];
 
-    // Reconciled against the receipt, the events and the exact deltas of every touched address.
-    // A final balance alone would not distinguish this transfer from anything else that moved.
-    const transferEvents = parseEventLogs({
-      abi: [{ type: "event", name: "Transfer", inputs: [
-        { name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true },
-        { name: "value", type: "uint256", indexed: false }] }],
-      eventName: "Transfer",
-      logs: fundingReceipt.logs.filter((log) => String(log.address).toLowerCase() === AUSDC.toLowerCase()),
-    }).map((event) => ({ from: event.args.from, to: event.args.to, value: event.args.value.toString() }));
-    const sourceAfter = await client.readContract({
-      address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [AUSDC_SOURCE] });
-    const buyerAfter = await client.readContract({
-      address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.funder.address] });
-    const sourceDelta = sourceAfter - sourceBalance;
-    const buyerDelta = buyerAfter - buyerBefore;
-    const fundingReasons = [];
-    if (fundingReceipt.status !== "success") fundingReasons.push(`receipt status ${fundingReceipt.status}`);
-    if (transferEvents.length !== 1) fundingReasons.push(`${transferEvents.length} aUSDC Transfer events, expected 1`);
-    const [only] = transferEvents;
-    if (only && (String(only.from).toLowerCase() !== AUSDC_SOURCE.toLowerCase()
-      || String(only.to).toLowerCase() !== accounts.funder.address.toLowerCase()
-      || BigInt(only.value) !== ADVANCE_AMOUNT)) {
-      fundingReasons.push("the Transfer event does not match the intended source, recipient and amount");
-    }
-    if (sourceDelta !== -BUYER_FUNDING) fundingReasons.push(`source delta ${sourceDelta}, expected -${BUYER_FUNDING}`);
-    if (buyerDelta !== ADVANCE_AMOUNT) fundingReasons.push(`funder delta ${buyerDelta}, expected ${ADVANCE_AMOUNT}`);
-    if (fundingReasons.length > 0) stop(`the aUSDC funding did not reconcile: ${fundingReasons.join("; ")}`);
-    note("aUSDC funding", `${BUYER_FUNDING} moved and reconciled, source -${BUYER_FUNDING},`
-      + ` funder +${ADVANCE_AMOUNT}, buyer +${FACE_VALUE}`);
-
-    report.aUsdcFunding = {
-      source: AUSDC_SOURCE, recipient: accounts.funder.address, amount: ADVANCE_AMOUNT.toString(), buyerAmount: FACE_VALUE.toString(),
-      buyerHash: buyerFundingReceipt.transactionHash,
-      hash: fundingReceipt.transactionHash, status: fundingReceipt.status,
-      blockNumber: fundingReceipt.blockNumber.toString(), gasUsed: fundingReceipt.gasUsed.toString(),
-      transferEvents,
-      balances: { sourceBefore: sourceBalance.toString(), sourceAfter: sourceAfter.toString(),
-        buyerBefore: buyerBefore.toString(), buyerAfter: buyerAfter.toString() },
-      deltas: { source: sourceDelta.toString(), buyer: buyerDelta.toString() },
-      reconciled: true,
-      note: "impersonated an address that really holds aUSDC; no balance was invented",
+    /** One reconciled leg: receipt, a single matching Transfer, and both exact deltas. */
+    const fundLeg = async (label, recipient, amount) => {
+      const sourceBefore = await client.readContract({
+        address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [AUSDC_SOURCE] });
+      const recipientBefore = await client.readContract({
+        address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [recipient] });
+      const receipt = await send(sourceWallet, AUSDC, ERC20_ABI, "transfer", [recipient, amount]);
+      const events = parseEventLogs({ abi: transferAbi, eventName: "Transfer",
+        logs: receipt.logs.filter((log) => String(log.address).toLowerCase() === AUSDC.toLowerCase()) })
+        .map((event) => ({ from: event.args.from, to: event.args.to, value: event.args.value.toString() }));
+      const sourceAfter = await client.readContract({
+        address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [AUSDC_SOURCE] });
+      const recipientAfter = await client.readContract({
+        address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [recipient] });
+      const reasons = [];
+      if (receipt.status !== "success") reasons.push(`receipt status ${receipt.status}`);
+      if (events.length !== 1) reasons.push(`${events.length} Transfer events, expected 1`);
+      const [only] = events;
+      if (only && (String(only.from).toLowerCase() !== AUSDC_SOURCE.toLowerCase()
+        || String(only.to).toLowerCase() !== String(recipient).toLowerCase()
+        || BigInt(only.value) !== amount)) {
+        reasons.push("the Transfer event does not match the intended source, recipient and amount");
+      }
+      if (sourceAfter - sourceBefore !== -amount) reasons.push(`source delta ${sourceAfter - sourceBefore}, expected -${amount}`);
+      if (recipientAfter - recipientBefore !== amount) reasons.push(`recipient delta ${recipientAfter - recipientBefore}, expected ${amount}`);
+      if (reasons.length > 0) stop(`the ${label} funding leg did not reconcile: ${reasons.join("; ")}`);
+      note(`funding leg ${label}`, `${amount} reconciled, source -${amount}, ${label} +${amount}`);
+      return { label, recipient, amount: amount.toString(), hash: receipt.transactionHash,
+        status: receipt.status, blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(), transferEvents: events,
+        sourceBefore: sourceBefore.toString(), sourceAfter: sourceAfter.toString(),
+        recipientBefore: recipientBefore.toString(), recipientAfter: recipientAfter.toString(),
+        sourceDelta: (sourceAfter - sourceBefore).toString(),
+        recipientDelta: (recipientAfter - recipientBefore).toString(), reconciled: true };
     };
+
+    // Two payers, two roles: the funder advances at activation, the buyer settles at maturity.
+    const legFunder = await fundLeg("funder", accounts.funder.address, ADVANCE_AMOUNT);
+    const legBuyer = await fundLeg("buyer", accounts.buyer.address, FACE_VALUE);
+
+    // The aggregate must hold as well as each leg, or a compensating pair of errors could hide.
+    const aggregate = {
+      sourceDelta: (BigInt(legFunder.sourceDelta) + BigInt(legBuyer.sourceDelta)).toString(),
+      funderDelta: legFunder.recipientDelta, buyerDelta: legBuyer.recipientDelta,
+    };
+    if (aggregate.sourceDelta !== (-BUYER_FUNDING).toString()
+      || aggregate.funderDelta !== ADVANCE_AMOUNT.toString()
+      || aggregate.buyerDelta !== FACE_VALUE.toString()) {
+      stop(`the aggregate funding does not reconcile: ${JSON.stringify(aggregate)}`);
+    }
+    note("funding aggregate", `source ${aggregate.sourceDelta}, funder +${aggregate.funderDelta},`
+      + ` buyer +${aggregate.buyerDelta}`);
+    report.aUsdcFunding = { source: AUSDC_SOURCE, legs: [legFunder, legBuyer], aggregate,
+      note: "impersonated an address that really holds aUSDC; no balance was invented" };
 
     // --- production Mordant contracts ---
     const verifierArtifact = artifact("CleanverseAPassVerifier.sol", "CleanverseAPassVerifier");
@@ -593,14 +695,27 @@ async function main() {
     const signPledge = (pledge) => accounts.originator.signTypedData({
       domain, types: pledgeTypes, primaryType: "Pledge", message: pledge });
 
+    const receipts = {};
+    const record = (label, receipt, extra = {}) => {
+      receipts[label] = { hash: receipt.transactionHash, status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(), blockHash: receipt.blockHash,
+        gasUsed: receipt.gasUsed.toString(),
+        adapterEvents: parseEventLogs({ abi: adapterArtifact.abi,
+          logs: receipt.logs.filter((log) => String(log.address).toLowerCase() === String(adapter).toLowerCase()) })
+          .map((event) => ({ name: event.eventName,
+            args: Object.fromEntries(Object.entries(event.args ?? {}).map(([k, v]) => [k, String(v)])) })),
+        ...extra };
+      return receipt;
+    };
+
     const pledge = buildPledge(accounts.facility.address, 1n, `0x${"a1".repeat(32)}`);
     const pledgeSignature = await signPledge(pledge);
     await send(walletFor(accounts.funder), AUSDC, ERC20_ABI, "approve", [vault, ADVANCE_AMOUNT]);
     const originatorBefore = await client.readContract({
       address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.originator.address] });
     const allocation = INITIAL_UNITS / 2n;
-    await send(walletFor(accounts.facility), vault, vaultAbi, "activate",
-      [pledge, pledgeSignature, accounts.funder.address, [HOLDER_A, HOLDER_B], [allocation, allocation]]);
+    record("activate", await send(walletFor(accounts.facility), vault, vaultAbi, "activate",
+      [pledge, pledgeSignature, accounts.funder.address, [HOLDER_A, HOLDER_B], [allocation, allocation]]));
 
     const originatorAfter = await client.readContract({
       address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [accounts.originator.address] });
@@ -613,14 +728,15 @@ async function main() {
       receiptSupply: (await readVault("totalSupply")).toString(),
       cvaAccounted: (await readVault("cvaAccounted")).toString(),
       adapterAvailable: (await readAdapter("availableBalance", [vault])).toString(),
+      protectionState: Number(await readVault("protectionState")),
+      receivableState: Number(await readVault("receivableState")),
+      assertAccounting: await readVault("assertAccounting").then(() => true).catch(() => false),
     };
-    const activationReasons = [];
-    if (activation.netProceedsReceived !== NET_PROCEEDS.toString()) activationReasons.push(`net proceeds ${activation.netProceedsReceived}`);
-    if (activation.bondLocked !== BOND.toString()) activationReasons.push(`bond ${activation.bondLocked}`);
-    if (activation.receiptHolderA !== allocation.toString()) activationReasons.push(`holderA receipts ${activation.receiptHolderA}`);
-    if (activation.receiptHolderB !== allocation.toString()) activationReasons.push(`holderB receipts ${activation.receiptHolderB}`);
-    if (activationReasons.length > 0) stop(`activation did not settle as intended: ${activationReasons.join("; ")}`);
-    report.activation = { ...activation, ok: true };
+    // ProtectionState.Active is 1 and ReceivableState.Outstanding is 1 in the vault's enums.
+    const activationResult = validateActivation(activation, { netProceeds: NET_PROCEEDS, bond: BOND,
+      allocation, units: INITIAL_UNITS, protectionState: 1, receivableState: 1 });
+    if (!activationResult.ok) stop(`activation did not settle as intended: ${activationResult.reasons.join("; ")}`);
+    report.activation = { ...activation, validation: activationResult, ok: activationResult.ok };
     note("activated", `net proceeds ${activation.netProceedsReceived}, bond ${activation.bondLocked},`
       + ` receipts ${activation.receiptHolderA}/${activation.receiptHolderB}`);
 
@@ -631,18 +747,18 @@ async function main() {
     const supplyBeforeA = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "totalSupply" });
     const adapterBeforeA = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [adapter] });
     await send(walletFor(accounts.buyer), AUSDC, ERC20_ABI, "approve", [vault, FACE_VALUE]);
-    await send(walletFor(accounts.buyer), vault, vaultAbi, "fundRedemption", [FACE_VALUE]);
+    record("fundRedemption", await send(walletFor(accounts.buyer), vault, vaultAbi, "fundRedemption", [FACE_VALUE]));
     const redeemed = [];
     for (const [label, holder] of [["holderA", HOLDER_A], ["holderB", HOLDER_B]]) {
       const wallet = await impersonate(holder);
       const cashBefore = await client.readContract({ address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [holder] });
-      const receipts = await readVault("balanceOf", [holder]);
-      await send(wallet, vault, vaultAbi, "redeem", [receipts]);
+      const receiptUnits = await readVault("balanceOf", [holder]);
+      record(`redeem_${label}`, await send(wallet, vault, vaultAbi, "redeem", [receiptUnits]));
       const cashAfter = await client.readContract({ address: AUSDC, abi: ERC20_ABI, functionName: "balanceOf", args: [holder] });
-      redeemed.push({ label, holder, units: receipts.toString(),
+      redeemed.push({ label, holder, units: receiptUnits.toString(),
         cashReceived: (cashAfter - cashBefore).toString(),
         receiptsAfter: (await readVault("balanceOf", [holder])).toString() });
-      note(`redeem ${label}`, `${receipts} units, received ${cashAfter - cashBefore} aUSDC`);
+      note(`redeem ${label}`, `${receiptUnits} units, received ${cashAfter - cashBefore} aUSDC`);
     }
     const supplyAfterA = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "totalSupply" });
     const adapterAfterA = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [adapter] });
@@ -656,9 +772,14 @@ async function main() {
       cvaAccounted: (await readVault("cvaAccounted")).toString(),
       cvaBurned: (await readVault("cvaBurned")).toString(),
       redeemedFace: (await readVault("redeemedFace")).toString(),
-      ok: burnShape.ok,
+      redemptionEscrow: (await readVault("redemptionEscrow")).toString(),
+      assertAccounting: await readVault("assertAccounting").then(() => true).catch(() => false),
     };
-    if (!burnShape.ok) stop(`scenario A token deltas are wrong: ${burnShape.reasons.join("; ")}`);
+    const scenarioAResult = validateScenarioA(scenarioA,
+      { holderCash: HOLDER_SHARE, units: INITIAL_UNITS, faceValue: FACE_VALUE });
+    scenarioA.validation = scenarioAResult;
+    scenarioA.ok = scenarioAResult.ok;
+    if (!scenarioAResult.ok) stop(`scenario A did not settle as intended: ${scenarioAResult.reasons.join("; ")}`);
     report.scenarioA = scenarioA;
     note("scenario A", `MINV01 supply ${supplyAfterA}, receipts ${scenarioA.receiptSupplyAfter},`
       + ` cvaBurned ${scenarioA.cvaBurned}`);
@@ -674,19 +795,19 @@ async function main() {
       functionName: "conflictCommitment",
       args: [await client.readContract({ address: vault, abi: vaultAbi, functionName: "hashPledge", args: [conflicting] }),
         keccak256(conflictingSignature), accounts.facilityTwo.address, salt] });
-    await send(walletFor(accounts.facilityTwo), vault, vaultAbi, "commitConflict", [commitment]);
-    await send(walletFor(accounts.facilityTwo), vault, vaultAbi, "revealConflict",
-      [conflicting, conflictingSignature, salt]);
+    record("commitConflict", await send(walletFor(accounts.facilityTwo), vault, vaultAbi, "commitConflict", [commitment]));
+    record("revealConflict", await send(walletFor(accounts.facilityTwo), vault, vaultAbi, "revealConflict",
+      [conflicting, conflictingSignature, salt]));
     note("conflict", "committed and revealed by the second facility");
 
     await test.increaseTime({ seconds: 3_601 });
     await test.mine({ blocks: 1 });
-    await send(walletFor(accounts.deployer), vault, vaultAbi, "finalizeConflict", []);
+    record("finalizeConflict", await send(walletFor(accounts.deployer), vault, vaultAbi, "finalizeConflict", []));
     note("finalized", "past the cure deadline");
 
     await test.increaseTime({ seconds: Number(protectionEnd - (await client.getBlock()).timestamp) + 60 });
     await test.mine({ blocks: 1 });
-    await send(walletFor(accounts.deployer), vault, vaultAbi, "markDefault", []);
+    record("markDefault", await send(walletFor(accounts.deployer), vault, vaultAbi, "markDefault", []));
     note("default", "marked past protectionEnd");
 
     const supplyBeforeB = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "totalSupply" });
@@ -696,7 +817,7 @@ async function main() {
       const wallet = await impersonate(holder);
       const tokenBefore = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [holder] });
       const receiptsBefore = await readVault("balanceOf", [holder]);
-      await send(wallet, vault, vaultAbi, "releaseDefaultCva", [receiptsBefore]);
+      record(`releaseDefaultCva_${label}`, await send(wallet, vault, vaultAbi, "releaseDefaultCva", [receiptsBefore]));
       const tokenAfter = await client.readContract({ address: MINV01, abi: ERC20_ABI, functionName: "balanceOf", args: [holder] });
       releases.push({ label, holder, units: receiptsBefore.toString(),
         tokenReceived: (tokenAfter - tokenBefore).toString(),
@@ -717,9 +838,14 @@ async function main() {
       receiptSupplyAfter: (await readVault("totalSupply")).toString(),
       cvaReleasedFace: (await readVault("cvaReleasedFace")).toString(),
       cvaAccounted: (await readVault("cvaAccounted")).toString(),
-      ok: releaseShape.ok,
+      defaultCvaReleaseStarted: await readVault("defaultCvaReleaseStarted"),
+      assertAccounting: await readVault("assertAccounting").then(() => true).catch(() => false),
     };
-    if (!releaseShape.ok) stop(`scenario B token deltas are wrong: ${releaseShape.reasons.join("; ")}`);
+    const scenarioBResult = validateScenarioB(scenarioB,
+      { holderUnits: INITIAL_UNITS / 2n, units: INITIAL_UNITS, faceValue: FACE_VALUE });
+    scenarioB.validation = scenarioBResult;
+    scenarioB.ok = scenarioBResult.ok;
+    if (!scenarioBResult.ok) stop(`scenario B did not settle as intended: ${scenarioBResult.reasons.join("; ")}`);
     report.scenarioB = scenarioB;
     note("scenario B", `MINV01 supply unchanged at ${supplyAfterB}, cvaReleasedFace`
       + ` ${scenarioB.cvaReleasedFace}, receipts ${scenarioB.receiptSupplyAfter}`);
@@ -737,9 +863,14 @@ async function main() {
       "LIVE MINTER ROLE / MINT / BIND": "NOT DONE",
       "MORDANT SETTLEMENT": "NOT PROVEN LIVE",
     };
-    report.classification = scenarioA.ok && scenarioB.ok
-      ? "M-13 PINNED MONAD FORK REHEARSAL: PROVEN"
-      : "M-13 PINNED MONAD FORK REHEARSAL: NOT PROVEN";
+    const verdict = classifyRehearsal({
+      controlA: controlA.proven === true,
+      forkPinned: report.hygiene.pinnedByNumberAndHash === true,
+      binding: report.binding?.after?.boundVault?.toLowerCase() === String(vault).toLowerCase(),
+      activation: activationResult.ok, scenarioA: scenarioAResult.ok, scenarioB: scenarioBResult.ok });
+    report.verdict = verdict;
+    report.receipts = receipts;
+    report.classification = verdict.classification;
     process.stdout.write(`\n${"CLASSIFICATION".padEnd(30)} ${report.classification}\n`);
 
     if (out) { writeArtifact(out, report, process.env); process.stdout.write(`\nWrote ${out}.json\n`); }
@@ -750,7 +881,7 @@ async function main() {
 
 const invokedDirectly = process.argv[1]?.endsWith("m13c-activation-terminal.mjs");
 if (invokedDirectly) {
-  process.stdout.write("M-13B: vault binding and terminal adapter paths\n\n");
+  process.stdout.write("M-13C: vault binding and terminal adapter paths\n\n");
   main().catch((error) => {
     process.stderr.write(`\n${error instanceof ControlError ? error.message : `STOP — ${error.message}`}\n`);
     process.exitCode = 1;
