@@ -109,7 +109,16 @@ holderA (4), holderB (4)
 37. `vault.fundRedemption(110e6)` from buyer
 38-39. `vault.redeem(60e6)` from holderA, `vault.redeem(40e6)` from holderB
 
-**Total: 39 transactions.** 5 funding, 5 deployments, 17 configuration, 12 journey.
+**Total: 39 transactions for the full ceremony**, split by who sends them:
+
+| | Transactions | Sender |
+| --- | --- | --- |
+| Phase 0 prefunding | 5 | **external.** The runner never sends these; it only gates on the resulting balances |
+| Phase 1 deployments | 5 | runner |
+| Phase 2 configuration | 17 | runner |
+| Phase 3 journey | 12 | runner |
+| **Runner owns** | **34** | |
+| **Full ceremony** | **39** | |
 
 ### Timing on a real network
 
@@ -165,8 +174,27 @@ anvil --port 8547 --code-size-limit 131072 --silent &
 node scripts/m05-dryrun-local.mjs                 # configuration and journey gas
 ```
 
-The broadcasting script does not exist yet and must not be written until this plan is approved. When
-it is, it must:
+The runner exists at `scripts/m05-runner.mjs`. **It has never broadcast anything.** Sending requires
+both `--broadcast` and `MORDANT_BROADCAST_AUTHORIZED` set to an exact ceremony string; without both
+it refuses, whatever else is on the command line.
+
+```bash
+pnpm m05:check    # chain gate, balance readbacks, creation-gas estimates. Sends nothing
+pnpm m05:fork     # the whole sequence on a disposable Monad fork, every readback exercised
+```
+
+The runner executes 34 transactions. The five Phase 0 transfers are external in every mode: fund the
+wallets yourself, then the runner's Phase 0 gate reads every balance and refuses to continue if any
+is short of its budget.
+
+Gate order is deliberate. `eth_chainId` runs first, before the broadcast authorization is examined
+and before any private key is read, so a misconfigured endpoint can never reach the point where
+secret material is loaded. Then authorization, then the gas-price cap, then keys, then balances.
+
+The cure window is proven, not slept through: the runner reads `pendingConflict.cureDeadline` from
+the contract and polls blocks until chain time passes it.
+
+It satisfies the constraints set for it:
 
 - refuse any chain id other than 10143;
 - read each key from its own environment variable at run time, never from a file in the repository,

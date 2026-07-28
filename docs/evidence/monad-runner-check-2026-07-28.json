@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T13:31:02.768Z",
+  "mode": "check",
+  "status": "STOPPED",
+  "classification": "READ-ONLY RPC SIMULATION",
+  "warning": "Protocol doubles only. No aUSDC, no CCUSD2, no WMON and no Cleanverse endpoint. The five prefunding transfers are external to this runner; it executes 34 of the 39 ceremony transactions.",
+  "transactionAccounting": {
+    "externalPrefundingTransfers": 5,
+    "executedByRunner": 0,
+    "runnerOwns": 34,
+    "fullCeremony": 39
+  },
+  "steps": [
+    {
+      "phase": "gate",
+      "label": "chain id",
+      "detail": "10143 at block 48833611"
+    },
+    {
+      "phase": "gate",
+      "label": "gas price",
+      "detail": "102000000000 wei, cap 200000000000 wei"
+    },
+    {
+      "phase": "gate",
+      "label": "address deployer",
+      "detail": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    {
+      "phase": "gate",
+      "label": "address buyer",
+      "detail": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityA",
+      "detail": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+    },
+    {
+      "phase": "gate",
+      "label": "address facilityB",
+      "detail": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderA",
+      "detail": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
+    },
+    {
+      "phase": "gate",
+      "label": "address holderB",
+      "detail": "0x976EA74026E726554dB657fA54763abd0C3a0aa9"
+    },
+    {
+      "phase": "gate",
+      "label": "address originator",
+      "detail": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (signs only, sends nothing)"
+    },
+    {
+      "phase": "gate",
+      "label": "role uniqueness",
+      "detail": "7 roles, all distinct addresses"
+    },
+    {
+      "phase": "stop",
+      "label": "run stopped",
+      "detail": "BLOCKED — underfunded or unconfigured wallet(s): deployer, buyer, facilityA, facilityB, holderA, holderB. Fund them externally before running Phase 1."
+    }
+  ],
+  "transactions": []
+}
