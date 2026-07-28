@@ -1,9 +1,12 @@
 # M-05 plan: Monad PROTOCOL DOUBLE deployment
 
-**Classification: `MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE`.**
+**`CURRENT STATUS: PLAN / DRY-RUN / NO BROADCAST`**
+
+**`TARGET CLASSIFICATION AFTER SUCCESSFUL EXECUTION: MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE`**
 
 This is a plan and a dry run. **Nothing has been broadcast.** No `--broadcast`, no signature, no
-private key in this repository. Execution requires the owner's explicit authorization.
+private key in this repository. Execution requires the owner's explicit authorization, and the
+target classification applies only once execution has actually succeeded.
 
 What this would prove: the Mordant recourse machinery running on the real Monad testnet, end to end,
 with its own protocol doubles. What it would **not** prove: any Cleanverse integration. It uses no
@@ -50,48 +53,63 @@ Key handling for the future runner, which does not exist yet:
 - the originator key is the one that may stay out of the runner entirely. Because it only signs,
   it can be held externally: the runner accepts a pre-computed EIP-712 signature for each pledge,
   which lets the originator sign from a hardware wallet or an isolated machine;
-- no key, and no value derived from a key, is printed to stdout or written into any artifact. The
-  artifacts record addresses, transaction hashes, blocks and readbacks only;
+- no private key, seed phrase or other secret material is logged or persisted. Public addresses,
+  signatures, transaction hashes, blocks and readbacks may be recorded where required;
 - `pnpm secret:scan` runs over the artifacts before they are committed.
 
 ## 3. Transaction order
 
+**Phase 0, funding (5 transactions).** The deployer sends MON to the five other spending wallets.
+The originator is deliberately not funded: it signs and never sends.
+
+1. `deployer -> buyer`, 1.3654 MON
+2. `deployer -> facilityA`, 0.1074 MON
+3. `deployer -> facilityB`, 0.1032 MON
+4. `deployer -> holderA`, 0.1431 MON
+5. `deployer -> holderB`, 0.0693 MON
+
+**Phase 0 gate.** Before any Phase 1 transaction, read `eth_getBalance` for all six spending wallets
+and confirm each is at least its budgeted figure. A wallet that is short here stops the run: topping
+it up mid-sequence is recoverable, but discovering it during `createInvoiceVault` wastes 6.5 M gas.
+
 **Phase 1, deployments (5 transactions).** Order matters: each later constructor takes an address
 produced earlier.
 
-1. `MockEligibility`
-2. `MockERC20` settlement double
-3. `MockERC20` CVA double
-4. `MockCvaAdapter(cvaDouble)`
-5. `MordantFactory(deployer, eligibility)`
+6. `MockEligibility`
+7. `MockERC20` settlement double
+8. `MockERC20` CVA double
+9. `MockCvaAdapter(cvaDouble)`
+10. `MordantFactory(deployer, eligibility)`
 
 **Phase 2, configuration (17 transactions).**
 
-6-11. `eligibility.setEligible` for buyer (role 1), originator (2), facilityA (3), facilityB (3),
+11-16. `eligibility.setEligible` for buyer (role 1), originator (2), facilityA (3), facilityB (3),
 holderA (4), holderB (4)
-12-13. `factory.setFacility(facilityA|facilityB, true)`
-14. `factory.setCvaAdapter(adapter, true)`
-15. `factory.setSettlementToken(settlementDouble, true)`
-16. `factory.createInvoiceVault(config)` **from the buyer**
-17. `eligibility.setIdentityValid(vault, true)`
-18. `cvaDouble.mint(deployer, 100e6)`
-19. `cvaDouble.approve(adapter, 100e6)`
-20. `adapter.creditVault(vault, 100e6)`
-21. `settlementDouble.mint(holderA, 100e6)`
-22. `settlementDouble.mint(buyer, 110e6)`
+17-18. `factory.setFacility(facilityA|facilityB, true)`
+19. `factory.setCvaAdapter(adapter, true)`
+20. `factory.setSettlementToken(settlementDouble, true)`
+21. `factory.createInvoiceVault(config)` **from the buyer**
+22. `eligibility.setIdentityValid(vault, true)`
+23. `cvaDouble.mint(deployer, 100e6)`
+24. `cvaDouble.approve(adapter, 100e6)`
+25. `adapter.creditVault(vault, 100e6)`
+26. `settlementDouble.mint(holderA, 100e6)`
+27. `settlementDouble.mint(buyer, 110e6)`
 
 **Phase 3, the journey (12 transactions).** Optional, and the reason the deployment is worth doing.
 
-23. `settlementDouble.approve(vault, 100e6)` from holderA
-24. `vault.activate(pledge, signature, holderA, [holderA], [100e6])` from facilityA
-25. `vault.transfer(holderB, 40e6)` from holderA
-26. `vault.commitConflict(commitment)` from facilityB
-27. `vault.revealConflict(pledge, signature, salt)` from facilityB
-28. `vault.finalizeConflict()` after the cure window
-29-30. `vault.claimBond()` from holderA, then holderB
-31. `settlementDouble.approve(vault, 110e6)` from buyer
-32. `vault.fundRedemption(110e6)` from buyer
-33-34. `vault.redeem(60e6)` from holderA, `vault.redeem(40e6)` from holderB
+28. `settlementDouble.approve(vault, 100e6)` from holderA
+29. `vault.activate(pledge, signature, holderA, [holderA], [100e6])` from facilityA
+30. `vault.transfer(holderB, 40e6)` from holderA
+31. `vault.commitConflict(commitment)` from facilityB
+32. `vault.revealConflict(pledge, signature, salt)` from facilityB
+33. `vault.finalizeConflict()` after the cure window
+34-35. `vault.claimBond()` from holderA, then holderB
+36. `settlementDouble.approve(vault, 110e6)` from buyer
+37. `vault.fundRedemption(110e6)` from buyer
+38-39. `vault.redeem(60e6)` from holderA, `vault.redeem(40e6)` from holderB
+
+**Total: 39 transactions.** 5 funding, 5 deployments, 17 configuration, 12 journey.
 
 ### Timing on a real network
 
@@ -153,7 +171,8 @@ it is, it must:
 - refuse any chain id other than 10143;
 - read each key from its own environment variable at run time, never from a file in the repository,
   and accept a pre-computed EIP-712 signature so the originator key can stay on a separate machine;
-- print no key and write none into any artifact;
+- log or persist no private key, seed phrase or other secret material; public addresses,
+  signatures, transaction hashes, blocks and readbacks may be recorded where required;
 - stop at the first failed readback rather than continuing;
 - write an artifact recording every transaction hash, block, gas used and readback.
 
@@ -163,6 +182,7 @@ No step is considered done on a receipt alone. Each one is confirmed by reading 
 
 | After | Readback |
 | --- | --- |
+| Phase 0 funding | `eth_getBalance` for all six spending wallets, each at or above its budget. This gate must pass before Phase 1 begins |
 | every deployment | `eth_getCode` non-empty, and its size equals the compiled runtime |
 | `setEligible` | `isEligible(account, role) == true` |
 | `setFacility` | `factory.isFacility(address) == true` |
@@ -203,7 +223,8 @@ are ever at risk, because none are involved.
 ## 8. What this deployment must never be called
 
 Not a Cleanverse integration, not a live settlement rail, not an aUSDC transaction, not proof that
-the Cleanverse CVA lifecycle works. Every published reference must carry
+the Cleanverse CVA lifecycle works. Until execution succeeds the status stays
+`PLAN / DRY-RUN / NO BROADCAST`. Once it does, every published reference must carry
 `MONAD LIVE / PROTOCOL DOUBLE / NOT CLEANVERSE`, and the interface must keep showing the same label
 for a deployment of this kind.
 
