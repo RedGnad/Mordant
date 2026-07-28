@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "runStartedAt": "2026-07-28T18:20:52.907Z",
+  "generatedAt": "2026-07-28T18:20:57.174Z",
+  "mode": "run",
+  "status": "COMPLETE",
+  "outcome": "CONTRACT APASS: PROVEN",
+  "question": "Can a Cleanverse A-Pass be issued to a contract address, and does the A-Token policy then let an A-Token reach that contract? Settled against a disposable probe, never a vault.",
+  "scope": "This proves nothing about Mordant settlement. No vault, adapter, pledge or invoice A-Token is involved.",
+  "steps": [
+    {
+      "label": "network",
+      "detail": "chain 10143"
+    },
+    {
+      "label": "pinned block",
+      "detail": "48889095 0x7ac75a0d4e7f2ba60c539d5c6a4f256aab9d92e980cf6d2ce76691fc6b898998"
+    },
+    {
+      "label": "baseline",
+      "detail": "0 of 5 known contracts hold an A-Pass"
+    },
+    {
+      "label": "probe owner",
+      "detail": "HOLDER_A 0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45"
+    },
+    {
+      "label": "probe bytecode",
+      "detail": "1473 bytes"
+    },
+    {
+      "label": "deployment gas",
+      "detail": "estimate 345335, price 102000000000 wei, budget 35224170000000000 wei"
+    },
+    {
+      "label": "probe deployed",
+      "detail": "0x0f8b9a0c064306f938912658c96c681d8655140b, 1177 bytes of code"
+    },
+    {
+      "label": "generate_apass",
+      "detail": "0000 \"success\""
+    },
+    {
+      "label": "isValidAPass(probe)",
+      "detail": "true"
+    },
+    {
+      "label": "query_apass",
+      "detail": "status 1 tier 50 expiry 1816798854 usable true"
+    },
+    {
+      "label": "verify_apass(probe)",
+      "detail": "code 4 \"apass verify success\""
+    },
+    {
+      "label": "canTransfer(owner->probe)",
+      "detail": "returned true"
+    },
+    {
+      "label": "canTransfer(probe->owner)",
+      "detail": "returned true"
+    }
+  ],
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48889095",
+    "blockHash": "0x7ac75a0d4e7f2ba60c539d5c6a4f256aab9d92e980cf6d2ce76691fc6b898998",
+    "blockTimestamp": "1785262852"
+  },
+  "baseline": [
+    {
+      "name": "AccessCore",
+      "address": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "isContract": true,
+      "isValidAPass": false
+    },
+    {
+      "name": "DepositGateway",
+      "address": "0x8e084646080a35347B2D053Dd72F550f12245c8B",
+      "isContract": true,
+      "isValidAPass": false
+    },
+    {
+      "name": "aUsdcToken",
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "isContract": true,
+      "isValidAPass": false
+    },
+    {
+      "name": "policy",
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "isContract": true,
+      "isValidAPass": false
+    },
+    {
+      "name": "apassRegistry",
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "isContract": true,
+      "isValidAPass": false
+    }
+  ],
+  "gas": {
+    "estimate": "345335",
+    "price": "102000000000",
+    "budgetWei": "35224170000000000",
+    "ownerNativeWei": "19967409674000000000"
+  },
+  "deployment": {
+    "hash": "0xd3967a308c5bc6ac3f89cf320d35f1865aeb70bf36dd465a578c4ea135dd6f6d",
+    "status": "success",
+    "blockNumber": "48889098",
+    "blockHash": "0x0394d39aea6179b3b0ae4fd4741d98418f91ce7d23da91a61c13b3fb867371e1",
+    "gasUsed": "345335",
+    "probeAddress": "0x0f8b9a0c064306f938912658c96c681d8655140b"
+  },
+  "apassRequest": {
+    "customerId": "mordantm08probe48889098",
+    "expirationTime": 1816798854,
+    "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+    "envelopeCode": "0000",
+    "message": "success",
+    "accepted": true,
+    "data": {
+      "customerId": "mordantm08probe48889098",
+      "cvRecordId": "624",
+      "tier": "50",
+      "wallet": {
+        "operate": "insert",
+        "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+        "chain": "monad",
+        "txHash": "0x4693a9afbcf4ce3401de6ce7f095afe309e8de33836a8d0443d96bf1dca16fd8",
+        "depositUSDCWallet": "0xf0879E4829667DE49b23f8f584C5902671B88A9d",
+        "depositUSDCAccount": "",
+        "depositUSDTWallet": "0xf0879E4829667DE49b23f8f584C5902671B88A9d",
+        "depositUSDTAccount": "",
+        "apassAddress": ""
+      }
+    }
+  },
+  "readback": {
+    "onchainValid": true,
+    "apass": {
+      "present": true,
+      "onchainValid": true,
+      "envelopeCode": "0000",
+      "status": 1,
+      "tier": "50",
+      "subTier": 0,
+      "expirationTime": 1816798854,
+      "expired": false,
+      "usable": true
+    },
+    "verifyApassCode": 4,
+    "canReceive": true,
+    "canReceiveDetail": "returned true",
+    "canSend": true,
+    "canSendDetail": "returned true"
+  }
+}

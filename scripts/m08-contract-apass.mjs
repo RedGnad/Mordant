@@ -134,14 +134,21 @@ export function classifyApassResponse(envelope, onchainValid, blockTimestamp) {
 }
 
 /**
- * The verdict. A contract A-Pass counts as proven only when Cleanverse accepted the request, the
- * record reads back usable, AND the policy actually lets an A-Token reach the contract. The first
- * two without the third would be a credential nobody can use.
+ * The verdict. Every one of five independent conditions must hold: Cleanverse accepted the request,
+ * the record reads back usable, verify_apass agrees for this exact token, and the policy permits the
+ * contract to RECEIVE and to SEND.
+ *
+ * Both directions are required because a vault that can be paid but cannot pay out is not a usable
+ * settlement endpoint, and a credential the policy refuses in either direction is one nobody can
+ * rely on. A reverting or unread canTransfer is never read as permission.
  */
-export function classifyOutcome({ requestAccepted, apass, canReceive }) {
+export function classifyOutcome({ requestAccepted, apass, verifyCode, canReceive, canSend }) {
   if (!requestAccepted) return "CONTRACT APASS: REFUSED BY CLEANVERSE";
   if (!apass?.usable) return "CONTRACT APASS: ACCEPTED BUT NOT USABLE";
-  if (canReceive !== true) return "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED";
+  if (Number(verifyCode) !== 4) return "CONTRACT APASS: ACCEPTED BUT NOT USABLE";
+  if (canReceive !== true || canSend !== true) {
+    return "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED";
+  }
   return "CONTRACT APASS: PROVEN";
 }
 
@@ -387,7 +394,15 @@ async function main() {
 
   report.readback = { onchainValid, apass, verifyApassCode: verifyCode,
     canReceive, canReceiveDetail, canSend, canSendDetail };
-  report.outcome = classifyOutcome({ requestAccepted, apass, canReceive });
+  report.outcome = classifyOutcome({ requestAccepted, apass, verifyCode, canReceive, canSend });
+  report.statuses = {
+    "CONTRACT APASS ISSUANCE": requestAccepted && apass?.usable ? "PROVEN" : "NOT PROVEN",
+    "CONTRACT APASS POLICY — RECEIVE": canReceive === true ? "PASSED" : "FAILED",
+    "CONTRACT APASS POLICY — SEND": canSend === true ? "PASSED" : "FAILED",
+    // Reading that a transfer is permitted is not the same as having moved value to and from
+    // the contract. No aUSDC has been sent to this probe.
+    "CONTRACT AUSDC LIVE ROUND-TRIP": "NOT PROVEN",
+  };
   report.status = "COMPLETE";
 
   process.stdout.write(`\n${"OUTCOME".padEnd(34)} ${report.outcome}\n`);

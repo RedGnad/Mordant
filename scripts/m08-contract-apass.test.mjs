@@ -95,30 +95,61 @@ test("an expired or absent expiration is present but not usable", () => {
 // --- outcome ---
 
 const usable = { usable: true };
+/** The one combination that counts as proven; each test below breaks exactly one condition. */
+const proven = { requestAccepted: true, apass: usable, verifyCode: 4, canReceive: true, canSend: true };
 
 test("a refused request is reported as refused", () => {
-  assert.equal(classifyOutcome({ requestAccepted: false, apass: null, canReceive: null }),
+  assert.equal(classifyOutcome({ ...proven, requestAccepted: false }),
     "CONTRACT APASS: REFUSED BY CLEANVERSE");
 });
 
 test("an accepted request whose record is unusable is not counted as proven", () => {
-  assert.equal(classifyOutcome({ requestAccepted: true, apass: { usable: false }, canReceive: true }),
+  assert.equal(classifyOutcome({ ...proven, apass: { usable: false } }),
     "CONTRACT APASS: ACCEPTED BUT NOT USABLE");
-  assert.equal(classifyOutcome({ requestAccepted: true, apass: null, canReceive: true }),
+  assert.equal(classifyOutcome({ ...proven, apass: null }),
     "CONTRACT APASS: ACCEPTED BUT NOT USABLE");
 });
 
-test("a usable A-Pass the policy still refuses is not counted as proven", () => {
-  assert.equal(classifyOutcome({ requestAccepted: true, apass: usable, canReceive: false }),
+test("a verify_apass code other than 4 is not counted as proven", () => {
+  for (const verifyCode of [1, 2, 3, 5, 0, -4, null, undefined, "", NaN]) {
+    assert.equal(classifyOutcome({ ...proven, verifyCode }),
+      "CONTRACT APASS: ACCEPTED BUT NOT USABLE", `verifyCode ${String(verifyCode)}`);
+  }
+});
+
+test("a verify_apass code of 4 as a string still counts, since the API is loosely typed", () => {
+  assert.equal(classifyOutcome({ ...proven, verifyCode: "4" }), "CONTRACT APASS: PROVEN");
+});
+
+test("a contract the policy will not let receive is not counted as proven", () => {
+  assert.equal(classifyOutcome({ ...proven, canReceive: false }),
     "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
-  // A reverting canTransfer must not be read as success either.
-  assert.equal(classifyOutcome({ requestAccepted: true, apass: usable, canReceive: null }),
+  // A reverting or unread canTransfer must never be read as permission.
+  assert.equal(classifyOutcome({ ...proven, canReceive: null }),
     "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
 });
 
-test("only a credential the policy honours counts as proven", () => {
-  assert.equal(classifyOutcome({ requestAccepted: true, apass: usable, canReceive: true }),
-    "CONTRACT APASS: PROVEN");
+test("a contract that can receive but cannot send is not counted as proven", () => {
+  assert.equal(classifyOutcome({ ...proven, canSend: false }),
+    "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
+});
+
+test("an unread send direction is not counted as proven", () => {
+  assert.equal(classifyOutcome({ ...proven, canSend: null }),
+    "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
+  assert.equal(classifyOutcome({ ...proven, canSend: undefined }),
+    "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
+});
+
+test("a truthy non-boolean does not satisfy either direction", () => {
+  assert.equal(classifyOutcome({ ...proven, canSend: "true" }),
+    "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
+  assert.equal(classifyOutcome({ ...proven, canReceive: 1 }),
+    "CONTRACT APASS: ISSUED BUT TRANSFER STILL REFUSED");
+});
+
+test("only all five conditions together count as proven", () => {
+  assert.equal(classifyOutcome(proven), "CONTRACT APASS: PROVEN");
 });
 
 test("scrub removes credentials while keeping the fields the classifier reads", () => {
