@@ -30,11 +30,12 @@
     "m05:dryrun": "node scripts/m05-dryrun-monad.mjs",
     "m05:check": "node scripts/m05-runner.mjs --check",
     "m05:fork": "node scripts/m05-runner.mjs --fork",
-    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs",
+    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs",
     "revalidate:ausdc": "node --env-file=.env scripts/m06-ausdc-revalidation.mjs",
     "m07:check": "node --env-file=.env scripts/m07-ausdc-transfer.mjs --check",
     "m08:check": "node --env-file=.env scripts/m08-contract-apass.mjs --check",
-    "m10:check": "node --env-file=.env scripts/m10-custody-roundtrip.mjs --check"
+    "m10:check": "node --env-file=.env scripts/m10-custody-roundtrip.mjs --check",
+    "m11:check": "node --env-file=.env scripts/m11-invoice-atoken-launch.mjs --check"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

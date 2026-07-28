@@ -200,8 +200,46 @@ the observation, and it is not generalised: one route, one call shape, one addre
 does not establish that every issuance route accepts contracts, nor that this one always will.
 
 The A-Pass is not permanent. It expires on 28 July 2027, so anything relying on it needs a renewal
-path. And the round-trip is `NOT PROVEN`: `canTransfer` answering in both directions is a read, and
-no aUSDC has moved to or from the probe.
+path.
+
+**M-10, 28 July 2026: the round trip, closed.** One atomic unit of aUSDC to the probe
+(`0x436c40b3...`, block 48897630) and back through the probe's own `sweep` (`0x268484f5...`, block
+48897632). One `Transfer` event per leg, exact debit and credit, no counterparty, no burn, logs
+reconciled against balances read at the parent and receipt blocks. The probe ends empty.
+
+**M-11, 28 July 2026: the dedicated invoice A-Token.** Mordant Invoice Note (`MINV01`) at
+`0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b`, request `IA20260729032221850604`, issuing transaction
+`0xd26ba9b1...`, six decimals, registered and not paused. Its implementation `0xce444680...` is the
+one behind SPT0001, mXAUt0 and CCUSD2, not the aUSDC implementation that refused every tuple in
+M-01C.
+
+## Where the integration stands
+
+    AUSDC LIVE TRANSFER: PROVEN
+    CONTRACT APASS: PROVEN
+    CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN
+    INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN
+    MINTER ROLE: NOT GRANTED
+    MINT/BURN VIA MORDANT ADAPTER: NOT PROVEN
+    MORDANT SETTLEMENT: NOT PROVEN
+
+The rail moves real value and a contract can take custody of it and return it. What remains unproven
+is precisely the part that makes it Mordant: no minter role granted, no mint or burn through a
+Mordant adapter, no settlement.
+
+A read-only check (`docs/evidence/monad-invoice-atoken-minter-authority-2026-07-28.json`) confirms
+the admin wallet holds the role that administers `MINTER_ROLE`, so a future grant would not revert
+for lack of authority. It holds no `MINTER_ROLE` itself, and none has been granted to anyone.
+
+### The tier 50 rule is validated for three addresses, not in general
+
+The invoice A-Token's rule is `min_tier: 50`, with no group, subgroup or country constraint. It is
+currently validated for exactly `HOLDER_A`, `HOLDER_B` and the M-08 probe, whose A-Passes were read
+back before the rule was derived from them.
+
+**Every future adapter, vault or holder must be tested separately.** An address satisfies this rule
+only once its own A-Pass exists and reads back at tier 50 or above; nothing about the three
+addresses above generalises to a fourth.
 
 Two consequences for Mordant:
 

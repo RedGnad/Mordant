@@ -100,14 +100,25 @@ Not proven end to end against the live network:
 - gateway delivery of an A-Pass to the adapter and to each vault;
 - the complete settlement rail on Monad.
 
-A read-only evidence run pinned to Monad testnet block 48667706 found no backend/factory selector
-skew, and an authenticated sandbox check found that several Monad A-Tokens accepted our test wallets
-while Monad aUSDC specifically failed with `ComplianceFailed`. That refusal was lifted on 28 July
-2026 by a Cleanverse configuration transaction, not by a contract upgrade: aUSDC now returns `true`
-for the same tuples, while the historical call still reverts when replayed at the original block.
+Where the Cleanverse integration actually stands on Monad testnet, as of 28 July 2026:
 
-Passing a compliance precheck is not settling. No aUSDC transfer has been broadcast, so the
-settlement rail is still not described as live.
+    AUSDC LIVE TRANSFER: PROVEN
+    CONTRACT APASS: PROVEN
+    CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN
+    INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN
+    MINTER ROLE: NOT GRANTED
+    MINT/BURN VIA MORDANT ADAPTER: NOT PROVEN
+    MORDANT SETTLEMENT: NOT PROVEN
+
+The rail moves real value, and a contract can take custody of it and give it back. What is not
+proven is the part that makes it Mordant: no minter role has been granted, no mint or burn has gone
+through a Mordant adapter, and no settlement has occurred. Nothing above should be read as a
+working product.
+
+The tier 50 rule on the invoice A-Token is currently validated for exactly three addresses,
+`HOLDER_A`, `HOLDER_B` and the M-08 probe. **Every future adapter, vault or holder has to be tested
+separately**: an address is admitted by the rule only once its own A-Pass has been issued and read
+back.
 
 Evidence, with every claim classified: [`docs/evidence/`](docs/evidence/) and
 [`docs/cleanverse-integration.md`](docs/cleanverse-integration.md).
