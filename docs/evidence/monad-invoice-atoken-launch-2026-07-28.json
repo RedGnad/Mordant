@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "runStartedAt": "2026-07-28T19:22:17.990Z",
+  "generatedAt": "2026-07-28T19:22:28.982Z",
+  "mode": "run",
+  "status": "COMPLETE",
+  "classification": "INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN",
+  "scope": "One /atoken/launch call for the dedicated invoice A-Token. No MINTER_ROLE, no mint, no Mordant deployment and no settlement. Nothing here is a Mordant settlement.",
+  "steps": [
+    {
+      "label": "network",
+      "detail": "chain 10143"
+    },
+    {
+      "label": "pinned block",
+      "detail": "48901220 0x85b5236019fe240ad72eee25ff388435d4faedf40e361ad5e75033045969f9d0"
+    },
+    {
+      "label": "dependencies",
+      "detail": "factory, policy, A-Pass, AccessCore and aUSDC all present and unchanged"
+    },
+    {
+      "label": "uniqueness",
+      "detail": "33 existing A-Tokens, no name or symbol collision"
+    },
+    {
+      "label": "resolved rule",
+      "detail": "min_tier 50, min_sub_tier 0, group \"\", subGroup \"\""
+    },
+    {
+      "label": "profiles admitted",
+      "detail": "HOLDER_A(t50), HOLDER_B(t50), probe(t50)"
+    },
+    {
+      "label": "admin",
+      "detail": "HOLDER_A 0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45"
+    },
+    {
+      "label": "launch key",
+      "detail": "68fba77582f5e45f7e80d014e139a5d97c8ed9c1e9b9bb9a0280692abcf0eb91"
+    },
+    {
+      "label": "launch accepted",
+      "detail": "requestId IA20260729032221850604, issueAssetId 160"
+    },
+    {
+      "label": "status",
+      "detail": "ISSUING"
+    },
+    {
+      "label": "status",
+      "detail": "ISSUED"
+    },
+    {
+      "label": "readback",
+      "detail": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b, decimals 6, registered, 6 control tuples true"
+    }
+  ],
+  "dependencies": {
+    "aUsdc": {
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "codeBytes": 122,
+      "implementation": "0x5a520e9992d30416c33e2dcdc2d8f3befce426da"
+    },
+    "policy": {
+      "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+      "codeBytes": 122,
+      "implementation": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101"
+    },
+    "policyImplementation": {
+      "address": "0xc644e79e4c8ee94c4dee49b76f8591e994e58101",
+      "codeBytes": 12966,
+      "implementation": null
+    },
+    "apass": {
+      "address": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+      "codeBytes": 122,
+      "implementation": "0x9406f5d46268ee6617f7ab28ed8ae0767d3415a3"
+    },
+    "accessCore": {
+      "address": "0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC",
+      "codeBytes": 122,
+      "implementation": "0xb099f7049517a9f886fdbc60cf4a9db33ff02f9a"
+    },
+    "aTokenFactory": {
+      "address": "0xd1ad67ca3b7da5934813f4bd005812ebb3b43ff6",
+      "codeBytes": 122,
+      "implementation": "0x21084e6ca8d65d3f1a3d27cac9c1abe06f1582ea"
+    }
+  },
+  "existingATokenCount": 33,
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143,
+    "blockNumber": "48901220",
+    "blockHash": "0x85b5236019fe240ad72eee25ff388435d4faedf40e361ad5e75033045969f9d0"
+  },
+  "plannedRequest": {
+    "chain": "monad",
+    "token_name": "Mordant Invoice Note",
+    "token_symbol": "MINV01",
+    "decimals": 6,
+    "icon": "https://avatars.githubusercontent.com/RedGnad",
+    "admin_address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "rule": {
+      "allowed_group": "",
+      "allowed_sub_group": "",
+      "min_tier": 50,
+      "min_sub_tier": 0
+    }
+  },
+  "launchKey": "68fba77582f5e45f7e80d014e139a5d97c8ed9c1e9b9bb9a0280692abcf0eb91",
+  "profiles": [
+    {
+      "label": "HOLDER_A",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "tier": 50,
+      "subTier": 0,
+      "group": "",
+      "subGroup": "",
+      "countries": [],
+      "expirationTime": 1816796031
+    },
+    {
+      "label": "HOLDER_B",
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "tier": 50,
+      "subTier": 0,
+      "group": "",
+      "subGroup": "",
+      "countries": [],
+      "expirationTime": 1816796031
+    },
+    {
+      "label": "probe",
+      "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "tier": 50,
+      "subTier": 0,
+      "group": "",
+      "subGroup": "",
+      "countries": [],
+      "expirationTime": 1816798854
+    }
+  ],
+  "ruleSatisfaction": [
+    {
+      "label": "HOLDER_A",
+      "address": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "tier": 50,
+      "subTier": 0,
+      "satisfies": true,
+      "reasons": []
+    },
+    {
+      "label": "HOLDER_B",
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "tier": 50,
+      "subTier": 0,
+      "satisfies": true,
+      "reasons": []
+    },
+    {
+      "label": "probe",
+      "address": "0x0f8b9a0c064306f938912658c96c681d8655140b",
+      "tier": 50,
+      "subTier": 0,
+      "satisfies": true,
+      "reasons": []
+    }
+  ],
+  "launchAttemptedAt": "2026-07-28T19:22:21.502Z",
+  "launchResponse": {
+    "envelopeCode": "0000",
+    "message": "success",
+    "data": {
+      "todo": true,
+      "requestId": "IA20260729032221850604",
+      "issueAssetId": 160
+    },
+    "transportError": null
+  },
+  "polling": {
+    "timeoutMs": 180000,
+    "intervalMs": 6000,
+    "polls": [
+      {
+        "at": "2026-07-28T19:22:22.132Z",
+        "envelopeCode": "0000",
+        "applyStatus": "ISSUING"
+      },
+      {
+        "at": "2026-07-28T19:22:28.458Z",
+        "envelopeCode": "0000",
+        "applyStatus": "ISSUED"
+      }
+    ],
+    "reachedTerminal": true
+  },
+  "applyStatus": "ISSUED",
+  "statusRecord": {
+    "flowType": "LAUNCH",
+    "requestId": "IA20260729032221850604",
+    "applyStatus": "ISSUED",
+    "chain": "monad",
+    "atokenAddress": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "tokenSymbol": "MINV01",
+    "txHash": "0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c",
+    "issueErrorMsg": "",
+    "issuedAt": "2026-07-29 03:22:22"
+  },
+  "readback": {
+    "atokenAddress": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "implementation": "0xce4446801356e7d8acbdfef93816bf62b05d3ebf",
+    "codeBytes": 122,
+    "name": "Mordant Invoice Note",
+    "symbol": "MINV01",
+    "decimals": 6,
+    "policy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "isTokenRegistered": true,
+    "isPaused": false,
+    "controlTuples": [
+      {
+        "from": "HOLDER_A",
+        "to": "HOLDER_B",
+        "answer": "true"
+      },
+      {
+        "from": "HOLDER_A",
+        "to": "probe",
+        "answer": "true"
+      },
+      {
+        "from": "HOLDER_B",
+        "to": "HOLDER_A",
+        "answer": "true"
+      },
+      {
+        "from": "HOLDER_B",
+        "to": "probe",
+        "answer": "true"
+      },
+      {
+        "from": "probe",
+        "to": "HOLDER_A",
+        "answer": "true"
+      },
+      {
+        "from": "probe",
+        "to": "HOLDER_B",
+        "answer": "true"
+      }
+    ],
+    "ok": true,
+    "reasons": []
+  }
+}
