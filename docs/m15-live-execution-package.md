@@ -1,18 +1,39 @@
 # M-15: live execution package
 
-    LIVE EXECUTION PACKAGE: READY
+    LIVE EXECUTION ENGINE: READY
     EXECUTION INPUTS: INCOMPLETE
     PUBLIC WRITES: NOT AUTHORIZED
     MORDANT SETTLEMENT: NOT PROVEN LIVE
 
-Seven runners, one per phase of the M-14 manifest, each usable on its own. Nothing here broadcasts:
-`--run` is implemented and **refused**, because public writes are not authorized. What is missing is
-the authorization, not the code.
+Real transaction engines, decomposed into seventeen resumable sub-actions. They execute for real
+against an injected client and are proven end to end on a fork; Monad public is refused.
+
+**The public gate is a source constant**, `PUBLIC_WRITES_AUTHORIZED` in `scripts/m15-engine.mjs`,
+deliberately not readable from the environment. Authorizing a public run means editing reviewed
+code, not exporting a variable, and a test asserts setting environment variables cannot open it.
 
     pnpm m15:phase --phase A --check
     node --env-file=.env scripts/m15-phase-b.mjs --check --from docs/evidence/<phase-A>.json
 
-## The seven runners
+## Seventeen sub-actions, not seven signers
+
+D, E and F are not single-signer steps and are not represented as such. The grant, the mint and the
+binding are signed by different wallets, and collapsing them would hide a resume point exactly where
+the ceremony is most exposed.
+
+| Phase | Sub-actions | Signers |
+| --- | --- | --- |
+| A | `A.deploy` | holderA |
+| B | `B.apass` | a Cleanverse call |
+| C1 | `C1.infra` | holderA |
+| C2 | `C2.vault` | buyer |
+| D | `D.grant` → `D.mint` → `D.revokeGrant` → `D.bind` | holderA, **issuanceMinter**, holderA, holderA |
+| E | `E.sign` → `E.approve` → `E.activate` | originator (offchain), **funder**, **facilityProtected** |
+| F | `F.commit` → `F.reveal` → `F.finalize` → `F.markDefault` → `F.releaseA` → `F.releaseB` | challenger, challenger, holderA, holderA, holderA, **holderB** |
+
+Each writes an artifact and stops. None triggers the next.
+
+## The seven entry points
 
 | Phase | Runner | Writes | Signer |
 | --- | --- | --- | --- |
@@ -80,11 +101,29 @@ during it.
 
 ## Tests
 
-48 tests covering every gate, every phase transition, each partially executed state, the manual
-resume path, and the specific refusals: a wrong contract hash, an unexpected on-chain readback, the
-funder equal to the buyer, two identical facilities, and an unexpected minter before binding.
+**74 tests, including a full A to F execution on a fork** that proves the engines really change
+state: the adapter is deployed and verified, its credential issued, the infrastructure configured,
+the vault created, the supply ceremony run, activation settled at 90000 net proceeds and 10000 bond,
+and both holders released their units with the MINV01 supply unchanged.
 
-Anvil and the fork are available to the tests. Nothing broadcasts publicly.
+Also covered: a missing `--from` blocks a sub-action, incomplete inputs or readiness block it, a key
+deriving the wrong signer blocks it, a `PENDING` artifact is written before each receipt is awaited,
+resumption after each partial transaction, no sub-action triggering the next, and the named
+refusals: a wrong contract hash, an unexpected readback, funder equal to buyer, identical
+facilities, and an unexpected minter before binding.
+
+Nothing broadcasts publicly.
+
+## A correction the execution surfaced
+
+Verifying a deployment by hashing its runtime bytecode **fails on any contract with `immutable`
+fields**. The adapter burns its `token` and `apass` into the runtime at construction, so the
+deployed bytes never equal the artifact's `deployedBytecode`, whose immutable slots are zero
+placeholders.
+
+`runtimeFingerprint` masks exactly the regions Foundry records before hashing, leaving the code
+itself compared byte for byte. The M-14 manifest said "verify the runtime bytecode hash against the
+frozen artifact"; taken literally that would have rejected every correct adapter deployment.
 
 ## Out of scope, and untouched
 

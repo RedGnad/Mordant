@@ -251,7 +251,7 @@ export function nextPhase(phase) {
 /** The four statuses this package reports, and the conditions for each. */
 export function packageStatus({ runnersComplete, inputsComplete }) {
   return {
-    "LIVE EXECUTION PACKAGE": runnersComplete ? "READY" : "INCOMPLETE",
+    "LIVE EXECUTION ENGINE": runnersComplete ? "READY" : "INCOMPLETE",
     "EXECUTION INPUTS": inputsComplete ? "COMPLETE" : "INCOMPLETE",
     "PUBLIC WRITES": "NOT AUTHORIZED",
     "MORDANT SETTLEMENT": "NOT PROVEN LIVE",

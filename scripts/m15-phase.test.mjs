@@ -265,7 +265,7 @@ test("an unreconstructable history is refused, never assumed clean", () => {
 
 test("the package is ready while its inputs are not", () => {
   const statuses = packageStatus({ runnersComplete: true, inputsComplete: false });
-  assert.equal(statuses["LIVE EXECUTION PACKAGE"], "READY");
+  assert.equal(statuses["LIVE EXECUTION ENGINE"], "READY");
   assert.equal(statuses["EXECUTION INPUTS"], "INCOMPLETE");
 });
 

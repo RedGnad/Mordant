@@ -22,6 +22,7 @@ import {
   KNOWN_INPUTS, REQUIRED_INPUTS, assessReadiness,
   loadParticipants, loadPreviousArtifact, nextPhase, packageStatus, resolveMode,
 } from "./m15-phase-lib.mjs";
+import { PUBLIC_WRITES_AUTHORIZED, STEPS, assertRunAllowed, nextStep, stepById } from "./m15-engine.mjs";
 import { ControlError, assertChainId, scrub, writeArtifact } from "./runner-controls.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -108,10 +109,13 @@ export function expectedRuntimeHashes(phase, read = (relative) =>
 
 async function main() {
   const argv = process.argv.slice(2);
+  const stepIndex = argv.indexOf("--step");
+  const stepId = stepIndex === -1 ? null : argv[stepIndex + 1];
   const phaseIndex = argv.indexOf("--phase");
-  const phase = phaseIndex === -1 ? null : argv[phaseIndex + 1];
+  const phase = stepId ? stepById(stepId).phase
+    : (phaseIndex === -1 ? null : argv[phaseIndex + 1]);
   if (!phase || !PHASE_PLAN[phase]) {
-    stop(`--phase must be one of ${Object.keys(PHASE_PLAN).join(", ")}.`);
+    stop(`--phase must be one of ${Object.keys(PHASE_PLAN).join(", ")}, or pass --step.`);
   }
   const fromIndex = argv.indexOf("--from");
   const from = fromIndex === -1 ? null : argv[fromIndex + 1] ?? null;
@@ -171,7 +175,20 @@ async function main() {
       + ` (${contract.runtimeBytes} B)\n`);
   }
 
-  const { next, instruction } = nextPhase(phase);
+  // The engine's own gate, so a check run reports the same refusal a run would hit.
+  let runAllowance;
+  try {
+    runAllowance = assertRunAllowed({ chainId });
+  } catch (error) {
+    runAllowance = `refused: ${error.message.replace("STOP — ", "")}`;
+  }
+  const subActions = STEPS.filter((entry) => entry.phase === phase)
+    .map((entry) => ({ ...entry, ...nextStep(entry.id) }));
+  for (const entry of subActions) {
+    process.stdout.write(`  ${entry.id.padEnd(20)} signer ${String(entry.signer ?? "none").padEnd(20)}`
+      + ` needs ${entry.needs ?? "nothing"}\n`);
+  }
+  const { next, instruction } = stepId ? nextStep(stepId) : nextPhase(phase);
   const statuses = packageStatus({ runnersComplete: true, inputsComplete: complete });
   const report = {
     schemaVersion: 1, phase, phaseName: plan.name, generatedAt: new Date().toISOString(),
@@ -181,6 +198,10 @@ async function main() {
     statuses,
     network: { name: "monad-testnet", chainId, blockNumber: blockNumber.toString() },
     consumesArtifactFromPhase: previous?.phase ?? null,
+    step: stepId ?? null,
+    subActions: subActions.map((entry) => ({ id: entry.id, signer: entry.signer, needs: entry.needs,
+      description: entry.description, next: entry.next })),
+    publicWritesAuthorized: PUBLIC_WRITES_AUTHORIZED, runAllowance,
     plan: { writes: plan.writes, verifies: plan.verifies, signer: plan.signer,
       cleanverse: plan.cleanverse, note: plan.note ?? null,
       ambiguityRule: plan.ambiguityRule ?? null },
