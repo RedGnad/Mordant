@@ -65,8 +65,8 @@ are not the basis of a check.
 
 ## How to obtain testnet aUSDC
 
-Two routes. The first is one call and is preferred; the second is the fallback and is the one the
-supply figures prove is live.
+Route A is the only candidate funding route. Route B is investigation only: its selector and
+conditions are unknown, and it is neither authorized nor executable.
 
 **Route A, direct faucet.** `POST /faucet` with
 `{chain: "monad", symbol: "ausdc", depositAddress: <wallet>, amount: <amount>}`, returning
@@ -80,18 +80,17 @@ the protected documentation site serves its content from a password-gated API ra
 page bundle, so it could not be re-read here. One authorized call resolves it. Ask for the smallest
 plausible amount first and read `tx_hash` back on chain.
 
-**Route B, wrap USDC.** A hypothesis, **not an executable procedure**. The idea is to faucet `usdc`
-to the wallet and deposit it into AccessCore `0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC` to obtain
-aUSDC.
+**Route B, wrap USDC. Investigation only.** The open question is whether aUSDC can be obtained by
+depositing USDC into AccessCore `0x8F118338a1fa41E7Fa86Be19A4e8B99Ed58A6EcC`.
 
     AUSDC PUBLIC DEPOSIT PATH: NOT PROVEN
 
-Nothing here is ready to run. The deposit selector has not been identified, the deposit conditions
-are unknown (whether an A-Pass, an allowance, a minimum or a permissioned caller is required), and
-no deposit was observed in the scanned window. Cleanverse publishes only the withdrawal side of
-this interface (`withdraw(address aToken, uint256 amount, address recipient)`). Route B becomes a
-plan once the selector and the conditions are identified and read back; until then it is a
-direction to investigate, and Route A is the only candidate route.
+It is neither authorized nor executable. The deposit selector has not been identified, the deposit
+conditions are unknown (whether an A-Pass, an allowance, a minimum or a permissioned caller is
+required), and no deposit was observed in the scanned window. Cleanverse publishes only the
+withdrawal side of this interface (`withdraw(address aToken, uint256 amount, address recipient)`).
+Identifying the selector and the conditions is a research task, and its outcome would be a separate
+mission, not a step of this one.
 
 **MON for gas** comes from the official Monad testnet faucet at `testnet.monad.xyz`: 0.5 MON for a
 new developer wallet, 10 MON with mainnet-balance eligibility, once per 24 hours. Either amount
@@ -111,7 +110,8 @@ covers the ~0.0326 MON this transfer costs, with a wide margin.
 3. **Issue an A-Pass to both wallets** with `POST /generate_apass`. This is the step most likely to
    surprise: the M-01C wallets already had A-Passes, so issuance to a fresh wallet is untested by
    us. Verify with `isValidAPass` on chain and `POST /query_apass`.
-4. **Obtain aUSDC for the sender** by route A, falling back to route B.
+4. **Obtain aUSDC through Route A. If Route A fails or its amount unit remains ambiguous, stop. Do
+   not attempt Route B.**
 
 The runner's read-only mode reaches step 1 and stops there today, which is the correct behaviour:
 it refuses to continue rather than assuming wallets exist.
