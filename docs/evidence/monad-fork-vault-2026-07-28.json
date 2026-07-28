@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-28T10:48:33.203Z",
+  "classification": "FORK",
+  "warning": "Disposable local fork of Monad testnet. Nothing was broadcast to Monad and no Cleanverse endpoint was called. FORK evidence is never READ-ONLY RPC evidence and never a deployment.",
+  "forkedFromBlock": "48802430",
+  "vault": "0x3df1E2e6F757E302dbf8b643880483938826968F",
+  "status": {
+    "MONAD FACTORY → VAULT CREATION": "FORK",
+    "MONAD DEPLOYMENT": "NOT PROVEN — NO TRANSACTION BROADCAST"
+  },
+  "steps": [
+    {
+      "step": "fork ready",
+      "ok": true,
+      "detail": "forked Monad at block 48802430"
+    },
+    {
+      "step": "CleanverseAPassVerifier deployed",
+      "ok": true,
+      "detail": "0xc0bf43a4ca27e0976195e6661b099742f10507e5"
+    },
+    {
+      "step": "CleanverseCvaAdapter deployed",
+      "ok": true,
+      "detail": "0x43ca9bae8df108684e5eaaa720c25e1b32b0a075"
+    },
+    {
+      "step": "MordantFactory deployed",
+      "ok": true,
+      "detail": "0x9d3da37d36bb0b825cd319ed129c2872b893f538 (40382 B runtime accepted)"
+    },
+    {
+      "step": "role eligibility granted",
+      "ok": true,
+      "detail": "buyer, originator, facility"
+    },
+    {
+      "step": "factory allowlists configured",
+      "ok": true,
+      "detail": "facility, adapter, settlement token"
+    },
+    {
+      "step": "factory created the vault",
+      "ok": true,
+      "detail": "0x3df1E2e6F757E302dbf8b643880483938826968F, 31312 B of runtime installed"
+    }
+  ]
+}
