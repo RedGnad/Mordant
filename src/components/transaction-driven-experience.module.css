@@ -70,6 +70,7 @@
 .truth h1 {
   max-width: 740px;
   margin: 10px 0 8px;
+  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
   font-size: clamp(42px, 4.9vw, 70px);
   font-weight: 700;
   letter-spacing: -0.045em;
@@ -115,7 +116,7 @@
 
 .experience[data-surface="workspace"] .protection[data-shift="true"],
 .experience[data-surface="participant"] .protection[data-shift="true"] {
-  transform: translate(24px, 24px);
+  transform: none;
 }
 
 .receivable p,
@@ -330,6 +331,7 @@
 .unavailable h1 {
   max-width: 840px;
   margin: 0;
+  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
   font-size: clamp(44px, 6vw, 84px);
   font-weight: 700;
   letter-spacing: -0.045em;
@@ -367,6 +369,7 @@
 .proofLead h1 {
   max-width: 760px;
   margin: 12px 0 10px;
+  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
   font-size: clamp(44px, 5vw, 70px);
   font-weight: 700;
   letter-spacing: -0.045em;
@@ -599,7 +602,7 @@
 
   .experience[data-surface="workspace"] .protection[data-shift="true"],
   .experience[data-surface="participant"] .protection[data-shift="true"] {
-    transform: translate(10px, 14px);
+    transform: none;
   }
 
   .responsibility {

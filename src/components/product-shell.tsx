@@ -190,7 +190,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
       </a>
 
       <header
-        className={`${styles.chrome} ${participantShell ? styles.participantChrome : ""} product-chrome`}
+        className={`${styles.chrome} ${participantShell && !mEx2Mode ? styles.participantChrome : ""} product-chrome`}
         data-testid="product-chrome"
       >
         <div className={`${styles.brandLockup} brand-lockup`}>
