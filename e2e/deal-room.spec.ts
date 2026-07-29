@@ -31,7 +31,7 @@ async function run(page: import("@playwright/test").Page, id: string) {
 
 test("the deal room executes the recourse journey as real transactions", async ({ page }) => {
   test.slow();
-  await page.goto("/deal-room");
+  await page.goto("/protocol/local-journey");
 
   await expect(page.getByTestId("honesty-label")).toHaveText("LOCAL / PROTOCOL DOUBLE / SYNTHETIC");
   await expect(page.getByTestId("state-grid")).toBeVisible();
@@ -85,7 +85,7 @@ test("the deal room executes the recourse journey as real transactions", async (
 });
 
 test("every business step is backed by a transaction receipt", async ({ page }) => {
-  await page.goto("/deal-room");
+  await page.goto("/protocol/local-journey");
 
   for (const id of STEPS) {
     await expect(page.getByTestId(`step-${id}`)).toBeVisible();

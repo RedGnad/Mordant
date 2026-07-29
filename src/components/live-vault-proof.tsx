@@ -55,10 +55,10 @@ export function LiveVaultProof() {
       <section className="chain-proof chain-proof-muted" aria-label="Deployment proof status">
         <div>
           <span className="micro">ONCHAIN PROOF SLOT</span>
-          <h2>Ready for the judged deployment.</h2>
+          <h2>Awaiting a configured vault.</h2>
           <p>The interface will bind to the fresh Monad testnet vault as soon as its public address is configured.</p>
         </div>
-        <span className="proof-status">Prebuild · no address claimed</span>
+        <span className="proof-status">Unconfigured · no address claimed</span>
       </section>
     );
   }
@@ -94,7 +94,7 @@ export function LiveVaultProof() {
       <div className="proof-heading">
         <div>
           <span className="micro">LIVE · BLOCK {snapshot.chain.blockNumber}</span>
-          <h2>Monad confirms the accounting.</h2>
+          <h2>Contract accounting assertion observed.</h2>
         </div>
         <a href={contractUrl} target="_blank" rel="noreferrer">
           {compactHex(snapshot.contract.address)} <ExternalLink size={14} />

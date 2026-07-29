@@ -1,12 +1,17 @@
-import { DealRoom } from "@/components/deal-room";
+import type { Metadata } from "next";
+import { ParticipantDealRoom } from "@/components/participant-deal-room";
+import { ProductShell } from "@/components/product-shell";
 
-export const metadata = {
-  title: "Mordant deal room: local transactional walkthrough",
+export const metadata: Metadata = {
+  title: "Participant deal room",
   description:
-    "Executes the Mordant recourse journey against a local chain, with real transactions,"
-    + " receipts and state read back from the contracts.",
+    "Understand participant responsibility, exposure, action timing, and evidence for a Mordant synthetic receivable deal.",
 };
 
 export default function DealRoomPage() {
-  return <DealRoom />;
+  return (
+    <ProductShell active="deal-room">
+      <ParticipantDealRoom />
+    </ProductShell>
+  );
 }

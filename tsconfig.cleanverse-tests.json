@@ -22,6 +22,7 @@
     "src/lib/evidence/cli.ts",
     "src/lib/evidence/evidence.test.ts",
     "src/lib/evidence/secret-scan-cli.ts",
+    "src/lib/mordant/product-model.test.ts",
     "src/lib/mordant/scenario.test.ts",
     "src/lib/preflight/cli.ts",
     "test/stubs/server-only.d.ts"
