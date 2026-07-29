@@ -120,9 +120,14 @@ export function ProductShell({ active, children }: ProductShellProps) {
     if (!revealHashTarget(destination.hash, true)) return;
 
     event.preventDefault();
+    const previousUrl = window.location.href;
     window.history.pushState(null, "", `${destination.pathname}${destination.search}${destination.hash}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange", {
+      oldURL: previousUrl,
+      newURL: window.location.href,
+    }));
     setActiveHash(destination.hash);
-    setNavigationStatus(`${label} section shown`);
+    setNavigationStatus(`${label} view shown`);
   }
 
   return (

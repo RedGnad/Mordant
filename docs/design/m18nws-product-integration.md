@@ -1,9 +1,9 @@
 # M-18NWS — product integration candidate
 
-Status: **candidate branch for live review**. This migration applies the selected benchmark logic to
-the three existing product surfaces without changing their synthetic data, state machines,
-transactions, contract boundaries or public deployment alias. It is intentionally stacked on the
-M-18NWS benchmark so it can be reviewed and discarded independently.
+Status: **product integration selected for `main`**. This migration applies the selected benchmark
+logic to the three existing product surfaces without changing their synthetic data, state machines,
+transactions or contract boundaries. The benchmark and intermediate candidate commits remain in the
+history, but the product no longer depends on a protected branch preview for review.
 
 ## Product promise
 
@@ -43,9 +43,11 @@ is also carried by labels, position and edge treatment so colour is never the on
 
 ### Participant Deal Room
 
-The first view is a human conclusion: the receivable has not moved, the holder has no cure action,
-Facility B owns the cure, and the UTC deadline appears once. The two balances stay unequal and
-separate. Explanation, readiness and evidence remain secondary and inspectable.
+The first view now starts with the direct outcome `Nothing you need to do.` and reassures the holder
+that the invoice payment remains theirs. Facility B and the deadline form one human sentence. The
+two accounting domains are a flat two-line money summary rather than competing cards. `Why am I
+waiting?` stays entirely human; `How do we know?` starts with a trust summary, while readiness,
+gates, transitions and identifiers require a second `Technical details` disclosure.
 
 ### Deal Workspace
 
@@ -65,13 +67,16 @@ of participant-facing pages.
 The three audiences intentionally keep different densities: Participant is low-to-medium,
 Workspace remains operationally dense, and Protocol remains expert-dense.
 
-- Participant exposes only the conclusion, absence of action, one owner/deadline, two two-line
-  amounts, one consequence, one exit and the closed `Why?` / `Evidence` disclosures. The complete
-  first view is capped at 80 visible words and contains no technical identifier.
+- Participant exposes four perceptual blocks: outcome, one owner/deadline sentence, a flat two-line
+  money summary and one conditional consequence. One exit and the closed `Why am I waiting?` /
+  `How do we know?` links follow. The complete first view is capped at 80 visible words and contains
+  no technical identifier.
 - Participant chrome exposes the brand, portfolio return, role and synthetic boundary. Wallet,
   network and freshness are grouped under the closed `Context` control.
-- Workspace `Portfolio` now scrolls and focuses the queue. `Evidence` opens, scrolls to and focuses
-  its disclosure. The current `Workspace` location is static rather than a false link.
+- Workspace navigation now changes product mode rather than pretending a visible panel is a
+  destination. `Portfolio` becomes a full-width monitored-deals view; choosing a deal returns to the
+  three-column Workspace. `Evidence` becomes a dedicated proof view with the queue and decision rail
+  removed. Each state is deep-linkable, focused and visibly current.
 - Protocol preserves the perceptual sequence `incident → impact → runbook → proof`, including at
   `390px`, without duplicating content for mobile.
 
@@ -87,10 +92,9 @@ Workspace remains operationally dense, and Protocol remains expert-dense.
 
 ## Integration gate
 
-This branch is technically integrable only when all existing product behavior tests, responsive
-checks, type/lint/build validation and a live visual review pass. Merge and movement of the public
-Vercel alias remain separate decisions. Non-technical comprehension still needs the M-31 user-test
-protocol; screenshots and automated checks cannot approve comprehension on their own.
+The integration can reach `main` only when all existing product behavior tests, responsive checks,
+type/lint/build validation and a live visual review pass. Non-technical comprehension still needs the
+M-31 user-test protocol; screenshots and automated checks cannot approve comprehension on their own.
 
 ## Validation record
 
@@ -98,7 +102,8 @@ protocol; screenshots and automated checks cannot approve comprehension on their
   lint, typecheck and production build). The existing unused-variable warning in
   `scripts/m05-runner-lib.mjs` is unchanged.
 - `pnpm test:e2e`: 58/58 scenarios passed across desktop, tablet, mobile and the transaction journey.
-- Independent visual review: `READY` on Workspace, Participant and Protocol at `1440 × 960` and
-  `390 × 844`. Participant measures about 57 visible words on desktop and 48 on mobile, including
-  chrome; Protocol keeps incident and impact ahead of the runbook and proof on mobile.
-- Public alias: unchanged. Integration remains isolated on its candidate branch until review.
+- Independent visual review: the participant hierarchy and the three Workspace navigation states
+  are materially distinct at desktop and mobile widths; Protocol keeps incident and impact ahead of
+  the runbook and proof on mobile.
+- Deployment target: `main`, with the public alias verified only after the resulting production
+  deployment reports the integrated commit SHA.

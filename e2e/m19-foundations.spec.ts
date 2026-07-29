@@ -11,7 +11,7 @@ type Bounds = {
 
 const surfaces = [
   { path: "/", heading: "Intervention queue" },
-  { path: "/deal-room", heading: /Your receivable has not moved/i },
+  { path: "/deal-room", heading: "Nothing you need to do." },
   { path: "/protocol", heading: "Event and recovery rail" },
 ] as const;
 
@@ -138,15 +138,15 @@ test.describe("1280 by 800 decision viewport", () => {
   test("participant and protocol keep their critical records fully above fold", async ({ page }) => {
     await page.goto("/deal-room");
     const participantRequired: readonly [Locator, string][] = [
-      [page.getByRole("heading", { name: "Your receivable has not moved.", exact: true }), "participant conclusion"],
-      [page.getByText("You have no action.", { exact: true }), "participant no-action decision"],
+      [page.getByRole("heading", { name: "Nothing you need to do.", exact: true }), "participant conclusion"],
+      [page.getByText("Your invoice payment is unchanged and remains yours.", { exact: true }), "participant reassurance"],
       [page.getByTestId("participant-deadline"), "participant responsibility and deadline"],
       [page.locator('.participant-domain-pair [data-domain="receivable"]'), "participant receivable"],
       [page.locator('.participant-domain-pair [data-domain="protection"]'), "participant protection"],
       [page.getByTestId("participant-deadline-consequence"), "participant consequence"],
       [page.getByTestId("participant-primary-action"), "participant exit"],
       [page.getByTestId("participant-review-action"), "participant why disclosure"],
-      [page.getByTestId("participant-evidence").locator("summary"), "participant evidence disclosure"],
+      [page.getByTestId("participant-evidence").locator(":scope > summary"), "participant evidence disclosure"],
     ];
     for (const [locator, label] of participantRequired) await expectInsideViewport(page, locator, label);
 

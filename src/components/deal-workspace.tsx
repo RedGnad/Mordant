@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   SYNTHETIC_DEALS,
@@ -49,6 +49,13 @@ const RESOLVED_SCENARIOS: readonly DealScenarioId[] = ["completed", "protection-
 const STORAGE_KEY = "mordant.workspace.selected-scenario";
 
 type QueueFilter = "interventions" | "all" | "resolved";
+type WorkspaceView = "workspace" | "portfolio" | "evidence";
+
+function viewFromHash(hash: string): WorkspaceView {
+  if (hash === "#portfolio") return "portfolio";
+  if (hash === "#evidence") return "evidence";
+  return "workspace";
+}
 
 const POSTURE_ORDER: Readonly<Record<DealPosture, number>> = {
   recovery: 0,
@@ -68,6 +75,26 @@ const READINESS_LABELS: Readonly<Record<ReadinessVerdictCode, string>> = {
   PREVIOUS_ACTION_REQUIRED: "Previous action required",
   ALREADY_COMPLETED: "Already completed",
   RECOVERY_REQUIRED: "Recovery required",
+};
+
+const PORTFOLIO_STATUS_LABELS: Readonly<Record<DealPosture, string>> = {
+  recovery: "Support needed",
+  critical: "Needs attention",
+  attention: "Waiting on someone",
+  unknown: "Being checked",
+  stable: "On track",
+  complete: "Complete",
+};
+
+const PORTFOLIO_READINESS_LABELS: Readonly<Record<ReadinessVerdictCode, string>> = {
+  AVAILABLE_NOW: "Action available",
+  AVAILABLE_AT: "Available later",
+  WRONG_ROLE: "Another party acts",
+  CREDENTIAL_REQUIRED: "Identity check needed",
+  FUNDS_REQUIRED: "Funding needed",
+  PREVIOUS_ACTION_REQUIRED: "Waiting for prior step",
+  ALREADY_COMPLETED: "Completed",
+  RECOVERY_REQUIRED: "Manual recovery",
 };
 
 function verdictTone(code: ReadinessVerdictCode) {
@@ -146,6 +173,13 @@ function queueDeadline(deal: SyntheticDeal) {
   return deriveReadinessVerdict(deal, action).code.replaceAll("_", " ");
 }
 
+function portfolioNextStep(deal: SyntheticDeal) {
+  if (deal.nextResponsibility.dueAt) return queueDeadline(deal);
+  const action = deal.actions[0];
+  if (!action) return "No action due";
+  return PORTFOLIO_READINESS_LABELS[deriveReadinessVerdict(deal, action).code];
+}
+
 function protectionLedgerLabel(deal: SyntheticDeal) {
   const state = deal.machines.protection.state;
   const reservePresent = BigInt(deal.economics.protection.lockedReserve.minorUnits) > 0n;
@@ -161,6 +195,8 @@ export function DealWorkspace() {
   const [queueFilter, setQueueFilter] = useState<QueueFilter>("interventions");
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [showExecution, setShowExecution] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("workspace");
+  const evidenceDetailRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     const task = window.setTimeout(() => {
@@ -170,6 +206,33 @@ export function DealWorkspace() {
       }
     }, 0);
     return () => window.clearTimeout(task);
+  }, []);
+
+  useEffect(() => {
+    function syncWorkspaceView() {
+      const nextView = viewFromHash(window.location.hash);
+      setWorkspaceView(nextView);
+      if (nextView === "portfolio") setQueueFilter("all");
+
+      window.requestAnimationFrame(() => {
+        if (evidenceDetailRef.current) evidenceDetailRef.current.open = nextView === "evidence";
+      });
+
+      if (nextView !== "workspace") {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+        });
+      }
+    }
+
+    syncWorkspaceView();
+    window.addEventListener("hashchange", syncWorkspaceView);
+    window.addEventListener("popstate", syncWorkspaceView);
+
+    return () => {
+      window.removeEventListener("hashchange", syncWorkspaceView);
+      window.removeEventListener("popstate", syncWorkspaceView);
+    };
   }, []);
 
   const selected = SYNTHETIC_DEALS.find((deal) => deal.scenario === selectedScenario) ?? SYNTHETIC_DEALS[0];
@@ -226,21 +289,33 @@ export function DealWorkspace() {
     setSelectedActionId(null);
     setShowExecution(false);
     window.localStorage.setItem(STORAGE_KEY, scenario);
+    if (workspaceView === "portfolio") {
+      const previousUrl = window.location.href;
+      window.history.pushState(null, "", "/#app-main");
+      window.dispatchEvent(new HashChangeEvent("hashchange", {
+        oldURL: previousUrl,
+        newURL: window.location.href,
+      }));
+    }
   }
 
   return (
-    <div className={`workspace-surface ${styles.workspace}`} data-testid="m18nws-workspace">
+    <div
+      className={`workspace-surface ${styles.workspace}`}
+      data-testid="m18nws-workspace"
+      data-workspace-view={workspaceView}
+    >
       <div className="workspace-grid">
         <aside
           className="intervention-queue"
           id="portfolio"
-          aria-label="Intervention queue"
+          aria-label={workspaceView === "portfolio" ? "Portfolio deals" : "Intervention queue"}
           data-testid="workspace-interventions"
         >
           <div className="queue-controls">
             <p className={styles.queueEyebrow}>Portfolio</p>
             <div className="queue-heading-line">
-              <h1>Intervention queue</h1>
+              <h1>{workspaceView === "portfolio" ? "All monitored deals" : "Intervention queue"}</h1>
               <span>{String(interventionCount).padStart(2, "0")} due now</span>
             </div>
             <label className="queue-search">
@@ -285,8 +360,12 @@ export function DealWorkspace() {
                       <small>{deal.nextResponsibility.actorLabel}</small>
                     </span>
                     <span className="queue-item-status">
-                      <strong>{formatState(dealSummary.protectionState)}</strong>
-                      <small>{queueDeadline(deal)}</small>
+                      <strong>
+                        {workspaceView === "portfolio"
+                          ? PORTFOLIO_STATUS_LABELS[dealSummary.posture]
+                          : formatState(dealSummary.protectionState)}
+                      </strong>
+                      <small>{workspaceView === "portfolio" ? portfolioNextStep(deal) : queueDeadline(deal)}</small>
                     </span>
                   </button>
                 </li>
@@ -381,7 +460,7 @@ export function DealWorkspace() {
             </div>
           </details>
 
-          <details className="workspace-secondary" id="evidence">
+          <details className="workspace-secondary" id="evidence" ref={evidenceDetailRef}>
             <summary>View evidence and allocations</summary>
             <div className="workspace-secondary-grid">
               <section className="workspace-transition" aria-labelledby="transition-heading">

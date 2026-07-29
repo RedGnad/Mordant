@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const surfaces = [
   { path: "/", heading: "Intervention queue" },
-  { path: "/deal-room", heading: /Your receivable has not moved/i },
+  { path: "/deal-room", heading: "Nothing you need to do." },
   { path: "/protocol", heading: "Event and recovery rail" },
 ] as const;
 
@@ -111,27 +111,59 @@ test.describe("Mordant role-aware product surfaces", () => {
   test("workspace anchors, reserve labels, and exceptional machine states stay truthful", async ({ page }) => {
     await page.goto("/");
 
+    const workspace = page.getByTestId("m18nws-workspace");
+    const queue = page.getByTestId("workspace-interventions");
+    const record = page.locator(".workspace-record");
+    const decision = page.locator(".workspace-decision");
     const navigation = page.getByRole("navigation", { name: "Originator navigation" });
     const portfolioLink = navigation.getByRole("link", { name: "Portfolio", exact: true });
     const evidenceLink = navigation.getByRole("link", { name: "Evidence", exact: true });
     await expect(portfolioLink).toHaveAttribute("href", "/#portfolio");
     await expect(evidenceLink).toHaveAttribute("href", "/#evidence");
+    await expect(workspace).toHaveAttribute("data-workspace-view", "workspace");
 
     await portfolioLink.click();
     await expect(page).toHaveURL(/\/#portfolio$/);
-    await expect(page.locator("#portfolio")).toBeVisible();
-    await expect(page.locator("#portfolio")).toBeFocused();
-    await evidenceLink.click();
-    await expect(page).toHaveURL(/\/#evidence$/);
-    await expect(page.locator("#evidence")).toHaveAttribute("open", "");
-    await expect(page.locator("#evidence > summary")).toBeFocused();
+    await expect(workspace).toHaveAttribute("data-workspace-view", "portfolio");
+    await expect(queue).toBeVisible();
+    await expect(queue.getByRole("heading", { name: "All monitored deals", exact: true })).toBeVisible();
+    await expect(queue.getByRole("button")).toHaveCount(14);
+    await expect(page.getByLabel("Filter intervention queue")).toHaveValue("all");
+    await expect(record).toBeHidden();
+    await expect(decision).toBeHidden();
 
-    const queue = page.getByTestId("workspace-interventions");
+    const fundingBlocked = queue.getByRole("button", {
+      name: /Protection funding blocked by synthetic balance/i,
+    }).first();
+    await fundingBlocked.click();
+    await expect(page).toHaveURL(/\/#app-main$/);
+    await expect(workspace).toHaveAttribute("data-workspace-view", "workspace");
+    await expect(queue.getByRole("heading", { name: "Intervention queue", exact: true })).toBeVisible();
+    await expect(record).toBeVisible();
+    await expect(decision).toBeVisible();
+
     const protection = page.locator('.workspace-domain-pair [data-domain="protection"]');
-    await queue.getByRole("button", { name: /Protection funding blocked by synthetic balance/i }).click();
     await expect(protection).toContainText("Protection reserve · Unfunded");
     await expect(protection).toContainText("0.00 aUSDC");
     await expect(protection).not.toContainText("Funded protection");
+
+    await evidenceLink.click();
+    await expect(page).toHaveURL(/\/#evidence$/);
+    await expect(workspace).toHaveAttribute("data-workspace-view", "evidence");
+    const workspaceEvidence = page.locator("details#evidence");
+    await expect(workspaceEvidence).toHaveAttribute("open", "");
+    await expect(workspaceEvidence.locator(":scope > summary")).toBeFocused();
+    await expect(page.locator(".workspace-transition")).toBeVisible();
+    await expect(queue).toBeHidden();
+    await expect(decision).toBeHidden();
+
+    await navigation.getByRole("link", { name: "Workspace", exact: true }).click();
+    await expect(page).toHaveURL(/\/#app-main$/);
+    await expect(workspace).toHaveAttribute("data-workspace-view", "workspace");
+    await expect(queue).toBeVisible();
+    await expect(record).toBeVisible();
+    await expect(decision).toBeVisible();
+    await expect(workspaceEvidence).not.toHaveAttribute("open", "");
 
     await queue.getByRole("button", { name: /Protection transition requires recovery/i }).click();
     const protectionRail = page.locator('.workspace-machines .machine-rail[data-domain="protection"]');
@@ -216,15 +248,31 @@ test.describe("Mordant role-aware product surfaces", () => {
     await page.goto("/deal-room");
 
     const firstView = page.getByTestId("participant-first-view");
-    await expect(firstView).toContainText("Your receivable has not moved.");
+    await expect(firstView.getByRole("heading", { name: "Nothing you need to do.", exact: true })).toBeVisible();
+    await expect(firstView).toContainText("Your invoice payment is unchanged and remains yours.");
+    await expect(page.getByTestId("participant-deadline")).toContainText(
+      "The responsible company (Facility B) is resolving the issue by 29 Jul 2026, 12:00 UTC.",
+    );
     await expect(page.getByTestId("participant-position")).toBeHidden();
 
-    const receivable = page.locator('.participant-domain-pair [data-domain="receivable"]');
-    const protection = page.locator('.participant-domain-pair [data-domain="protection"]');
+    const money = page.locator(".participant-domain-pair");
+    await expect(money.getByRole("heading", { name: "Your money", exact: true })).toBeVisible();
+    const receivable = page.getByTestId("participant-domain-receivable");
+    const protection = page.getByTestId("participant-domain-protection");
+    expect(await receivable.evaluate((element) => element.tagName)).toBe("DIV");
+    expect(await protection.evaluate((element) => element.tagName)).toBe("DIV");
+    await expect(money.locator("details, article")).toHaveCount(0);
     await expect(receivable.locator(".domain-ledger-amount")).toHaveText("1,488,000 aUSDC");
+    await expect(receivable).toContainText("Invoice payment");
+    await expect(receivable).toContainText("Still yours");
     await expect(protection.locator(".domain-ledger-amount")).toHaveText("148,800 aUSDC");
+    await expect(protection).toContainText("Protection reserve");
+    await expect(protection).toContainText("Backup if unresolved");
     await expect(receivable).toHaveAttribute("data-edge", "continuous-double");
     await expect(protection).toHaveAttribute("data-edge", "interrupted-notch");
+    await expect(page.getByTestId("participant-deadline-consequence")).toContainText(
+      "The protection reserve may become available; your invoice remains yours.",
+    );
 
     await expect(firstView).toHaveAttribute("data-readiness-verdict", "WRONG_ROLE");
     await expect(page.locator(".participant-surface .readiness-verdict")).toBeHidden();
@@ -233,9 +281,28 @@ test.describe("Mordant role-aware product surfaces", () => {
     await expect(page.getByRole("button", { name: /^(?:Holder A|Facility B)$/i })).toHaveCount(0);
 
     const evidence = page.getByTestId("participant-evidence");
-    await evidence.locator("summary").click();
+    const technicalDetails = page.getByTestId("participant-technical-details");
+    await evidence.locator(":scope > summary").click();
     await expect(evidence).toHaveAttribute("open", "");
+    await expect(evidence).toContainText("This screen uses a configured test scenario.");
+    await expect(evidence).toContainText("Your role cannot resolve this issue and no action is offered.");
+    await expect(technicalDetails).not.toHaveAttribute("open", "");
+    const trustLevelText = await evidence.innerText();
+    expect(trustLevelText).not.toMatch(
+      /Wrong role|Configured holder position|No corresponding event|Immutable invoice root/i,
+    );
+
     const participantEvidence = page.locator(".participant-proof .evidence-facts");
+    await expect(participantEvidence).toBeHidden();
+    await expect(page.locator(".participant-surface .readiness-verdict")).toBeHidden();
+    await expect(page.getByTestId("participant-position")).toBeHidden();
+
+    await technicalDetails.locator(":scope > summary").click();
+    await expect(technicalDetails).toHaveAttribute("open", "");
+    await expect(page.locator('.participant-surface .readiness-verdict[data-readiness-verdict="WRONG_ROLE"]')).toBeVisible();
+    await expect(page.getByTestId("participant-position")).toContainText(
+      "Configured holder position · 60 / 100 invoice units",
+    );
     await expect(participantEvidence.locator('[data-evidence-class="observed"]')).toHaveCount(0);
     await expect(participantEvidence.locator('[data-evidence-class="attested"]')).toHaveCount(0);
     await expect(participantEvidence.locator('[data-evidence-class="derived"]')).toHaveCount(2);
@@ -246,13 +313,14 @@ test.describe("Mordant role-aware product surfaces", () => {
       .locator(".participant-actions .observation-stamp > div")
       .filter({ hasText: "Live read" });
     await expect(liveReadBoundary).toContainText("Not performed");
+
     await page.getByTestId("participant-review-action").click();
     await expect(evidence).not.toHaveAttribute("open", "");
     const review = page.getByTestId("participant-why").getByRole("status");
-    await expect(review).toContainText("No cure action is offered to this synthetic holder.");
-    await expect(review).toContainText("not a live wallet read or manual selector");
-    await expect(page.getByTestId("participant-position")).toContainText("Your position · 60 / 100 units");
-    await expect(review.locator('[data-readiness-verdict="WRONG_ROLE"]')).toBeVisible();
+    await expect(review).toContainText("Another company is resolving the issue.");
+    await expect(review).toContainText("Facility B is responsible for resolving it. You do not need to sign anything.");
+    await expect(review).toContainText("Your invoice payment remains yours throughout this process.");
+    await expect(review.locator(".readiness-verdict, [data-readiness-verdict]")).toHaveCount(0);
 
     await expectNoThirdPartyKycDetail(page);
   });
