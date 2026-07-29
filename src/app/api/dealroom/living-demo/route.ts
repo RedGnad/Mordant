@@ -6,6 +6,7 @@ import {
   getLivingDemoRun,
   resetLivingDemoRun,
 } from "@/lib/dealroom/living-demo-server";
+import { getLivingDemoReviewRun } from "@/lib/dealroom/living-demo-review-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,8 +26,11 @@ function failure(error: unknown) {
   return response({ error: message }, 500);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (new URL(request.url).searchParams.get("source") === "review") {
+      return response(getLivingDemoReviewRun());
+    }
     return response(await getLivingDemoRun());
   } catch (error) {
     return failure(error);

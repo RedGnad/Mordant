@@ -280,6 +280,15 @@
   color: var(--state-critical);
 }
 
+.reviewNotice {
+  align-self: center;
+  margin: 0;
+  color: var(--nws-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .secondaryControls {
   display: flex;
   gap: 8px;

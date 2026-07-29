@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ParticipantDealRoom } from "@/components/participant-deal-room";
 import { ProductShell } from "@/components/product-shell";
 import { TransactionDrivenExperience } from "@/components/transaction-driven-experience";
 import { TRANSACTION_DEMO_QUERY } from "@/lib/dealroom/living-demo";
@@ -17,8 +16,8 @@ export default async function DealRoomPage({
 }) {
   const demo = (await searchParams).demo === TRANSACTION_DEMO_QUERY;
   return (
-    <ProductShell active="deal-room" mode={demo ? "transaction-demo" : undefined}>
-      {demo ? <TransactionDrivenExperience surface="participant" /> : <ParticipantDealRoom />}
+    <ProductShell active="deal-room" mode={demo ? "transaction-demo" : "executed-review"}>
+      <TransactionDrivenExperience surface="participant" mode={demo ? "live" : "review"} />
     </ProductShell>
   );
 }

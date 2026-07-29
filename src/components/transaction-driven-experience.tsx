@@ -15,7 +15,8 @@ import {
 
 import styles from "./transaction-driven-experience.module.css";
 
-const ENDPOINT = "/api/dealroom/living-demo";
+const LIVE_ENDPOINT = "/api/dealroom/living-demo";
+const REVIEW_ENDPOINT = "/api/dealroom/living-demo?source=review";
 const POLL_INTERVAL_MS = 400;
 
 type RequestState = "idle" | "executing" | "resetting";
@@ -46,7 +47,15 @@ function SourceBoundary({ message }: { readonly message: string }) {
   );
 }
 
-export function TransactionDrivenExperience({ surface }: { readonly surface: LivingSurface }) {
+export function TransactionDrivenExperience({
+  surface,
+  mode = "live",
+}: {
+  readonly surface: LivingSurface;
+  readonly mode?: "live" | "review";
+}) {
+  const endpoint = mode === "review" ? REVIEW_ENDPOINT : LIVE_ENDPOINT;
+  const readOnly = mode === "review";
   const [run, setRun] = useState<LivingRunArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
@@ -59,7 +68,7 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
     const sequence = requestSequence.current + 1;
     requestSequence.current = sequence;
     try {
-      const response = await fetch(ENDPOINT, { cache: "no-store" });
+      const response = await fetch(endpoint, { cache: "no-store" });
       const next = await responseBody(response);
       if (requestSequence.current === sequence) {
         setRun(next);
@@ -70,26 +79,26 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
         setError(nextError instanceof Error ? nextError.message : "Unknown controlled run error");
       }
     }
-  }, []);
+  }, [endpoint]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
-    const interval = window.setInterval(() => {
+    const interval = readOnly ? undefined : window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh(true);
     }, POLL_INTERVAL_MS);
     return () => {
       window.clearTimeout(initial);
-      window.clearInterval(interval);
+      if (interval !== undefined) window.clearInterval(interval);
       requestSequence.current += 1;
     };
-  }, [refresh]);
+  }, [readOnly, refresh]);
 
   const mutate = useCallback(async (body: object, state: RequestState) => {
     requestSequence.current += 1;
     setRequestState(state);
     setError(null);
     try {
-      const response = await fetch(ENDPOINT, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -106,7 +115,7 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
     } finally {
       setRequestState("idle");
     }
-  }, [refresh]);
+  }, [endpoint, refresh]);
 
   const closeProof = useCallback(() => {
     setProofOpen(false);
@@ -231,13 +240,14 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
       data-invoice-root={run.deal.invoiceRoot}
       data-source={run.source.kind}
       data-status={run.status}
+      data-execution-mode={mode}
       data-abnormal={view.abnormal ? "true" : "false"}
       data-resolved={view.resolved ? "true" : "false"}
     >
       <header className={styles.runContext}>
         <p className={styles.sourceLabel} data-testid="living-source">{run.source.label}</p>
         <p>{surfaceLabel(surface)} · block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
-        <p>Protocol doubles</p>
+        <p>{readOnly ? "Receipt-derived review" : "Protocol doubles"}</p>
       </header>
 
       <div className={styles.scene}>
@@ -271,6 +281,28 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
         </aside>
       </div>
 
+      {readOnly ? (
+        <footer className={styles.controls}>
+          <div className={styles.executionControl}>
+            <p>
+              <span>Retained execution</span>
+              <strong>Receipt confirmed · block {receipt?.blockNumber}</strong>
+            </p>
+            <button
+              type="button"
+              ref={proofTriggerRef}
+              className={styles.execute}
+              disabled={latestReceipt === null}
+              onClick={() => setProofOpen(true)}
+            >
+              Open receipt proof
+            </button>
+          </div>
+          <p className={styles.reviewNotice}>
+            Public review is read-only. No transaction can be sent from this deployment.
+          </p>
+        </footer>
+      ) : (
       <footer className={styles.controls}>
         <div className={styles.executionControl}>
           <p>
@@ -319,6 +351,7 @@ export function TransactionDrivenExperience({ surface }: { readonly surface: Liv
           </button>
         </div>
       </footer>
+      )}
 
       {error === null ? null : <p className={styles.requestError} role="alert">{error}</p>}
       <p className="visually-hidden" aria-live="polite" aria-atomic="true">

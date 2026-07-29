@@ -10,7 +10,7 @@ type ProductSurface = "workspace" | "deal-room" | "protocol";
 type ProductShellProps = {
   active: ProductSurface;
   children: ReactNode;
-  mode?: "transaction-demo";
+  mode?: "transaction-demo" | "executed-review";
 };
 
 type ShellDefinition = {
@@ -111,12 +111,14 @@ function revealHashTarget(hash: string, moveFocus = false) {
 
 export function ProductShell({ active, children, mode }: ProductShellProps) {
   const transactionDemo = mode === "transaction-demo";
+  const executedReview = mode === "executed-review";
+  const mEx2Mode = transactionDemo || executedReview;
   const surfacePath = active === "workspace" ? "/" : active === "deal-room" ? "/deal-room" : "/protocol";
   const baseShell = SHELLS[active];
-  const shell: ShellDefinition = transactionDemo ? {
+  const shell: ShellDefinition = mEx2Mode ? {
     ...baseShell,
-    wallet: "Controlled demo signer",
-    freshness: "Receipt-derived state",
+    wallet: transactionDemo ? "Controlled demo signer" : "Retained execution",
+    freshness: transactionDemo ? "Receipt-derived state" : "Confirmed · block 27",
     navigation: TRANSACTION_DEMO_NAVIGATION[active],
   } : baseShell;
   const participantShell = active === "deal-room";
@@ -161,7 +163,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
     <div
       className={`${styles.shell} product-shell product-shell-${active}`}
       data-surface={active}
-      data-demo-mode={transactionDemo ? "transactions" : undefined}
+      data-demo-mode={transactionDemo ? "transactions" : executedReview ? "review" : undefined}
     >
       <a className="app-skip-link" href="#app-main">
         Skip to product surface
@@ -225,7 +227,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
               <strong>Session context</strong>
               <dl>
                 <div><dt>Wallet</dt><dd>{shell.wallet}</dd></div>
-                <div><dt>Network</dt><dd>{transactionDemo ? "Controlled Anvil · 31337" : "Monad testnet · 10143"}</dd></div>
+                <div><dt>Network</dt><dd>{mEx2Mode ? "Controlled Anvil · 31337" : "Monad testnet · 10143"}</dd></div>
                 <div><dt>Freshness</dt><dd className={shell.caution ? "session-restricted" : "session-fresh"}>{shell.freshness}</dd></div>
                 <div><dt>View</dt><dd>{participantShell ? "Participant" : active === "protocol" ? "Operations" : "Originator"}</dd></div>
               </dl>
@@ -233,7 +235,9 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
                 className={styles.demoModeLink}
                 href={transactionDemo ? surfacePath : `${surfacePath}?demo=transactions`}
               >
-                {transactionDemo ? "Exit transaction demo" : "Open transaction demo"}
+                {transactionDemo
+                  ? "Open retained review"
+                  : executedReview ? "Live mode requires local chain" : "Open transaction demo"}
               </Link>
             </div>
           </details>
@@ -242,8 +246,8 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
 
       <div className={`${styles.fixture} fixture-notice`}>
         <span>
-          {transactionDemo
-            ? "Controlled mode · no real funds"
+          {mEx2Mode
+            ? transactionDemo ? "Controlled mode · no real funds" : "Executed review · no real funds"
             : participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}
         </span>
         {!participantShell && !transactionDemo ? (

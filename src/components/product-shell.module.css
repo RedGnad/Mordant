@@ -359,7 +359,7 @@
     grid-template-columns: 116px minmax(0, auto) auto;
   }
 
-  .shell[data-demo-mode="transactions"] .participantChrome {
+  .shell[data-demo-mode] .participantChrome {
     grid-template-columns: 104px minmax(0, 1fr) 48px;
   }
 
@@ -419,15 +419,15 @@
     gap: 0;
   }
 
-  .shell[data-demo-mode="transactions"] .participantChrome .sessionIdentity {
+  .shell[data-demo-mode] .participantChrome .sessionIdentity {
     display: none;
   }
 
-  .shell[data-demo-mode="transactions"] .participantChrome .navigation :global(li + li) {
+  .shell[data-demo-mode] .participantChrome .navigation :global(li + li) {
     border-left: 1px solid var(--nws-soft-rule);
   }
 
-  .shell[data-demo-mode="transactions"] .participantChrome .navigation :global(.role-navigation-link) {
+  .shell[data-demo-mode] .participantChrome .navigation :global(.role-navigation-link) {
     padding-inline: 8px;
     font-size: 10px;
   }
