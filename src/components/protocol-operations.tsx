@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 
 import { LiveVaultProof } from "@/components/live-vault-proof";
 import {
-  FolioIdentity,
   GateVector,
   ReadinessVerdict,
   TransitionJoint,
   type EvidenceFact,
 } from "@/components/structural-ui";
+import styles from "@/components/protocol-operations.module.css";
 import {
   SYNTHETIC_DEALS,
   type DealDiagnostic,
@@ -218,6 +218,14 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
   const transition = selectedRecord ? recordTransition(selectedRecord) : undefined;
   const facts = selectedRecord ? recordFacts(selectedRecord) : [];
   const checklist = verdict?.code === "RECOVERY_REQUIRED" ? RECOVERY_CHECKLIST : PROOF_CHECKLIST;
+  const receivableImpact = selectedAction?.consequence.receivableUnitsEffect === "burn_redeemed_units"
+    ? "Burn redeemed units"
+    : "Unchanged";
+  const selectedTone = selectedRecord?.status === "Recovery required"
+    ? "critical"
+    : selectedRecord?.kind === "diagnostic"
+      ? "pending"
+      : "positive";
   const selectedDiagnostics = useMemo(() => {
     if (!selectedRecord) return [];
     if (selectedRecord.kind === "diagnostic") {
@@ -250,12 +258,18 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
   }
 
   return (
-    <div className="protocol-surface">
+    <div className={`${styles.surface} protocol-surface`}>
       <div className="protocol-grid">
         <aside className="protocol-event-rail" id="events" aria-label="Protocol event and recovery rail">
-          <header>
-            <p className="micro-label">Observed records</p>
-            <h1>Event and recovery rail</h1>
+          <header className={styles.railHeader}>
+            <div>
+              <p className="micro-label">Protocol / record index</p>
+              <h1>Event and recovery rail</h1>
+            </div>
+            <p className={styles.recordCount} aria-label={`${RECORDS.length} observed protocol records`}>
+              {String(RECORDS.length).padStart(2, "0")}
+              <span>records</span>
+            </p>
           </header>
           <ol>
             {RECORDS.map((record, index) => (
@@ -282,7 +296,7 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
             ))}
           </ol>
           <div className="protocol-evidence-legend" aria-label="Evidence registration legend">
-            <p className="micro-label">Registration legend</p>
+            <p className="micro-label">Evidence syntax</p>
             <span data-evidence-class="observed">Observed</span>
             <span data-evidence-class="attested">Attested</span>
             <span data-evidence-class="derived">Derived</span>
@@ -299,17 +313,28 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
 
           <div className="protocol-proof-content">
             <div className="protocol-record-title">
-              <div>
-                <p className="micro-label">Selected {selectedRecord.kind} record</p>
+              <div className={styles.incidentHeading}>
+                <p className="micro-label">01 / Selected {selectedRecord.kind}</p>
                 <h2 id="protocol-record-title">
                   {selectedRecord.kind === "diagnostic" ? selectedRecord.diagnostic.title : selectedRecord.proof.action.name}
                 </h2>
+                <p className={styles.impactLine}>
+                  <span>Receivable units</span>
+                  <strong>{receivableImpact}</strong>
+                  <span>Recovery owner</span>
+                  <strong>{selectedRecord.deal.nextResponsibility.actorLabel}</strong>
+                </p>
               </div>
-              <span className="status-token" data-tone={selectedRecord.status === "Recovery required" ? "critical" : "positive"}>
-                {selectedRecord.status}
-              </span>
+              <div className={styles.recordStatus}>
+                <span className="status-token" data-tone={selectedTone}>{selectedRecord.status}</span>
+                <small>{selectedRecord.kind === "diagnostic" ? "Incident" : "Transition"} / {dealShortId(selectedRecord.deal)}</small>
+              </div>
             </div>
 
+            <div className={styles.levelHeading}>
+              <p className="micro-label">02 / State transition</p>
+              <span>{transition.before} → {transition.after}</span>
+            </div>
             <TransitionJoint
               before={transition.before}
               action={transition.action}
@@ -330,11 +355,7 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
 
             <footer className="protocol-record-foot">
               <span>Immutable root / {shortReference(selectedRecord.deal.machines.receivable.immutableInvoiceRoot, 24, 14)}</span>
-              <FolioIdentity
-                folio={dealShortId(selectedRecord.deal)}
-                root={selectedRecord.deal.machines.receivable.immutableInvoiceRoot}
-                compact
-              />
+              <span className={styles.folioReference}><small>Deal folio</small><strong>{dealShortId(selectedRecord.deal)}</strong></span>
             </footer>
 
             <details className="protocol-artifact-boundary">
@@ -365,9 +386,28 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
             </section>
           )}
 
+          <section className="protocol-runbook" aria-labelledby="protocol-runbook-heading">
+            <p className="micro-label">{verdict?.code === "RECOVERY_REQUIRED" ? "Recovery runbook · no automatic retry" : "Inspection checklist"}</p>
+            <h2 id="protocol-runbook-heading" className={styles.runbookHeading}>
+              {verdict?.code === "RECOVERY_REQUIRED" ? "Recover the protection flow" : "Verify this record"}
+            </h2>
+            <p className={styles.runbookCommand}>{selectedAction?.contractAction ?? "No candidate call"}</p>
+            <p className={styles.runbookImpact}>Receivable units / <strong>{receivableImpact}</strong></p>
+            <button type="button" className="secondary-action" onClick={() => void copyChecklist()}>
+              {copyStatus === "copied" ? "Checklist copied" : "Copy selected checklist"}
+            </button>
+            <details className={styles.runbookSteps}>
+              <summary>{checklist.length} controlled steps</summary>
+              <ol>
+                {checklist.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </details>
+            {copyStatus === "failed" ? <p className="copy-feedback" role="status">Clipboard unavailable. Select the listed steps manually.</p> : null}
+          </section>
+
           <section className="selected-record-diagnostic" aria-labelledby="selected-diagnostic-heading">
             <h2 className="structural-heading" id="selected-diagnostic-heading">
-              Selected-record diagnostic
+              02 / Why this state
               <small>{selectedDiagnostics.length || "None"}</small>
             </h2>
             {selectedDiagnostics.length > 0 ? selectedDiagnostics.map((diagnostic) => (
@@ -391,21 +431,10 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
           {selectedAction ? (
             <GateVector
               gates={selectedAction.gates.map(gateToView)}
-              title="Selected-record preconditions"
+              title="03 / Preconditions"
               compact
             />
           ) : null}
-
-          <section className="protocol-runbook">
-            <p className="micro-label">{verdict?.code === "RECOVERY_REQUIRED" ? "Recovery runbook · no automatic retry" : "Inspection checklist"}</p>
-            <ol>
-              {checklist.map((step) => <li key={step}>{step}</li>)}
-            </ol>
-            <button type="button" className="secondary-action" onClick={() => void copyChecklist()}>
-              {copyStatus === "copied" ? "Checklist copied" : "Copy selected checklist"}
-            </button>
-            {copyStatus === "failed" ? <p className="copy-feedback" role="status">Clipboard unavailable. Select the listed steps manually.</p> : null}
-          </section>
         </aside>
       </div>
 

@@ -10,14 +10,11 @@ import {
   type SyntheticDeal,
 } from "@/lib/mordant/product-model";
 import { deriveReadinessVerdict } from "@/lib/mordant/readiness";
+import type { ReadinessVerdictCode } from "@/lib/mordant/readiness";
 import {
-  DomainLedger,
-  FolioIdentity,
   GateVector,
   MachineRail,
   ObservationStamp,
-  ReadinessVerdict,
-  Rootline,
   TransitionJoint,
   type EvidenceFact,
 } from "@/components/structural-ui";
@@ -35,6 +32,8 @@ import {
   responsibilityDue,
   shortReference,
 } from "@/components/product-presenters";
+
+import styles from "./deal-workspace.module.css";
 
 const RECEIVABLE_STATES = ["Accepted", "Issued", "Outstanding", "Partially redeemed", "Redeemed"] as const;
 const PROTECTION_STATES = [
@@ -59,6 +58,46 @@ const POSTURE_ORDER: Readonly<Record<DealPosture, number>> = {
   stable: 4,
   complete: 5,
 };
+
+const READINESS_LABELS: Readonly<Record<ReadinessVerdictCode, string>> = {
+  AVAILABLE_NOW: "Available now",
+  AVAILABLE_AT: "Available later",
+  WRONG_ROLE: "Wrong role",
+  CREDENTIAL_REQUIRED: "Credential required",
+  FUNDS_REQUIRED: "Funds required",
+  PREVIOUS_ACTION_REQUIRED: "Previous action required",
+  ALREADY_COMPLETED: "Already completed",
+  RECOVERY_REQUIRED: "Recovery required",
+};
+
+function verdictTone(code: ReadinessVerdictCode) {
+  if (code === "AVAILABLE_NOW" || code === "ALREADY_COMPLETED") return "positive";
+  if (code === "AVAILABLE_AT" || code === "PREVIOUS_ACTION_REQUIRED") return "attention";
+  return "critical";
+}
+
+function deadlineParts(deal: SyntheticDeal) {
+  const dueAt = deal.nextResponsibility.dueAt;
+  if (!dueAt) return undefined;
+
+  const value = new Date(dueAt);
+  return {
+    dueAt,
+    label: responsibilityDue(deal),
+    clock: new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: "UTC",
+    }).format(value),
+    date: new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(value),
+  };
+}
 
 function dealTone(deal: SyntheticDeal) {
   const posture = deriveDealSummary(deal).posture;
@@ -154,6 +193,7 @@ export function DealWorkspace() {
     }
     : latestTransition(selected);
   const position = selected.viewer.position;
+  const deadline = deadlineParts(selected);
 
   const queue = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("en-US");
@@ -189,7 +229,7 @@ export function DealWorkspace() {
   }
 
   return (
-    <div className="workspace-surface">
+    <div className={`workspace-surface ${styles.workspace}`} data-testid="m18nws-workspace">
       <div className="workspace-grid">
         <aside
           className="intervention-queue"
@@ -198,6 +238,7 @@ export function DealWorkspace() {
           data-testid="workspace-interventions"
         >
           <div className="queue-controls">
+            <p className={styles.queueEyebrow}>Portfolio</p>
             <div className="queue-heading-line">
               <h1>Intervention queue</h1>
               <span>{String(interventionCount).padStart(2, "0")} due now</span>
@@ -208,7 +249,7 @@ export function DealWorkspace() {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search deal, owner, root"
+                placeholder="Search deal or owner"
               />
               <select
                 aria-label="Filter intervention queue"
@@ -237,11 +278,9 @@ export function DealWorkspace() {
                     onClick={() => selectDeal(deal.scenario)}
                   >
                     <span className="queue-item-main">
-                      <FolioIdentity
-                        folio={dealShortId(deal)}
-                        root={deal.machines.receivable.immutableInvoiceRoot}
-                        compact
-                      />
+                      <span className="folio-identity folio-identity-compact">
+                        <strong>{dealShortId(deal)}</strong>
+                      </span>
                       <strong>{deal.label}</strong>
                       <small>{deal.nextResponsibility.actorLabel}</small>
                     </span>
@@ -266,7 +305,7 @@ export function DealWorkspace() {
 
           <div className="queue-summary">
             <span>{queue.length} shown · {SYNTHETIC_DEALS.length} monitored</span>
-            <span>Due and recovery first</span>
+            <span>Urgent first</span>
           </div>
         </aside>
 
@@ -278,74 +317,125 @@ export function DealWorkspace() {
                 <span className="status-token" data-tone={dealTone(selected)}>{formatState(summary.protectionState)}</span>
               </div>
               <h2 id="selected-deal-title">{selected.label}</h2>
-              <p>Buyer-accepted synthetic invoice · immutable one-vault / one-root record</p>
+              <p>Buyer-accepted synthetic invoice · {selected.economics.receivable.outstandingUnits} of {selected.economics.receivable.issuedUnits} units outstanding</p>
             </div>
             <div className="workspace-root-identity">
-              <Rootline root={selected.machines.receivable.immutableInvoiceRoot} showLabel={false} />
-              <span className="micro-label">Root · {shortReference(selected.machines.receivable.immutableInvoiceRoot, 18, 10)}</span>
-              <small>Root-derived navigation index · not cryptographic proof</small>
+              <span className="micro-label">Selected deal</span>
+              <strong>{formatState(summary.receivableState)}</strong>
+              <small>Full identifiers stay in evidence</small>
             </div>
           </header>
 
           <div className="workspace-domain-pair" aria-label="Independent accounting domains">
-            <DomainLedger
-              domain="receivable"
-              label="Receivable · outstanding"
-              amount={formatDomainAmount(selected.economics.receivable.outstanding)}
-              asset={selected.economics.receivable.outstanding.asset.symbol}
-              state={formatState(selected.machines.receivable.state)}
-              role="Buyer owes · holders own"
-              location="Receivable vault ledger"
-              source="Buyer-accepted synthetic invoice root"
-              nextEffect="Redemption burns only redeemed invoice units"
-              description={`${selected.economics.receivable.outstandingUnits} / ${selected.economics.receivable.issuedUnits} units remain outstanding. Protection transitions never burn or transfer them.`}
-            />
-            <DomainLedger
-              domain="protection"
-              label={protectionLedgerLabel(selected)}
-              amount={formatDomainAmount(selected.economics.protection.lockedReserve)}
-              asset={selected.economics.protection.lockedReserve.asset.symbol}
-              state={formatState(selected.machines.protection.state)}
-              role="Originator funds · policy beneficiary receives"
-              location="Protection reserve ledger"
-              source={selected.machines.protection.immutablePolicyId}
-              nextEffect="Policy settlement leaves invoice units untouched"
-              description="The 10% reserve is a synthetic demo parameter amortized against protected outstanding principal, not a production price."
-            />
+            <section
+              className="domain-ledger"
+              data-domain="receivable"
+              data-edge="continuous-double"
+              aria-label={`Receivable · outstanding: ${formatDomainAmount(selected.economics.receivable.outstanding)} ${selected.economics.receivable.outstanding.asset.symbol}`}
+            >
+              <div className="domain-ledger-head">
+                <span>Receivable · outstanding</span>
+                <strong>{formatState(selected.machines.receivable.state)}</strong>
+              </div>
+              <p className="domain-ledger-amount">
+                <span>{formatDomainAmount(selected.economics.receivable.outstanding)}</span>{" "}
+                <small>{selected.economics.receivable.outstanding.asset.symbol}</small>
+              </p>
+              <p className="domain-ledger-description">
+                {selected.economics.receivable.outstandingUnits} / {selected.economics.receivable.issuedUnits} units remain held. Protection cannot move them.
+              </p>
+            </section>
+
+            <section
+              className="domain-ledger"
+              data-domain="protection"
+              data-edge="interrupted-notch"
+              aria-label={`${protectionLedgerLabel(selected)}: ${formatDomainAmount(selected.economics.protection.lockedReserve)} ${selected.economics.protection.lockedReserve.asset.symbol}`}
+            >
+              <div className="domain-ledger-head">
+                <span>{protectionLedgerLabel(selected)}</span>
+                <strong>{formatState(selected.machines.protection.state)}</strong>
+              </div>
+              <p className="domain-ledger-amount">
+                <span>{formatDomainAmount(selected.economics.protection.lockedReserve)}</span>{" "}
+                <small>{selected.economics.protection.lockedReserve.asset.symbol}</small>
+              </p>
+              <p className="domain-ledger-description">Separate, conditional reserve. Invoice units stay untouched.</p>
+            </section>
           </div>
 
           <section className="workspace-consequence" aria-label="Economic consequence">
-            <p className="micro-label">If the next responsibility is missed</p>
+            <p className="micro-label">If this deadline is missed</p>
             <strong>{selected.nextResponsibility.consequenceIfMissed ?? "No configured economic consequence."}</strong>
           </section>
 
-          <section className="workspace-transition" id="evidence" aria-labelledby="transition-heading">
-            <h2 className="structural-heading" id="transition-heading">
-              Latest inspectable transition
-              <small>Before · action · after</small>
-            </h2>
-            <TransitionJoint before={transition.before} action={transition.action} after={transition.after} facts={transition.facts} compact />
-          </section>
+          <details className={styles.whyDetail}>
+            <summary>
+              <span>Why this deal needs attention</span>
+              <span aria-hidden="true" />
+            </summary>
+            <div className={styles.whyGrid}>
+              <p><strong>Who acts</strong>{selected.nextResponsibility.actorLabel} owns the next responsibility.</p>
+              <p><strong>What changes</strong>{primaryAction?.consequence.summary ?? "No candidate state change is configured."}</p>
+              <p><strong>What stays</strong>Protection events never burn or transfer the underlying invoice units.</p>
+            </div>
+          </details>
 
-          <section className="workspace-machines" aria-labelledby="machine-heading">
-            <h2 className="visually-hidden" id="machine-heading">Independent state machines</h2>
-            <MachineRail
-              domain="receivable"
-              label="Receivable"
-              states={RECEIVABLE_STATES}
-              current={formatState(selected.machines.receivable.state)}
-            />
-            <MachineRail
-              domain="protection"
-              label="Protection"
-              states={PROTECTION_STATES}
-              current={formatState(selected.machines.protection.state)}
-            />
-          </section>
-
-          <details className="workspace-secondary">
-            <summary>Record allocation and observation detail</summary>
+          <details className="workspace-secondary" id="evidence">
+            <summary>View evidence and allocations</summary>
             <div className="workspace-secondary-grid">
+              <section className="workspace-transition" aria-labelledby="transition-heading">
+                <h2 className="structural-heading" id="transition-heading">
+                  Latest inspectable transition
+                  <small>Before · action · after</small>
+                </h2>
+                <TransitionJoint before={transition.before} action={transition.action} after={transition.after} facts={transition.facts} compact />
+              </section>
+
+              <section className="workspace-machines" aria-labelledby="machine-heading">
+                <h2 className="visually-hidden" id="machine-heading">Independent state machines</h2>
+                <MachineRail
+                  domain="receivable"
+                  label="Receivable"
+                  states={RECEIVABLE_STATES}
+                  current={formatState(selected.machines.receivable.state)}
+                />
+                <MachineRail
+                  domain="protection"
+                  label="Protection"
+                  states={PROTECTION_STATES}
+                  current={formatState(selected.machines.protection.state)}
+                />
+              </section>
+
+              <div className={styles.evidenceIdentity}>
+                <p><span>Invoice root</span><strong>{selected.machines.receivable.immutableInvoiceRoot}</strong></p>
+                <p><span>Policy</span><strong>{selected.machines.protection.immutablePolicyId}</strong></p>
+                <p><span>Short reference</span><strong>{shortReference(selected.machines.receivable.immutableInvoiceRoot, 18, 10)}</strong></p>
+              </div>
+
+              <div className={styles.domainEvidence}>
+                <section aria-labelledby="receivable-accounting-heading">
+                  <h3 id="receivable-accounting-heading">Receivable accounting</h3>
+                  <dl className="domain-ledger-context">
+                    <div><dt>Role</dt><dd>Buyer owes · holders own</dd></div>
+                    <div><dt>Location</dt><dd>Receivable vault ledger</dd></div>
+                    <div><dt>Source</dt><dd>Buyer-accepted synthetic invoice root</dd></div>
+                    <div><dt>Next effect</dt><dd>Redemption burns only redeemed invoice units</dd></div>
+                  </dl>
+                </section>
+                <section aria-labelledby="protection-accounting-heading">
+                  <h3 id="protection-accounting-heading">Protection accounting</h3>
+                  <dl className="domain-ledger-context">
+                    <div><dt>Role</dt><dd>Originator funds · policy beneficiary receives</dd></div>
+                    <div><dt>Location</dt><dd>Protection reserve ledger</dd></div>
+                    <div><dt>Source</dt><dd>{selected.machines.protection.immutablePolicyId}</dd></div>
+                    <div><dt>Next effect</dt><dd>Policy settlement leaves invoice units untouched</dd></div>
+                  </dl>
+                  <p className={styles.reserveBoundary}>The 10% reserve is a synthetic demo parameter amortized against protected outstanding principal, not a production price.</p>
+                </section>
+              </div>
+
               <ObservationStamp {...observation} />
               <div className="allocation-table-wrap">
                 <table>
@@ -379,14 +469,23 @@ export function DealWorkspace() {
         </section>
 
         <aside className="workspace-decision" aria-label="Readiness and next action">
+          <p className={styles.mobileDecisionContext}>
+            <span>{dealShortId(selected)}</span>
+            <strong>{selected.label}</strong>
+          </p>
           {verdict ? (
-            <ReadinessVerdict
-              verdict={verdict}
-              recheckLabel={verdict.recheckAt ? formatUtc(verdict.recheckAt) : undefined}
-            />
+            <section
+              className="readiness-verdict"
+              data-readiness-verdict={verdict.code}
+              data-tone={verdictTone(verdict.code)}
+            >
+              <p className="micro-label">Decision</p>
+              <h2>{READINESS_LABELS[verdict.code]}</h2>
+              <p className="readiness-cause">{verdict.conclusion}</p>
+            </section>
           ) : (
             <section className="readiness-verdict" data-tone="positive">
-              <p className="micro-label">Unique readiness verdict</p>
+              <p className="micro-label">Decision</p>
               <h2>No action due</h2>
               <p className="readiness-cause">This synthetic state has no candidate action configured.</p>
             </section>
@@ -394,21 +493,26 @@ export function DealWorkspace() {
 
           <section className="workspace-responsibility" data-status={selected.nextResponsibility.status}>
             <div>
-              <p className="micro-label">Next responsibility</p>
+              <p className="micro-label">Owner now</p>
               <strong>{selected.nextResponsibility.actorLabel}</strong>
               <p>{selected.nextResponsibility.task}</p>
             </div>
             <div className="deadline-seal" data-testid="decision-deadline">
-              <span>Due</span>
-              <strong>{responsibilityDue(selected)}</strong>
+              <span>Deadline</span>
+              {deadline ? (
+                <time dateTime={deadline.dueAt} aria-label={deadline.label}>
+                  <strong>{deadline.clock}</strong>
+                  <small>{deadline.date} · UTC</small>
+                </time>
+              ) : (
+                <strong>No deadline</strong>
+              )}
             </div>
           </section>
 
-          {gates.length > 0 ? <GateVector gates={gates} compact /> : null}
-
           {primaryAction ? (
             <section className="workspace-candidate" aria-labelledby="candidate-action-heading">
-              <p className="micro-label">Candidate action · review before commitment</p>
+              <p className="micro-label">Next action · review before commitment</p>
               {selected.actions.length > 1 ? (
                 <fieldset className="candidate-selector">
                   <legend>Select one independently assessed action</legend>
@@ -433,10 +537,6 @@ export function DealWorkspace() {
                 </div>
                 <span>{formatRole(primaryAction.actorRole)}<br />{formatState(primaryAction.machine)}</span>
               </div>
-              <dl>
-                <div><dt>Contract intent</dt><dd>{primaryAction.contractAction}</dd></div>
-                <div><dt>Receivable units</dt><dd>{formatState(primaryAction.consequence.receivableUnitsEffect)}</dd></div>
-              </dl>
               <button
                 className={verdict?.code === "AVAILABLE_NOW" ? "primary-action" : "secondary-action"}
                 data-testid="primary-action"
@@ -446,7 +546,33 @@ export function DealWorkspace() {
               >
                 {verdict?.code === "AVAILABLE_NOW" ? "Review action package" : "Inspect resolution path"}
               </button>
+              <details className={styles.actionDetail}>
+                <summary>Action detail</summary>
+                <dl>
+                  <div><dt>Contract intent</dt><dd>{primaryAction.contractAction}</dd></div>
+                  <div><dt>Receivable units</dt><dd>{formatState(primaryAction.consequence.receivableUnitsEffect)}</dd></div>
+                </dl>
+              </details>
             </section>
+          ) : null}
+
+          {verdict ? (
+            <details className={styles.readinessDetail}>
+              <summary>
+                <span>Why this verdict?</span>
+                <span aria-hidden="true" />
+              </summary>
+              <dl className="readiness-facts">
+                <div><dt>Cause</dt><dd>{verdict.cause}</dd></div>
+                <div><dt>Blocking gate</dt><dd>{verdict.blockingGate?.label ?? "None"}</dd></div>
+                <div><dt>Responsible</dt><dd>{verdict.responsible}</dd></div>
+                <div><dt>Unlock</dt><dd>{verdict.unlock}</dd></div>
+                <div><dt>Re-evaluate</dt><dd>{verdict.recheckAt ? formatUtc(verdict.recheckAt) : "After the next state observation"}</dd></div>
+                <div><dt>Economic consequence</dt><dd>{verdict.economicConsequence}</dd></div>
+                <div><dt>Next action</dt><dd>{verdict.nextAction}</dd></div>
+              </dl>
+              {gates.length > 0 ? <GateVector gates={gates} compact /> : null}
+            </details>
           ) : null}
         </aside>
       </div>

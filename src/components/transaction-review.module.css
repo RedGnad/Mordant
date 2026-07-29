@@ -5,7 +5,7 @@
   display: grid;
   place-items: center;
   padding: clamp(12px, 2vw, 28px);
-  background: color-mix(in srgb, var(--surface-proof) 70%, transparent);
+  background: rgb(22 28 40 / 82%);
 }
 
 .dialog {
@@ -15,9 +15,9 @@
   max-height: min(900px, calc(100svh - 24px));
   overflow: hidden;
   color: var(--text-primary);
-  background: var(--surface-raised);
-  border: var(--line-structural) solid var(--border-structural);
-  box-shadow: 0 24px 72px color-mix(in srgb, var(--text-primary) 32%, transparent);
+  background: var(--nws-ground, var(--surface-raised));
+  border: 1px solid var(--nws-ink, var(--border-structural));
+  box-shadow: none;
   outline: none;
 }
 
@@ -38,9 +38,9 @@
 
 .header h2 {
   margin: 2px 0 5px;
-  font-family: var(--type-identity);
+  font-family: var(--font-product), Arial, sans-serif;
   font-size: clamp(1.55rem, 3vw, 2.3rem);
-  font-weight: 500;
+  font-variation-settings: "wdth" 88, "wght" 720;
   line-height: 1;
   letter-spacing: -0.035em;
 }
@@ -74,7 +74,8 @@
 .primaryButton {
   min-height: var(--target-min);
   padding: 0 16px;
-  font-family: var(--type-interface);
+  border-radius: 8px;
+  font-family: var(--font-product), Arial, sans-serif;
   font-size: 0.78rem;
   font-weight: 750;
   cursor: pointer;
@@ -134,7 +135,9 @@
 .consequenceCard {
   padding: 14px;
   background: var(--surface-raised);
-  border: var(--line-structural) solid var(--border-subtle);
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .fieldLabel {
@@ -245,9 +248,9 @@
 
 .progressValue {
   margin: 4px 0 0;
-  font-family: var(--type-identity);
+  font-family: var(--font-product), Arial, sans-serif;
   font-size: 1.15rem;
-  font-weight: 600;
+  font-variation-settings: "wdth" 86, "wght" 700;
 }
 
 .demoBadge {
@@ -446,7 +449,7 @@
 }
 
 .completionPanel strong {
-  font-family: var(--type-identity);
+  font-family: var(--font-product), Arial, sans-serif;
   font-size: 1rem;
 }
 

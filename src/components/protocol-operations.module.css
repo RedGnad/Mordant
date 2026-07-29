@@ -1,0 +1,1102 @@
+.surface {
+  --protocol-ground: var(--nws-ground, #f3f4ef);
+  --protocol-ink: var(--nws-ink, #12141a);
+  --protocol-receivable: var(--nws-receivable, #006c9c);
+  --protocol-protection: var(--nws-protection, #d62e68);
+  --protocol-action: var(--nws-action, #6750d8);
+  --protocol-proof: var(--nws-proof, #161c28);
+  --protocol-muted: var(--nws-muted, #687078);
+  --protocol-receivable-on-proof: #58c9f2;
+  --protocol-protection-on-proof: #ff6fa4;
+  --protocol-action-on-proof: #a996ff;
+  min-height: calc(100svh - var(--chrome-height));
+  overflow: clip;
+  background: var(--protocol-proof);
+  color: var(--protocol-ink);
+  font-family: var(--font-product, var(--type-interface));
+}
+
+.surface :global(.micro-label) {
+  margin: 0;
+  font-family: var(--type-proof);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.surface :global(.protocol-grid) {
+  display: grid;
+  grid-template-columns: minmax(224px, 3fr) minmax(510px, 6fr) minmax(306px, 3fr);
+  height: calc(100svh - var(--chrome-height));
+  min-height: 680px;
+  background: var(--protocol-proof);
+}
+
+.surface :global(.protocol-event-rail) {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0 14px 12px;
+  overflow: hidden;
+  border-right: 1px solid color-mix(in srgb, var(--protocol-ground) 20%, transparent);
+  background: var(--protocol-proof);
+  color: var(--protocol-ground);
+}
+
+.railHeader {
+  display: grid;
+  min-height: 88px;
+  flex: 0 0 88px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 17px 2px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 24%, transparent);
+}
+
+.railHeader h1 {
+  max-width: 155px;
+  margin: 5px 0 0;
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 18px;
+  font-stretch: condensed;
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  line-height: 0.96;
+}
+
+.recordCount {
+  margin: 0;
+  color: var(--protocol-protection-on-proof);
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 31px;
+  font-stretch: condensed;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 0.78;
+  text-align: right;
+}
+
+.recordCount span {
+  display: block;
+  margin-top: 7px;
+  color: color-mix(in srgb, var(--protocol-ground) 62%, var(--protocol-proof));
+  font-family: var(--type-proof);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.surface :global(.protocol-event-rail > ol) {
+  min-height: 0;
+  flex: 1;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: color-mix(in srgb, var(--protocol-ground) 24%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.surface :global(.protocol-record-row) {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 62px;
+  grid-template-rows: auto 1fr auto;
+  align-content: center;
+  padding: 8px 8px 8px 13px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 18%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--protocol-ground);
+  font: inherit;
+  text-align: left;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.surface :global(.protocol-record-row)::before {
+  position: absolute;
+  inset: 9px auto 9px 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--protocol-ground) 24%, transparent);
+  content: "";
+}
+
+.surface :global(.protocol-record-row:hover) {
+  background: color-mix(in srgb, var(--protocol-ground) 7%, transparent);
+}
+
+.surface :global(.protocol-record-row[data-selected="true"]) {
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 38%, transparent);
+  background: color-mix(in srgb, var(--protocol-ground) 10%, transparent);
+}
+
+.surface :global(.protocol-record-row[data-selected="true"])::before,
+.surface :global(.protocol-record-row[data-record-kind="diagnostic"])::before {
+  background: var(--protocol-protection);
+}
+
+.surface :global(.protocol-record-row[data-record-kind="transition"])::before {
+  background: var(--protocol-receivable);
+}
+
+.surface :global(.protocol-record-row > span),
+.surface :global(.protocol-record-row > strong),
+.surface :global(.protocol-record-row > small) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.surface :global(.protocol-record-row > span) {
+  color: color-mix(in srgb, var(--protocol-ground) 56%, var(--protocol-proof));
+  font-family: var(--type-proof);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.surface :global(.protocol-record-row > strong) {
+  align-self: center;
+  margin-top: 3px;
+  font-family: var(--type-proof);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.surface :global(.protocol-record-row > small) {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: color-mix(in srgb, var(--protocol-ground) 62%, var(--protocol-proof));
+  font-size: 9px;
+}
+
+.surface :global(.protocol-record-row > small span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.surface :global(.protocol-record-row:focus-visible),
+.surface :global(.protocol-runbook .secondary-action:focus-visible),
+.surface :global(.protocol-artifact-boundary > summary:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--protocol-action-on-proof);
+  outline-offset: -2px;
+}
+
+.surface :global(.protocol-evidence-legend) {
+  display: grid;
+  min-height: 91px;
+  flex: 0 0 91px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 8px;
+  padding: 9px 2px 0;
+  border-top: 1px solid color-mix(in srgb, var(--protocol-ground) 24%, transparent);
+}
+
+.surface :global(.protocol-evidence-legend > p) {
+  grid-column: 1 / -1;
+}
+
+.surface :global(.protocol-evidence-legend > span) {
+  position: relative;
+  display: grid;
+  min-height: 23px;
+  grid-template-columns: 21px 1fr;
+  align-items: center;
+  color: color-mix(in srgb, var(--protocol-ground) 68%, var(--protocol-proof));
+  font-size: 8px;
+}
+
+.surface :global(.protocol-evidence-legend > span)::before {
+  width: 13px;
+  border-top: 1px solid currentColor;
+  content: "";
+}
+
+.surface :global(.protocol-evidence-legend > span[data-evidence-class="attested"])::before {
+  border-top: 3px double currentColor;
+}
+
+.surface :global(.protocol-evidence-legend > span[data-evidence-class="derived"])::before {
+  border-top-style: dashed;
+}
+
+.surface :global(.protocol-evidence-legend > span[data-evidence-class="external"])::before {
+  width: 13px;
+  border-right: 3px solid var(--protocol-proof);
+  border-left: 3px solid var(--protocol-proof);
+}
+
+.surface :global(.protocol-proof-stage) {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+  background: var(--protocol-ground);
+  color: var(--protocol-ink);
+  scrollbar-color: color-mix(in srgb, var(--protocol-ink) 24%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.surface :global(.protocol-service-plate) {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: grid;
+  min-height: 50px;
+  grid-template-columns: 1.35fr 1fr 0.78fr;
+  align-items: center;
+  padding: 0 19px;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ink) 28%, transparent);
+  background: color-mix(in srgb, var(--protocol-ground) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.surface :global(.protocol-service-plate > div) {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--protocol-muted);
+  font-family: var(--type-proof);
+  font-size: 8px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.surface :global(.protocol-service-plate > div + div) {
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--protocol-ink) 20%, transparent);
+}
+
+.surface :global(.protocol-proof-content) {
+  padding: 0 24px 22px;
+}
+
+.surface :global(.protocol-record-title) {
+  display: grid;
+  min-height: 162px;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 18px;
+  align-items: end;
+  padding: 23px 0 19px 20px;
+  border-bottom: 1px solid var(--protocol-ink);
+}
+
+.incidentHeading {
+  min-width: 0;
+}
+
+.incidentHeading h2 {
+  max-width: 660px;
+  margin: 10px 0 13px -20px;
+  font-family: var(--font-product, var(--type-interface));
+  font-size: clamp(37px, 4vw, 58px);
+  font-stretch: condensed;
+  font-weight: 690;
+  letter-spacing: -0.065em;
+  line-height: 0.84;
+  overflow-wrap: anywhere;
+}
+
+.impactLine {
+  display: flex;
+  max-width: 610px;
+  flex-wrap: wrap;
+  gap: 5px 11px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 11px;
+}
+
+.impactLine span {
+  color: var(--protocol-muted);
+  font-family: var(--type-proof);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.impactLine span:nth-of-type(2) {
+  margin-left: 8px;
+}
+
+.impactLine strong:first-of-type {
+  color: var(--protocol-receivable);
+}
+
+.impactLine strong:last-of-type {
+  color: var(--protocol-protection);
+}
+
+.recordStatus {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+  padding-bottom: 1px;
+}
+
+.recordStatus :global(.status-token) {
+  min-height: 28px;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--type-proof);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.recordStatus :global(.status-token[data-tone="critical"]) {
+  color: var(--protocol-protection);
+}
+
+.recordStatus :global(.status-token[data-tone="pending"]) {
+  color: var(--protocol-action);
+}
+
+.recordStatus :global(.status-token[data-tone="positive"]) {
+  color: var(--protocol-receivable);
+}
+
+.recordStatus small {
+  max-width: 132px;
+  color: var(--protocol-muted);
+  font-family: var(--type-proof);
+  font-size: 8px;
+  line-height: 1.25;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.levelHeading {
+  display: flex;
+  min-height: 41px;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ink) 18%, transparent);
+}
+
+.levelHeading span {
+  color: var(--protocol-muted);
+  font-family: var(--type-proof);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.surface :global(.protocol-proof-stage .transition-joint) {
+  border: 0;
+  border-bottom: 1px solid var(--protocol-ink);
+  background: transparent;
+}
+
+.surface :global(.protocol-proof-stage .transition-flow) {
+  min-height: 94px;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1.5fr) 28px minmax(0, 1fr);
+}
+
+.surface :global(.protocol-proof-stage .transition-node),
+.surface :global(.protocol-proof-stage .transition-action-node) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 13px 11px;
+}
+
+.surface :global(.protocol-proof-stage .transition-action-node) {
+  background: color-mix(in srgb, var(--protocol-action) 10%, var(--protocol-ground));
+}
+
+.surface :global(.protocol-proof-stage .transition-node > span),
+.surface :global(.protocol-proof-stage .transition-action-node > span) {
+  color: var(--protocol-muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.surface :global(.protocol-proof-stage .transition-node strong),
+.surface :global(.protocol-proof-stage .transition-action-node strong) {
+  margin-top: 9px;
+  color: var(--protocol-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.surface :global(.protocol-proof-stage .transition-action-node strong) {
+  color: var(--protocol-action);
+}
+
+.surface :global(.protocol-proof-stage .transition-connector span) {
+  background: color-mix(in srgb, var(--protocol-ink) 36%, transparent);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid color-mix(in srgb, var(--protocol-ink) 18%, transparent);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div) {
+  min-height: 58px;
+  grid-template-columns: 100px minmax(0, 1fr);
+  padding-left: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ink) 12%, transparent);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div:nth-child(odd)) {
+  border-right: 1px solid color-mix(in srgb, var(--protocol-ink) 12%, transparent);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div)::before {
+  left: 0;
+  width: 6px;
+  border-top-width: 1px;
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div[data-evidence-class="observed"]) {
+  color: var(--protocol-receivable);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div[data-evidence-class="attested"]),
+.surface :global(.protocol-proof-stage .evidence-facts > div[data-evidence-class="derived"]) {
+  color: var(--protocol-action);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts > div[data-evidence-class="external"]) {
+  color: var(--protocol-muted);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts dt),
+.surface :global(.protocol-proof-stage .evidence-facts dd) {
+  padding: 8px 7px;
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts dt) {
+  border-right: 1px solid color-mix(in srgb, var(--protocol-ink) 12%, transparent);
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts dt span) {
+  font-size: 8px;
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts dt small),
+.surface :global(.protocol-proof-stage .evidence-facts dd small) {
+  color: var(--protocol-muted);
+  font-size: 9px;
+}
+
+.surface :global(.protocol-proof-stage .evidence-facts dd span) {
+  color: var(--protocol-ink);
+  font-size: 10px;
+}
+
+.surface :global(.protocol-raw-fields) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  margin: 0;
+  padding: 12px 13px;
+  border-top: 0;
+  background: var(--protocol-proof);
+  color: var(--protocol-ground);
+}
+
+.surface :global(.protocol-raw-fields > div) {
+  display: grid;
+  min-height: 29px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 17%, transparent);
+  font-family: var(--type-proof);
+  font-size: 9px;
+}
+
+.surface :global(.protocol-raw-fields dt),
+.surface :global(.protocol-raw-fields dd) {
+  min-width: 0;
+  margin: 0;
+}
+
+.surface :global(.protocol-raw-fields dt) {
+  color: color-mix(in srgb, var(--protocol-ground) 56%, var(--protocol-proof));
+}
+
+.surface :global(.protocol-raw-fields dd) {
+  overflow-wrap: anywhere;
+  color: var(--protocol-ground);
+  text-align: right;
+}
+
+.surface :global(.protocol-record-foot) {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--protocol-ink);
+  color: var(--protocol-muted);
+  font-family: var(--type-proof);
+  font-size: 8px;
+}
+
+.folioReference {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.folioReference small {
+  color: var(--protocol-muted);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.folioReference strong {
+  color: var(--protocol-ink);
+  font-size: 9px;
+}
+
+.surface :global(.protocol-artifact-boundary) {
+  margin-top: 0;
+  border: 0;
+  border-bottom: 1px solid var(--protocol-ink);
+  background: transparent;
+}
+
+.surface :global(.protocol-artifact-boundary > summary) {
+  min-height: 48px;
+  padding: 8px 0;
+  color: var(--protocol-ink);
+  font-size: 8px;
+}
+
+.surface :global(.protocol-artifact-boundary > summary strong) {
+  max-width: 280px;
+  color: var(--protocol-protection);
+  font-size: 8px;
+}
+
+.surface :global(.protocol-artifact-boundary > dl) {
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--protocol-ink) 18%, transparent);
+  background: transparent;
+}
+
+.surface :global(.protocol-artifact-boundary > dl > div) {
+  padding: 9px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ink) 12%, transparent);
+  background: transparent;
+}
+
+.surface :global(.protocol-artifact-boundary > dl > div:nth-child(odd)) {
+  padding-right: 12px;
+  border-right: 1px solid color-mix(in srgb, var(--protocol-ink) 12%, transparent);
+}
+
+.surface :global(.protocol-artifact-boundary > dl > div:nth-child(even)) {
+  padding-left: 12px;
+}
+
+.surface :global(.protocol-artifact-boundary > a) {
+  margin-left: 0;
+  color: var(--protocol-action);
+}
+
+.surface :global(.protocol-artifact-boundary > p) {
+  margin-left: 0;
+  color: var(--protocol-muted);
+}
+
+.surface :global(.protocol-diagnostic-rail) {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 14px 18px 0;
+  overflow-y: auto;
+  background: var(--protocol-proof);
+  color: var(--protocol-ground);
+  scrollbar-color: color-mix(in srgb, var(--protocol-ground) 24%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.surface :global(.protocol-diagnostic-rail .micro-label),
+.surface :global(.protocol-diagnostic-rail .structural-heading),
+.surface :global(.protocol-diagnostic-rail .structural-heading small) {
+  color: color-mix(in srgb, var(--protocol-ground) 61%, var(--protocol-proof));
+}
+
+.surface :global(.protocol-diagnostic-rail .readiness-verdict),
+.surface :global(.protocol-no-verdict) {
+  min-height: 112px;
+  padding: 13px 14px 12px 16px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+  background: transparent;
+  color: var(--protocol-ground);
+}
+
+.surface :global(.protocol-diagnostic-rail .readiness-verdict)::before {
+  width: 38px;
+  border-top: 2px solid var(--protocol-protection-on-proof);
+}
+
+.surface :global(.protocol-diagnostic-rail .readiness-verdict h2),
+.surface :global(.protocol-no-verdict h2) {
+  margin: 7px 0 5px;
+  color: var(--protocol-protection-on-proof);
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 30px;
+  font-stretch: condensed;
+  font-weight: 680;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+}
+
+.surface :global(.protocol-diagnostic-rail .readiness-cause),
+.surface :global(.protocol-no-verdict p) {
+  margin: 0;
+  color: color-mix(in srgb, var(--protocol-ground) 74%, var(--protocol-proof));
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.surface :global(.protocol-runbook) {
+  min-height: 188px;
+  padding: 13px 14px 12px 16px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+  background: transparent;
+}
+
+.runbookHeading {
+  margin: 8px 0 4px;
+  color: var(--protocol-ground);
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 22px;
+  font-stretch: condensed;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.runbookCommand {
+  margin: 8px 0 3px;
+  color: var(--protocol-action-on-proof);
+  font-family: var(--type-proof);
+  font-size: 10px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.runbookImpact {
+  margin: 0 0 9px;
+  color: color-mix(in srgb, var(--protocol-ground) 65%, var(--protocol-proof));
+  font-family: var(--type-proof);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.runbookImpact strong {
+  color: var(--protocol-receivable-on-proof);
+}
+
+.surface :global(.protocol-runbook .secondary-action) {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--protocol-action);
+  border-radius: 8px;
+  background: var(--protocol-action);
+  color: #fff;
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.runbookSteps {
+  margin-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--protocol-ground) 18%, transparent);
+}
+
+.runbookSteps summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  color: color-mix(in srgb, var(--protocol-ground) 62%, var(--protocol-proof));
+  cursor: pointer;
+  font-family: var(--type-proof);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.surface :global(.protocol-runbook ol) {
+  margin: 0 0 9px;
+  padding: 0 0 0 17px;
+  color: color-mix(in srgb, var(--protocol-ground) 76%, var(--protocol-proof));
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.surface :global(.copy-feedback) {
+  color: color-mix(in srgb, var(--protocol-protection) 72%, var(--protocol-ground));
+}
+
+.surface :global(.selected-record-diagnostic) {
+  min-height: 156px;
+  padding: 11px 14px 12px 16px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+}
+
+.surface :global(.selected-record-diagnostic .structural-heading) {
+  min-height: 28px;
+  padding: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 18%, transparent);
+  font-size: 9px;
+}
+
+.surface :global(.diagnostic-entry > strong),
+.surface :global(.diagnostic-empty > strong) {
+  margin-top: 9px;
+  color: color-mix(in srgb, var(--protocol-protection) 74%, var(--protocol-ground));
+  font-size: 10px;
+}
+
+.surface :global(.diagnostic-entry > p),
+.surface :global(.diagnostic-empty > p) {
+  margin: 5px 0 8px;
+  color: color-mix(in srgb, var(--protocol-ground) 72%, var(--protocol-proof));
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.surface :global(.diagnostic-entry dl > div) {
+  min-height: 23px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 16%, transparent);
+  font-size: 8px;
+}
+
+.surface :global(.diagnostic-entry dt) {
+  color: color-mix(in srgb, var(--protocol-ground) 55%, var(--protocol-proof));
+}
+
+.surface :global(.diagnostic-entry dd) {
+  color: var(--protocol-ground);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-vector) {
+  border: 0;
+  background: transparent;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-vector > .structural-heading) {
+  min-height: 40px;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-item) {
+  min-height: 44px;
+  padding: 7px 14px 7px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 17%, transparent);
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-glyph) {
+  display: none;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-copy) {
+  width: 100%;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-label-line strong) {
+  color: var(--protocol-ground);
+  font-size: 9px;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-label-line span) {
+  font-size: 8px;
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-item[data-gate-tone="pass"] .gate-label-line span),
+.surface :global(.protocol-diagnostic-rail .gate-item[data-gate-tone="complete"] .gate-label-line span) {
+  color: var(--protocol-receivable-on-proof);
+}
+
+.surface :global(.protocol-diagnostic-rail .gate-item[data-gate-tone="blocked"] .gate-label-line span),
+.surface :global(.protocol-diagnostic-rail .gate-item[data-gate-tone="attention"] .gate-label-line span) {
+  color: color-mix(in srgb, var(--protocol-protection) 78%, var(--protocol-ground));
+}
+
+.surface :global(.protocol-live-observation) {
+  display: grid;
+  grid-template-columns: minmax(220px, 3fr) minmax(0, 9fr);
+  gap: 28px;
+  padding: 32px var(--page-gutter);
+  border-top: 1px solid var(--protocol-ink);
+  background: var(--protocol-ground);
+  color: var(--protocol-ink);
+}
+
+.surface :global(.protocol-live-observation h2) {
+  margin: 8px 0 6px;
+  font-family: var(--font-product, var(--type-interface));
+  font-size: 28px;
+  font-stretch: condensed;
+  font-weight: 660;
+  letter-spacing: -0.045em;
+}
+
+.surface :global(.protocol-live-observation > div > p:last-child) {
+  color: var(--protocol-muted);
+}
+
+@media (max-width: 1179px) {
+  .surface {
+    overflow: visible;
+  }
+
+  .surface :global(.protocol-grid) {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    height: auto;
+  }
+
+  .surface :global(.protocol-event-rail) {
+    grid-column: span 2;
+    height: calc(100svh - var(--chrome-height));
+  }
+
+  .surface :global(.protocol-proof-stage) {
+    grid-column: span 6;
+    height: calc(100svh - var(--chrome-height));
+  }
+
+  .surface :global(.protocol-diagnostic-rail) {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0;
+    overflow: visible;
+    border-top: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+  }
+
+  .surface :global(.protocol-diagnostic-rail > *) {
+    min-width: 0;
+  }
+
+  .surface :global(.protocol-diagnostic-rail > :nth-child(odd)) {
+    border-right: 1px solid color-mix(in srgb, var(--protocol-ground) 25%, transparent);
+  }
+}
+
+@media (max-width: 720px) {
+  .surface :global(.protocol-grid) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: 0;
+  }
+
+  .surface :global(.protocol-event-rail),
+  .surface :global(.protocol-proof-stage),
+  .surface :global(.protocol-diagnostic-rail) {
+    width: 100%;
+    height: auto;
+    grid-column: 1 / -1;
+  }
+
+  .surface :global(.protocol-event-rail) {
+    order: 1;
+    min-height: 184px;
+    padding: 0 12px;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 24%, transparent);
+  }
+
+  .railHeader {
+    min-height: 74px;
+    flex-basis: 74px;
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+
+  .railHeader h1 {
+    max-width: none;
+    font-size: 17px;
+  }
+
+  .recordCount {
+    font-size: 28px;
+  }
+
+  .surface :global(.protocol-event-rail > ol) {
+    display: flex;
+    min-height: 96px;
+    margin: 7px 0 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+  }
+
+  .surface :global(.protocol-event-rail > ol li) {
+    min-width: min(78vw, 286px);
+    scroll-snap-align: start;
+  }
+
+  .surface :global(.protocol-record-row) {
+    min-height: 88px;
+    border-right: 1px solid color-mix(in srgb, var(--protocol-ground) 18%, transparent);
+  }
+
+  .surface :global(.protocol-evidence-legend) {
+    display: none;
+  }
+
+  .surface :global(.protocol-service-plate) {
+    position: static;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 10px 14px;
+  }
+
+  .surface :global(.protocol-service-plate > div + div) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .surface :global(.protocol-proof-content) {
+    padding: 0 16px 20px;
+  }
+
+  .surface :global(.protocol-record-title) {
+    min-height: 184px;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 22px 0 17px;
+  }
+
+  .incidentHeading h2 {
+    margin-left: 0;
+    font-size: clamp(36px, 12vw, 48px);
+  }
+
+  .impactLine span:nth-of-type(2) {
+    margin-left: 0;
+  }
+
+  .recordStatus {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .recordStatus small {
+    text-align: right;
+  }
+
+  .surface :global(.protocol-proof-stage .transition-flow) {
+    grid-template-columns: 1fr;
+  }
+
+  .surface :global(.protocol-proof-stage .transition-connector) {
+    height: 12px;
+    padding-left: 16px;
+  }
+
+  .surface :global(.protocol-proof-stage .transition-connector span) {
+    width: 1px;
+    height: 100%;
+  }
+
+  .surface :global(.protocol-proof-stage .evidence-facts),
+  .surface :global(.protocol-raw-fields) {
+    grid-template-columns: 1fr;
+  }
+
+  .surface :global(.protocol-proof-stage .evidence-facts > div:nth-child(odd)) {
+    border-right: 0;
+  }
+
+  .surface :global(.protocol-raw-fields) {
+    gap: 0;
+  }
+
+  .surface :global(.protocol-record-foot) {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px 0;
+  }
+
+  .surface :global(.protocol-artifact-boundary > summary),
+  .surface :global(.protocol-artifact-boundary > dl) {
+    grid-template-columns: 1fr;
+  }
+
+  .surface :global(.protocol-artifact-boundary > summary strong) {
+    max-width: none;
+    text-align: left;
+  }
+
+  .surface :global(.protocol-artifact-boundary > dl > div:nth-child(odd)),
+  .surface :global(.protocol-artifact-boundary > dl > div:nth-child(even)) {
+    padding-right: 0;
+    padding-left: 0;
+    border-right: 0;
+  }
+
+  .surface :global(.protocol-diagnostic-rail) {
+    display: block;
+    order: 2;
+    padding: 0;
+  }
+
+  .surface :global(.protocol-proof-stage) {
+    order: 3;
+  }
+
+  .surface :global(.protocol-diagnostic-rail > :nth-child(odd)) {
+    border-right: 0;
+  }
+
+  .surface :global(.protocol-live-observation) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    padding: 28px 16px;
+  }
+
+  .surface :global(.protocol-live-observation > *) {
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface :global(*),
+  .surface :global(*::before),
+  .surface :global(*::after) {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

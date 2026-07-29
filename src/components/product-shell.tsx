@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import styles from "./product-shell.module.css";
+
 type ProductSurface = "workspace" | "deal-room" | "protocol";
 
 type ProductShellProps = {
@@ -59,20 +61,20 @@ export function ProductShell({ active, children }: ProductShellProps) {
   const shell = SHELLS[active];
 
   return (
-    <div className={`product-shell product-shell-${active}`} data-surface={active}>
+    <div className={`${styles.shell} product-shell product-shell-${active}`} data-surface={active}>
       <a className="app-skip-link" href="#app-main">
         Skip to product surface
       </a>
 
-      <header className="product-chrome" data-testid="product-chrome">
-        <div className="brand-lockup">
+      <header className={`${styles.chrome} product-chrome`} data-testid="product-chrome">
+        <div className={`${styles.brandLockup} brand-lockup`}>
           <Link className="brand-link" href="/" aria-label="Mordant workspace">
             <span className="brand-wordmark">Mordant</span>
-            <span className="brand-caption">Programmable recourse for receivables</span>
+            <span className="brand-caption">Receivables, with recourse</span>
           </Link>
         </div>
 
-        <nav className="role-navigation" aria-label={`${shell.role} navigation`}>
+        <nav className={`${styles.navigation} role-navigation`} aria-label={`${shell.role} navigation`}>
           <ul>
             {shell.navigation.map((item) => (
               <li key={`${active}-${item.href}-${item.label}`}>
@@ -88,14 +90,17 @@ export function ProductShell({ active, children }: ProductShellProps) {
           </ul>
         </nav>
 
-        <div className="session-context" aria-label="Session context">
+        <div className={`${styles.session} session-context`} aria-label="Session context">
           <span>Monad testnet · 10143</span>
           <span>{shell.role} · {shell.wallet}</span>
           <span className={shell.caution ? "session-restricted" : "session-fresh"}>{shell.freshness}</span>
         </div>
       </header>
 
-      <div className="fixture-notice">Synthetic design fixture · no real funds</div>
+      <div className={`${styles.fixture} fixture-notice`}>
+        <span>Synthetic design fixture · no real funds</span>
+        <span aria-hidden="true">{active === "deal-room" ? "Participant" : active === "protocol" ? "Operations" : "Originator"} view</span>
+      </div>
 
       <main className="product-main" id="app-main" tabIndex={-1}>
         {children}

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const surfaces = [
   { path: "/", heading: "Intervention queue" },
-  { path: "/deal-room", heading: /This fixture is configured in a conflict state/i },
+  { path: "/deal-room", heading: /Your receivable has not moved/i },
   { path: "/protocol", heading: "Event and recovery rail" },
 ] as const;
 

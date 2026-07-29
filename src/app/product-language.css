@@ -1,0 +1,263 @@
+/* M-18NWS product language. Scoped so the research benchmarks remain frozen. */
+
+.product-shell {
+  font-variation-settings: "wdth" 96, "wght" 480;
+}
+
+.product-shell :is(h1, h2, h3, p) {
+  text-wrap: pretty;
+}
+
+.product-shell :is(.micro-label, .surface-kicker, .structural-heading) {
+  color: var(--nws-muted);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 11px;
+  font-variation-settings: "wdth" 78, "wght" 720;
+  letter-spacing: 0.075em;
+}
+
+.product-shell :is(.primary-action, .secondary-action, .text-button, .compact-action, .proof-refresh) {
+  min-height: 44px;
+  border-color: var(--nws-action);
+  border-radius: 8px;
+  color: var(--nws-action);
+  font-size: 13px;
+  font-variation-settings: "wdth" 92, "wght" 650;
+}
+
+.product-shell .primary-action {
+  background: var(--nws-action);
+  color: var(--nws-ground);
+}
+
+.product-shell .status-token {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 10px;
+  font-variation-settings: "wdth" 78, "wght" 720;
+}
+
+/* The root-derived stripes were useful as an experiment, but not as product navigation. */
+.product-shell .rootline {
+  display: none;
+}
+
+.product-shell .root-index > small {
+  max-width: none;
+}
+
+.product-shell .folio-identity {
+  justify-content: flex-start;
+}
+
+.product-shell .folio-identity > strong,
+.product-shell .folio-code {
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.product-shell .readiness-verdict {
+  padding: 14px 0;
+  border-top: 1px solid var(--nws-rule);
+  border-bottom: 1px solid var(--nws-rule);
+  background: transparent;
+}
+
+.product-shell .readiness-verdict::before {
+  display: none;
+}
+
+.product-shell .readiness-verdict h2 {
+  margin: 8px 0;
+  color: var(--nws-ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: clamp(30px, 3vw, 48px);
+  font-variation-settings: "wdth" 82, "wght" 760;
+  letter-spacing: -0.055em;
+  line-height: 0.9;
+}
+
+.product-shell .readiness-verdict[data-tone="critical"] h2 {
+  color: var(--nws-protection);
+}
+
+.product-shell .readiness-verdict[data-tone="attention"] h2 {
+  color: var(--nws-action);
+}
+
+.product-shell .readiness-verdict[data-tone="positive"] h2 {
+  color: var(--nws-receivable);
+}
+
+.product-shell .readiness-cause {
+  max-width: 62ch;
+  font-size: 13px;
+}
+
+.product-shell .readiness-facts {
+  gap: 0;
+  background: transparent;
+  border-top: 1px solid var(--nws-soft-rule);
+}
+
+.product-shell .readiness-facts > div {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--nws-soft-rule);
+  background: transparent;
+}
+
+.product-shell .readiness-facts > div:nth-child(odd) {
+  padding-right: 14px;
+}
+
+.product-shell .readiness-facts > div:nth-child(even) {
+  padding-left: 14px;
+}
+
+.product-shell .gate-vector {
+  background: transparent;
+}
+
+.product-shell .gate-vector > .structural-heading {
+  padding-inline: 0;
+  border-color: var(--nws-soft-rule);
+}
+
+.product-shell .gate-item {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 8px 0 8px 12px;
+  border-color: var(--nws-soft-rule);
+}
+
+.product-shell .gate-item::before {
+  position: absolute;
+  top: 13px;
+  bottom: 13px;
+  left: 0;
+  width: 3px;
+  background: var(--nws-muted);
+  content: "";
+}
+
+.product-shell .gate-item[data-gate-tone="pass"]::before,
+.product-shell .gate-item[data-gate-tone="complete"]::before {
+  background: var(--nws-receivable);
+}
+
+.product-shell .gate-item[data-gate-tone="blocked"]::before,
+.product-shell .gate-item[data-gate-tone="attention"]::before {
+  background: var(--nws-protection);
+}
+
+.product-shell .gate-item[data-gate-tone="wait"]::before {
+  background: var(--nws-action);
+}
+
+.product-shell .gate-glyph {
+  display: none;
+}
+
+.product-shell .domain-ledger {
+  padding: 18px 20px;
+  border: 0;
+  background: transparent;
+}
+
+.product-shell .domain-ledger[data-domain="receivable"] {
+  border: 0;
+  background: var(--nws-receivable);
+  color: var(--nws-ground);
+}
+
+.product-shell .domain-ledger[data-domain="protection"] {
+  border: 0;
+  border-left: 8px solid var(--nws-protection);
+}
+
+.product-shell .domain-ledger[data-domain="protection"]::before,
+.product-shell .domain-ledger[data-domain="protection"]::after {
+  display: none;
+}
+
+.product-shell .domain-ledger[data-domain="receivable"] :is(.domain-ledger-head, .domain-ledger-description, .domain-ledger-context dt) {
+  color: var(--nws-ground);
+}
+
+.product-shell .domain-ledger[data-domain="receivable"] .domain-ledger-context {
+  border-color: rgb(243 244 239 / 42%);
+}
+
+.product-shell .domain-ledger-head {
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 11px;
+  font-variation-settings: "wdth" 78, "wght" 720;
+}
+
+.product-shell .domain-ledger[data-domain="protection"] .domain-ledger-head,
+.product-shell .domain-ledger[data-domain="protection"] .domain-ledger-amount {
+  color: var(--nws-protection);
+}
+
+.product-shell .domain-ledger-amount {
+  margin-block: 14px 10px;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: clamp(28px, 3vw, 42px);
+  font-variation-settings: "wdth" 84, "wght" 720;
+  letter-spacing: -0.05em;
+}
+
+.product-shell .machine-rail {
+  border-top: 1px solid var(--nws-soft-rule);
+}
+
+.product-shell .machine-rail-name :is(span, strong),
+.product-shell .machine-states li {
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+}
+
+.product-shell .transition-joint {
+  border: 0;
+  border-top: 1px solid var(--nws-rule);
+  border-bottom: 1px solid var(--nws-rule);
+  background: transparent;
+}
+
+.product-shell .transition-action-node {
+  background: #e7e8e3;
+}
+
+.product-shell .evidence-facts > div {
+  border-color: var(--nws-soft-rule);
+}
+
+.product-shell .observation-stamp {
+  border-color: var(--nws-rule);
+  background: transparent;
+}
+
+.product-shell .execution-review,
+.product-shell .empty-state,
+.product-shell .state-message {
+  border: 0;
+  border-left: 4px solid var(--nws-action);
+  background: #e7e8e3;
+}
+
+@media (max-width: 720px) {
+  .product-shell .readiness-verdict h2 {
+    font-size: 34px;
+  }
+
+  .product-shell .domain-ledger {
+    padding: 14px;
+  }
+
+  .product-shell .domain-ledger-amount {
+    font-size: 29px;
+  }
+}

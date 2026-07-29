@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
+import { Archivo, IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import "./foundations.css";
 import "./globals.css";
 import "./instruments.css";
 import "./surfaces.css";
+import "./product-language.css";
 
 const identityFont = Newsreader({
   variable: "--font-identity",
@@ -27,6 +28,14 @@ const proofFont = IBM_Plex_Mono({
   display: "swap",
 });
 
+const productFont = Archivo({
+  variable: "--font-product",
+  subsets: ["latin"],
+  weight: "variable",
+  axes: ["wdth"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: {
     default: "Mordant — programmable recourse",
@@ -39,7 +48,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html
       lang="en"
-      className={`${identityFont.variable} ${interfaceFont.variable} ${proofFont.variable}`}
+      className={`${identityFont.variable} ${interfaceFont.variable} ${proofFont.variable} ${productFont.variable}`}
       data-scroll-behavior="smooth"
     >
       <body>{children}</body>

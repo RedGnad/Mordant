@@ -1,0 +1,257 @@
+.shell {
+  --nws-ground: #f3f4ef;
+  --nws-ink: #12141a;
+  --nws-receivable: #006c9c;
+  --nws-protection: #d62e68;
+  --nws-action: #6750d8;
+  --nws-proof: #161c28;
+  --nws-muted: #545965;
+  --nws-rule: rgb(18 20 26 / 34%);
+  --nws-soft-rule: rgb(18 20 26 / 16%);
+  --chrome-bar-height: 56px;
+  --fixture-height: 24px;
+  --chrome-height: calc(var(--chrome-bar-height) + var(--fixture-height));
+  --background-primary: var(--nws-ground);
+  --background-operational: #e9ebe6;
+  --surface-raised: #f8f9f4;
+  --surface-proof: var(--nws-proof);
+  --surface-proof-raised: #222a38;
+  --text-primary: var(--nws-ink);
+  --text-secondary: var(--nws-muted);
+  --text-on-proof: var(--nws-ground);
+  --border-structural: rgb(18 20 26 / 44%);
+  --border-subtle: var(--nws-soft-rule);
+  --action-primary: var(--nws-action);
+  --action-primary-hover: #5039bc;
+  --domain-receivable: var(--nws-receivable);
+  --domain-protection: var(--nws-protection);
+  --state-critical: #a61f50;
+  --state-attention: #7458d0;
+  --state-positive: #006c9c;
+  --state-neutral: var(--nws-muted);
+  --type-identity: var(--font-product), Arial, sans-serif;
+  --type-interface: var(--font-product), Arial, sans-serif;
+  min-height: 100svh;
+  overflow-x: clip;
+  background: var(--nws-ground);
+  color: var(--nws-ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 14px;
+}
+
+.chrome {
+  position: relative;
+  display: grid;
+  height: var(--chrome-bar-height);
+  grid-template-columns: minmax(230px, 3fr) minmax(360px, 5fr) minmax(310px, 4fr);
+  align-items: stretch;
+  border-bottom: 1px solid var(--nws-rule);
+  background: var(--nws-ground);
+  color: var(--nws-ink);
+}
+
+.brandLockup {
+  padding-inline: clamp(16px, 2vw, 28px);
+  border-right: 1px solid var(--nws-soft-rule);
+}
+
+.shell :global(.brand-wordmark) {
+  margin-right: 14px;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 19px;
+  font-variation-settings: "wdth" 112, "wght" 780;
+  letter-spacing: -0.055em;
+}
+
+.shell :global(.brand-caption) {
+  max-width: none;
+  color: var(--nws-muted);
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.navigation {
+  min-width: 0;
+  border-right: 1px solid var(--nws-soft-rule);
+}
+
+.navigation :global(ul) {
+  justify-content: center;
+}
+
+.navigation :global(li) {
+  border: 0;
+}
+
+.navigation :global(.role-navigation-link) {
+  min-width: 0;
+  height: 100%;
+  padding: 0 clamp(12px, 1.7vw, 24px);
+  color: var(--nws-muted);
+  font-size: 12px;
+  font-variation-settings: "wdth" 92, "wght" 560;
+}
+
+.navigation :global(.role-navigation-link:hover) {
+  background: transparent;
+  color: var(--nws-ink);
+}
+
+.navigation :global(.role-navigation-link.is-current) {
+  color: var(--nws-ink);
+  font-variation-settings: "wdth" 88, "wght" 740;
+}
+
+.navigation :global(.role-navigation-link.is-current::after) {
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 3px;
+  background: var(--nws-action);
+}
+
+.session {
+  justify-content: flex-end;
+  padding-inline: clamp(14px, 1.8vw, 24px);
+  color: var(--nws-muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+}
+
+.session :global(span + span) {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--nws-soft-rule);
+}
+
+.session :global(.session-fresh),
+.session :global(.session-restricted) {
+  color: var(--nws-ink);
+  font-weight: 600;
+}
+
+.fixture {
+  position: relative;
+  z-index: 10;
+  top: auto;
+  right: auto;
+  display: flex;
+  width: 100%;
+  height: var(--fixture-height);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(16px, 2vw, 28px);
+  border: 0;
+  border-bottom: 1px solid var(--nws-soft-rule);
+  background: var(--nws-ground);
+  color: var(--nws-muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fixture::before {
+  display: none;
+}
+
+.shell :global(.product-main) {
+  min-height: calc(100svh - var(--chrome-height));
+}
+
+.shell:global(.product-shell-protocol),
+.shell:global(.product-shell-protocol) .chrome {
+  background: var(--nws-ground);
+  color: var(--nws-ink);
+}
+
+.shell:global(.product-shell-protocol) .chrome :global(.brand-lockup),
+.shell:global(.product-shell-protocol) .chrome :global(.role-navigation li),
+.shell:global(.product-shell-protocol) .chrome :global(.session-context span + span) {
+  border-color: var(--nws-soft-rule);
+}
+
+.shell:global(.product-shell-protocol) .chrome :global(.brand-caption),
+.shell:global(.product-shell-protocol) .chrome :global(.role-navigation-link),
+.shell:global(.product-shell-protocol) .chrome :global(.session-context) {
+  color: var(--nws-muted);
+}
+
+.shell:global(.product-shell-protocol) .chrome :global(.role-navigation-link:hover),
+.shell:global(.product-shell-protocol) .chrome :global(.role-navigation-link.is-current) {
+  background: transparent;
+  color: var(--nws-ink);
+}
+
+@media (max-width: 1080px) {
+  .chrome {
+    grid-template-columns: 190px minmax(320px, 1fr) auto;
+  }
+
+  .shell :global(.brand-caption),
+  .session :global(span:first-child) {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    --chrome-bar-height: 52px;
+    --fixture-height: 22px;
+  }
+
+  .chrome {
+    grid-template-columns: 116px minmax(0, 1fr) 42px;
+    height: var(--chrome-bar-height);
+  }
+
+  .brandLockup {
+    padding-inline: 14px;
+  }
+
+  .shell :global(.brand-wordmark) {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .navigation {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .navigation :global(ul) {
+    justify-content: flex-start;
+  }
+
+  .navigation :global(.role-navigation-link) {
+    padding-inline: 11px;
+    font-size: 11px;
+  }
+
+  .session {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .fixture {
+    top: auto;
+    height: var(--fixture-height);
+    max-width: none;
+    padding-inline: 14px;
+  }
+
+  .fixture span:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
