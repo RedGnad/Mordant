@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mordant M-18 — Protocol diagnostic</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="composition.css" />
+  </head>
+  <body>
+    <main class="artboard protocol-board" aria-label="Mordant Protocol Operations diagnostic composition">
+      <header class="product-bar">
+        <div class="brand-lockup">
+          <span class="brand-name">Mordant</span>
+          <span class="brand-caption">Programmable recourse for receivables</span>
+        </div>
+        <nav class="product-nav" aria-label="Primary">
+          <span class="nav-item">Events</span>
+          <span class="nav-item is-active">Diagnostics</span>
+          <span class="nav-item">Policies</span>
+        </nav>
+        <div class="session-context" aria-label="Operations context">
+          <span>MONAD TESTNET · 10143</span>
+          <span>PROTOCOL OPERATOR · 0x0A9…11E</span>
+          <span>RESTRICTED VIEW</span>
+        </div>
+      </header>
+
+      <div class="protocol-layout">
+        <aside class="event-panel" aria-label="Protocol event rail">
+          <header class="event-head">
+            <div class="micro-label light">Observed records</div>
+            <h2>Event and recovery rail</h2>
+          </header>
+          <div class="event-list">
+            <article class="event-item">
+              <span class="event-num">05 · FINALIZED</span>
+              <span class="event-action">settleSyntheticProtection()</span>
+              <span class="event-case"><span>MRD–S02494</span><b>BLOCK 1398</b></span>
+            </article>
+            <article class="event-item">
+              <span class="event-num">04 · 1 CONFIRMATION</span>
+              <span class="event-action">revealSyntheticConflict()</span>
+              <span class="event-case"><span>MRD–S02468</span><b>PENDING</b></span>
+            </article>
+            <article class="event-item">
+              <span class="event-num">03 · FINALIZED</span>
+              <span class="event-action">redeemSyntheticReceivable()</span>
+              <span class="event-case"><span>MRD–S02457</span><b>BLOCK 1391</b></span>
+            </article>
+            <article class="event-item">
+              <span class="event-num">02 · STALE</span>
+              <span class="event-action">observation_ttl_exceeded</span>
+              <span class="event-case"><span>MRD–S02409</span><b>REFRESH</b></span>
+            </article>
+            <article class="event-item is-selected">
+              <span class="event-num">01 · RECOVERY REQUIRED</span>
+              <span class="event-action">after_state_unavailable</span>
+              <span class="event-case"><span>MRD–S02388</span><b>SELECTED</b></span>
+            </article>
+          </div>
+
+          <div class="event-legend" aria-label="Evidence line styles">
+            <div class="micro-label light">Registration legend</div>
+            <div class="event-legend-row"><span class="line-sample"></span><span>Observed</span></div>
+            <div class="event-legend-row"><span class="line-sample attested"></span><span>Attested</span></div>
+            <div class="event-legend-row"><span class="line-sample derived"></span><span>Derived</span></div>
+            <div class="event-legend-row"><span class="line-sample external"></span><span>Not established</span></div>
+          </div>
+        </aside>
+
+        <section class="proof-stage" aria-labelledby="diagnostic-title">
+          <header class="service-plate">
+            <div>DIAGNOSTIC / after_state_unavailable<br />DEAL / synthetic:recovery-required</div>
+            <div>SCHEMA / product-model.v1<br />SOURCE / synthetic-fixture</div>
+            <div>OBS / BLOCK 1402<br />FINALITY / FINALIZED</div>
+          </header>
+
+          <div class="proof-content">
+            <div class="diagnostic-title">
+              <h1 id="diagnostic-title">Expected after-state could not be reconstructed.</h1>
+              <span class="state-chip critical">Recovery state</span>
+            </div>
+
+            <section class="transition-bays" aria-label="Before action and after transition">
+              <article class="transition-bay before">
+                <div class="micro-label">Before · observed</div>
+                <h3>PROTECTION · ACTIVE</h3>
+                <p>Last safe state<br />Receivable outstanding</p>
+              </article>
+              <article class="transition-bay action">
+                <div class="micro-label">Action · submitted</div>
+                <h3>TRANSITION REFERENCE</h3>
+                <p>Not established by fixture<br />No executable action exposed</p>
+              </article>
+              <article class="transition-bay after">
+                <div class="micro-label">After · unavailable</div>
+                <h3>NOT RECONSTRUCTED</h3>
+                <p>Recovery required<br />Protocol gate blocked</p>
+              </article>
+            </section>
+
+            <section class="raw-proof" aria-label="Raw diagnostic fields">
+              <div class="raw-proof-head">
+                <span class="micro-label light">Raw proof boundary · machine-readable fields</span>
+                <span>FIXTURE-OBSERVED · NOT LIVE ON-CHAIN</span>
+              </div>
+              <div class="raw-grid">
+                <div>
+                  <div class="raw-row"><span>source</span><span>synthetic-fixture</span></div>
+                  <div class="raw-row"><span>observed_at</span><span>2026-07-29T08:00:00Z</span></div>
+                  <div class="raw-row"><span>finality</span><span>finalized · 32 conf</span></div>
+                  <div class="raw-row"><span>safe_state</span><span>protection/active</span></div>
+                </div>
+                <div>
+                  <div class="raw-row"><span>revert_sel</span><span>not emitted by fixture</span></div>
+                  <div class="raw-row"><span>gas_estimate</span><span>unavailable</span></div>
+                  <div class="raw-row"><span>recovery_call</span><span>resumeSyntheticTransition()</span></div>
+                  <div class="raw-row"><span>owner</span><span>protocol_operations</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="protocol-evidence" aria-label="Evidence boundary">
+              <div class="protocol-evidence-title">
+                <div class="micro-label">Evidence boundary</div>
+                <p>Classification stays attached to every fact.</p>
+              </div>
+              <div class="protocol-evidence-list">
+                <div class="evidence-row observed"><span class="evidence-kind">Observed</span><span>Synthetic fixture state at block 1402</span></div>
+                <div class="evidence-row attested"><span class="evidence-kind">Attested</span><span>No participant attestation in this record</span></div>
+                <div class="evidence-row derived"><span class="evidence-kind">Derived</span><span>Recovery required · protocol gate blocked</span></div>
+                <div class="evidence-row external"><span class="evidence-kind">Not established</span><span>Revert cause, legal effect, production safety</span></div>
+              </div>
+            </section>
+
+            <footer class="record-foot">
+              <span>LAST SAFE ROOT / synroot:mordant-demo-invoice-001 · RECORD / diagnostic:after_state_unavailable</span>
+              <div class="root-index">
+                <div class="rootline" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                <small>visual index derived from invoice root</small>
+              </div>
+            </footer>
+          </div>
+        </section>
+
+        <aside class="recovery-panel" aria-label="Recovery diagnostic and runbook">
+          <section class="recovery-verdict">
+            <div class="micro-label light">Unique readiness verdict</div>
+            <h2 class="verdict-word">Recovery required</h2>
+            <p>No action may be presented as executable.<br />Owner · Protocol Operations</p>
+          </section>
+
+          <section class="recovery-diagnostic">
+            <div class="micro-label light">Selected-record diagnostic</div>
+            <div class="diagnostic-row"><span>code</span><span>transition_incomplete</span></div>
+            <div class="diagnostic-row"><span>last safe state</span><span>Protection / Active</span></div>
+            <div class="diagnostic-row"><span>expected after</span><span>Unavailable</span></div>
+            <div class="diagnostic-row"><span>receivable units</span><span>Unchanged</span></div>
+            <div class="diagnostic-row"><span>candidate recovery</span><span>resumeSynthetic…()</span></div>
+          </section>
+
+          <section class="recovery-gates">
+            <div class="micro-label light">Preconditions · selected record only</div>
+            <div class="gate-list">
+              <div class="gate-row">
+                <span class="gate-symbol identity" aria-hidden="true"></span>
+                <span><span class="gate-name">Eligibility</span><span class="gate-detail">Operator credential</span></span>
+                <span class="gate-state clear">Clear</span>
+              </div>
+              <div class="gate-row">
+                <span class="gate-symbol role" aria-hidden="true"></span>
+                <span><span class="gate-name">Role</span><span class="gate-detail">Protocol operator</span></span>
+                <span class="gate-state clear">Clear</span>
+              </div>
+              <div class="gate-row">
+                <span class="gate-symbol time" aria-hidden="true"></span>
+                <span><span class="gate-name">Time</span><span class="gate-detail">No time gate</span></span>
+                <span class="gate-state neutral">Not required</span>
+              </div>
+              <div class="gate-row">
+                <span class="gate-symbol economic" aria-hidden="true"></span>
+                <span><span class="gate-name">Economics</span><span class="gate-detail">No funds move</span></span>
+                <span class="gate-state neutral">Not required</span>
+              </div>
+              <div class="gate-row">
+                <span class="gate-symbol protocol" aria-hidden="true"></span>
+                <span><span class="gate-name">Protocol</span><span class="gate-detail">Reconcile after-state</span></span>
+                <span class="gate-state blocked">Recovery required</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="recovery-runbook">
+            <div class="micro-label light">Recovery runbook · no automatic retry</div>
+            <ol>
+              <li>Refresh the last finalized observation.</li>
+              <li>Compare expected and observed protection state.</li>
+              <li>Re-run simulation without changing receivable units.</li>
+              <li>Resume only after the protocol gate clears.</li>
+            </ol>
+            <button class="btn" type="button"><span>Copy recovery checklist</span><span class="arrow">↗</span></button>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>
