@@ -15,25 +15,30 @@ async function expectNoThirdPartyKycDetail(page: Page) {
 }
 
 test.describe("Mordant role-aware product surfaces", () => {
-  test("each role receives its own compact navigation and current location", async ({ page }) => {
+  test("each role receives compact navigation and folded session context", async ({ page }) => {
     const cases = [
       {
         path: "/",
         navigation: "Originator navigation",
-        links: ["Workspace", "Portfolio", "Evidence"],
+        links: ["Portfolio", "Evidence"],
         current: "Workspace",
+        role: "Originator",
+        fixture: "Synthetic design fixture · no real funds",
       },
       {
         path: "/deal-room",
         navigation: "Holder navigation",
-        links: ["← Portfolio", "Deal room", "Evidence"],
-        current: "Deal room",
+        links: ["← Portfolio"],
+        role: "Holder",
+        fixture: "Synthetic · no real funds",
       },
       {
         path: "/protocol",
         navigation: "Protocol operator navigation",
-        links: ["← Workspace", "Events", "Diagnostics", "Recovery"],
+        links: ["← Workspace", "Events", "Recovery"],
         current: "Diagnostics",
+        role: "Protocol operator",
+        fixture: "Synthetic design fixture · no real funds",
       },
     ] as const;
 
@@ -45,18 +50,29 @@ test.describe("Mordant role-aware product surfaces", () => {
       // Protocol intentionally hides secondary anchors on narrow viewports, but
       // the role contract and link order remain present in the navigation DOM.
       await expect(navigation.locator("a")).toHaveText([...item.links]);
-      await expect(navigation.getByRole("link", { name: item.current, exact: true })).toHaveAttribute(
-        "aria-current",
-        "page",
-      );
+      if ("current" in item) {
+        const current = navigation.getByText(item.current, { exact: true });
+        await expect(current).toHaveAttribute("aria-current", "page");
+        await expect(current).not.toHaveAttribute("href");
+      }
 
       const session = page.getByLabel("Session context");
-      await expect(session).toContainText(/Monad testnet · 10143/i);
+      const role = page.getByLabel(`${item.role} role`);
+      if (item.path === "/deal-room" || (page.viewportSize()?.width ?? 1280) > 720) {
+        await expect(role).toBeVisible();
+      } else {
+        await expect(role).toBeHidden();
+      }
+      const context = session.locator("details");
+      await expect(context).not.toHaveAttribute("open", "");
+      await expect(context.getByText("Monad testnet · 10143", { exact: true })).toBeHidden();
+      await context.locator("summary").click();
+      await expect(context.getByText("Monad testnet · 10143", { exact: true })).toBeVisible();
       if (item.path === "/protocol") {
         await expect(session).toContainText("Public synthetic diagnostics");
         await expect(session).not.toContainText(/restricted/i);
       }
-      await expect(page.getByText("Synthetic design fixture · no real funds", { exact: true })).toBeVisible();
+      await expect(page.getByText(item.fixture, { exact: true })).toBeVisible();
     }
   });
 
@@ -104,9 +120,11 @@ test.describe("Mordant role-aware product surfaces", () => {
     await portfolioLink.click();
     await expect(page).toHaveURL(/\/#portfolio$/);
     await expect(page.locator("#portfolio")).toBeVisible();
+    await expect(page.locator("#portfolio")).toBeFocused();
     await evidenceLink.click();
     await expect(page).toHaveURL(/\/#evidence$/);
-    await expect(page.locator("#evidence")).toBeVisible();
+    await expect(page.locator("#evidence")).toHaveAttribute("open", "");
+    await expect(page.locator("#evidence > summary")).toBeFocused();
 
     const queue = page.getByTestId("workspace-interventions");
     const protection = page.locator('.workspace-domain-pair [data-domain="protection"]');
@@ -197,25 +215,26 @@ test.describe("Mordant role-aware product surfaces", () => {
   test("the participant view is fixture-position-derived, exact, and offers no manual role switch", async ({ page }) => {
     await page.goto("/deal-room");
 
-    await expect(page.getByTestId("participant-position")).toContainText("Your position · 60 / 100 units");
-    await expect(page.getByText("Your synthetic role view", { exact: true })).toBeVisible();
+    const firstView = page.getByTestId("participant-first-view");
+    await expect(firstView).toContainText("Your receivable has not moved.");
+    await expect(page.getByTestId("participant-position")).toBeHidden();
 
     const receivable = page.locator('.participant-domain-pair [data-domain="receivable"]');
     const protection = page.locator('.participant-domain-pair [data-domain="protection"]');
-    await expect(receivable.locator(".domain-ledger-amount")).toHaveText("1,488,000.00 aUSDC");
-    await expect(protection.locator(".domain-ledger-amount")).toHaveText("148,800.00 aUSDC");
+    await expect(receivable.locator(".domain-ledger-amount")).toHaveText("1,488,000 aUSDC");
+    await expect(protection.locator(".domain-ledger-amount")).toHaveText("148,800 aUSDC");
     await expect(receivable).toHaveAttribute("data-edge", "continuous-double");
     await expect(protection).toHaveAttribute("data-edge", "interrupted-notch");
 
-    const verdicts = page.locator("[data-readiness-verdict]");
-    await expect(verdicts).toHaveCount(1);
-    await expect(verdicts).toHaveAttribute("data-readiness-verdict", "WRONG_ROLE");
-    await expect(verdicts.getByRole("heading", { name: "Wrong role", exact: true })).toBeVisible();
-    await expect(verdicts).toContainText("Facility B (synthetic)");
+    await expect(firstView).toHaveAttribute("data-readiness-verdict", "WRONG_ROLE");
+    await expect(page.locator(".participant-surface .readiness-verdict")).toBeHidden();
 
     await expect(page.locator(".participant-surface fieldset, .participant-surface select")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^(?:Holder A|Facility B)$/i })).toHaveCount(0);
 
+    const evidence = page.getByTestId("participant-evidence");
+    await evidence.locator("summary").click();
+    await expect(evidence).toHaveAttribute("open", "");
     const participantEvidence = page.locator(".participant-proof .evidence-facts");
     await expect(participantEvidence.locator('[data-evidence-class="observed"]')).toHaveCount(0);
     await expect(participantEvidence.locator('[data-evidence-class="attested"]')).toHaveCount(0);
@@ -224,13 +243,16 @@ test.describe("Mordant role-aware product surfaces", () => {
     await expect(participantEvidence).toContainText("No corresponding event is attached to this scenario");
     await expect(participantEvidence).toContainText("No signed participant attestation is attached to this scenario");
     const liveReadBoundary = page
-      .locator(".participant-evidence-area .observation-stamp > div")
+      .locator(".participant-actions .observation-stamp > div")
       .filter({ hasText: "Live read" });
     await expect(liveReadBoundary).toContainText("Not performed");
     await page.getByTestId("participant-review-action").click();
-    const review = page.getByRole("status");
+    await expect(evidence).not.toHaveAttribute("open", "");
+    const review = page.getByTestId("participant-why").getByRole("status");
     await expect(review).toContainText("No cure action is offered to this synthetic holder.");
     await expect(review).toContainText("not a live wallet read or manual selector");
+    await expect(page.getByTestId("participant-position")).toContainText("Your position · 60 / 100 units");
+    await expect(review.locator('[data-readiness-verdict="WRONG_ROLE"]')).toBeVisible();
 
     await expectNoThirdPartyKycDetail(page);
   });
@@ -308,13 +330,13 @@ test.describe("Mordant role-aware product surfaces", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator("main")).toBeFocused();
 
-    await page.reload();
+    await page.goto("/");
     await page.keyboard.press("Tab");
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Mordant workspace", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: "Workspace", exact: true })).toBeFocused();
+    await expect(page.getByRole("link", { name: "Portfolio", exact: true })).toBeFocused();
 
     const target = page.getByTestId("workspace-interventions").getByRole("button", {
       name: /Protection funding blocked by synthetic balance/i,

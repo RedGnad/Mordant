@@ -304,33 +304,107 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
           </div>
         </aside>
 
-        <section className="protocol-proof-stage" id="diagnostics" aria-labelledby="protocol-record-title">
-          <header className="protocol-service-plate">
-            <div>Record / {selectedRecord.id}<br />Deal / {selectedRecord.deal.id}</div>
-            <div>Schema / {selectedRecord.deal.schemaVersion}<br />Source / synthetic-fixture</div>
-            <div>Obs / block {observation.block}<br />Finality / {observation.finality}</div>
-          </header>
-
-          <div className="protocol-proof-content">
-            <div className="protocol-record-title">
-              <div className={styles.incidentHeading}>
-                <p className="micro-label">01 / Selected {selectedRecord.kind}</p>
-                <h2 id="protocol-record-title">
-                  {selectedRecord.kind === "diagnostic" ? selectedRecord.diagnostic.title : selectedRecord.proof.action.name}
-                </h2>
-                <p className={styles.impactLine}>
-                  <span>Receivable units</span>
-                  <strong>{receivableImpact}</strong>
-                  <span>Recovery owner</span>
-                  <strong>{selectedRecord.deal.nextResponsibility.actorLabel}</strong>
-                </p>
-              </div>
-              <div className={styles.recordStatus}>
-                <span className="status-token" data-tone={selectedTone}>{selectedRecord.status}</span>
-                <small>{selectedRecord.kind === "diagnostic" ? "Incident" : "Transition"} / {dealShortId(selectedRecord.deal)}</small>
-              </div>
+        <section
+          className="protocol-incident-stage"
+          id="diagnostics"
+          aria-labelledby="protocol-record-title"
+          data-testid="protocol-incident-stage"
+        >
+          <div className="protocol-record-title">
+            <div className={styles.incidentHeading}>
+              <p className="micro-label">01 / Selected {selectedRecord.kind}</p>
+              <h2 id="protocol-record-title">
+                {selectedRecord.kind === "diagnostic" ? selectedRecord.diagnostic.title : selectedRecord.proof.action.name}
+              </h2>
+              <p className={styles.impactLine} data-testid="protocol-impact">
+                <span>Receivable units</span>
+                <strong>{receivableImpact}</strong>
+                <span>Recovery owner</span>
+                <strong>{selectedRecord.deal.nextResponsibility.actorLabel}</strong>
+              </p>
             </div>
+            <div className={styles.recordStatus}>
+              <span className="status-token" data-tone={selectedTone}>{selectedRecord.status}</span>
+              <small>{selectedRecord.kind === "diagnostic" ? "Incident" : "Transition"} / {dealShortId(selectedRecord.deal)}</small>
+            </div>
+          </div>
+        </section>
 
+        <aside className="protocol-diagnostic-rail" id="recovery" aria-label="Selected record diagnostic and runbook">
+          {verdict ? <ReadinessVerdict verdict={verdict} compact /> : (
+            <section className="protocol-no-verdict">
+              <p className="micro-label">Unique readiness verdict</p>
+              <h2>Evidence only</h2>
+              <p>No candidate action is attached to this selected transition.</p>
+            </section>
+          )}
+
+          <section
+            className="protocol-runbook"
+            aria-labelledby="protocol-runbook-heading"
+            data-testid="protocol-runbook"
+          >
+            <p className="micro-label">{verdict?.code === "RECOVERY_REQUIRED" ? "Recovery runbook · no automatic retry" : "Inspection checklist"}</p>
+            <h2 id="protocol-runbook-heading" className={styles.runbookHeading}>
+              {verdict?.code === "RECOVERY_REQUIRED" ? "Recover the protection flow" : "Verify this record"}
+            </h2>
+            <p className={styles.runbookCommand}>{selectedAction?.contractAction ?? "No candidate call"}</p>
+            <button type="button" className="secondary-action" onClick={() => void copyChecklist()}>
+              {copyStatus === "copied" ? "Checklist copied" : "Copy selected checklist"}
+            </button>
+            <details className={styles.runbookSteps}>
+              <summary>{checklist.length} controlled steps</summary>
+              <ol>
+                {checklist.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </details>
+            {copyStatus === "failed" ? <p className="copy-feedback" role="status">Clipboard unavailable. Select the listed steps manually.</p> : null}
+          </section>
+
+          <section className="selected-record-diagnostic" aria-labelledby="selected-diagnostic-heading">
+            <h2 className="structural-heading" id="selected-diagnostic-heading">
+              02 / Why this state
+              <small>{selectedDiagnostics.length || "None"}</small>
+            </h2>
+            {selectedDiagnostics.length > 0 ? selectedDiagnostics.map((diagnostic) => (
+              <div className="diagnostic-entry" data-severity={diagnostic.severity} key={diagnostic.code}>
+                <strong>{diagnostic.code}</strong>
+                <p>{diagnostic.message}</p>
+                <dl>
+                  <div><dt>Severity</dt><dd>{diagnostic.severity}</dd></div>
+                  <div><dt>Owner</dt><dd>{selectedRecord.deal.nextResponsibility.actorLabel}</dd></div>
+                  <div><dt>Recovery</dt><dd>{diagnostic.recovery ?? "No automatic recovery"}</dd></div>
+                </dl>
+              </div>
+            )) : (
+              <div className="diagnostic-empty">
+                <strong>No diagnostic attached</strong>
+                <p>The selected transition record contains no error or warning diagnostic.</p>
+              </div>
+            )}
+          </section>
+
+          {selectedAction ? (
+            <GateVector
+              gates={selectedAction.gates.map(gateToView)}
+              title="03 / Preconditions"
+              compact
+            />
+          ) : null}
+        </aside>
+
+        <header className="protocol-service-plate">
+          <div>Record / {selectedRecord.id}<br />Deal / {selectedRecord.deal.id}</div>
+          <div>Schema / {selectedRecord.deal.schemaVersion}<br />Source / synthetic-fixture</div>
+          <div>Obs / block {observation.block}<br />Finality / {observation.finality}</div>
+        </header>
+
+        <section
+          className="protocol-proof-stage"
+          aria-labelledby="protocol-record-title"
+          data-testid="protocol-proof-stage"
+        >
+          <div className="protocol-proof-content">
             <div className={styles.levelHeading}>
               <p className="micro-label">02 / State transition</p>
               <span>{transition.before} → {transition.after}</span>
@@ -376,66 +450,6 @@ export function ProtocolOperations({ artifactContext }: { readonly artifactConte
             </details>
           </div>
         </section>
-
-        <aside className="protocol-diagnostic-rail" id="recovery" aria-label="Selected record diagnostic and runbook">
-          {verdict ? <ReadinessVerdict verdict={verdict} compact /> : (
-            <section className="protocol-no-verdict">
-              <p className="micro-label">Unique readiness verdict</p>
-              <h2>Evidence only</h2>
-              <p>No candidate action is attached to this selected transition.</p>
-            </section>
-          )}
-
-          <section className="protocol-runbook" aria-labelledby="protocol-runbook-heading">
-            <p className="micro-label">{verdict?.code === "RECOVERY_REQUIRED" ? "Recovery runbook · no automatic retry" : "Inspection checklist"}</p>
-            <h2 id="protocol-runbook-heading" className={styles.runbookHeading}>
-              {verdict?.code === "RECOVERY_REQUIRED" ? "Recover the protection flow" : "Verify this record"}
-            </h2>
-            <p className={styles.runbookCommand}>{selectedAction?.contractAction ?? "No candidate call"}</p>
-            <p className={styles.runbookImpact}>Receivable units / <strong>{receivableImpact}</strong></p>
-            <button type="button" className="secondary-action" onClick={() => void copyChecklist()}>
-              {copyStatus === "copied" ? "Checklist copied" : "Copy selected checklist"}
-            </button>
-            <details className={styles.runbookSteps}>
-              <summary>{checklist.length} controlled steps</summary>
-              <ol>
-                {checklist.map((step) => <li key={step}>{step}</li>)}
-              </ol>
-            </details>
-            {copyStatus === "failed" ? <p className="copy-feedback" role="status">Clipboard unavailable. Select the listed steps manually.</p> : null}
-          </section>
-
-          <section className="selected-record-diagnostic" aria-labelledby="selected-diagnostic-heading">
-            <h2 className="structural-heading" id="selected-diagnostic-heading">
-              02 / Why this state
-              <small>{selectedDiagnostics.length || "None"}</small>
-            </h2>
-            {selectedDiagnostics.length > 0 ? selectedDiagnostics.map((diagnostic) => (
-              <div className="diagnostic-entry" data-severity={diagnostic.severity} key={diagnostic.code}>
-                <strong>{diagnostic.code}</strong>
-                <p>{diagnostic.message}</p>
-                <dl>
-                  <div><dt>Severity</dt><dd>{diagnostic.severity}</dd></div>
-                  <div><dt>Owner</dt><dd>{selectedRecord.deal.nextResponsibility.actorLabel}</dd></div>
-                  <div><dt>Recovery</dt><dd>{diagnostic.recovery ?? "No automatic recovery"}</dd></div>
-                </dl>
-              </div>
-            )) : (
-              <div className="diagnostic-empty">
-                <strong>No diagnostic attached</strong>
-                <p>The selected transition record contains no error or warning diagnostic.</p>
-              </div>
-            )}
-          </section>
-
-          {selectedAction ? (
-            <GateVector
-              gates={selectedAction.gates.map(gateToView)}
-              title="03 / Preconditions"
-              compact
-            />
-          ) : null}
-        </aside>
       </div>
 
       <section className="protocol-live-observation" aria-labelledby="live-observation-heading">

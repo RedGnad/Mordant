@@ -44,8 +44,8 @@ is also carried by labels, position and edge treatment so colour is never the on
 ### Participant Deal Room
 
 The first view is a human conclusion: the receivable has not moved, the holder has no cure action,
-Facility B owns the cure, and the UTC deadline is visible as one macro typographic event. The two
-balances stay unequal and separate. Explanation and evidence remain secondary and inspectable.
+Facility B owns the cure, and the UTC deadline appears once. The two balances stay unequal and
+separate. Explanation, readiness and evidence remain secondary and inspectable.
 
 ### Deal Workspace
 
@@ -59,6 +59,21 @@ The event rail remains dense, but the selected incident, impact and recovery rou
 before/action/after evidence, diagnostics, artifact manifest context and recovery instructions are
 preserved as the expert layer. The dark proof field is allowed here without becoming the atmosphere
 of participant-facing pages.
+
+## UX density calibration
+
+The three audiences intentionally keep different densities: Participant is low-to-medium,
+Workspace remains operationally dense, and Protocol remains expert-dense.
+
+- Participant exposes only the conclusion, absence of action, one owner/deadline, two two-line
+  amounts, one consequence, one exit and the closed `Why?` / `Evidence` disclosures. The complete
+  first view is capped at 80 visible words and contains no technical identifier.
+- Participant chrome exposes the brand, portfolio return, role and synthetic boundary. Wallet,
+  network and freshness are grouped under the closed `Context` control.
+- Workspace `Portfolio` now scrolls and focuses the queue. `Evidence` opens, scrolls to and focuses
+  its disclosure. The current `Workspace` location is static rather than a false link.
+- Protocol preserves the perceptual sequence `incident → impact → runbook → proof`, including at
+  `390px`, without duplicating content for mobile.
 
 ## Preserved safety and accounting boundaries
 
@@ -82,7 +97,8 @@ protocol; screenshots and automated checks cannot approve comprehension on their
 - `pnpm validate`: passed (118 unit tests, runner checks, 89 Forge tests, evidence and secret scans,
   lint, typecheck and production build). The existing unused-variable warning in
   `scripts/m05-runner-lib.mjs` is unchanged.
-- `pnpm test:e2e`: 52/52 scenarios passed across desktop, mobile and the transaction journey.
+- `pnpm test:e2e`: 58/58 scenarios passed across desktop, tablet, mobile and the transaction journey.
 - Independent visual review: `READY` on Workspace, Participant and Protocol at `1440 × 960` and
-  `390 × 844`, including the corrected Protocol proof-field contrast.
+  `390 × 844`. Participant measures about 57 visible words on desktop and 48 on mobile, including
+  chrome; Protocol keeps incident and impact ahead of the runbook and proof on mobile.
 - Public alias: unchanged. Integration remains isolated on its candidate branch until review.

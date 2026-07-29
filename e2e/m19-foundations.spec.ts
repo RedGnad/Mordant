@@ -47,6 +47,29 @@ async function expectMinimumTarget(locator: Locator, label: string) {
   expect(bounds.height, `${label} height`).toBeGreaterThanOrEqual(44);
 }
 
+async function visibleViewportText(page: Page) {
+  return page.locator(".product-shell").evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const fragments: string[] = [];
+
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      const value = node.textContent?.replace(/\s+/g, " ").trim();
+      const parent = node.parentElement;
+      if (!value || !parent || parent.closest('[aria-hidden="true"]')) continue;
+      if (parent.closest("details:not([open])") && !parent.closest("summary")) continue;
+
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      if (Array.from(range.getClientRects()).some((rect) => rect.bottom > 0 && rect.top < window.innerHeight)) {
+        fragments.push(value);
+      }
+    }
+
+    return fragments.join(" ").replace(/\s+/g, " ").trim();
+  });
+}
+
 function parseHex(color: string): readonly [number, number, number] {
   const normalized = color.trim().toLowerCase();
   const match = /^#([0-9a-f]{6})$/.exec(normalized);
@@ -115,14 +138,24 @@ test.describe("1280 by 800 decision viewport", () => {
   test("participant and protocol keep their critical records fully above fold", async ({ page }) => {
     await page.goto("/deal-room");
     const participantRequired: readonly [Locator, string][] = [
-      [page.locator(".participant-critical-band"), "participant critical band"],
-      [page.getByTestId("participant-position"), "participant position"],
+      [page.getByRole("heading", { name: "Your receivable has not moved.", exact: true }), "participant conclusion"],
+      [page.getByText("You have no action.", { exact: true }), "participant no-action decision"],
+      [page.getByTestId("participant-deadline"), "participant responsibility and deadline"],
       [page.locator('.participant-domain-pair [data-domain="receivable"]'), "participant receivable"],
       [page.locator('.participant-domain-pair [data-domain="protection"]'), "participant protection"],
-      [page.locator('[data-readiness-verdict="WRONG_ROLE"]'), "participant verdict"],
-      [page.getByTestId("participant-review-action"), "participant next action"],
+      [page.getByTestId("participant-deadline-consequence"), "participant consequence"],
+      [page.getByTestId("participant-primary-action"), "participant exit"],
+      [page.getByTestId("participant-review-action"), "participant why disclosure"],
+      [page.getByTestId("participant-evidence").locator("summary"), "participant evidence disclosure"],
     ];
     for (const [locator, label] of participantRequired) await expectInsideViewport(page, locator, label);
+
+    const participantText = await visibleViewportText(page);
+    const participantWords = participantText.match(/[A-Za-zÀ-ÿ0-9]+(?:[’'.,:/-][A-Za-zÀ-ÿ0-9]+)*/g) ?? [];
+    expect(participantWords.length).toBeLessThanOrEqual(80);
+    expect(participantText.match(/Facility B/g)).toHaveLength(1);
+    expect(participantText.match(/12:00/g)).toHaveLength(1);
+    expect(participantText).not.toMatch(/invoice root|\bfolio\b|blocking gate|unlock|gate vector|0x[a-f0-9]+|MRD-|P[–-]CP/i);
 
     await page.goto("/protocol");
     const protocolRequired: readonly [Locator, string][] = [
@@ -133,6 +166,27 @@ test.describe("1280 by 800 decision viewport", () => {
       [page.locator(".protocol-runbook"), "recovery runbook"],
     ];
     for (const [locator, label] of protocolRequired) await expectInsideViewport(page, locator, label);
+  });
+});
+
+test.describe("1024px expert flow", () => {
+  test.use({ viewport: { width: 1024, height: 900 } });
+
+  test("protocol keeps impact and runbook ahead of technical proof", async ({ page }) => {
+    await page.goto("/protocol");
+
+    const impact = await page.getByTestId("protocol-impact").boundingBox();
+    const runbook = await page.getByTestId("protocol-runbook").boundingBox();
+    const metadata = await page.locator(".protocol-service-plate").boundingBox();
+    const proof = await page.getByTestId("protocol-proof-stage").boundingBox();
+
+    expect(impact).not.toBeNull();
+    expect(runbook).not.toBeNull();
+    expect(metadata).not.toBeNull();
+    expect(proof).not.toBeNull();
+    expect((impact?.y ?? 0) + (impact?.height ?? 0)).toBeLessThanOrEqual(runbook?.y ?? 0);
+    expect((runbook?.y ?? 0) + (runbook?.height ?? 0)).toBeLessThanOrEqual(metadata?.y ?? 0);
+    expect((metadata?.y ?? 0) + (metadata?.height ?? 0)).toBeLessThanOrEqual(proof?.y ?? 0);
   });
 });
 
@@ -164,20 +218,37 @@ test.describe("390px product viewport", () => {
     await expectMinimumTarget(page.getByTestId("primary-action"), "workspace action");
     await expectMinimumTarget(
       page.getByRole("navigation", { name: "Originator navigation" }).getByRole("link", {
-        name: "Workspace",
+        name: "Portfolio",
         exact: true,
       }),
       "workspace navigation",
     );
 
     await page.goto("/deal-room");
-    await expectMinimumTarget(page.getByTestId("participant-review-action"), "participant action");
+    await expectMinimumTarget(page.getByTestId("participant-primary-action"), "participant exit");
+    await expectMinimumTarget(page.getByTestId("participant-review-action"), "participant why disclosure");
 
     await page.goto("/protocol");
     await expectMinimumTarget(
       page.locator(".protocol-runbook").getByRole("button", { name: "Copy selected checklist", exact: true }),
       "protocol runbook action",
     );
+  });
+
+  test("protocol mobile order is incident, impact, runbook, then proof", async ({ page }) => {
+    await page.goto("/protocol");
+
+    const incident = await page.getByTestId("protocol-incident-stage").boundingBox();
+    const impact = await page.getByTestId("protocol-impact").boundingBox();
+    const runbook = await page.getByTestId("protocol-runbook").boundingBox();
+    const proof = await page.getByTestId("protocol-proof-stage").boundingBox();
+
+    expect(incident).not.toBeNull();
+    expect(impact).not.toBeNull();
+    expect(runbook).not.toBeNull();
+    expect(proof).not.toBeNull();
+    expect((impact?.y ?? 0) + (impact?.height ?? 0)).toBeLessThanOrEqual(runbook?.y ?? 0);
+    expect((runbook?.y ?? 0) + (runbook?.height ?? 0)).toBeLessThanOrEqual(proof?.y ?? 0);
   });
 });
 

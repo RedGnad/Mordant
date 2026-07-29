@@ -19,6 +19,33 @@ async function visibleStyleViolations(page: Page) {
   );
 }
 
+async function visibleViewportText(page: Page) {
+  return page.locator(".product-shell").evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const fragments: string[] = [];
+
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      const value = node.textContent?.replace(/\s+/g, " ").trim();
+      const parent = node.parentElement;
+      if (!value || !parent || parent.closest('[aria-hidden="true"]')) continue;
+      if (parent.closest("details:not([open])") && !parent.closest("summary")) continue;
+
+      const style = getComputedStyle(parent);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const intersectsViewport = Array.from(range.getClientRects()).some(
+        (rect) => rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth,
+      );
+      if (intersectsViewport) fragments.push(value);
+    }
+
+    return fragments.join(" ").replace(/\s+/g, " ").trim();
+  });
+}
+
 test.describe("M-18NWS product integration", () => {
   test("the shared product language reaches every real surface without visual noise", async ({ page }) => {
     for (const path of productRoutes) {
@@ -65,10 +92,20 @@ test.describe("M-18NWS product integration", () => {
   test("decision, responsibility and accounting domains lead the participant view", async ({ page }) => {
     await page.goto("/deal-room");
 
+    const firstView = page.getByTestId("participant-first-view");
     await expect(page.getByRole("heading", { name: /Your receivable has not moved/i })).toBeVisible();
     await expect(page.getByText("You have no action.", { exact: true })).toBeVisible();
     await expect(page.getByTestId("participant-deadline")).toContainText("Facility B");
     await expect(page.getByTestId("participant-deadline")).toContainText("12:00");
+    await expect(firstView).toHaveAttribute("data-readiness-verdict", "WRONG_ROLE");
+
+    const firstLevelText = await firstView.innerText();
+    const firstLevelWords = firstLevelText.match(/[A-Za-zÀ-ÿ0-9]+(?:[’'.,:/-][A-Za-zÀ-ÿ0-9]+)*/g) ?? [];
+    expect(firstLevelWords.length).toBeLessThanOrEqual(80);
+    expect(firstLevelText.match(/Facility B/g)).toHaveLength(1);
+    expect(firstLevelText.match(/12:00/g)).toHaveLength(1);
+    expect(firstLevelText).not.toMatch(/invoice root|\bfolio\b|blocking gate|unlock|gate vector|0x[a-f0-9]+|MRD-|P[–-]CP/i);
+    await expect(firstView.locator("time")).toHaveCount(1);
 
     const receivable = page.locator('.participant-domain-pair [data-domain="receivable"]');
     const protection = page.locator('.participant-domain-pair [data-domain="protection"]');
@@ -77,12 +114,65 @@ test.describe("M-18NWS product integration", () => {
       protection.evaluate((element) => getComputedStyle(element, "::before").backgroundColor),
     ]);
     expect(domainStyles).toEqual(["rgb(0, 108, 156)", "rgb(214, 46, 104)"]);
+    await expect(receivable.locator("p")).toHaveCount(2);
+    await expect(protection.locator("p")).toHaveCount(2);
 
-    const evidence = page.locator("#evidence");
+    const why = page.getByTestId("participant-why");
+    const evidence = page.getByTestId("participant-evidence");
+    await expect(why).not.toHaveAttribute("open", "");
     await expect(evidence).not.toHaveAttribute("open", "");
-    await page.getByRole("link", { name: "Inspect evidence", exact: true }).click();
+    await expect(page.getByTestId("participant-primary-action")).toHaveAttribute("href", "/#portfolio");
+
+    const viewportText = await visibleViewportText(page);
+    const viewportWords = viewportText.match(/[A-Za-zÀ-ÿ0-9]+(?:[’'.,:/-][A-Za-zÀ-ÿ0-9]+)*/g) ?? [];
+    expect(viewportWords.length).toBeLessThanOrEqual(80);
+    expect(viewportText.match(/Facility B/g)).toHaveLength(1);
+    expect(viewportText.match(/12:00/g)).toHaveLength(1);
+
+    await page.getByTestId("participant-review-action").click();
+    await expect(why).toHaveAttribute("open", "");
+    await expect(why.locator('[data-readiness-verdict="WRONG_ROLE"]')).toBeVisible();
+    await evidence.locator(":scope > summary").click();
+    await expect(why).not.toHaveAttribute("open", "");
     await expect(evidence).toHaveAttribute("open", "");
-    await expect(page.getByRole("heading", { name: "Inspectable evidence summary", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Configured scenario, not an observed transaction", exact: true })).toBeVisible();
+  });
+
+  test("product navigation produces a visible, focusable result and participant context stays folded", async ({ page }) => {
+    await page.goto("/");
+
+    const workspaceNavigation = page.getByRole("navigation", { name: "Originator navigation" });
+    const workspaceLocation = workspaceNavigation.getByText("Workspace", { exact: true });
+    await expect(workspaceLocation).toHaveAttribute("aria-current", "page");
+    await expect(workspaceLocation).not.toHaveAttribute("href");
+
+    await workspaceNavigation.getByRole("link", { name: "Portfolio", exact: true }).click();
+    await expect(page).toHaveURL(/\/#portfolio$/);
+    await expect(page.locator("#portfolio")).toBeFocused();
+    await expect(workspaceNavigation.getByRole("link", { name: "Portfolio", exact: true })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+
+    await workspaceNavigation.getByRole("link", { name: "Evidence", exact: true }).click();
+    const workspaceEvidence = page.locator("details#evidence");
+    await expect(page).toHaveURL(/\/#evidence$/);
+    await expect(workspaceEvidence).toHaveAttribute("open", "");
+    await expect(workspaceEvidence.locator("summary")).toBeFocused();
+
+    await page.goto("/deal-room");
+    const participantNavigation = page.getByRole("navigation", { name: "Holder navigation" });
+    await expect(participantNavigation.locator("a")).toHaveText(["← Portfolio"]);
+    await expect(page.getByLabel("Holder role")).toBeVisible();
+
+    const context = page.locator(".session-context details");
+    await expect(context).not.toHaveAttribute("open", "");
+    await expect(context.getByText("Monad testnet · 10143", { exact: true })).toBeHidden();
+    await context.locator("summary").click();
+    await expect(context).toHaveAttribute("open", "");
+    await expect(context.getByText("Monad testnet · 10143", { exact: true })).toBeVisible();
+    await expect(context).toContainText("0x4B7…A82");
+    await expect(page.getByText("Synthetic · no real funds", { exact: true })).toBeVisible();
   });
 
   test("workspace and protocol keep their primary operational controls", async ({ page }) => {
@@ -138,6 +228,17 @@ test.describe("M-18NWS product integration", () => {
     expect(proofContrast.command).toBeGreaterThanOrEqual(4.5);
     expect(proofContrast.clear).toBeGreaterThanOrEqual(4.5);
     if ((page.viewportSize()?.width ?? 1280) <= 720) {
+      const incidentBox = await page.getByTestId("protocol-incident-stage").boundingBox();
+      const impactBox = await page.getByTestId("protocol-impact").boundingBox();
+      const runbookBox = await page.getByTestId("protocol-runbook").boundingBox();
+      const proofBox = await page.getByTestId("protocol-proof-stage").boundingBox();
+      expect(incidentBox).not.toBeNull();
+      expect(impactBox).not.toBeNull();
+      expect(runbookBox).not.toBeNull();
+      expect(proofBox).not.toBeNull();
+      expect((impactBox?.y ?? 0) + (impactBox?.height ?? 0)).toBeLessThanOrEqual(runbookBox?.y ?? 0);
+      expect((runbookBox?.y ?? 0) + (runbookBox?.height ?? 0)).toBeLessThanOrEqual(proofBox?.y ?? 0);
+
       const protocolActionBox = await page
         .locator(".protocol-runbook")
         .getByRole("button", { name: "Copy selected checklist", exact: true })

@@ -50,6 +50,10 @@
   color: var(--nws-ink);
 }
 
+.participantChrome {
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+}
+
 .brandLockup {
   padding-inline: clamp(16px, 2vw, 28px);
   border-right: 1px solid var(--nws-soft-rule);
@@ -97,6 +101,14 @@
   color: var(--nws-ink);
 }
 
+.navigation :global(.role-navigation-link:focus-visible),
+.brandLockup :global(.brand-link:focus-visible),
+.contextControl > summary:focus-visible {
+  border-radius: 2px;
+  outline: 3px solid var(--nws-action);
+  outline-offset: -3px;
+}
+
 .navigation :global(.role-navigation-link.is-current) {
   color: var(--nws-ink);
   font-variation-settings: "wdth" 88, "wght" 740;
@@ -111,23 +123,123 @@
 }
 
 .session {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   justify-content: flex-end;
   padding-inline: clamp(14px, 1.8vw, 24px);
-  color: var(--nws-muted);
-  font-family: var(--font-proof), monospace;
-  font-size: 10px;
+  color: var(--nws-ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 11px;
 }
 
-.session :global(span + span) {
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--nws-soft-rule);
+.sessionIdentity {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.sessionIdentity strong {
+  font-variation-settings: "wdth" 88, "wght" 700;
 }
 
 .session :global(.session-fresh),
 .session :global(.session-restricted) {
   color: var(--nws-ink);
   font-weight: 600;
+}
+
+.contextControl {
+  position: relative;
+}
+
+.contextControl > summary {
+  display: flex;
+  min-width: 84px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--nws-soft-rule);
+  color: var(--nws-muted);
+  cursor: pointer;
+  font-variation-settings: "wdth" 90, "wght" 650;
+  list-style: none;
+}
+
+.contextControl > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contextControl > summary > i {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms ease;
+}
+
+.contextControl[open] > summary {
+  border-color: var(--nws-action);
+  color: var(--nws-ink);
+}
+
+.contextControl[open] > summary > i {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.contextPanel {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(272px, calc(100vw - 28px));
+  padding: 15px;
+  border: 1px solid var(--nws-rule);
+  background: var(--nws-ground);
+  color: var(--nws-ink);
+}
+
+.contextPanel > strong {
+  display: block;
+  margin-bottom: 11px;
+  font-size: 12px;
+  font-variation-settings: "wdth" 90, "wght" 740;
+}
+
+.contextPanel dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.contextPanel dl > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--nws-soft-rule);
+}
+
+.contextPanel dt,
+.contextPanel dd {
+  margin: 0;
+}
+
+.contextPanel dt {
+  color: var(--nws-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.contextPanel dd {
+  overflow-wrap: anywhere;
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  text-align: right;
 }
 
 .fixture {
@@ -155,6 +267,20 @@
   display: none;
 }
 
+.shell:global(.product-shell-deal-room) {
+  --fixture-height: 18px;
+}
+
+.shell:global(.product-shell-deal-room) .fixture {
+  justify-content: flex-end;
+  border-bottom-color: transparent;
+  font-size: 9px;
+}
+
+.shell :global(:is(#app-main, #portfolio, #evidence, #events, #diagnostics, #recovery)) {
+  scroll-margin-top: 12px;
+}
+
 .shell :global(.product-main) {
   min-height: calc(100svh - var(--chrome-height));
 }
@@ -167,7 +293,8 @@
 
 .shell:global(.product-shell-protocol) .chrome :global(.brand-lockup),
 .shell:global(.product-shell-protocol) .chrome :global(.role-navigation li),
-.shell:global(.product-shell-protocol) .chrome :global(.session-context span + span) {
+.shell:global(.product-shell-protocol) .chrome .contextControl > summary,
+.shell:global(.product-shell-protocol) .chrome .contextPanel {
   border-color: var(--nws-soft-rule);
 }
 
@@ -189,7 +316,7 @@
   }
 
   .shell :global(.brand-caption),
-  .session :global(span:first-child) {
+  .shell:not(:global(.product-shell-deal-room)) :global(.brand-caption) {
     display: none;
   }
 }
@@ -201,8 +328,12 @@
   }
 
   .chrome {
-    grid-template-columns: 116px minmax(0, 1fr) 42px;
+    grid-template-columns: 116px minmax(0, 1fr) auto;
     height: var(--chrome-bar-height);
+  }
+
+  .participantChrome {
+    grid-template-columns: 116px minmax(0, auto) auto;
   }
 
   .brandLockup {
@@ -229,8 +360,49 @@
   }
 
   .session {
-    padding: 0;
+    gap: 8px;
+    padding: 0 8px;
     justify-content: center;
+  }
+
+  .shell:not(:global(.product-shell-deal-room)) .sessionIdentity {
+    display: none;
+  }
+
+  .contextControl > summary {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0 8px;
+    font-size: 0;
+  }
+
+  .contextControl > summary::before {
+    color: var(--nws-muted);
+    content: "Ctx";
+    font-size: 10px;
+    font-variation-settings: "wdth" 90, "wght" 700;
+  }
+
+  .contextControl > summary > i {
+    display: none;
+  }
+
+  .participantChrome .sessionIdentity {
+    gap: 0;
+  }
+
+  .participantChrome .contextControl > summary {
+    min-width: 64px;
+    font-size: 10px;
+  }
+
+  .participantChrome .contextControl > summary::before {
+    display: none;
+  }
+
+  .participantChrome .contextPanel {
+    right: -2px;
   }
 
   .fixture {
@@ -240,7 +412,7 @@
     padding-inline: 14px;
   }
 
-  .fixture span:last-child {
+  .fixture span + span {
     display: none;
   }
 }

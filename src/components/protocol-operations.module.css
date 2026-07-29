@@ -29,6 +29,7 @@
 .surface :global(.protocol-grid) {
   display: grid;
   grid-template-columns: minmax(224px, 3fr) minmax(510px, 6fr) minmax(306px, 3fr);
+  grid-template-rows: 50px 162px minmax(0, 1fr);
   height: calc(100svh - var(--chrome-height));
   min-height: 680px;
   background: var(--protocol-proof);
@@ -44,6 +45,8 @@
   border-right: 1px solid color-mix(in srgb, var(--protocol-ground) 20%, transparent);
   background: var(--protocol-proof);
   color: var(--protocol-ground);
+  grid-column: 1;
+  grid-row: 1 / -1;
 }
 
 .railHeader {
@@ -240,8 +243,19 @@
   border-left: 3px solid var(--protocol-proof);
 }
 
+.surface :global(.protocol-incident-stage) {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 2;
+  padding: 0 24px;
+  background: var(--protocol-ground);
+  color: var(--protocol-ink);
+}
+
 .surface :global(.protocol-proof-stage) {
   min-width: 0;
+  grid-column: 2;
+  grid-row: 3;
   height: 100%;
   min-height: 0;
   margin: 0;
@@ -257,6 +271,8 @@
   z-index: 3;
   top: 0;
   display: grid;
+  grid-column: 2;
+  grid-row: 1;
   min-height: 50px;
   grid-template-columns: 1.35fr 1fr 0.78fr;
   align-items: center;
@@ -630,6 +646,8 @@
 .surface :global(.protocol-diagnostic-rail) {
   min-width: 0;
   min-height: 0;
+  grid-column: 3;
+  grid-row: 1 / -1;
   margin: 0;
   padding: 16px 14px 18px 0;
   overflow-y: auto;
@@ -706,18 +724,6 @@
   font-size: 10px;
   font-weight: 600;
   overflow-wrap: anywhere;
-}
-
-.runbookImpact {
-  margin: 0 0 9px;
-  color: color-mix(in srgb, var(--protocol-ground) 65%, var(--protocol-proof));
-  font-family: var(--type-proof);
-  font-size: 9px;
-  text-transform: uppercase;
-}
-
-.runbookImpact strong {
-  color: var(--protocol-receivable-on-proof);
 }
 
 .surface :global(.protocol-runbook .secondary-action) {
@@ -881,22 +887,36 @@
 
   .surface :global(.protocol-grid) {
     grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-rows: 162px auto 50px minmax(468px, auto);
     height: auto;
   }
 
   .surface :global(.protocol-event-rail) {
-    grid-column: span 2;
+    grid-column: 1 / 3;
+    grid-row: 1 / -1;
     height: calc(100svh - var(--chrome-height));
   }
 
+  .surface :global(.protocol-service-plate) {
+    grid-column: 3 / -1;
+    grid-row: 3;
+  }
+
+  .surface :global(.protocol-incident-stage) {
+    grid-column: 3 / -1;
+    grid-row: 1;
+  }
+
   .surface :global(.protocol-proof-stage) {
-    grid-column: span 6;
-    height: calc(100svh - var(--chrome-height));
+    grid-column: 3 / -1;
+    grid-row: 4;
+    height: auto;
   }
 
   .surface :global(.protocol-diagnostic-rail) {
     display: grid;
-    grid-column: 1 / -1;
+    grid-column: 3 / -1;
+    grid-row: 2;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
     overflow: visible;
@@ -916,15 +936,20 @@
   .surface :global(.protocol-grid) {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
     min-height: 0;
   }
 
   .surface :global(.protocol-event-rail),
+  .surface :global(.protocol-incident-stage),
+  .surface :global(.protocol-service-plate),
   .surface :global(.protocol-proof-stage),
   .surface :global(.protocol-diagnostic-rail) {
     width: 100%;
     height: auto;
     grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   .surface :global(.protocol-event-rail) {
@@ -933,6 +958,11 @@
     padding: 0 12px;
     border-right: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--protocol-ground) 24%, transparent);
+  }
+
+  .surface :global(.protocol-incident-stage) {
+    order: 2;
+    padding: 0 16px;
   }
 
   .railHeader {
@@ -976,6 +1006,7 @@
 
   .surface :global(.protocol-service-plate) {
     position: static;
+    order: 4;
     grid-template-columns: 1fr;
     gap: 5px;
     padding: 10px 14px;
@@ -1068,12 +1099,13 @@
 
   .surface :global(.protocol-diagnostic-rail) {
     display: block;
-    order: 2;
+    order: 3;
     padding: 0;
   }
 
   .surface :global(.protocol-proof-stage) {
-    order: 3;
+    order: 5;
+    overflow: visible;
   }
 
   .surface :global(.protocol-diagnostic-rail > :nth-child(odd)) {

@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 
 import { getSyntheticDeal } from "@/lib/mordant/product-model";
 import { deriveReadinessVerdict } from "@/lib/mordant/readiness";
@@ -10,29 +8,12 @@ import {
   TransitionJoint,
 } from "@/components/structural-ui";
 import {
-  dealShortId,
   formatDomainAmount,
-  formatState,
-  formatUtc,
   gateToView,
   proRateDomainAmount,
-  shortReference,
 } from "@/components/product-presenters";
 
 import styles from "./participant-deal-room.module.css";
-
-function formatParisTime(timestamp: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: "Europe/Paris",
-    timeZoneName: "short",
-  }).format(new Date(timestamp));
-}
 
 function formatDeadline(timestamp: string) {
   const value = new Date(timestamp);
@@ -58,12 +39,7 @@ type ParticipantDomainLedgerProps = {
   label: string;
   amount: string;
   asset: string;
-  state: string;
-  role: string;
-  location: string;
-  source: string;
-  nextEffect: string;
-  description: string;
+  status: string;
 };
 
 function ParticipantDomainLedger({
@@ -71,12 +47,7 @@ function ParticipantDomainLedger({
   label,
   amount,
   asset,
-  state,
-  role,
-  location,
-  source,
-  nextEffect,
-  description,
+  status,
 }: ParticipantDomainLedgerProps) {
   const edge = domain === "receivable" ? "continuous-double" : "interrupted-notch";
 
@@ -85,26 +56,15 @@ function ParticipantDomainLedger({
       className="domain-ledger"
       data-domain={domain}
       data-edge={edge}
-      aria-label={`${label}: ${amount} ${asset}`}
+      data-testid={`participant-domain-${domain}`}
+      aria-label={`${label}: ${amount} ${asset}. ${status}.`}
     >
-      <div className="domain-ledger-head">
-        <span>{label}</span>
-        <strong>{state}</strong>
-      </div>
-      <p className="domain-ledger-amount"><span>{amount}</span> <small>{asset}</small></p>
-      <p className="domain-ledger-description">{description}</p>
-      <details className={styles.domainDisclosure}>
-        <summary>
-          <span>Position detail</span>
-          <span className={styles.disclosureSign} aria-hidden="true" />
-        </summary>
-        <dl className="domain-ledger-context">
-          <div><dt>Role</dt><dd>{role}</dd></div>
-          <div><dt>Location</dt><dd>{location}</dd></div>
-          <div><dt>Source</dt><dd>{source}</dd></div>
-          <div><dt>Next effect</dt><dd>{nextEffect}</dd></div>
-        </dl>
-      </details>
+      <p className="domain-ledger-head">
+        <span>{label} · <strong>{status}</strong></span>
+      </p>
+      <p className="domain-ledger-amount">
+        <span>{amount}</span> <small>{asset}</small>
+      </p>
     </section>
   );
 }
@@ -118,177 +78,120 @@ export function ParticipantDealRoom() {
   const protectionExposure = proRateDomainAmount(deal.economics.protection.lockedReserve, position);
   const dueAt = deal.nextResponsibility.dueAt ?? "2026-07-29T12:00:00.000Z";
   const deadline = formatDeadline(dueAt);
-  const [showReview, setShowReview] = useState(false);
-  const [showEvidence, setShowEvidence] = useState(false);
+  const responsible = deal.nextResponsibility.actorLabel.replace(" (synthetic)", "");
 
   return (
     <div className={`participant-surface ${styles.surface}`}>
       <section className="participant-folio" aria-labelledby="participant-title">
-        <header className="participant-critical-band" aria-label="Synthetic deal status">
-          <span>Synthetic policy P–CP–01</span>
-          <strong>Conflict state · cure window open</strong>
-          <time dateTime={dueAt}>Closes {formatUtc(dueAt)}</time>
-        </header>
-
-        <div className="participant-columns">
-          <article className="participant-record">
-            <header className="participant-identity">
-              <div className="participant-position" data-testid="participant-position">
-                <strong>{dealShortId(deal)}</strong>
-                <span>{deal.viewer.label}</span>
-                <span>Your position · {position.invoiceUnits} / {position.totalUnits} units</span>
-              </div>
-              <p className={styles.rootReference} title={deal.machines.receivable.immutableInvoiceRoot}>
-                <span>Invoice root</span>
-                <code>{shortReference(deal.machines.receivable.immutableInvoiceRoot, 10, 6)}</code>
-              </p>
-            </header>
-
-            <section className="participant-message">
-              <div className={styles.decisionCopy}>
-                <p className="micro-label">Your synthetic role view</p>
-                <h1 id="participant-title">
-                  Your receivable has not moved.
-                  <span>You have no action.</span>
-                </h1>
-                <p className={styles.decisionSupport}>
-                  Facility B owns the cure. Your configured Holder role has nothing to sign.
-                </p>
-              </div>
-
-              <div className={styles.deadline} data-testid="participant-deadline">
-                <p><strong>{deal.nextResponsibility.actorLabel}</strong> must cure before</p>
-                <time dateTime={dueAt} aria-label={`${deadline.clock} UTC on ${deadline.date}`}>
-                  <span>{deadline.clock}</span>
-                  <small>UTC</small>
-                </time>
-                <p>{deadline.date}</p>
-              </div>
-            </section>
-
-            <div className="participant-domain-pair" aria-label="Your independent economic domains">
-              <ParticipantDomainLedger
-                domain="receivable"
-                label="Your receivable · outstanding"
-                amount={formatDomainAmount(receivableExposure)}
-                asset={receivableExposure.asset.symbol}
-                state={formatState(deal.machines.receivable.state)}
-                role={`${position.invoiceUnits} invoice units assigned to this synthetic holder`}
-                location="Receivable vault ledger"
-                source="Synthetic holder position × outstanding receivable"
-                nextEffect="Settlement continues independently"
-                description="Your pro-rata receivable position remains owned and outstanding through the protection conflict."
-              />
-              <ParticipantDomainLedger
-                domain="protection"
-                label="Potential protection entitlement"
-                amount={formatDomainAmount(protectionExposure)}
-                asset={protectionExposure.asset.symbol}
-                state="Not yet claimable"
-                role="Potential pro-rata policy beneficiary"
-                location="Separate funded protection reserve"
-                source="Synthetic holder position × locked reserve"
-                nextEffect="May become claimable only if the cure is missed"
-                description="This separately funded amount is not receivable redemption money and is not currently payable."
-              />
+        <section
+          className="participant-first-view"
+          data-testid="participant-first-view"
+          data-readiness-verdict={verdict.code}
+        >
+          <header className="participant-message">
+            <div className={styles.decisionCopy}>
+              <p className="micro-label">Your position</p>
+              <h1 id="participant-title">Your receivable has not moved.</h1>
+              <p className={styles.noAction}>You have no action.</p>
             </div>
 
-            <section className="participant-consequence" aria-labelledby="participant-consequence-heading">
+            <dl className={styles.responsibility} data-testid="participant-deadline">
               <div>
-                <p className="micro-label">If the deadline is missed</p>
-                <h2 id="participant-consequence-heading">Protection may become claimable.</h2>
+                <dt>Responsible</dt>
+                <dd>{responsible}</dd>
               </div>
-              <ol>
-                <li>Your {position.invoiceUnits} invoice units are neither burned nor transferred.</li>
-                <li>Receivable settlement keeps its independent lifecycle.</li>
-                <li>Protection remains a separately funded entitlement.</li>
-              </ol>
-            </section>
-          </article>
+              <div>
+                <dt>Deadline</dt>
+                <dd>
+                  <time dateTime={dueAt} aria-label={`${deadline.clock} UTC on ${deadline.date}`}>
+                    {deadline.clock} UTC · {deadline.date}
+                  </time>
+                </dd>
+              </div>
+            </dl>
+          </header>
 
-          <aside className="participant-capability" aria-label="Your current capability">
-            <ReadinessVerdict
-              verdict={verdict}
-              recheckLabel={verdict.recheckAt ? formatUtc(verdict.recheckAt) : undefined}
-              compact
+          <div className="participant-domain-pair" aria-label="Your separate economic positions">
+            <ParticipantDomainLedger
+              domain="receivable"
+              label="Receivable"
+              amount={formatDomainAmount(receivableExposure, 0)}
+              asset={receivableExposure.asset.symbol}
+              status="Still held"
             />
+            <ParticipantDomainLedger
+              domain="protection"
+              label="Protection"
+              amount={formatDomainAmount(protectionExposure, 0)}
+              asset={protectionExposure.asset.symbol}
+              status="Not paid"
+            />
+          </div>
 
-            <section className="participant-responsibility">
-              <p className="micro-label">Responsible now</p>
-              <strong>{deal.nextResponsibility.actorLabel}</strong>
-              <p>{deal.nextResponsibility.task}</p>
-              <details className={styles.inlineDisclosure}>
-                <summary>
-                  <span>Timing and consequence</span>
-                  <span className={styles.disclosureSign} aria-hidden="true" />
-                </summary>
-                <dl>
-                  <div><dt>UTC deadline</dt><dd>{formatUtc(dueAt)}</dd></div>
-                  <div><dt>Your local reference</dt><dd>{formatParisTime(dueAt)}</dd></div>
-                  <div><dt>Blocking gate</dt><dd>{verdict.blockingGate?.label ?? "None"}</dd></div>
-                  <div><dt>Unlock</dt><dd>{verdict.unlock}</dd></div>
-                  <div><dt>Economic consequence</dt><dd>{verdict.economicConsequence}</dd></div>
-                  <div><dt>Re-evaluate</dt><dd>{verdict.recheckAt ? formatUtc(verdict.recheckAt) : "After the next state observation"}</dd></div>
-                </dl>
-              </details>
-            </section>
+          <p className="participant-consequence" data-testid="participant-deadline-consequence">
+            If the cure is missed, protection may become claimable while your receivable remains separate.
+          </p>
 
-            <section className="participant-actions">
-              <p className="micro-label">Safe next step</p>
-              <p>{verdict.nextAction}</p>
-              <button
-                type="button"
-                className="primary-action"
-                onClick={() => setShowReview((open) => !open)}
-                aria-expanded={showReview}
-                data-testid="participant-review-action"
-              >
-                {showReview ? "Close explanation" : "Review what happens next"}
-              </button>
-              <a
-                className="text-button"
-                href="#evidence"
-                aria-expanded={showEvidence}
-                onClick={() => setShowEvidence(true)}
-              >
-                Inspect evidence
-              </a>
-              {showReview ? (
-                <div className="execution-review" role="status">
-                  <strong>No cure action is offered to this synthetic holder.</strong>
-                  <p>{verdict.economicConsequence}</p>
-                  <p>Capability comes from the configured synthetic role and position, not a live wallet read or manual selector.</p>
-                </div>
-              ) : null}
-            </section>
+          <section className="participant-actions" aria-label="Your next step and decision detail">
+            <Link className="primary-action" href="/#portfolio" data-testid="participant-primary-action">
+              <span aria-hidden="true">←</span>
+              Back to portfolio
+            </Link>
 
-            <details className={styles.gateDisclosure}>
-              <summary>
-                <span>Check readiness gates</span>
+            <details className={styles.disclosure} name="participant-detail" data-testid="participant-why">
+              <summary data-testid="participant-review-action">
+                <span>Why?</span>
                 <span className={styles.disclosureSign} aria-hidden="true" />
               </summary>
-              <GateVector gates={action.gates.map(gateToView)} title="Your readiness inspection" compact />
-            </details>
-          </aside>
+              <div className={styles.disclosureBody} role="status">
+                <header className={styles.detailHeading}>
+                  <p className="micro-label">Why you wait</p>
+                  <h2>The cure belongs to another role.</h2>
+                </header>
 
-          <div className="participant-evidence-area">
+                <div className={styles.whyGrid}>
+                  <p>
+                    <strong>No signature needed</strong>
+                    No cure action is offered to this synthetic holder. Your role has nothing to sign.
+                  </p>
+                  <p>
+                    <strong>Your receivable stays yours</strong>
+                    A protection claim never burns or transfers your invoice units.
+                  </p>
+                  <p data-testid="participant-position">
+                    <strong>Your configured position</strong>
+                    Your position · {position.invoiceUnits} / {position.totalUnits} units. This is a synthetic scenario, not a live wallet read or manual selector.
+                  </p>
+                </div>
+
+                <ReadinessVerdict verdict={verdict} compact />
+
+                <details className={styles.gateDisclosure}>
+                  <summary>
+                    <span>Technical readiness</span>
+                    <span className={styles.disclosureSign} aria-hidden="true" />
+                  </summary>
+                  <GateVector gates={action.gates.map(gateToView)} title="Your readiness inspection" compact />
+                </details>
+              </div>
+            </details>
+
             <details
-              className={styles.evidenceDisclosure}
+              className={`${styles.disclosure} ${styles.evidenceDisclosure}`}
               id="evidence"
-              open={showEvidence}
-              onToggle={(event) => setShowEvidence(event.currentTarget.open)}
+              name="participant-detail"
+              data-testid="participant-evidence"
             >
               <summary>
                 <span>Evidence</span>
-                <strong>Configured scenario · no live read</strong>
                 <span className={styles.disclosureSign} aria-hidden="true" />
               </summary>
               <div className={styles.evidenceBody}>
                 <section className="participant-proof" aria-labelledby="participant-proof-heading">
-                  <div className="participant-proof-heading">
+                  <header className="participant-proof-heading">
                     <p className="micro-label">What supports this state</p>
-                    <h2 id="participant-proof-heading">Inspectable evidence summary</h2>
-                  </div>
+                    <h2 id="participant-proof-heading">Configured scenario, not an observed transaction</h2>
+                  </header>
                   <TransitionJoint
                     before="Not established"
                     action="No transition proof attached"
@@ -346,8 +249,8 @@ export function ParticipantDealRoom() {
                 </p>
               </div>
             </details>
-          </div>
-        </div>
+          </section>
+        </section>
       </section>
     </div>
   );
