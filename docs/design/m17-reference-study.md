@@ -127,11 +127,20 @@ Mordant in the whole set.
 **Monzo**, **Wise**. Bright flat colour, rounded geometric sans, product shots in device frames.
 Competent, category-standard, not distinctive.
 
-## Part D: three candidate territories
+## Part D: three patterns, not three competing aesthetics
 
-Each is named after an existing, nameable aesthetic. None is a decision.
+**Correction to an earlier draft.** These were presented as three rival directions to choose between.
+That framing was wrong: the M-17 inventory describes three surfaces with different users, and these
+three patterns map onto them. They are complementary, not competing.
 
-### Territory 1: Technical reference
+    Technical reference  -> proof and diagnostics (Protocol Operations)
+    Instrument panel     -> a possible composition for the Deal Workspace
+    Disclosure-led       -> critical decisions, the Participant Deal Room, confirmations
+
+**No final art direction is selected here.** A pattern says how a surface could be composed; it does
+not decide typeface, palette, imagery or voice. That decision is human and comes next.
+
+### Pattern 1: Technical reference, for proof and diagnostics
 
 **Named lineage:** API and systems documentation. Stripe API reference, Observable Framework docs,
 Observable's dense dashboard artefacts.
@@ -150,12 +159,13 @@ white. Persistent left rail for navigation, right column for proof.
 | Irreversible action | A confirmation step listing exactly what will change, in the same table format as the state itself |
 | Dense data | Its native form. This territory is built for it |
 | Error | The revert selector and its decoded meaning in the dark panel, with the plain-language cause above |
-| Operator daily screen | Strongest of the three |
+| Operator daily screen | Not its job. This pattern serves Protocol Operations, where the reader is diagnosing, not working deals |
 
-**Trust:** high. **Usability:** high. **Differentiation:** low to moderate; it is a well-populated
-category, and the distinctiveness would have to come from the content, not the form. **Cost:** low.
+**Where it belongs:** Protocol Operations, and the proof level of the other two surfaces.
+**Trust:** high. **Usability:** high for its user. **Differentiation:** low to moderate; a
+well-populated category, and distinctiveness would have to come from the content. **Cost:** low.
 
-### Territory 2: Instrument panel
+### Pattern 2: Instrument panel, a possible Deal Workspace composition
 
 **Named lineage:** laboratory and measurement instrumentation, plus the operational half of the docs
 tradition. Observable's dark dense dashboards, tldraw's edge-anchored chrome, Stripe's two-tone split.
@@ -173,13 +183,15 @@ Iconography is single-weight line glyphs used for actions, never for decoration.
 | Irreversible action | The action bar detaches from the edge and centres, which is the only time it moves |
 | Dense data | Fits, in the rails |
 | Error | Held in the same edge band as state, so failure and status occupy one place |
-| Operator daily screen | Strong; this is the shape of a tool someone uses all day |
+| Operator daily screen | Its reason to exist. This is the shape of a tool someone uses all day |
 
+**Where it belongs:** the Deal Workspace. Its first-use cost is acceptable for a daily user and would
+not be for an occasional participant.
 **Trust:** moderate to high. **Usability:** high once learned, with a real learning cost on first
 use. **Differentiation:** moderate to high; almost nothing in finance is composed this way.
-**Cost:** moderate. The edge chrome must be designed once and then holds for every screen.
+**Cost:** moderate. The edge chrome is designed once and then holds for every screen.
 
-### Territory 3: Disclosure-led
+### Pattern 3: Disclosure-led, for critical decisions and the Participant Deal Room
 
 **Named lineage:** regulated financial communication, where the required statement is part of the
 composition rather than hidden in a footer. Mercury's persistent disclosure band, 37signals' plain
@@ -198,23 +210,33 @@ screen does not know. The band is not a footer and does not scroll away.
 | Irreversible action | Placed in the band, where it cannot be reached accidentally while reading |
 | Dense data | Weakest of the three. Tables have to be designed against the editorial rhythm rather than with it |
 | Error | The band changes register and states the cause in a full sentence |
-| Operator daily screen | Weakest. Editorial air costs the density an operator needs |
+| Operator daily screen | Not its job, and it should not be asked to do it |
 
-**Trust:** high; it looks like something that has been through compliance. **Usability:** good for
-occasional users, poor for daily operators. **Differentiation:** high. **Cost:** moderate to high,
-and it will fight every dense screen.
+**Where it belongs:** the Participant Deal Room, plus confirmation steps and critical-decision moments
+inside the Deal Workspace.
+**Trust:** high; it reads as something that has been through compliance. **Usability:** good for
+occasional users, poor as a daily working surface. **Differentiation:** high. **Cost:** moderate to
+high wherever it meets dense data, which is why it is scoped to the surfaces that carry least.
 
-## Where the tension sits
+## What the earlier framing got wrong
 
-The inventory in Part A says the product is deadline-driven, dense, and split across two very
-different users: a holder who visits occasionally to decide, and an operator who runs ceremonies and
-reads revert selectors. **No single territory serves both well.**
+The first draft concluded that no territory served both users and presented that as an unresolved
+trade-off. The trade-off was an artefact of the framing: it came from merging a deal manager, an
+occasional participant and a protocol administrator into one "operator", then looking for one
+composition to serve all three.
 
-Territory 1 serves the operator and under-serves the holder's need for a fast read. Territory 3
-serves the holder and fights the operator's density. Territory 2 is the only one that plausibly does
-both, and it carries the largest first-use learning cost.
+With three surfaces named, the three patterns stop competing. The real questions become sequencing
+and consistency:
 
-That is the trade-off worth deciding, and it is a human decision. This study does not make it.
+- **Sequencing.** The Deal Workspace is used daily and should be designed first, per
+  `OPERATOR-FIRST, PARTICIPANT-READABLE, DIAGNOSTICS-SEPARATE`.
+- **Consistency.** Three patterns across three surfaces risks three products. What must be shared is
+  the readiness vocabulary, the eight verdicts in Part A, and the treatment of amounts and proof.
+  Those are the same facts everywhere; only the density and the register change.
+
+A remaining open question, stated rather than answered: the Participant Deal Room shows a subset of
+the Deal Workspace's data. Whether that is one implementation with a reduced mode, or two, is an
+architecture decision that should follow the art direction rather than precede it.
 
 ## Method notes and limits
 

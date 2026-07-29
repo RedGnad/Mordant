@@ -17,7 +17,7 @@
       "height": 844
     }
   ],
-  "note": "Public pages captured for design comparison. A failed capture is recorded rather than replaced: a screenshot of a consent wall is not a design reference.",
+  "note": "Public pages captured for design comparison. The PNGs live in the m17 branch as a research archive and are deliberately not merged to main: they are third-party material and 9.5 MB of it. Each entry below carries its own observation so this file is readable without them.",
   "referenceCount": 20,
   "usableCount": 20,
   "captureCount": 46,
@@ -33,23 +33,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Observable Notebooks: Fast data exploration and prototyping",
           "file": "docs/design/m17/references/observable-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Observable Notebooks: Fast data exploration and prototyping",
           "file": "docs/design/m17/references/observable-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "Observable Notebooks: Fast data exploration and prototyping",
           "file": "docs/design/m17/references/observable-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Monospace display headline, one green accent, capability proved by a grid of real dense dashboards rather than illustration.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Observable Notebooks: Fast data exploration and prototyping"
     },
     {
       "id": "observable-docs",
@@ -61,17 +62,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Observable Framework",
           "file": "docs/design/m17/references/observable-docs-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Observable Framework",
           "file": "docs/design/m17/references/observable-docs-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "272 px persistent nav rail, unconstrained content column, monospace headline at ~48 px, white / near-black / one green.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Observable Framework"
     },
     {
       "id": "tldraw",
@@ -83,17 +86,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "tldraw • very good free whiteboard",
           "file": "docs/design/m17/references/tldraw-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "tldraw • very good free whiteboard",
           "file": "docs/design/m17/references/tldraw-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Live editor. Chrome pushed to four edges, centre entirely empty, single-weight line icons, blue only for selection.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "tldraw • very good free whiteboard"
     },
     {
       "id": "excalidraw",
@@ -105,17 +110,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Excalidraw Whiteboard",
           "file": "docs/design/m17/references/excalidraw-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Excalidraw Whiteboard",
           "file": "docs/design/m17/references/excalidraw-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Same edge-anchored family as tldraw; not separately analysed.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Excalidraw Whiteboard"
     },
     {
       "id": "benchling",
@@ -127,17 +134,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Cloud-based platform for biotech R&D | Benchling",
           "file": "docs/design/m17/references/benchling-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Cloud-based platform for biotech R&D | Benchling",
           "file": "docs/design/m17/references/benchling-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Light ground, Inter-class sans, centred headline over a product screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Cloud-based platform for biotech R&D | Benchling"
     },
     {
       "id": "plotly",
@@ -149,17 +158,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Interactive Data Visualization Tools & Software | Plotly",
           "file": "docs/design/m17/references/plotly-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Interactive Data Visualization Tools & Software | Plotly",
           "file": "docs/design/m17/references/plotly-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Light ground, leads with a chart rather than a screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Interactive Data Visualization Tools & Software | Plotly"
     },
     {
       "id": "deepnote",
@@ -171,17 +182,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Deepnote: Collaborative analytics & data science notebook",
           "file": "docs/design/m17/references/deepnote-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Deepnote: Collaborative analytics & data science notebook",
           "file": "docs/design/m17/references/deepnote-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Light ground, centred headline over a notebook screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Deepnote: Collaborative analytics & data science notebook"
     },
     {
       "id": "stripe-docs",
@@ -194,23 +207,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Stripe API Reference",
           "file": "docs/design/m17/references/stripe-docs-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Stripe API Reference",
           "file": "docs/design/m17/references/stripe-docs-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "Stripe API Reference",
           "file": "docs/design/m17/references/stripe-docs-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Three columns: 280 px nav, prose on white, code on a dark slate panel. 14-15 px type, indigo for links and current position only. The two-tone prose-light machine-dark split is the proprietary move.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Stripe API Reference"
     },
     {
       "id": "vercel",
@@ -222,17 +236,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Agentic Infrastructure - Vercel",
           "file": "docs/design/m17/references/vercel-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Agentic Infrastructure - Vercel",
           "file": "docs/design/m17/references/vercel-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Near-white or dark ground, tight tracking on a geometric sans, screenshot over a soft gradient.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Agentic Infrastructure - Vercel"
     },
     {
       "id": "linear",
@@ -245,23 +261,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Linear – The system for product development",
           "file": "docs/design/m17/references/linear-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Linear – The system for product development",
           "file": "docs/design/m17/references/linear-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "Linear – The system for product development",
           "file": "docs/design/m17/references/linear-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Same formula as Vercel. Not distinctive enough to build on.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Linear – The system for product development"
     },
     {
       "id": "37signals",
@@ -273,17 +290,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "37signals",
           "file": "docs/design/m17/references/37signals-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "37signals",
           "file": "docs/design/m17/references/37signals-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Plain, text-led, no imagery in the first viewport. The outlier of its group.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "37signals"
     },
     {
       "id": "teenage-engineering",
@@ -296,23 +315,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "teenage engineering",
           "file": "docs/design/m17/references/teenage-engineering-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "teenage engineering",
           "file": "docs/design/m17/references/teenage-engineering-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "teenage engineering",
           "file": "docs/design/m17/references/teenage-engineering-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Row of large custom pictograms as navigation, die-cut orange ticket hero in a heavy rounded display face, cookie notice as a yellow warning triangle with a hand pictogram. Strongest formal position in the set, least applicable to a financial product.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "teenage engineering"
     },
     {
       "id": "panic",
@@ -324,17 +344,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Panic - We code apps, publish games, and make Playdate.",
           "file": "docs/design/m17/references/panic-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Panic - We code apps, publish games, and make Playdate.",
           "file": "docs/design/m17/references/panic-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Same tactile studio family as Teenage Engineering, less extreme; not separately analysed.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Panic - We code apps, publish games, and make Playdate."
     },
     {
       "id": "area17",
@@ -346,17 +368,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "AREA 17 — Brand, experience, and technology transformation",
           "file": "docs/design/m17/references/area17-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "AREA 17 — Brand, experience, and technology transformation",
           "file": "docs/design/m17/references/area17-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Left-aligned ~56 px statement in a neutral grotesque, ~240 px of air above, then a full-bleed image band. No colour in the first viewport.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "AREA 17 — Brand, experience, and technology transformation"
     },
     {
       "id": "rive",
@@ -368,17 +392,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Rive — the interactive experience engine",
           "file": "docs/design/m17/references/rive-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Rive — the interactive experience engine",
           "file": "docs/design/m17/references/rive-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "Argues in motion; the still says nothing. Would not survive prefers-reduced-motion.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Rive — the interactive experience engine"
     },
     {
       "id": "spline",
@@ -390,17 +416,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Spline - 3D Design tool in the browser with real-time collaboration",
           "file": "docs/design/m17/references/spline-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Spline - 3D Design tool in the browser with real-time collaboration",
           "file": "docs/design/m17/references/spline-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "As Rive. Recorded, not carried forward.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Spline - 3D Design tool in the browser with real-time collaboration"
     },
     {
       "id": "mercury",
@@ -413,23 +441,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Online Business Banking For Startups, Small Businesses & Scaling Companies",
           "file": "docs/design/m17/references/mercury-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Online Business Banking For Startups, Small Businesses & Scaling Companies",
           "file": "docs/design/m17/references/mercury-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "Online Business Banking For Startups, Small Businesses & Scaling Companies",
           "file": "docs/design/m17/references/mercury-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Full-bleed photographic composite, headline in white at ~44 px over sky, and a persistent dark band pinning the required 'not an FDIC-insured bank' disclosure to every viewport. The expressive-surface-plus-mandatory-disclosure tension is the closest structural parallel to Mordant in the set.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Online Business Banking For Startups, Small Businesses & Scaling Companies"
     },
     {
       "id": "ramp",
@@ -441,17 +470,19 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "",
           "file": "docs/design/m17/references/ramp-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "",
           "file": "docs/design/m17/references/ramp-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "EXCLUDED. Served a plain-text 'Machine Version' page addressed to AI agents, not the interface. Not a design reference.",
+      "usableAsDesignReference": false,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": ""
     },
     {
       "id": "monzo",
@@ -464,23 +495,24 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Monzo | Your New Favourite Bank",
           "file": "docs/design/m17/references/monzo-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Monzo | Your New Favourite Bank",
           "file": "docs/design/m17/references/monzo-laptop.png"
         },
         "mobile": {
           "ok": true,
           "status": 200,
-          "title": "Monzo | Your New Favourite Bank",
           "file": "docs/design/m17/references/monzo-mobile.png"
         }
       },
-      "captured": 3
+      "captured": 3,
+      "observation": "Bright flat colour, rounded geometric sans, device-framed product shots. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Monzo | Your New Favourite Bank"
     },
     {
       "id": "wise",
@@ -492,17 +524,32 @@
         "desktop": {
           "ok": true,
           "status": 200,
-          "title": "Wise: The international account | Money without borders | Wise France",
           "file": "docs/design/m17/references/wise-desktop.png"
         },
         "laptop": {
           "ok": true,
           "status": 200,
-          "title": "Wise: The international account | Money without borders | Wise France",
           "file": "docs/design/m17/references/wise-laptop.png"
         }
       },
-      "captured": 2
+      "captured": 2,
+      "observation": "As Monzo. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Wise: The international account | Money without borders | Wise France"
     }
+  ],
+  "pngsInMain": false,
+  "pngLocation": "branch m17-references-and-semantics, docs/design/m17/references/",
+  "excluded": [
+    "ramp"
+  ],
+  "consentWallObstructed": [
+    "area17",
+    "mercury",
+    "monzo",
+    "stripe-docs",
+    "teenage-engineering",
+    "tldraw"
   ]
 }

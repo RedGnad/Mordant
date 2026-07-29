@@ -7,8 +7,29 @@ Sources: `contracts/src/MordantInvoiceVault.sol` (16 events, 30 public state var
 `src/lib/contracts/read-vault.ts` (the reader the app already uses),
 `src/lib/dealroom/journey.ts` (14 journey steps), and the M-15 engine's 17 sub-actions.
 
-**Users referenced below:** holder, buyer, funder, originator, facility (protected), facility
-(challenger), operator (whoever runs the ceremony), auditor.
+## Three surfaces, not one audience
+
+**Correction to an earlier draft.** "Operator" was used for both the person working deals and the
+person running M-15 and reading revert selectors. Those are different people with different
+sessions, and merging them is what made the earlier single-screen tension look unresolvable.
+
+| Surface | User | What they do | Session shape |
+| --- | --- | --- | --- |
+| **Deal Workspace** | credit operator, deal manager | works deals daily: monitors deadlines, prepares and takes actions, reads positions and accounting | long, repeated, many deals |
+| **Participant Deal Room** | holders, buyer, funder, originator, facilities | checks one deal: exposure, state, what they may do and when | short, occasional, one deal |
+| **Protocol Operations** | protocol administrator | runs deployment phases, reads runtime fingerprints, revert selectors and stop matrices | rare, high-stakes, ceremony-shaped |
+
+Product priority:
+
+    OPERATOR-FIRST, PARTICIPANT-READABLE, DIAGNOSTICS-SEPARATE
+
+The Deal Workspace is the surface that earns its keep daily and should be designed first. The
+Participant Deal Room shows the same deal with less, and must be readable by someone who has not seen
+it before. Protocol Operations is a separate application in everything but deployment: its user, its
+frequency and its failure modes have nothing in common with the other two.
+
+**Users referenced in the tables below:** holder, buyer, funder, originator, facility (protected),
+facility (challenger), deal manager, protocol administrator, auditor.
 
 ## Level 1: immediate decision
 
@@ -25,13 +46,47 @@ and by whom". If a screen shows nothing else, it shows these.
 | `pendingConflict.cureDeadline` | `PendingConflict` | all | when finalisation unlocks | continuously while open | public | yes |
 | `pendingConflict.revealDeadline` | `PendingConflict` | challenger | when a commit expires unrevealed | continuously while committed | public | yes |
 | `protectionEnd` | immutable | holder, buyer | when default becomes markable | daily | public | yes |
-| next permitted action | derived: state + deadlines + caller role | all | what to do now | every visit | public | yes |
-| caller eligibility | `cviVerifier.isEligible` | all | whether *this* user may act | every visit | public | yes |
+| action readiness | derived, five independent inputs, see below | all | what to do now, and why not | every visit | public | yes |
 | `balanceOf(holder)` | vault receipts | holder | size of own position | every visit | public | yes |
 
-**The derived pair is the important one.** Neither "next permitted action" nor "caller eligibility"
-exists as a field; both are computed from state, deadlines and role. They are what the user actually
-came for, and they are the two facts no contract returns directly.
+## Action readiness: five independent gates
+
+**Correction to an earlier draft.** `cviVerifier.isEligible` was presented as the answer to "may I
+act". It is not. It answers one of five questions, and a screen that renders it as the answer will
+tell a user they are eligible while the transaction reverts.
+
+The five gates are independent, and a readiness verdict must name the one that is failing:
+
+| Gate | Answered by | Failure means |
+| --- | --- | --- |
+| **Identity / policy** | `cviVerifier.isEligible`, `isValidAPass`, `policy.canTransfer` | the credential is missing, expired, or the token policy refuses this transfer |
+| **Role / participant** | `buyer`, `originatorTreasury`, `protectedFacility`, `authorizedOriginator`, `factory.isFacility`, plus the vault's exclusions such as funder ≠ buyer | this address is not the party this action belongs to |
+| **Temporal** | `cureDeadline`, `revealDeadline`, `protectionEnd`, `block.timestamp` | the window has not opened, or has closed |
+| **Economic** | `balanceOf`, `allowance` on the settlement token | the balance or the approval is short |
+| **Protocol precondition** | `protectionState`, `receivableState`, `boundVault`, `MINTER_ROLE`, prior artifacts | the state machine is not at a point where this action exists |
+
+### The readiness vocabulary
+
+Eight verdicts, each mapping to a gate and each carrying what would resolve it:
+
+| Verdict | Gate that produced it | What the screen must also say |
+| --- | --- | --- |
+| `AVAILABLE NOW` | all pass | which address will sign |
+| `AVAILABLE AT <timestamp>` | temporal | the timestamp, and the remaining interval |
+| `WRONG ROLE` | role | which role may act, and whether the viewer holds another |
+| `CREDENTIAL REQUIRED` | identity / policy | which credential, and whether it is missing or expired |
+| `FUNDS REQUIRED` | economic | the shortfall, in the token, and whether it is balance or allowance |
+| `PREVIOUS ACTION REQUIRED` | protocol precondition | which action, and who owes it |
+| `ALREADY COMPLETED` | protocol precondition | when, and the transaction that did it |
+| `RECOVERY REQUIRED` | protocol precondition | what is stranded, and that no automatic recovery will run |
+
+`RECOVERY REQUIRED` is not hypothetical: the M-14 stop matrix lists seven interruption points, two of
+them with real exposure, an unrevoked temporary minter and a minted-but-unbound supply.
+
+**Why this replaces "almost every decision is not yet".** That earlier phrasing collapsed five
+different refusals into one, and only `AVAILABLE AT` was actually about time. A design built on it
+would have produced a single greyed button with a countdown, which is wrong for the other six
+verdicts and actively misleading for `WRONG ROLE` and `RECOVERY REQUIRED`.
 
 ## Level 2: operational detail
 
@@ -39,10 +94,10 @@ Needed to work the deal, not to decide in the first ten seconds.
 
 | Data | Source | Who | Decision it enables | Consulted | Nature | Main screen |
 | --- | --- | --- | --- | --- | --- | --- |
-| `totalSupply`, `initialUnits` | vault | holder, operator | how much of the issue remains outstanding | per action | public | secondary |
-| holder allocation table | `Activated` event + balances | holder, operator | who carries what | per action | public | secondary |
-| `cvaAccounted` | vault | operator | units the vault still counts as backed | per action | technical | secondary |
-| `adapter.availableBalance` | adapter | operator | custody the adapter admits owing | per action | technical | secondary |
+| `totalSupply`, `initialUnits` | vault | holder, deal manager | how much of the issue remains outstanding | per action | public | secondary |
+| holder allocation table | `Activated` event + balances | holder, deal manager | who carries what | per action | public | secondary |
+| `cvaAccounted` | vault | deal manager | units the vault still counts as backed | per action | technical | secondary |
+| `adapter.availableBalance` | adapter | deal manager | custody the adapter admits owing | per action | technical | secondary |
 | `redemptionEscrow` | vault | buyer, holder | cash already parked against the face | per action | public | secondary |
 | `redeemedFace`, `cvaReleasedFace` | vault | holder | how much of the liability is discharged, and by which route | per action | public | secondary |
 | `entitlementAllocated` / `Claimed` | vault | holder | bond claimable after finalisation | after finalisation | public | secondary |
@@ -62,9 +117,9 @@ with level 1.
 | the 16 vault events | `Activated` … `DefaultMarked` | auditor | reconstructing the whole history | on dispute | public | on demand |
 | `protectedPledgeDigest`, `conflictingPledgeDigest` | vault | auditor, facility | which pledge is which | during conflict | public | on demand |
 | EIP-712 pledge signature | off-chain, recorded | auditor | who authorised the pledge | on dispute | public | on demand |
-| `RoleGranted` / `RoleRevoked` on MINV01 | token events | operator, auditor | that only the adapter can mint | before binding | technical | on demand |
-| `assertAccounting()` result | vault view | operator | that the vault's own invariants hold | per action | technical | on demand |
-| A-Pass validity and expiry | registry + `/query_apass` | operator | whether a party can still transact | per action | **sensitive** | on demand |
+| `RoleGranted` / `RoleRevoked` on MINV01 | token events | protocol administrator, auditor | that only the adapter can mint | before binding | technical | on demand |
+| `assertAccounting()` result | vault view | deal manager | that the vault's own invariants hold | per action | technical | on demand |
+| A-Pass validity and expiry | registry + `/query_apass` | deal manager | whether a party can still transact | per action | **sensitive** | on demand |
 
 **One sensitivity flag.** A-Pass records carry a `currentKycHash` and a `magickLink`. The hash is a
 compliance artefact and the link is a credential; neither belongs on a shared screen. Everything
@@ -72,32 +127,34 @@ else in this table is already public on chain.
 
 ## Level 4: technical diagnostic
 
-Needed when something is wrong. Not part of the normal product surface.
+Needed when something is wrong. This is the **Protocol Operations** surface, used by the protocol
+administrator. It is not part of the Deal Workspace or the Participant Deal Room.
 
 | Data | Source | Who | Decision it enables | Consulted | Nature | Main screen |
 | --- | --- | --- | --- | --- | --- | --- |
-| adapter runtime fingerprint | `getCode` + artifact, immutables masked | operator | that the deployed contract is the reviewed one | at deployment | technical | no |
-| custody cross-links | `token()`, `apass()`, `boundVault()` | operator | that the wiring matches the manifest | at deployment | technical | no |
-| the nine policy tuples | `policy.canTransfer` | operator | which transfer would be refused, and in which direction | before each phase | technical | no |
-| revert selector | failed call data | operator | why a transaction was refused | on failure | technical | no |
-| gas estimate and ceiling | `estimateContractGas` | operator | whether a cost is abnormal | per transaction | technical | no |
-| phase artifact status | M-15 artifacts | operator | where a ceremony stopped and what may resume | on interruption | technical | no |
-| chain id, fork pinning | RPC | operator | that this is the intended network | always | technical | no |
+| adapter runtime fingerprint | `getCode` + artifact, immutables masked | protocol administrator | that the deployed contract is the reviewed one | at deployment | technical | no |
+| custody cross-links | `token()`, `apass()`, `boundVault()` | protocol administrator | that the wiring matches the manifest | at deployment | technical | no |
+| the nine policy tuples | `policy.canTransfer` | protocol administrator | which transfer would be refused, and in which direction | before each phase | technical | no |
+| revert selector | failed call data | protocol administrator | why a transaction was refused | on failure | technical | no |
+| gas estimate and ceiling | `estimateContractGas` | protocol administrator | whether a cost is abnormal | per transaction | technical | no |
+| phase artifact status | M-15 artifacts | protocol administrator | where a ceremony stopped and what may resume | on interruption | technical | no |
+| chain id, fork pinning | RPC | protocol administrator | that this is the intended network | always | technical | no |
 
 ## Three observations for whoever designs this
 
-**The deadline is the interface.** Almost every level-1 decision is "not yet" rather than "no". The
-state alone is not actionable; state plus remaining time is. A design that renders status as a
-static badge will be wrong for this product most of the time.
+**Readiness is the interface, and it has eight shapes.** State alone is not actionable, but neither
+is state plus time: five independent gates produce eight verdicts, and each needs a different
+resolution path shown next to it. A design that renders a single greyed button with a countdown
+handles one verdict out of eight.
 
 **Two figures mean different things and look identical.** `faceValue` is what is owed; `bondLocked`
 is what protects the holder if it is not paid. Both are amounts in the same token at the same
 decimals. Nothing but labelling and placement distinguishes them, so the typographic system carries
 real risk here.
 
-**Level 4 is not decoration for level 1.** Runtime fingerprints and policy tuples are how an
-operator finds out why a ceremony refused to continue. They belong to a different surface, used by a
-different person, at a different moment. Merging them into the deal screen for a sense of rigour
+**Level 4 belongs to Protocol Operations, not to the deal screens.** Runtime fingerprints and policy
+tuples are how a protocol administrator finds out why a ceremony refused to continue. Different user,
+different frequency, different failure modes. Merging them into a deal screen for a sense of rigour
 would make the daily screen unreadable and the diagnostic screen incomplete.
 
 ## What does not exist
