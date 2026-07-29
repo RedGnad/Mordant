@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DealRoom } from "@/components/deal-room";
+import "@/app/local-journey.css";
 
 export const metadata: Metadata = {
   title: "Local transaction journey",

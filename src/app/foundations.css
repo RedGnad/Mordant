@@ -1,0 +1,55 @@
+:root {
+  color-scheme: light;
+
+  /* Document and surface roles */
+  --background-primary: #eef2ef;
+  --background-operational: #e1e8e4;
+  --surface-raised: #fbfbf7;
+  --surface-proof: #241a2a;
+  --surface-proof-raised: #302434;
+
+  /* Text and structural roles */
+  --text-primary: #211923;
+  --text-secondary: #655d68;
+  --text-on-proof: #fffef9;
+  --text-on-critical: #fffef9;
+  --border-structural: #8d858f;
+  --border-subtle: #c9c4ca;
+  --border-proof: #5c505e;
+
+  /* Interaction */
+  --action-primary: #49305c;
+  --action-primary-hover: #382246;
+  --focus-outer: #211923;
+  --focus-gap: #fbfbf7;
+
+  /* Economic domains: never reused for state or interaction */
+  --domain-receivable: #00696d;
+  --domain-protection: #87506f;
+
+  /* State: never reused for domains, navigation, or evidence */
+  --state-critical: #af2858;
+  --state-attention: #945a30;
+  --state-positive: #276858;
+  --state-neutral: #655d68;
+
+  /* Evidence classification: always reinforced by a line pattern and label */
+  --evidence-observed: #1e3d46;
+  --evidence-attested: #675879;
+  --evidence-derived: #4e6a61;
+  --evidence-external: #686d72;
+
+  /* Typography */
+  --type-identity: var(--font-identity), Georgia, serif;
+  --type-interface: var(--font-interface), Arial, sans-serif;
+  --type-proof: var(--font-proof), "SFMono-Regular", Consolas, monospace;
+
+  /* Geometry and rhythm */
+  --chrome-height: 54px;
+  --target-min: 44px;
+  --line-structural: 1px;
+  --page-gutter: clamp(16px, 2.3vw, 32px);
+  --content-max: 1440px;
+  --motion-register: 180ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

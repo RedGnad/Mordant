@@ -5,9 +5,12 @@ import type {
   GateStatus,
   MonetaryDomain,
   Observation,
+  ParticipantPosition,
   ParticipantRole,
   SyntheticDeal,
 } from "@/lib/mordant/product-model";
+import { proRateAmount } from "@/lib/mordant/product-model";
+import { syntheticFolioForScenario } from "@/lib/mordant/identity";
 import type { EvidenceFact, GateTone, GateView } from "@/components/structural-ui";
 
 const GATE_STATUS_COPY: Readonly<Record<GateStatus, { label: string; tone: GateTone }>> = {
@@ -36,6 +39,18 @@ export function formatDomainAmount(amount: DomainAmount<MonetaryDomain>, fractio
   const whole = raw / scale;
   const fraction = (raw % scale).toString().padStart(amount.asset.decimals, "0").slice(0, fractionDigits);
   return fractionDigits > 0 ? `${whole.toLocaleString("en-US")}.${fraction}` : whole.toLocaleString("en-US");
+}
+
+/**
+ * Derives the connected participant's exact monetary exposure using integer
+ * minor units. The model helper rejects non-representable fractions rather
+ * than permitting display-only rounding to change the economic meaning.
+ */
+export function proRateDomainAmount<D extends MonetaryDomain>(
+  source: DomainAmount<D>,
+  position: ParticipantPosition,
+): DomainAmount<D> {
+  return proRateAmount(source, position);
 }
 
 export function formatState(value: string): string {
@@ -94,7 +109,7 @@ export function evidenceTone(classification: EvidenceClassification): EvidenceFa
 }
 
 export function dealShortId(deal: SyntheticDeal): string {
-  return `MRD-${String(deal.scenario.length * 137).padStart(4, "0")}`;
+  return syntheticFolioForScenario(deal.scenario);
 }
 
 export function responsibilityDue(deal: SyntheticDeal): string {

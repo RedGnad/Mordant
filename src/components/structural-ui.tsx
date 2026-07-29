@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
+
+import { ROOTLINE_USAGE_NOTICE, rootlineSegments } from "@/lib/mordant/identity";
+import type { ReadinessVerdict as ReadinessVerdictModel } from "@/lib/mordant/readiness";
 
 export type GateGlyphKind = "identity" | "role" | "time" | "economic" | "protocol";
 export type GateTone = "pass" | "wait" | "blocked" | "attention" | "complete";
@@ -14,53 +17,19 @@ export type GateView = {
 
 type GateGlyphProps = {
   kind: GateGlyphKind;
+  tone?: GateTone;
 };
 
-export function GateGlyph({ kind }: GateGlyphProps) {
-  if (kind === "identity") {
-    return (
-      <svg className="gate-glyph" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 3H3v5M18 3h3v5M6 21H3v-5M18 21h3v-5" />
-        <circle cx="12" cy="9" r="3" />
-        <path d="M7.5 18c.7-2.7 2.2-4 4.5-4s3.8 1.3 4.5 4" />
-      </svg>
-    );
-  }
-
-  if (kind === "role") {
-    return (
-      <svg className="gate-glyph" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="6" cy="6" r="2.5" />
-        <circle cx="18" cy="6" r="2.5" />
-        <circle cx="12" cy="18" r="2.5" />
-        <path d="M8 7.5l3 7.5M16 7.5L13 15M8.5 6h7" />
-      </svg>
-    );
-  }
-
-  if (kind === "time") {
-    return (
-      <svg className="gate-glyph" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 6.5V12l4 2.5M4 12h2M18 12h2" />
-      </svg>
-    );
-  }
-
-  if (kind === "economic") {
-    return (
-      <svg className="gate-glyph" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7h16v11H4zM7 4h10v3M8 12h8M12 9v6" />
-        <circle cx="12" cy="12" r="2.5" />
-      </svg>
-    );
-  }
-
+export function GateGlyph({ kind, tone = "pass" }: GateGlyphProps) {
   return (
-    <svg className="gate-glyph" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 3h8l5 5v8l-5 5H8l-5-5V8z" />
-      <path d="M8 12h8M12 8v8" />
-      <circle cx="12" cy="12" r="6" />
+    <svg className="gate-glyph" data-kind={kind} data-tone={tone} viewBox="0 0 16 16" aria-hidden="true">
+      {kind === "identity" ? <path d="M5 2H2v3M11 2h3v3M5 14H2v-3M11 14h3v-3M5 8h6" /> : null}
+      {kind === "role" ? <path d="M2 2h6v6H2zM8 8h6v6H8zM8 5h3v3" /> : null}
+      {kind === "time" ? <path d="M8 2a6 6 0 1 1-4.3 1.8M8 4v4l3 2" /> : null}
+      {kind === "economic" ? <path d="M2 2h12v12H2zM5 5h6v6H5z" /> : null}
+      {kind === "protocol" ? <path d="M2 8h12M8 2v12M4 4l8 8M12 4l-8 8" /> : null}
+      {tone === "blocked" || tone === "attention" ? <path className="gate-glyph-state" d="M12 2h2v2" /> : null}
+      {tone === "complete" ? <path className="gate-glyph-state" d="m4 8 2.5 2.5L12 5" /> : null}
     </svg>
   );
 }
@@ -71,18 +40,19 @@ type GateVectorProps = {
   compact?: boolean;
 };
 
-export function GateVector({ gates, title = "Action readiness", compact = false }: GateVectorProps) {
+export function GateVector({ gates, title = "Readiness inspection", compact = false }: GateVectorProps) {
+  const headingId = `gate-title-${compact ? "compact" : "full"}-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`;
+
   return (
-    <section className={`gate-vector${compact ? " gate-vector-compact" : ""}`} aria-labelledby={`gate-title-${compact ? "compact" : "full"}`}>
-      <h2 className="structural-heading" id={`gate-title-${compact ? "compact" : "full"}`}>
+    <section className={`gate-vector${compact ? " gate-vector-compact" : ""}`} aria-labelledby={headingId}>
+      <h2 className="structural-heading" id={headingId}>
         {title}
-        <small>{gates.filter((gate) => gate.tone === "pass" || gate.tone === "complete").length} / {gates.length} clear</small>
+        <small>Five independent checks</small>
       </h2>
       <ol className="gate-list">
-        {gates.map((gate, index) => (
+        {gates.map((gate) => (
           <li className="gate-item" data-gate-tone={gate.tone} key={gate.kind}>
-            <span className="gate-index mono" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-            <GateGlyph kind={gate.kind} />
+            <GateGlyph kind={gate.kind} tone={gate.tone} />
             <div className="gate-copy">
               <div className="gate-label-line">
                 <strong>{gate.label}</strong>
@@ -98,14 +68,109 @@ export function GateVector({ gates, title = "Action readiness", compact = false 
   );
 }
 
+type ReadinessVerdictProps = {
+  verdict: ReadinessVerdictModel;
+  recheckLabel?: string;
+  compact?: boolean;
+};
+
+const VERDICT_LABELS: Readonly<Record<ReadinessVerdictModel["code"], string>> = {
+  AVAILABLE_NOW: "Available now",
+  AVAILABLE_AT: "Available at",
+  WRONG_ROLE: "Wrong role",
+  CREDENTIAL_REQUIRED: "Credential required",
+  FUNDS_REQUIRED: "Funds required",
+  PREVIOUS_ACTION_REQUIRED: "Previous action required",
+  ALREADY_COMPLETED: "Already completed",
+  RECOVERY_REQUIRED: "Recovery required",
+};
+
+export function ReadinessVerdict({ verdict, recheckLabel, compact = false }: ReadinessVerdictProps) {
+  const headingId = useId();
+  const label = verdict.code === "AVAILABLE_AT" && recheckLabel
+    ? `${VERDICT_LABELS[verdict.code]} ${recheckLabel}`
+    : VERDICT_LABELS[verdict.code];
+  const tone = verdict.code === "AVAILABLE_NOW" || verdict.code === "ALREADY_COMPLETED"
+    ? "positive"
+    : verdict.code === "AVAILABLE_AT" || verdict.code === "PREVIOUS_ACTION_REQUIRED"
+      ? "attention"
+      : "critical";
+
+  return (
+    <section
+      className={`readiness-verdict${compact ? " readiness-verdict-compact" : ""}`}
+      data-readiness-verdict={verdict.code}
+      data-tone={tone}
+      aria-labelledby={headingId}
+    >
+      <p className="micro-label">Unique readiness verdict</p>
+      <h2 id={headingId}>{label}</h2>
+      <p className="readiness-cause">{verdict.cause}</p>
+      <dl className="readiness-facts">
+        <div><dt>Blocking gate</dt><dd>{verdict.blockingGate?.label ?? "None"}</dd></div>
+        <div><dt>Responsible</dt><dd>{verdict.responsible}</dd></div>
+        <div><dt>Unlock</dt><dd>{verdict.unlock}</dd></div>
+        <div><dt>Re-evaluate</dt><dd>{recheckLabel ?? "After the next state observation"}</dd></div>
+        <div><dt>Economic consequence</dt><dd>{verdict.economicConsequence}</dd></div>
+        <div><dt>Next action</dt><dd>{verdict.nextAction}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+type RootlineProps = {
+  root: string;
+  compact?: boolean;
+  showLabel?: boolean;
+};
+
+export function Rootline({ root, compact = false, showLabel = true }: RootlineProps) {
+  const segments = rootlineSegments(root);
+
+  return (
+    <div className={`root-index${compact ? " root-index-compact" : ""}`} data-rootline={root}>
+      <span className="rootline" aria-hidden="true">
+        {segments.map((segment, index) => (
+          <i
+            key={`${segment.width}-${segment.spacing}-${index}`}
+            style={{
+              "--root-width": `${segment.width}px`,
+              "--root-gap": `${segment.spacing}px`,
+            } as CSSProperties}
+          />
+        ))}
+      </span>
+      {showLabel ? <small>{ROOTLINE_USAGE_NOTICE}</small> : null}
+    </div>
+  );
+}
+
+type FolioIdentityProps = {
+  folio: string;
+  root: string;
+  compact?: boolean;
+};
+
+export function FolioIdentity({ folio, root, compact = false }: FolioIdentityProps) {
+  return (
+    <div className={`folio-identity${compact ? " folio-identity-compact" : ""}`}>
+      <strong>{folio}</strong>
+      <Rootline root={root} compact={compact} showLabel={!compact} />
+    </div>
+  );
+}
+
 type DomainLedgerProps = {
   domain: "receivable" | "protection";
   label: string;
   amount: string;
   asset: string;
   state: string;
+  role: string;
+  location: string;
+  source: string;
+  nextEffect: string;
   description: string;
-  footer: string;
 };
 
 export function DomainLedger({
@@ -114,19 +179,33 @@ export function DomainLedger({
   amount,
   asset,
   state,
+  role,
+  location,
+  source,
+  nextEffect,
   description,
-  footer,
 }: DomainLedgerProps) {
+  const edge = domain === "receivable" ? "continuous-double" : "interrupted-notch";
+
   return (
-    <section className="domain-ledger" data-domain={domain} aria-label={`${label}: ${amount} ${asset}`}>
-      <div className="domain-ledger-rail" aria-hidden="true" />
+    <section
+      className="domain-ledger"
+      data-domain={domain}
+      data-edge={edge}
+      aria-label={`${label}: ${amount} ${asset}`}
+    >
       <div className="domain-ledger-head">
         <span>{label}</span>
         <strong>{state}</strong>
       </div>
       <p className="domain-ledger-amount"><span>{amount}</span> <small>{asset}</small></p>
       <p className="domain-ledger-description">{description}</p>
-      <p className="domain-ledger-footer mono">{footer}</p>
+      <dl className="domain-ledger-context">
+        <div><dt>Role</dt><dd>{role}</dd></div>
+        <div><dt>Location</dt><dd>{location}</dd></div>
+        <div><dt>Source</dt><dd>{source}</dd></div>
+        <div><dt>Next effect</dt><dd>{nextEffect}</dd></div>
+      </dl>
     </section>
   );
 }
@@ -142,23 +221,38 @@ export function MachineRail({ domain, label, states, current }: MachineRailProps
   const activeIndex = states.findIndex(
     (state) => state.toLocaleLowerCase("en-US") === current.toLocaleLowerCase("en-US"),
   );
+  const stateIsMapped = activeIndex >= 0;
+  const displayedStates = stateIsMapped ? states : [current];
 
   return (
-    <div className="machine-rail" data-domain={domain}>
+    <div className="machine-rail" data-domain={domain} data-state-mapped={stateIsMapped ? "true" : "false"}>
       <div className="machine-rail-name">
         <span>{label}</span>
         <strong>{current}</strong>
       </div>
-      <ol className="machine-states">
-        {states.map((state, index) => (
-          <li
-            className={index === activeIndex ? "machine-state-current" : index < activeIndex ? "machine-state-past" : ""}
-            key={state}
-          >
-            <span aria-hidden="true" />
-            <small>{state}</small>
-          </li>
-        ))}
+      <ol className="machine-states" aria-label={`${label} lifecycle`}>
+        {displayedStates.map((state, index) => {
+          const isCurrent = stateIsMapped ? index === activeIndex : true;
+          const isPast = stateIsMapped && index < activeIndex;
+          const temporal = stateIsMapped
+            ? isCurrent
+              ? "Current"
+              : isPast
+                ? "Past"
+                : "Upcoming"
+            : "Current observed state; lifecycle position is not mapped";
+          return (
+            <li
+              className={isCurrent ? "machine-state-current" : isPast ? "machine-state-past" : ""}
+              aria-current={isCurrent ? "step" : undefined}
+              key={state}
+            >
+              <span aria-hidden="true" />
+              <small>{state}</small>
+              <span className="visually-hidden">{temporal}</span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
@@ -169,6 +263,13 @@ export type EvidenceFact = {
   value: string;
   source?: string;
   tone?: "observed" | "attested" | "derived" | "external";
+};
+
+const EVIDENCE_LABELS: Readonly<Record<NonNullable<EvidenceFact["tone"]>, string>> = {
+  observed: "Observed",
+  attested: "Attested",
+  derived: "Derived",
+  external: "Not established",
 };
 
 type TransitionJointProps = {
@@ -201,15 +302,18 @@ export function TransitionJoint({ before, action, after, facts = [], children, c
       </div>
       {facts.length > 0 ? (
         <dl className="evidence-facts">
-          {facts.map((fact) => (
-            <div data-evidence-tone={fact.tone ?? "observed"} key={`${fact.label}-${fact.value}`}>
-              <dt>{fact.label}</dt>
-              <dd>
-                <span>{fact.value}</span>
-                {fact.source ? <small>{fact.source}</small> : null}
-              </dd>
-            </div>
-          ))}
+          {facts.map((fact) => {
+            const tone = fact.tone ?? "observed";
+            return (
+              <div data-evidence-class={tone} key={`${fact.label}-${fact.value}`}>
+                <dt><span>{EVIDENCE_LABELS[tone]}</span><small>{fact.label}</small></dt>
+                <dd>
+                  <span>{fact.value}</span>
+                  {fact.source ? <small>{fact.source}</small> : null}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
       ) : null}
       {children}
@@ -222,11 +326,13 @@ type ObservationStampProps = {
   time: string;
   finality: string;
   freshness: string;
+  source?: string;
 };
 
-export function ObservationStamp({ block, time, finality, freshness }: ObservationStampProps) {
+export function ObservationStamp({ block, time, finality, freshness, source = "Synthetic fixture" }: ObservationStampProps) {
   return (
-    <div className="observation-stamp" aria-label={`Observed at block ${block}, ${time}. ${finality}. ${freshness}.`}>
+    <div className="observation-stamp" aria-label={`Observed from ${source} at block ${block}, ${time}. ${finality}. ${freshness}.`}>
+      <div><span>Source</span><strong>{source}</strong></div>
       <div><span>Observed block</span><strong>{block}</strong></div>
       <div><span>Timestamp</span><strong>{time}</strong></div>
       <div><span>Finality</span><strong>{finality}</strong></div>

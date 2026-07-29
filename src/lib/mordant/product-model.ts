@@ -6,6 +6,8 @@
  * assets and synthetic references only.
  */
 
+import { syntheticInvoiceRootForScenario } from "./identity";
+
 export const PRODUCT_MODEL_SCHEMA_VERSION = "mordant.product-model.v1" as const;
 
 export const SYNTHETIC_MODEL_NOTICE =
@@ -60,6 +62,15 @@ export interface DomainAmount<D extends MonetaryDomain = MonetaryDomain> {
   readonly domain: D;
   readonly asset: typeof SYNTHETIC_ASSET;
   readonly minorUnits: IntegerString;
+}
+
+/**
+ * Deterministic synthetic allocation used to derive the connected holder's
+ * personal exposure. It is a unit ratio, not a claim about legal ownership.
+ */
+export interface ParticipantPosition {
+  readonly invoiceUnits: IntegerString;
+  readonly totalUnits: IntegerString;
 }
 
 export interface ReceivableLedger {
@@ -301,6 +312,7 @@ export interface SyntheticDeal {
     readonly participantId: SyntheticReference;
     readonly role: ParticipantRole;
     readonly label: string;
+    readonly position?: ParticipantPosition;
   };
   readonly machines: {
     readonly receivable: ReceivableMachine;
@@ -381,6 +393,30 @@ export function amount<D extends MonetaryDomain>(domain: D, minorUnits: IntegerS
   }
 
   return { domain, asset: SYNTHETIC_ASSET, minorUnits };
+}
+
+/**
+ * Returns a participant's exact share of a domain amount without converting
+ * through Number. A non-integral minor-unit result is rejected rather than
+ * rounded, so the UI cannot silently overstate or understate an exposure.
+ */
+export function proRateAmount<D extends MonetaryDomain>(
+  source: DomainAmount<D>,
+  position: ParticipantPosition,
+): DomainAmount<D> {
+  const invoiceUnits = BigInt(position.invoiceUnits);
+  const totalUnits = BigInt(position.totalUnits);
+
+  if (invoiceUnits < 0n || totalUnits <= 0n || invoiceUnits > totalUnits) {
+    throw new RangeError("position must satisfy 0 <= invoiceUnits <= totalUnits and totalUnits > 0");
+  }
+
+  const weightedMinorUnits = BigInt(source.minorUnits) * invoiceUnits;
+  if (weightedMinorUnits % totalUnits !== 0n) {
+    throw new RangeError("participant exposure is not exactly representable in asset minor units");
+  }
+
+  return amount(source.domain, (weightedMinorUnits / totalUnits).toString() as IntegerString);
 }
 
 function finalityRank(status: FinalityStatus): number {
@@ -484,9 +520,9 @@ export function deriveDealSummary(deal: SyntheticDeal): DealSummary {
   };
 }
 
-const RECEIVABLE_FACE = amount("receivable", "110000000");
+const RECEIVABLE_FACE = amount("receivable", "2480000000000");
 const RECEIVABLE_ZERO = amount("receivable", "0");
-const PROTECTION_TEN = amount("protection", "10000000");
+const PROTECTION_RESERVE = amount("protection", "248000000000");
 const PROTECTION_ZERO = amount("protection", "0");
 
 const BASE_OBSERVATION: Observation = {
@@ -541,9 +577,9 @@ const BASE_RECEIVABLE_LEDGER: ReceivableLedger = {
 const BASE_PROTECTION_LEDGER: ProtectionLedger = {
   domain: "protection",
   demoReserveParameterBps: 1000,
-  initialReserve: PROTECTION_TEN,
-  requiredReserve: PROTECTION_TEN,
-  lockedReserve: PROTECTION_TEN,
+  initialReserve: PROTECTION_RESERVE,
+  requiredReserve: PROTECTION_RESERVE,
+  lockedReserve: PROTECTION_RESERVE,
   protectionPaid: PROTECTION_ZERO,
 };
 
@@ -569,6 +605,8 @@ interface FixtureOverrides {
 }
 
 function fixture(scenario: DealScenarioId, overrides: FixtureOverrides): SyntheticDeal {
+  const receivable = overrides.receivable ?? BASE_RECEIVABLE;
+
   return {
     schemaVersion: PRODUCT_MODEL_SCHEMA_VERSION,
     environment: "synthetic-demo",
@@ -578,9 +616,17 @@ function fixture(scenario: DealScenarioId, overrides: FixtureOverrides): Synthet
     label: overrides.label,
     viewer:
       overrides.viewer ??
-      ({ participantId: "synthetic:participant:holder-a", role: "holder", label: "Holder A (synthetic)" } as const),
+      ({
+        participantId: "synthetic:participant:holder-a",
+        role: "holder",
+        label: "Holder A (synthetic)",
+        position: { invoiceUnits: "60", totalUnits: "100" },
+      } as const),
     machines: {
-      receivable: overrides.receivable ?? BASE_RECEIVABLE,
+      receivable: {
+        ...receivable,
+        immutableInvoiceRoot: syntheticInvoiceRootForScenario(scenario),
+      },
       protection: overrides.protection ?? BASE_PROTECTION,
     },
     economics: {
@@ -830,7 +876,7 @@ export const SYNTHETIC_DEALS = [
           economic: {
             status: "blocked",
             code: "synthetic_balance_insufficient",
-            detail: "Your synthetic test balance is below the 10.00 aUSDC demo reserve.",
+            detail: "Your synthetic test balance is below the 248,000.00 aUSDC demo reserve.",
             remediation: "Add synthetic test assets to this demo participant.",
             responsibleRole: "originator",
             visibility: "viewer_only",
@@ -843,7 +889,7 @@ export const SYNTHETIC_DEALS = [
             {
               domain: "protection",
               direction: "into_reserve",
-              amount: PROTECTION_TEN,
+              amount: PROTECTION_RESERVE,
               label: "Synthetic protection reserve",
             },
           ],
@@ -883,7 +929,7 @@ export const SYNTHETIC_DEALS = [
             status: "blocked",
             code: "synthetic_allowance_insufficient",
             detail: "Your synthetic protection allowance is 0.00 aUSDC.",
-            remediation: "Set a 10.00 aUSDC synthetic test allowance.",
+            remediation: "Set a 248,000.00 aUSDC synthetic test allowance.",
             responsibleRole: "originator",
             visibility: "viewer_only",
           },
@@ -895,7 +941,7 @@ export const SYNTHETIC_DEALS = [
             {
               domain: "protection",
               direction: "into_reserve",
-              amount: PROTECTION_TEN,
+              amount: PROTECTION_RESERVE,
               label: "Synthetic protection reserve",
             },
           ],
@@ -975,7 +1021,7 @@ export const SYNTHETIC_DEALS = [
             {
               domain: "protection",
               direction: "into_reserve",
-              amount: PROTECTION_TEN,
+              amount: PROTECTION_RESERVE,
               label: "Synthetic protection reserve",
             },
           ],
@@ -1199,14 +1245,14 @@ export const SYNTHETIC_DEALS = [
     receivable: { ...BASE_RECEIVABLE, state: "partially_redeemed" },
     receivableLedger: {
       ...BASE_RECEIVABLE_LEDGER,
-      outstanding: amount("receivable", "55000000"),
-      redeemed: amount("receivable", "55000000"),
+      outstanding: amount("receivable", "1240000000000"),
+      redeemed: amount("receivable", "1240000000000"),
       outstandingUnits: "50",
     },
     protectionLedger: {
       ...BASE_PROTECTION_LEDGER,
-      requiredReserve: amount("protection", "5000000"),
-      lockedReserve: amount("protection", "5000000"),
+      requiredReserve: amount("protection", "124000000000"),
+      lockedReserve: amount("protection", "124000000000"),
     },
     nextResponsibility: {
       status: "upcoming",
@@ -1228,7 +1274,7 @@ export const SYNTHETIC_DEALS = [
             {
               domain: "receivable",
               direction: "to_holder",
-              amount: amount("receivable", "55000000"),
+              amount: amount("receivable", "1240000000000"),
               label: "Remaining synthetic receivable redemption",
             },
           ],
@@ -1258,7 +1304,7 @@ export const SYNTHETIC_DEALS = [
       ...BASE_PROTECTION_LEDGER,
       requiredReserve: PROTECTION_ZERO,
       lockedReserve: PROTECTION_ZERO,
-      protectionPaid: PROTECTION_TEN,
+      protectionPaid: PROTECTION_RESERVE,
     },
     nextResponsibility: {
       status: "upcoming",
@@ -1285,7 +1331,7 @@ export const SYNTHETIC_DEALS = [
             {
               domain: "protection",
               direction: "to_protected_party",
-              amount: PROTECTION_TEN,
+              amount: PROTECTION_RESERVE,
               label: "Synthetic protection settlement",
             },
           ],

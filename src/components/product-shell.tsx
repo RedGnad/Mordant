@@ -8,85 +8,96 @@ type ProductShellProps = {
   children: ReactNode;
 };
 
-const productNavigation: ReadonlyArray<{
-  id: ProductSurface;
-  href: "/" | "/deal-room" | "/protocol";
-  label: string;
-  detail: string;
-}> = [
-  {
-    id: "workspace",
-    href: "/",
-    label: "Deal workspace",
-    detail: "Monitor",
+type ShellDefinition = {
+  role: string;
+  wallet: string;
+  freshness: string;
+  caution?: boolean;
+  navigation: ReadonlyArray<{
+    href: string;
+    label: string;
+    current?: boolean;
+  }>;
+};
+
+const SHELLS: Readonly<Record<ProductSurface, ShellDefinition>> = {
+  workspace: {
+    role: "Originator",
+    wallet: "0x71A9…92C4",
+    freshness: "Fresh · block 1402",
+    navigation: [
+      { href: "/", label: "Workspace", current: true },
+      { href: "/#portfolio", label: "Portfolio" },
+      { href: "/#evidence", label: "Evidence" },
+    ],
   },
-  {
-    id: "deal-room",
-    href: "/deal-room",
-    label: "Participant deal room",
-    detail: "Understand",
+  "deal-room": {
+    role: "Holder",
+    wallet: "0x4B7…A82",
+    freshness: "Observed · block 1402",
+    navigation: [
+      { href: "/", label: "← Portfolio" },
+      { href: "/deal-room", label: "Deal room", current: true },
+      { href: "/deal-room#evidence", label: "Evidence" },
+    ],
   },
-  {
-    id: "protocol",
-    href: "/protocol",
-    label: "Protocol operations",
-    detail: "Inspect",
+  protocol: {
+    role: "Protocol operator",
+    wallet: "0x0A9…11E",
+    freshness: "Public synthetic diagnostics",
+    caution: true,
+    navigation: [
+      { href: "/", label: "← Workspace" },
+      { href: "/protocol#events", label: "Events" },
+      { href: "/protocol#diagnostics", label: "Diagnostics", current: true },
+      { href: "/protocol#recovery", label: "Recovery" },
+    ],
   },
-];
+};
 
 export function ProductShell({ active, children }: ProductShellProps) {
+  const shell = SHELLS[active];
+
   return (
-    <div className="app-shell">
+    <div className={`product-shell product-shell-${active}`} data-surface={active}>
       <a className="app-skip-link" href="#app-main">
         Skip to product surface
       </a>
 
-      <header className="app-header">
-        <div className="app-header-brand">
-          <Link className="app-brand-link" href="/" aria-label="Mordant deal workspace">
-            <span className="app-wordmark">Mordant</span>
-            <span className="app-tagline">Programmable recourse</span>
+      <header className="product-chrome" data-testid="product-chrome">
+        <div className="brand-lockup">
+          <Link className="brand-link" href="/" aria-label="Mordant workspace">
+            <span className="brand-wordmark">Mordant</span>
+            <span className="brand-caption">Programmable recourse for receivables</span>
           </Link>
         </div>
 
-        <div className="app-environment" aria-label="Prototype environment">
-          <span className="app-environment-item">
-            <span className="app-environment-signal" aria-hidden="true" />
-            Monad testnet · 10143
-          </span>
-          <span className="app-environment-item">Synthetic test data</span>
-        </div>
-
-        <p className="app-prototype-warning">
-          Prototype only — not approved for real funds, legal assignment, or custody.
-        </p>
-      </header>
-
-      <nav className="app-navigation" aria-label="Product surfaces">
-        <ol className="app-navigation-list">
-          {productNavigation.map((item, index) => {
-            const isActive = item.id === active;
-
-            return (
-              <li className="app-navigation-item" key={item.id}>
+        <nav className="role-navigation" aria-label={`${shell.role} navigation`}>
+          <ul>
+            {shell.navigation.map((item) => (
+              <li key={`${active}-${item.href}-${item.label}`}>
                 <Link
-                  className={`app-navigation-link${isActive ? " app-navigation-link-active" : ""}`}
+                  className={item.current ? "role-navigation-link is-current" : "role-navigation-link"}
                   href={item.href}
-                  aria-current={isActive ? "page" : undefined}
+                  aria-current={item.current ? "page" : undefined}
                 >
-                  <span className="app-navigation-index" aria-hidden="true">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span className="app-navigation-label">{item.label}</span>
-                  <span className="app-navigation-detail">{item.detail}</span>
+                  {item.label}
                 </Link>
               </li>
-            );
-          })}
-        </ol>
-      </nav>
+            ))}
+          </ul>
+        </nav>
 
-      <main className={`app-main app-main-${active}`} id="app-main" tabIndex={-1}>
+        <div className="session-context" aria-label="Session context">
+          <span>Monad testnet · 10143</span>
+          <span>{shell.role} · {shell.wallet}</span>
+          <span className={shell.caution ? "session-restricted" : "session-fresh"}>{shell.freshness}</span>
+        </div>
+      </header>
+
+      <div className="fixture-notice">Synthetic design fixture · no real funds</div>
+
+      <main className="product-main" id="app-main" tabIndex={-1}>
         {children}
       </main>
     </div>

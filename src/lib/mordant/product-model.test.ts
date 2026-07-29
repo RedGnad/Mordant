@@ -13,6 +13,7 @@ import {
   deriveDealSummary,
   getSyntheticDeal,
   makeGateVector,
+  proRateAmount,
   type DealAction,
   type DealScenarioId,
   type MonetaryEffect,
@@ -157,7 +158,7 @@ test("keeps receivable and protection state machines independent after protectio
 
   assert.equal(deal.machines.protection.state, "settled");
   assert.equal(deal.machines.receivable.state, "outstanding");
-  assert.equal(deal.economics.receivable.outstanding.minorUnits, "110000000");
+  assert.equal(deal.economics.receivable.outstanding.minorUnits, "2480000000000");
   assert.equal(deal.economics.receivable.outstandingUnits, "100");
   assert.equal(settlement.machine, "protection");
   assert.equal(settlement.consequence.receivableTransition, undefined);
@@ -204,9 +205,44 @@ test("models the ten-percent demo reserve as amortizing with outstanding protect
   assert.equal(deal.economics.receivable.issuedUnits, "100");
   assert.equal(deal.economics.receivable.outstandingUnits, "50");
   assert.equal(deal.economics.protection.demoReserveParameterBps, 1000);
-  assert.equal(deal.economics.protection.initialReserve.minorUnits, "10000000");
-  assert.equal(deal.economics.protection.requiredReserve.minorUnits, "5000000");
-  assert.equal(deal.economics.protection.lockedReserve.minorUnits, "5000000");
+  assert.equal(deal.economics.protection.initialReserve.minorUnits, "248000000000");
+  assert.equal(deal.economics.protection.requiredReserve.minorUnits, "124000000000");
+  assert.equal(deal.economics.protection.lockedReserve.minorUnits, "124000000000");
+});
+
+test("derives the connected holder's 60/100 personal exposures with exact bigint arithmetic", () => {
+  const deal = getSyntheticDeal("wrong-role");
+  const position = deal.viewer.position;
+  assert.deepEqual(position, { invoiceUnits: "60", totalUnits: "100" });
+  assert.equal(deal.viewer.role, "holder");
+
+  assert.deepEqual(proRateAmount(deal.economics.receivable.outstanding, position), {
+    domain: "receivable",
+    asset: deal.economics.receivable.outstanding.asset,
+    minorUnits: "1488000000000",
+  });
+  assert.deepEqual(proRateAmount(deal.economics.protection.lockedReserve, position), {
+    domain: "protection",
+    asset: deal.economics.protection.lockedReserve.asset,
+    minorUnits: "148800000000",
+  });
+});
+
+test("rejects invalid or non-integral participant exposure ratios instead of rounding", () => {
+  const source = amount("receivable", "1");
+
+  assert.throws(
+    () => proRateAmount(source, { invoiceUnits: "1", totalUnits: "0" }),
+    /totalUnits > 0/,
+  );
+  assert.throws(
+    () => proRateAmount(source, { invoiceUnits: "101", totalUnits: "100" }),
+    /invoiceUnits <= totalUnits/,
+  );
+  assert.throws(
+    () => proRateAmount(source, { invoiceUnits: "1", totalUnits: "3" }),
+    /not exactly representable/,
+  );
 });
 
 test("represents evidence as before, action, after with provenance and diagnostics", () => {
@@ -264,7 +300,7 @@ test("derives deterministic summaries without discarding action diagnostics", ()
 });
 
 test("validates exact non-negative minor-unit amounts", () => {
-  assert.deepEqual(amount("receivable", "110000000"), {
+  assert.deepEqual(amount("receivable", "2480000000000"), {
     domain: "receivable",
     asset: {
       id: "synthetic-ausdc",
@@ -273,7 +309,7 @@ test("validates exact non-negative minor-unit amounts", () => {
       decimals: 6,
       kind: "synthetic-test-asset",
     },
-    minorUnits: "110000000",
+    minorUnits: "2480000000000",
   });
   assert.throws(() => amount("protection", "-1"), RangeError);
   assert.throws(() => amount("protection", "01" as `${bigint}`), RangeError);
