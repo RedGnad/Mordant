@@ -141,6 +141,12 @@ test.describe("Mordant role-aware product surfaces", () => {
     await expect(queue.getByRole("heading", { name: "Intervention queue", exact: true })).toBeVisible();
     await expect(record).toBeVisible();
     await expect(decision).toBeVisible();
+    const selectedTitle = page.locator("#selected-deal-title");
+    await expect(selectedTitle).toBeFocused();
+    await expect.poll(() => selectedTitle.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.top >= 0 && bounds.bottom <= window.innerHeight;
+    })).toBe(true);
 
     const protection = page.locator('.workspace-domain-pair [data-domain="protection"]');
     await expect(protection).toContainText("Protection reserve · Unfunded");

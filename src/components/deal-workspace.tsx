@@ -296,6 +296,18 @@ export function DealWorkspace() {
         oldURL: previousUrl,
         newURL: window.location.href,
       }));
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const selectedTitle = document.getElementById("selected-deal-title");
+          if (!selectedTitle) return;
+          selectedTitle.setAttribute("tabindex", "-1");
+          selectedTitle.focus({ preventScroll: true });
+          selectedTitle.scrollIntoView({
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+            block: "start",
+          });
+        });
+      });
     }
   }
 
