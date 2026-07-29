@@ -215,6 +215,10 @@ test("derives the connected holder's 60/100 personal exposures with exact bigint
   const position = deal.viewer.position;
   assert.deepEqual(position, { invoiceUnits: "60", totalUnits: "100" });
   assert.equal(deal.viewer.role, "holder");
+  assert.match(
+    deal.nextResponsibility.consequenceIfMissed ?? "",
+    /claimable.*receivable units remain untouched/i,
+  );
 
   assert.deepEqual(proRateAmount(deal.economics.receivable.outstanding, position), {
     domain: "receivable",

@@ -960,6 +960,7 @@ export const SYNTHETIC_DEALS = [
       actorLabel: "Facility B (synthetic)",
       task: "Reveal or cure the registered synthetic conflict.",
       dueAt: "2026-07-29T12:00:00.000Z",
+      consequenceIfMissed: "The protection state can become claimable; receivable units remain untouched.",
       visibility: "shared",
     },
     actions: [
