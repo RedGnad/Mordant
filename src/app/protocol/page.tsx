@@ -14,7 +14,8 @@ export default async function ProtocolPage({
 }: {
   searchParams: Promise<{ demo?: string | string[] }>;
 }) {
-  const demo = (await searchParams).demo === TRANSACTION_DEMO_QUERY;
+  const demo = process.env.NODE_ENV !== "production"
+    && (await searchParams).demo === TRANSACTION_DEMO_QUERY;
   return (
     <ProductShell active="protocol" mode={demo ? "transaction-demo" : "executed-review"}>
       <TransactionDrivenExperience surface="protocol" mode={demo ? "live" : "review"} />

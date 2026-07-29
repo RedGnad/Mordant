@@ -74,6 +74,24 @@ const TRANSACTION_DEMO_NAVIGATION: Readonly<Record<ProductSurface, ShellDefiniti
   ],
 };
 
+const EXECUTED_REVIEW_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
+  workspace: [
+    { href: "/", label: "Workspace", current: true },
+    { href: "/deal-room", label: "Participant" },
+    { href: "/protocol", label: "Protocol" },
+  ],
+  "deal-room": [
+    { href: "/", label: "Workspace" },
+    { href: "/deal-room", label: "Participant", current: true },
+    { href: "/protocol", label: "Protocol" },
+  ],
+  protocol: [
+    { href: "/", label: "Workspace" },
+    { href: "/deal-room", label: "Participant" },
+    { href: "/protocol", label: "Protocol", current: true },
+  ],
+};
+
 function targetHash(href: string) {
   const hashIndex = href.indexOf("#");
   return hashIndex === -1 ? "" : href.slice(hashIndex);
@@ -119,7 +137,9 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
     ...baseShell,
     wallet: transactionDemo ? "Controlled demo signer" : "Retained execution",
     freshness: transactionDemo ? "Receipt-derived state" : "Confirmed · block 27",
-    navigation: TRANSACTION_DEMO_NAVIGATION[active],
+    navigation: transactionDemo
+      ? TRANSACTION_DEMO_NAVIGATION[active]
+      : EXECUTED_REVIEW_NAVIGATION[active],
   } : baseShell;
   const participantShell = active === "deal-room";
   const [activeHash, setActiveHash] = useState("");
@@ -233,11 +253,11 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
               </dl>
               <Link
                 className={styles.demoModeLink}
-                href={transactionDemo ? surfacePath : `${surfacePath}?demo=transactions`}
+                href={transactionDemo || executedReview ? surfacePath : `${surfacePath}?demo=transactions`}
               >
                 {transactionDemo
                   ? "Open retained review"
-                  : executedReview ? "Live mode requires local chain" : "Open transaction demo"}
+                  : executedReview ? "Retained review active" : "Open transaction demo"}
               </Link>
             </div>
           </details>
