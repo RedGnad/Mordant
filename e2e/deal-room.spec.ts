@@ -1,98 +1,148 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Drives the whole recourse journey against the deterministic local chain.
- *
- * Every assertion below reads state the interface fetched back from the contracts after a receipt,
- * so a step that only moved component state would fail here.
+ * M-EX2 drives one retained execution through the actual product routes. Every
+ * business transition below is accepted only after the API has retained its
+ * receipt and block-pinned after-state.
  */
 
-const STEPS = [
-  "approve-funding",
-  "activate",
-  "positions",
-  "sign-conflict",
-  "commit",
-  "reveal",
-  "cure-window",
-  "finalize",
-  "claim-a",
-  "claim-b",
-  "approve-redemption",
-  "fund-redemption",
-  "redeem-a",
-  "redeem-b",
-] as const;
+const SOURCE = "Executed on controlled demo chain";
 
-async function run(page: import("@playwright/test").Page, id: string) {
-  await page.getByTestId(`run-${id}`).click();
-  await expect(page.getByTestId(`receipt-${id}`)).toBeVisible({ timeout: 30_000 });
+async function reset(page: Page) {
+  const response = await page.request.post("/api/dealroom/living-demo", {
+    data: { intent: "reset" },
+  });
+  expect(response.ok()).toBe(true);
+  return response.json() as Promise<{
+    deal: { id: string; invoiceRoot: string; vault: string };
+  }>;
 }
 
-test("the deal room executes the recourse journey as real transactions", async ({ page }) => {
+async function execute(page: Page, current: string, next?: string) {
+  const control = page.getByTestId("living-run-next");
+  await expect(control).toHaveAttribute("data-action-id", current);
+  await control.click();
+  if (next === undefined) {
+    await expect(control).toBeDisabled({ timeout: 15_000 });
+    await expect(control).not.toHaveAttribute("data-action-id", /.+/);
+  } else {
+    await expect(control).toHaveAttribute("data-action-id", next, { timeout: 15_000 });
+  }
+}
+
+async function identity(page: Page) {
+  const experience = page.getByTestId("living-experience");
+  await expect(experience).toBeVisible();
+  return {
+    deal: await experience.getAttribute("data-deal-id"),
+    root: await experience.getAttribute("data-invoice-root"),
+    vault: await experience.getAttribute("data-vault"),
+    source: await experience.getAttribute("data-source"),
+  };
+}
+
+test("one canonical receipt-driven deal stays truthful across all three product perspectives", async ({ page }) => {
   test.slow();
-  await page.goto("/protocol/local-journey");
+  const clean = await reset(page);
+  await page.goto("/?demo=transactions");
 
-  await expect(page.getByTestId("honesty-label")).toHaveText("LOCAL / PROTOCOL DOUBLE / SYNTHETIC");
-  await expect(page.getByTestId("state-grid")).toBeVisible();
-  await expect(page.getByTestId("protection-state")).toHaveText("Unfunded");
+  await expect(page.getByTestId("living-source")).toHaveText(SOURCE);
+  await expect(page.getByTestId("living-conclusion")).toHaveText("This receivable is ready for funding.");
+  const canonicalIdentity = await identity(page);
+  expect(canonicalIdentity).toEqual({
+    deal: clean.deal.id,
+    root: clean.deal.invoiceRoot,
+    vault: clean.deal.vault,
+    source: "controlled-demo-chain",
+  });
 
-  // --- funding: 100 in, 90 to the originator, 10 held as the reserve ---
-  await run(page, "approve-funding");
-  await run(page, "activate");
-  await expect(page.getByTestId("protection-state")).toHaveText("Active");
-  await expect(page.getByTestId("receivable-state")).toHaveText("Outstanding");
-  await expect(page.getByTestId("originator-settlement")).toHaveText("90.000000");
+  const firstControl = page.getByTestId("living-run-next");
+  await expect(firstControl).toHaveAttribute("data-action-id", "approve-funding");
+  await firstControl.click();
+  await expect(page.getByTestId("living-pending")).toContainText("Pending", { timeout: 4_000 });
+  await expect(page.getByTestId("living-pending")).toContainText("0x");
+  await expect(firstControl).toHaveAttribute("data-action-id", "activate", { timeout: 15_000 });
 
-  // --- positions 60 / 40 ---
-  await run(page, "positions");
-  await expect(page.getByTestId("holder-a-units")).toHaveText("60.000000");
-  await expect(page.getByTestId("holder-b-units")).toHaveText("40.000000");
+  await execute(page, "activate", "positions");
+  await expect(page.getByTestId("living-conclusion")).toHaveText("No exception is open.");
+  await execute(page, "positions", "sign-conflict");
+  await execute(page, "sign-conflict", "commit");
+  await execute(page, "commit", "reveal");
+  await execute(page, "reveal", "cure-window");
 
-  // --- incident: signed, sealed before disclosure, then revealed ---
-  await run(page, "sign-conflict");
-  await run(page, "commit");
-  await expect(page.getByTestId("protection-state")).toHaveText("CommitPending");
-  await run(page, "reveal");
-  await expect(page.getByTestId("protection-state")).toHaveText("ConflictConfirmed");
+  await expect(page.getByTestId("living-conclusion")).toHaveText(
+    "Facility B revealed a conflicting pledge.",
+  );
+  await expect(page.getByTestId("living-receivable-anchor")).toContainText("Outstanding");
 
-  // --- unresolved conflict activates the 6/4 entitlement ---
-  await run(page, "cure-window");
-  await run(page, "finalize");
-  await expect(page.getByTestId("protection-state")).toHaveText("Entitled");
-  await expect(page.getByTestId("entitlement")).toHaveText("10.000000");
+  await page.getByRole("button", { name: "Open receipt proof" }).click();
+  await expect(page.getByTestId("living-proof")).toBeVisible();
+  await expect(page.getByTestId("living-experience")).toHaveCount(0);
+  await expect(page.getByTestId("living-technical-proof")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("living-proof")).toContainText("Before · block");
+  await expect(page.getByTestId("living-proof")).toContainText("After · block");
+  await expect(page.getByTestId("living-proof")).toContainText("Observed events");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Open receipt proof" })).toBeFocused();
 
-  // --- claims paid from the pre-funded reserve ---
-  await run(page, "claim-a");
-  await run(page, "claim-b");
-  await expect(page.getByTestId("holder-a-settlement")).toHaveText("6.000000");
-  await expect(page.getByTestId("holder-b-settlement")).toHaveText("4.000000");
+  await page.getByRole("link", { name: "Participant" }).click();
+  await expect(page).toHaveURL(/\/deal-room\?demo=transactions$/);
+  await expect(page.getByTestId("living-conclusion")).toHaveText("Nothing you need to do.");
+  await expect(identity(page)).resolves.toEqual(canonicalIdentity);
 
-  // The claim did not consume the receivable: both holders still own their units.
-  await expect(page.getByTestId("holder-a-units")).toHaveText("60.000000");
-  await expect(page.getByTestId("holder-b-units")).toHaveText("40.000000");
+  await page.getByRole("link", { name: "Protocol" }).click();
+  await expect(page).toHaveURL(/\/protocol\?demo=transactions$/);
+  await expect(page.getByTestId("living-conclusion")).toContainText(
+    "Facility B revealed a conflicting pledge at block",
+  );
+  await expect(page.getByTestId("living-experience")).toContainText("Last safe block");
+  await expect(identity(page)).resolves.toEqual(canonicalIdentity);
 
-  // --- the receivable settles on its own track, after the recourse payout ---
-  await run(page, "approve-redemption");
-  await run(page, "fund-redemption");
-  await run(page, "redeem-a");
-  await run(page, "redeem-b");
+  await page.getByRole("link", { name: "Participant" }).click();
+  await execute(page, "cure-window", "finalize");
+  await execute(page, "finalize", "claim-a");
+  await expect(page.getByTestId("living-conclusion")).toHaveText(
+    "6.00 dSETTLE is ready for you to claim.",
+  );
+  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 units remain yours");
 
-  await expect(page.getByTestId("redeemed-face")).toHaveText("110.000000");
-  await expect(page.getByTestId("holder-a-settlement")).toHaveText("72.000000");
-  await expect(page.getByTestId("holder-b-settlement")).toHaveText("48.000000");
-  await expect(page.getByTestId("receivable-state")).toHaveText("Redeemed");
+  await execute(page, "claim-a", "claim-b");
+  await expect(page.getByTestId("living-conclusion")).toHaveText("Your protection was paid.");
+  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 units remain yours");
+
+  await execute(page, "claim-b", "approve-redemption");
+  await execute(page, "approve-redemption", "fund-redemption");
+  await execute(page, "fund-redemption", "redeem-a");
+  await execute(page, "redeem-a", "redeem-b");
+  await execute(page, "redeem-b");
+
+  await expect(page.getByTestId("living-conclusion")).toHaveText("Your invoice position has been paid.");
+  await expect(page.getByTestId("living-experience")).toContainText("72.00 dSETTLE received across both domains.");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reset canonical run" }).click();
+  await expect(page.getByTestId("living-run-next")).toHaveAttribute("data-action-id", "approve-funding");
+  await expect(page.getByTestId("living-conclusion")).toHaveText("Your position is unchanged.");
+  await expect(identity(page)).resolves.toEqual(canonicalIdentity);
 });
 
-test("every business step is backed by a transaction receipt", async ({ page }) => {
-  await page.goto("/protocol/local-journey");
+test("the execution API refuses discontinuous actions without changing contract-derived state", async ({ page }) => {
+  const clean = await reset(page);
+  const refused = await page.request.post("/api/dealroom/living-demo", {
+    data: { intent: "execute", actionId: "activate" },
+  });
+  expect(refused.status()).toBe(409);
+  await expect(refused.json()).resolves.toMatchObject({ error: "Expected approve-funding; received activate." });
 
-  for (const id of STEPS) {
-    await expect(page.getByTestId(`step-${id}`)).toBeVisible();
-  }
-
-  // Only the next step is actionable, so no control can be clicked out of order.
-  await expect(page.getByTestId("run-approve-funding")).toBeEnabled();
-  await expect(page.getByTestId("run-activate")).toBeDisabled();
-  await expect(page.getByTestId("run-redeem-b")).toBeDisabled();
+  const read = await page.request.get("/api/dealroom/living-demo");
+  const run = await read.json() as {
+    deal: { id: string; invoiceRoot: string; vault: string };
+    actions: unknown[];
+    current: { blockNumber: string; protectionState: number; receivableState: number };
+    nextAction: { id: string };
+  };
+  expect(run.deal).toEqual(clean.deal);
+  expect(run.actions).toHaveLength(0);
+  expect(run.nextAction.id).toBe("approve-funding");
+  expect(run.current).toMatchObject({ protectionState: 0, receivableState: 0 });
 });

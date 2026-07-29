@@ -10,6 +10,7 @@ type ProductSurface = "workspace" | "deal-room" | "protocol";
 type ProductShellProps = {
   active: ProductSurface;
   children: ReactNode;
+  mode?: "transaction-demo";
 };
 
 type ShellDefinition = {
@@ -55,6 +56,24 @@ const SHELLS: Readonly<Record<ProductSurface, ShellDefinition>> = {
   },
 };
 
+const TRANSACTION_DEMO_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
+  workspace: [
+    { href: "/?demo=transactions", label: "Workspace", current: true },
+    { href: "/deal-room?demo=transactions", label: "Participant" },
+    { href: "/protocol?demo=transactions", label: "Protocol" },
+  ],
+  "deal-room": [
+    { href: "/?demo=transactions", label: "Workspace" },
+    { href: "/deal-room?demo=transactions", label: "Participant", current: true },
+    { href: "/protocol?demo=transactions", label: "Protocol" },
+  ],
+  protocol: [
+    { href: "/?demo=transactions", label: "Workspace" },
+    { href: "/deal-room?demo=transactions", label: "Participant" },
+    { href: "/protocol?demo=transactions", label: "Protocol", current: true },
+  ],
+};
+
 function targetHash(href: string) {
   const hashIndex = href.indexOf("#");
   return hashIndex === -1 ? "" : href.slice(hashIndex);
@@ -90,8 +109,16 @@ function revealHashTarget(hash: string, moveFocus = false) {
   return true;
 }
 
-export function ProductShell({ active, children }: ProductShellProps) {
-  const shell = SHELLS[active];
+export function ProductShell({ active, children, mode }: ProductShellProps) {
+  const transactionDemo = mode === "transaction-demo";
+  const surfacePath = active === "workspace" ? "/" : active === "deal-room" ? "/deal-room" : "/protocol";
+  const baseShell = SHELLS[active];
+  const shell: ShellDefinition = transactionDemo ? {
+    ...baseShell,
+    wallet: "Controlled demo signer",
+    freshness: "Receipt-derived state",
+    navigation: TRANSACTION_DEMO_NAVIGATION[active],
+  } : baseShell;
   const participantShell = active === "deal-room";
   const [activeHash, setActiveHash] = useState("");
   const [navigationStatus, setNavigationStatus] = useState("");
@@ -131,7 +158,11 @@ export function ProductShell({ active, children }: ProductShellProps) {
   }
 
   return (
-    <div className={`${styles.shell} product-shell product-shell-${active}`} data-surface={active}>
+    <div
+      className={`${styles.shell} product-shell product-shell-${active}`}
+      data-surface={active}
+      data-demo-mode={transactionDemo ? "transactions" : undefined}
+    >
       <a className="app-skip-link" href="#app-main">
         Skip to product surface
       </a>
@@ -143,7 +174,7 @@ export function ProductShell({ active, children }: ProductShellProps) {
         <div className={`${styles.brandLockup} brand-lockup`}>
           <Link
             className="brand-link"
-            href="/"
+            href={transactionDemo ? "/?demo=transactions" : "/"}
             aria-label="Mordant workspace"
           >
             <span className="brand-wordmark">Mordant</span>
@@ -194,18 +225,28 @@ export function ProductShell({ active, children }: ProductShellProps) {
               <strong>Session context</strong>
               <dl>
                 <div><dt>Wallet</dt><dd>{shell.wallet}</dd></div>
-                <div><dt>Network</dt><dd>Monad testnet · 10143</dd></div>
+                <div><dt>Network</dt><dd>{transactionDemo ? "Controlled Anvil · 31337" : "Monad testnet · 10143"}</dd></div>
                 <div><dt>Freshness</dt><dd className={shell.caution ? "session-restricted" : "session-fresh"}>{shell.freshness}</dd></div>
                 <div><dt>View</dt><dd>{participantShell ? "Participant" : active === "protocol" ? "Operations" : "Originator"}</dd></div>
               </dl>
+              <Link
+                className={styles.demoModeLink}
+                href={transactionDemo ? surfacePath : `${surfacePath}?demo=transactions`}
+              >
+                {transactionDemo ? "Exit transaction demo" : "Open transaction demo"}
+              </Link>
             </div>
           </details>
         </div>
       </header>
 
       <div className={`${styles.fixture} fixture-notice`}>
-        <span>{participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}</span>
-        {!participantShell ? (
+        <span>
+          {transactionDemo
+            ? "Controlled mode · no real funds"
+            : participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}
+        </span>
+        {!participantShell && !transactionDemo ? (
           <span aria-hidden="true">{active === "protocol" ? "Operations" : "Originator"} view</span>
         ) : null}
       </div>

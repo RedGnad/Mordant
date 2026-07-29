@@ -47,7 +47,7 @@ const FACE = 110n * UNIT;             // 110 face value
 const BOND_BPS = 1_000;               // 10% reserve
 const REVEAL_PERIOD = 3_600n;
 const CURE_PERIOD = 3_600n;
-const PROTECTION_WINDOW = 30n * 24n * 3_600n;
+const PROTECTION_WINDOW = 24n * 3_600n; // the protocol's 24-hour duration, never shortened
 const CURRENCY = `0x${Buffer.from("USD").toString("hex").padEnd(64, "0")}`;
 const INVOICE_ROOT = `0x${"a1".repeat(32)}`;
 
@@ -197,12 +197,19 @@ async function deploy() {
   await send("deployer", settlement, erc20Artifact.abi, "mint", [accounts.buyer.address, FACE]);
   log("settlement balances minted", "funder 100, buyer 110");
 
+  // Reset does not redeploy or invent a second deal. Reverting to this Anvil snapshot preserves the
+  // same vault, invoice root and participants, then the server immediately takes a replacement
+  // snapshot because `evm_revert` consumes the previous id.
+  const resetSnapshotId = await publicClient.request({ method: "evm_snapshot" });
+  log("canonical reset snapshot", String(resetSnapshotId));
+
   const deployment = {
     label: "LOCAL / PROTOCOL DOUBLE / SYNTHETIC",
     warning:
       "Local Anvil deployment. The settlement and CVA tokens are protocol doubles, not Cleanverse"
       + " assets. Nothing here is live and no Cleanverse endpoint was called.",
     generatedAt: new Date().toISOString(),
+    resetSnapshotId: String(resetSnapshotId),
     rpcUrl: RPC_URL,
     chainId: anvil.id,
     contracts: { eligibility, settlement, cva, adapter, factory, vault },

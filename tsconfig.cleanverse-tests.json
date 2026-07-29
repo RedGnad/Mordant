@@ -18,6 +18,7 @@
     "src/lib/contracts/abi-parity.test.ts",
     "src/lib/contracts/pledge.test.ts",
     "src/lib/contracts/read-vault.test.ts",
+    "src/lib/dealroom/living-demo.test.ts",
     "src/lib/evidence/chain-config.test.ts",
     "src/lib/evidence/cli.ts",
     "src/lib/evidence/evidence.test.ts",

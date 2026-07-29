@@ -39,6 +39,8 @@ export type Role = (typeof ROLES)[number];
 export type Deployment = Readonly<{
   label: string;
   warning: string;
+  generatedAt: string;
+  resetSnapshotId: string;
   rpcUrl: string;
   chainId: number;
   contracts: Readonly<Record<"eligibility" | "settlement" | "cva" | "adapter" | "factory" | "vault", Address>>;
@@ -48,6 +50,7 @@ export type Deployment = Readonly<{
     initialUnits: string;
     advanceAmount: string;
     faceValue: string;
+    bondBps: number;
     protectionEnd: string;
     revealPeriod: string;
     curePeriod: string;
@@ -62,6 +65,7 @@ export type StepOutcome = Readonly<{
   kind: StepKind;
   hash?: Hex;
   blockNumber?: string;
+  blockHash?: Hex;
   status?: "success" | "reverted";
   gasUsed?: string;
   events: readonly string[];
@@ -72,6 +76,13 @@ export type JourneyContext = {
   deployment: Deployment;
   publicClient: PublicClient;
   wallet: (role: Role) => WalletClient;
+  onTransactionBroadcast?: (observation: Readonly<{
+    hash: Hex;
+    role: Role;
+    address: Address;
+    functionName: string;
+  }>) => Promise<void> | void;
+  receiptObservationDelayMs?: number;
   /** Conflicting pledge produced by the signature step and consumed by commit and reveal. */
   conflict?: { pledge: MordantPledge; signature: Hex; salt: Hex; digest: Hex };
 };
@@ -82,6 +93,8 @@ export type JourneyStep = Readonly<{
   detail: string;
   role: Role;
   kind: StepKind;
+  contract: "vault" | "settlement" | null;
+  method: string | null;
   run: (context: JourneyContext) => Promise<StepOutcome>;
 }>;
 
@@ -117,7 +130,7 @@ export function createClients(deployment: Deployment) {
   };
 }
 
-function decodeEvents(abi: Abi, receipt: TransactionReceipt): readonly string[] {
+export function decodeReceiptEvents(abi: Abi, receipt: TransactionReceipt): readonly string[] {
   const parsed = parseEventLogs({ abi, logs: receipt.logs });
   return parsed.map((event) => {
     const args = event.args as Record<string, unknown> | undefined;
@@ -129,6 +142,22 @@ function decodeEvents(abi: Abi, receipt: TransactionReceipt): readonly string[] 
         .join(", ");
     return summary.length === 0 ? event.eventName : `${event.eventName}(${summary})`;
   });
+}
+
+export function transactionOutcomeFromReceipt(
+  abi: Abi,
+  hash: Hex,
+  receipt: TransactionReceipt,
+): StepOutcome {
+  return {
+    kind: "transaction",
+    hash,
+    blockNumber: receipt.blockNumber.toString(),
+    blockHash: receipt.blockHash,
+    status: receipt.status,
+    gasUsed: receipt.gasUsed.toString(),
+    events: decodeReceiptEvents(abi, receipt),
+  };
 }
 
 /** Sends a transaction and resolves only once its receipt is available. */
@@ -151,20 +180,17 @@ async function sendTransaction(
     address, abi, functionName, args: args as never, account,
   });
   const hash = await wallet.writeContract(request as never);
+  await context.onTransactionBroadcast?.({ hash, role, address, functionName });
+  if ((context.receiptObservationDelayMs ?? 0) > 0) {
+    await new Promise((resolve) => setTimeout(resolve, context.receiptObservationDelayMs));
+  }
   const receipt = await context.publicClient.waitForTransactionReceipt({ hash });
 
   if (receipt.status !== "success") {
     throw new Error(`Transaction ${hash} reverted on chain`);
   }
 
-  return {
-    kind: "transaction",
-    hash,
-    blockNumber: receipt.blockNumber.toString(),
-    status: receipt.status,
-    gasUsed: receipt.gasUsed.toString(),
-    events: decodeEvents(abi, receipt),
-  };
+  return transactionOutcomeFromReceipt(abi, hash, receipt);
 }
 
 function buildPledge(
@@ -236,6 +262,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The funder allows the vault to pull the 100-unit advance.",
     role: "holderA",
     kind: "transaction",
+    contract: "settlement",
+    method: "approve",
     run: (context) => sendTransaction(
       context, "holderA", context.deployment.contracts.settlement,
       context.deployment.abis.erc20, "approve",
@@ -248,6 +276,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The facility activates the vault against an originator-signed exclusive pledge.",
     role: "facilityA",
     kind: "transaction",
+    contract: "vault",
+    method: "activate",
     run: async (context) => {
       const now = await currentTimestamp(context);
       const pledge = buildPledge(
@@ -273,6 +303,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Holder A transfers 40 invoice units to holder B under the live policy checks.",
     role: "holderA",
     kind: "transaction",
+    contract: "vault",
+    method: "transfer",
     run: (context) => sendTransaction(
       context, "holderA", context.deployment.contracts.vault,
       context.deployment.abis.vault, "transfer",
@@ -285,6 +317,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The originator signs a second exclusive pledge to facility B. EIP-712 signature, no transaction.",
     role: "originator",
     kind: "signature",
+    contract: null,
+    method: "signTypedData",
     run: async (context) => {
       const now = await currentTimestamp(context);
       const pledge = buildPledge(
@@ -312,6 +346,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Facility B commits the hidden conflict, fixing the record date before disclosure.",
     role: "facilityB",
     kind: "transaction",
+    contract: "vault",
+    method: "commitConflict",
     run: (context) => {
       if (context.conflict === undefined) {
         throw new Error("Sign the conflicting pledge first");
@@ -335,6 +371,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Facility B discloses the pledge that the commitment already bound.",
     role: "facilityB",
     kind: "transaction",
+    contract: "vault",
+    method: "revealConflict",
     run: (context) => {
       if (context.conflict === undefined) {
         throw new Error("Sign and commit the conflicting pledge first");
@@ -352,6 +390,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Advances the local chain past the cure deadline. LOCAL chain control, not a business action.",
     role: "deployer",
     kind: "local-chain",
+    contract: null,
+    method: "evm_increaseTime",
     run: async (context) => {
       await advanceTime(context, BigInt(context.deployment.invoice.curePeriod) + 60n);
       const block = await context.publicClient.getBlock();
@@ -369,6 +409,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The unresolved conflict converts the still-required reserve into a record-date entitlement.",
     role: "facilityB",
     kind: "transaction",
+    contract: "vault",
+    method: "finalizeConflict",
     run: (context) => sendTransaction(
       context, "facilityB", context.deployment.contracts.vault,
       context.deployment.abis.vault, "finalizeConflict", [],
@@ -380,6 +422,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The claim pays from the pre-funded reserve and does not touch the invoice claim.",
     role: "holderA",
     kind: "transaction",
+    contract: "vault",
+    method: "claimBond",
     run: (context) => sendTransaction(
       context, "holderA", context.deployment.contracts.vault,
       context.deployment.abis.vault, "claimBond", [],
@@ -391,6 +435,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Same record date, proportional to the 40-unit position.",
     role: "holderB",
     kind: "transaction",
+    contract: "vault",
+    method: "claimBond",
     run: (context) => sendTransaction(
       context, "holderB", context.deployment.contracts.vault,
       context.deployment.abis.vault, "claimBond", [],
@@ -402,6 +448,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The receivable settles on its own track, after the recourse payout.",
     role: "buyer",
     kind: "transaction",
+    contract: "settlement",
+    method: "approve",
     run: (context) => sendTransaction(
       context, "buyer", context.deployment.contracts.settlement,
       context.deployment.abis.erc20, "approve",
@@ -414,6 +462,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "Redemption escrow is funded independently of the reserve that was already paid out.",
     role: "buyer",
     kind: "transaction",
+    contract: "vault",
+    method: "fundRedemption",
     run: (context) => sendTransaction(
       context, "buyer", context.deployment.contracts.vault,
       context.deployment.abis.vault, "fundRedemption",
@@ -426,6 +476,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The invoice claim settles at face value, unaffected by the earlier 6 payout.",
     role: "holderA",
     kind: "transaction",
+    contract: "vault",
+    method: "redeem",
     run: (context) => sendTransaction(
       context, "holderA", context.deployment.contracts.vault,
       context.deployment.abis.vault, "redeem", [60n * UNIT],
@@ -437,6 +489,8 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
     detail: "The receivable is fully settled while both holders kept their recourse payout.",
     role: "holderB",
     kind: "transaction",
+    contract: "vault",
+    method: "redeem",
     run: (context) => sendTransaction(
       context, "holderB", context.deployment.contracts.vault,
       context.deployment.abis.vault, "redeem", [40n * UNIT],
@@ -445,6 +499,9 @@ export const JOURNEY: readonly JourneyStep[] = Object.freeze([
 ]);
 
 export type DealRoomState = Readonly<{
+  blockNumber: string;
+  blockHash: Hex;
+  blockTimestamp: string;
   protectionState: number;
   receivableState: number;
   totalSupply: string;
@@ -458,23 +515,43 @@ export type DealRoomState = Readonly<{
   holderBSettlement: string;
   originatorSettlement: string;
   vaultSettlement: string;
+  holderABondClaimed: boolean;
+  holderBBondClaimed: boolean;
+  pendingConflict: Readonly<{
+    facility: Address;
+    committedAt: string;
+    revealDeadline: string;
+    cureDeadline: string;
+    conflictingPledgeDigest: Hex;
+  }>;
 }>;
 
 /** Re-reads everything the deal room displays straight from the contracts. */
-export async function readDealRoomState(context: JourneyContext): Promise<DealRoomState> {
+export async function readDealRoomState(
+  context: JourneyContext,
+  atBlockNumber?: bigint,
+): Promise<DealRoomState> {
   const { deployment, publicClient } = context;
   const vault = { address: deployment.contracts.vault, abi: deployment.abis.vault } as const;
   const token = { address: deployment.contracts.settlement, abi: deployment.abis.erc20 } as const;
+  const block = atBlockNumber === undefined
+    ? await publicClient.getBlock()
+    : await publicClient.getBlock({ blockNumber: atBlockNumber });
+  if (block.hash === null) {
+    throw new Error(`Block ${block.number} is not finalized enough to identify.`);
+  }
+  const blockNumber = block.number;
 
   const read = (functionName: string, args: readonly unknown[] = []) =>
-    publicClient.readContract({ ...vault, functionName, args: args as never });
+    publicClient.readContract({ ...vault, functionName, args: args as never, blockNumber });
   const balance = (address: Address) =>
-    publicClient.readContract({ ...token, functionName: "balanceOf", args: [address] });
+    publicClient.readContract({ ...token, functionName: "balanceOf", args: [address], blockNumber });
 
   const [
     protectionState, receivableState, totalSupply, bondLocked, entitlementAllocated,
     entitlementClaimed, redeemedFace, holderAUnits, holderBUnits,
     holderASettlement, holderBSettlement, originatorSettlement, vaultSettlement,
+    holderABondClaimed, holderBBondClaimed, pendingConflict,
   ] = await Promise.all([
     read("protectionState"), read("receivableState"), read("totalSupply"), read("bondLocked"),
     read("entitlementAllocated"), read("entitlementClaimed"), read("redeemedFace"),
@@ -484,9 +561,19 @@ export async function readDealRoomState(context: JourneyContext): Promise<DealRo
     balance(deployment.accounts.holderB.address),
     balance(deployment.accounts.originator.address),
     balance(deployment.contracts.vault),
+    read("bondClaimedBy", [deployment.accounts.holderA.address]),
+    read("bondClaimedBy", [deployment.accounts.holderB.address]),
+    read("pendingConflict"),
   ]);
 
+  const pending = pendingConflict as readonly [
+    Hex, Address, bigint, bigint, bigint, bigint, bigint, bigint, Hex, Address,
+  ];
+
   return Object.freeze({
+    blockNumber: blockNumber.toString(),
+    blockHash: block.hash,
+    blockTimestamp: block.timestamp.toString(),
     protectionState: Number(protectionState),
     receivableState: Number(receivableState),
     totalSupply: String(totalSupply),
@@ -500,6 +587,15 @@ export async function readDealRoomState(context: JourneyContext): Promise<DealRo
     holderBSettlement: String(holderBSettlement),
     originatorSettlement: String(originatorSettlement),
     vaultSettlement: String(vaultSettlement),
+    holderABondClaimed: Boolean(holderABondClaimed),
+    holderBBondClaimed: Boolean(holderBBondClaimed),
+    pendingConflict: Object.freeze({
+      facility: pending[1],
+      committedAt: pending[5].toString(),
+      revealDeadline: pending[6].toString(),
+      cureDeadline: pending[7].toString(),
+      conflictingPledgeDigest: pending[8],
+    }),
   });
 }
 

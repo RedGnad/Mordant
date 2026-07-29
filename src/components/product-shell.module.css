@@ -242,6 +242,29 @@
   text-align: right;
 }
 
+.demoModeLink {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+  border: 1px solid var(--nws-ink);
+  color: var(--nws-ink);
+  font-size: 11px;
+  font-variation-settings: "wdth" 90, "wght" 680;
+  text-align: center;
+}
+
+.demoModeLink:hover {
+  border-color: var(--nws-action);
+  color: var(--nws-action);
+}
+
+.demoModeLink:focus-visible {
+  outline: 3px solid var(--nws-action);
+  outline-offset: 2px;
+}
+
 .fixture {
   position: relative;
   z-index: 10;
@@ -336,6 +359,10 @@
     grid-template-columns: 116px minmax(0, auto) auto;
   }
 
+  .shell[data-demo-mode="transactions"] .participantChrome {
+    grid-template-columns: 104px minmax(0, 1fr) 48px;
+  }
+
   .brandLockup {
     padding-inline: 14px;
   }
@@ -390,6 +417,19 @@
 
   .participantChrome .sessionIdentity {
     gap: 0;
+  }
+
+  .shell[data-demo-mode="transactions"] .participantChrome .sessionIdentity {
+    display: none;
+  }
+
+  .shell[data-demo-mode="transactions"] .participantChrome .navigation :global(li + li) {
+    border-left: 1px solid var(--nws-soft-rule);
+  }
+
+  .shell[data-demo-mode="transactions"] .participantChrome .navigation :global(.role-navigation-link) {
+    padding-inline: 8px;
+    font-size: 10px;
   }
 
   .participantChrome .contextControl > summary {

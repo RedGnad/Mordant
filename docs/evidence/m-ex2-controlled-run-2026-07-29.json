@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "mission": "M-EX2",
+  "classification": "Executed on controlled demo chain",
+  "generatedAt": "2026-07-29T21:21:43.776Z",
+  "network": {
+    "name": "Anvil",
+    "chainId": 31337,
+    "protocolAssets": "doubles",
+    "realFunds": false
+  },
+  "execution": {
+    "discipline": "M-15 checkpoint semantics",
+    "initialBlock": 22,
+    "finalBlock": 35,
+    "businessTransactions": 12,
+    "offchainSignatures": 1,
+    "controlledTimeTransitions": 1,
+    "protectionDurationSeconds": 86400,
+    "cureDurationSeconds": 3600
+  },
+  "deal": {
+    "id": "deal:856e4424",
+    "invoiceRoot": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "vault": "0x856e4424f806D16E8CBC702B3c0F2ede5468eae5",
+    "settlementToken": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+    "participants": {
+      "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "buyer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "originator": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "facilityA": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "facilityB": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "holderA": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+      "holderB": "0x976EA74026E726554dB657fA54763abd0C3a0aa9"
+    }
+  },
+  "actions": [
+    {
+      "id": "approve-funding",
+      "kind": "transaction",
+      "actor": "holderA",
+      "transactionHash": "0xb00edc7d87f343705c8ed675719694241ad80dd9ad4d95ded2714d1762bc94c7",
+      "block": 23,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "activate",
+      "kind": "transaction",
+      "actor": "facilityA",
+      "transactionHash": "0x3862689eac1e9357beb86b1aa9a7c1f95bbba9d19c75e8bb313aef8b14b6fa37",
+      "block": 24,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "positions",
+      "kind": "transaction",
+      "actor": "holderA",
+      "transactionHash": "0x6e2814afaecc32fb7c8e072d72544e25433607c1d958d97c1c4ef6a437af99d0",
+      "block": 25,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "sign-conflict",
+      "kind": "signature",
+      "actor": "originator",
+      "transactionHash": null,
+      "block": null,
+      "receiptStatus": null
+    },
+    {
+      "id": "commit",
+      "kind": "transaction",
+      "actor": "facilityB",
+      "transactionHash": "0x03b50e764a977e3213d1f7209308cd7efe4bfa9d892275ac00a645b9cbc5c9cd",
+      "block": 26,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "reveal",
+      "kind": "transaction",
+      "actor": "facilityB",
+      "transactionHash": "0x70200112e47f90c2f2b0315f145de65420b37b9ec33b8695e0b987b45b63fb2b",
+      "block": 27,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "cure-window",
+      "kind": "controlled-time",
+      "actor": "deployer",
+      "transactionHash": null,
+      "block": 28,
+      "receiptStatus": null
+    },
+    {
+      "id": "finalize",
+      "kind": "transaction",
+      "actor": "facilityB",
+      "transactionHash": "0xeae3e5f2aae32f1d31df072ffe6dc8ee87bb9f5ae067f58f324c68440abe5f9a",
+      "block": 29,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "claim-a",
+      "kind": "transaction",
+      "actor": "holderA",
+      "transactionHash": "0xcc74840ec4221c388ceed404bca6fa34b1e7219c00e0a4fea5cbf1b82a3d868d",
+      "block": 30,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "claim-b",
+      "kind": "transaction",
+      "actor": "holderB",
+      "transactionHash": "0x034319b7e3fead291c19ebfd9d965b9792431d6af5cf84630efa56ac277c58b0",
+      "block": 31,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "approve-redemption",
+      "kind": "transaction",
+      "actor": "buyer",
+      "transactionHash": "0x567fd37578954590a9e09c04874e9f9e56e6238b034c5395cf75d6abaa5efeb1",
+      "block": 32,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "fund-redemption",
+      "kind": "transaction",
+      "actor": "buyer",
+      "transactionHash": "0x117cf7fa526b14b1540b61810640a067b8a192800db94ce3f81b4a2cb55d8532",
+      "block": 33,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "redeem-a",
+      "kind": "transaction",
+      "actor": "holderA",
+      "transactionHash": "0x5c54c215a16ddeef1eb8f50bb0718fe0d6ab35259528dd34115c18c27f1e8106",
+      "block": 34,
+      "receiptStatus": "success"
+    },
+    {
+      "id": "redeem-b",
+      "kind": "transaction",
+      "actor": "holderB",
+      "transactionHash": "0x67e9802257ef7dde3c1c781ea61abe0b754be932726aee4d60d7afec4693fc66",
+      "block": 35,
+      "receiptStatus": "success"
+    }
+  ],
+  "terminalState": {
+    "protectionState": "Entitled",
+    "receivableState": "Redeemed",
+    "entitlementAllocated": "10000000",
+    "entitlementClaimed": "10000000",
+    "redeemedFace": "110000000",
+    "holderASettlement": "72000000",
+    "holderBSettlement": "48000000",
+    "vaultSettlement": "0"
+  },
+  "claims": {
+    "productionAuthorized": false,
+    "realFundsAuthorized": false,
+    "commercialPilotStarted": false
+  }
+}
