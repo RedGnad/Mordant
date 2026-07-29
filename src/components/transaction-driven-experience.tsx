@@ -162,6 +162,7 @@ export function TransactionDrivenExperience({
   const protectionLabel = PROTECTION_STATES[run.current.protectionState] ?? "Unknown";
   const receivableLabel = RECEIVABLE_STATES[run.current.receivableState] ?? "Unknown";
   const receipt = latestReceipt?.receipt;
+  const capturedRecovery = readOnly && surface === "protocol";
 
   if (proofOpen && latestReceipt !== null && receipt !== undefined) {
     return (
@@ -194,7 +195,7 @@ export function TransactionDrivenExperience({
           </article>
           <article className={styles.proofAction}>
             <span>Action</span>
-            <strong>{latestReceipt.method}</strong>
+            <strong>{latestReceipt.title}</strong>
             <small>{latestReceipt.actorLabel}</small>
           </article>
           <article>
@@ -204,16 +205,11 @@ export function TransactionDrivenExperience({
           </article>
         </section>
 
-        {receipt.events.length > 0 ? (
-          <section className={styles.events} aria-label="Observed events">
-            <p>Observed events</p>
-            <ul>{receipt.events.map((event) => <li key={event}>{event}</li>)}</ul>
-          </section>
-        ) : null}
-
         <details className={styles.technical} data-testid="living-technical-proof">
           <summary>Technical record</summary>
           <dl>
+            {latestReceipt.contract === null ? null : <div><dt>Contract</dt><dd>{latestReceipt.contract}</dd></div>}
+            {latestReceipt.method === null ? null : <div><dt>Method</dt><dd>{latestReceipt.method}</dd></div>}
             <div><dt>Deal</dt><dd>{run.deal.id}</dd></div>
             <div><dt>Vault</dt><dd>{run.deal.vault}</dd></div>
             <div><dt>Invoice root</dt><dd>{run.deal.invoiceRoot}</dd></div>
@@ -221,6 +217,12 @@ export function TransactionDrivenExperience({
             <div><dt>Block hash</dt><dd>{receipt.blockHash}</dd></div>
             <div><dt>Gas used</dt><dd>{receipt.gasUsed}</dd></div>
           </dl>
+          {receipt.events.length > 0 ? (
+            <section className={styles.events} aria-label="Observed events">
+              <p>Observed events</p>
+              <ul>{receipt.events.map((event) => <li key={event}>{event}</li>)}</ul>
+            </section>
+          ) : null}
         </details>
 
         <footer className={styles.proofControls}>
@@ -246,8 +248,8 @@ export function TransactionDrivenExperience({
     >
       <header className={styles.runContext}>
         <p className={styles.sourceLabel} data-testid="living-source">{run.source.label}</p>
-        <p>{surfaceLabel(surface)} · block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
-        <p>{readOnly ? "Receipt-derived review" : "Protocol doubles"}</p>
+        <p>{surfaceLabel(surface)} · {readOnly ? "captured" : "current"} block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
+        {readOnly ? null : <p>Protocol doubles</p>}
       </header>
 
       <div className={styles.scene}>
@@ -272,12 +274,17 @@ export function TransactionDrivenExperience({
         </section>
 
         <aside className={styles.responsibility} data-region="responsibility" data-shift={view.abnormal ? "true" : undefined}>
-          <p>{surface === "protocol" ? "Recovery" : surface === "participant" ? "Your safe next step" : "Responsible now"}</p>
-          <strong>{surface === "protocol" ? view.safeAction : view.responsible}</strong>
-          {view.deadline === null ? null : <time>{view.deadline}</time>}
+          <p>{capturedRecovery ? "Captured recovery checkpoint" : surface === "protocol" ? "Recovery" : surface === "participant" ? "Your safe next step" : "Responsible now"}</p>
+          <strong>{capturedRecovery ? "Cure window open at capture" : surface === "protocol" ? view.safeAction : view.responsible}</strong>
+          {view.deadline === null ? null : (
+            <time>
+              {capturedRecovery ? <small>Recorded deadline</small> : null}
+              {view.deadline}
+            </time>
+          )}
           <span>{view.consequence}</span>
           {surface === "participant" ? <em>{view.safeAction}</em> : null}
-          {surface === "protocol" ? <em>Last safe block · {run.lastSafeState.blockNumber}</em> : null}
+          {surface === "protocol" ? <em>{readOnly ? "Captured safe state" : "Last safe block"} · block {run.lastSafeState.blockNumber}</em> : null}
         </aside>
       </div>
 
@@ -285,8 +292,8 @@ export function TransactionDrivenExperience({
         <footer className={styles.controls}>
           <div className={styles.executionControl}>
             <p>
-              <span>Retained execution</span>
-              <strong>Receipt confirmed · block {receipt?.blockNumber}</strong>
+              <span>Captured checkpoint</span>
+              <strong>Conflict reveal confirmed · block {receipt?.blockNumber}</strong>
             </p>
             <button
               type="button"
@@ -295,12 +302,9 @@ export function TransactionDrivenExperience({
               disabled={latestReceipt === null}
               onClick={() => setProofOpen(true)}
             >
-              Open receipt proof
+              Review receipt proof
             </button>
           </div>
-          <p className={styles.reviewNotice}>
-            Public review is read-only. No transaction can be sent from this deployment.
-          </p>
         </footer>
       ) : (
       <footer className={styles.controls}>

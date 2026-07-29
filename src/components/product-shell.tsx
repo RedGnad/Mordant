@@ -267,7 +267,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
       <div className={`${styles.fixture} fixture-notice`}>
         <span>
           {mEx2Mode
-            ? transactionDemo ? "Controlled mode · no real funds" : "Executed review · no real funds"
+            ? transactionDemo ? "Controlled mode · no real funds" : "No real funds · retained receipt"
             : participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}
         </span>
         {!participantShell && !transactionDemo ? (

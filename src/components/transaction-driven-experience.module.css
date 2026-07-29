@@ -9,7 +9,8 @@
 
 .experience {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  align-content: start;
   padding: clamp(18px, 2.4vw, 34px) clamp(16px, 3vw, 44px) 22px;
 }
 
@@ -36,7 +37,7 @@
 .eyebrow {
   margin: 0;
   font-size: 10px;
-  font-variation-settings: "wdth" 86, "wght" 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -52,27 +53,27 @@
 
 .scene {
   display: grid;
-  min-height: 520px;
+  min-height: 450px;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: minmax(220px, 1fr) 176px;
+  grid-template-rows: minmax(190px, auto) 156px;
   column-gap: clamp(16px, 2vw, 28px);
-  align-content: center;
-  padding-block: clamp(28px, 5vh, 64px);
+  align-content: start;
+  padding-block: clamp(40px, 5vh, 58px) 22px;
 }
 
 .truth {
   grid-column: 1 / 8;
   align-self: end;
-  padding-bottom: clamp(20px, 3vh, 38px);
+  padding-bottom: clamp(18px, 2.4vh, 30px);
 }
 
 .truth h1 {
-  max-width: 790px;
+  max-width: 740px;
   margin: 10px 0 8px;
-  font-size: clamp(48px, 5.6vw, 82px);
-  font-variation-settings: "wdth" 80, "wght" 780;
-  letter-spacing: -0.065em;
-  line-height: 0.9;
+  font-size: clamp(42px, 4.9vw, 70px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
   text-wrap: balance;
 }
 
@@ -122,7 +123,7 @@
 .responsibility > p {
   margin: 0;
   font-size: 9px;
-  font-variation-settings: "wdth" 88, "wght" 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -131,8 +132,8 @@
 .protection strong {
   margin: 8px 0 3px;
   font-size: clamp(28px, 3vw, 44px);
-  font-variation-settings: "wdth" 82, "wght" 760;
-  letter-spacing: -0.055em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   line-height: 0.95;
 }
 
@@ -169,22 +170,33 @@
 }
 
 .experience[data-surface="protocol"] .responsibility[data-shift="true"] {
-  transform: translate(-34px, 26px);
+  transform: translate(-20px, 18px);
 }
 
 .responsibility strong {
   max-width: 420px;
-  font-size: clamp(27px, 3.2vw, 46px);
-  font-variation-settings: "wdth" 84, "wght" 750;
-  letter-spacing: -0.05em;
-  line-height: 0.95;
+  font-size: clamp(25px, 2.7vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
 }
 
 .responsibility time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--nws-action);
   font-family: var(--font-proof), monospace;
   font-size: 12px;
   font-weight: 700;
+}
+
+.responsibility time small {
+  color: var(--nws-muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .responsibility span,
@@ -280,13 +292,8 @@
   color: var(--state-critical);
 }
 
-.reviewNotice {
-  align-self: center;
-  margin: 0;
-  color: var(--nws-muted);
-  font-size: 11px;
-  line-height: 1.35;
-  text-align: right;
+.experience[data-execution-mode="review"] .controls {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .secondaryControls {
@@ -324,9 +331,9 @@
   max-width: 840px;
   margin: 0;
   font-size: clamp(44px, 6vw, 84px);
-  font-variation-settings: "wdth" 82, "wght" 780;
-  letter-spacing: -0.065em;
-  line-height: 0.9;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
 }
 
 .unavailable > p:not(.sourceLabel) {
@@ -360,10 +367,10 @@
 .proofLead h1 {
   max-width: 760px;
   margin: 12px 0 10px;
-  font-size: clamp(48px, 5.6vw, 80px);
-  font-variation-settings: "wdth" 80, "wght" 780;
-  letter-spacing: -0.065em;
-  line-height: 0.9;
+  font-size: clamp(44px, 5vw, 70px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
 }
 
 .proofLead > p:last-child {
@@ -442,19 +449,19 @@
 
 .transitionProof strong {
   font-size: clamp(24px, 2.4vw, 36px);
-  font-variation-settings: "wdth" 84, "wght" 720;
-  letter-spacing: -0.04em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .proofAction strong {
   color: var(--nws-ground);
-  font-family: var(--font-proof), monospace;
-  font-size: 16px;
-  letter-spacing: 0;
+  font-size: clamp(22px, 2.2vw, 32px);
 }
 
 .events {
-  grid-column: 1 / 8;
+  margin: 4px 0 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(243 244 239 / 18%);
 }
 
 .events > p {
@@ -539,11 +546,11 @@
   }
 
   .scene {
-    min-height: 520px;
+    min-height: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-template-rows: 168px 176px minmax(110px, auto);
+    grid-template-rows: auto 160px minmax(118px, auto);
     gap: 12px;
-    padding-block: 16px;
+    padding-block: 20px 16px;
   }
 
   .truth {
@@ -555,7 +562,10 @@
 
   .truth h1 {
     margin: 7px 0 5px;
-    font-size: clamp(34px, 10.2vw, 44px);
+    font-size: clamp(31px, 9vw, 38px);
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    text-wrap: pretty;
   }
 
   .truth > p:last-child {
@@ -602,7 +612,7 @@
   }
 
   .experience[data-surface="protocol"] .responsibility[data-shift="true"] {
-    transform: translateX(18px);
+    transform: translateX(8px);
   }
 
   .responsibility strong {
@@ -661,7 +671,9 @@
   }
 
   .proofLead h1 {
-    font-size: 43px;
+    font-size: 38px;
+    letter-spacing: -0.025em;
+    line-height: 1;
   }
 
   .transitionProof {

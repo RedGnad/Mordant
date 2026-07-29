@@ -349,8 +349,8 @@ a:focus-visible,
     font-size: 11px;
   }
 
-  .product-shell-protocol .role-navigation li:nth-child(2),
-  .product-shell-protocol .role-navigation li:nth-child(4) {
+  .product-shell-protocol:not([data-demo-mode]) .role-navigation li:nth-child(2),
+  .product-shell-protocol:not([data-demo-mode]) .role-navigation li:nth-child(4) {
     display: none;
   }
 

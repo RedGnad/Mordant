@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
+import localFont from "next/font/local";
 import "./foundations.css";
 import "./globals.css";
 import "./instruments.css";
@@ -28,12 +29,13 @@ const proofFont = IBM_Plex_Mono({
   display: "swap",
 });
 
-const productFont = Archivo({
+const productFont = localFont({
+  src: "./fonts/Chillax-Variable.woff2",
   variable: "--font-product",
-  subsets: ["latin"],
-  weight: "variable",
-  axes: ["wdth"],
+  weight: "200 700",
+  style: "normal",
   display: "swap",
+  fallback: ["Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
