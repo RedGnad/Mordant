@@ -1,0 +1,555 @@
+{
+  "generatedAt": "2026-07-29T00:19:06.584Z",
+  "viewports": [
+    {
+      "id": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "laptop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "id": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "note": "Public pages captured for design comparison. The PNGs live in the m17 branch as a research archive and are deliberately not merged to main: they are third-party material and 9.5 MB of it. Each entry below carries its own observation so this file is readable without them.",
+  "referenceCount": 20,
+  "usableCount": 20,
+  "captureCount": 46,
+  "references": [
+    {
+      "id": "observable",
+      "territory": "raw-systems",
+      "name": "Observable",
+      "url": "https://observablehq.com/",
+      "surface": "product landing",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/observable-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/observable-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/observable-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Monospace display headline, one green accent, capability proved by a grid of real dense dashboards rather than illustration.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Observable Notebooks: Fast data exploration and prototyping"
+    },
+    {
+      "id": "observable-docs",
+      "territory": "raw-systems",
+      "name": "Observable Framework docs",
+      "url": "https://observablehq.com/framework/",
+      "surface": "documentation",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/observable-docs-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/observable-docs-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "272 px persistent nav rail, unconstrained content column, monospace headline at ~48 px, white / near-black / one green.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Observable Framework"
+    },
+    {
+      "id": "tldraw",
+      "territory": "raw-systems",
+      "name": "tldraw",
+      "url": "https://www.tldraw.com/",
+      "surface": "live product canvas",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/tldraw-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/tldraw-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Live editor. Chrome pushed to four edges, centre entirely empty, single-weight line icons, blue only for selection.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "tldraw • very good free whiteboard"
+    },
+    {
+      "id": "excalidraw",
+      "territory": "raw-systems",
+      "name": "Excalidraw",
+      "url": "https://excalidraw.com/",
+      "surface": "live product canvas",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/excalidraw-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/excalidraw-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Same edge-anchored family as tldraw; not separately analysed.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Excalidraw Whiteboard"
+    },
+    {
+      "id": "benchling",
+      "territory": "scientific",
+      "name": "Benchling",
+      "url": "https://www.benchling.com/",
+      "surface": "enterprise landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/benchling-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/benchling-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Light ground, Inter-class sans, centred headline over a product screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Cloud-based platform for biotech R&D | Benchling"
+    },
+    {
+      "id": "plotly",
+      "territory": "scientific",
+      "name": "Plotly",
+      "url": "https://plotly.com/",
+      "surface": "data tooling landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/plotly-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/plotly-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Light ground, leads with a chart rather than a screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Interactive Data Visualization Tools & Software | Plotly"
+    },
+    {
+      "id": "deepnote",
+      "territory": "scientific",
+      "name": "Deepnote",
+      "url": "https://deepnote.com/",
+      "surface": "notebook product landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/deepnote-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/deepnote-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Light ground, centred headline over a notebook screenshot. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Deepnote: Collaborative analytics & data science notebook"
+    },
+    {
+      "id": "stripe-docs",
+      "territory": "editorial-enterprise",
+      "name": "Stripe API reference",
+      "url": "https://docs.stripe.com/api",
+      "surface": "dense documentation",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/stripe-docs-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/stripe-docs-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/stripe-docs-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Three columns: 280 px nav, prose on white, code on a dark slate panel. 14-15 px type, indigo for links and current position only. The two-tone prose-light machine-dark split is the proprietary move.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Stripe API Reference"
+    },
+    {
+      "id": "vercel",
+      "territory": "editorial-enterprise",
+      "name": "Vercel",
+      "url": "https://vercel.com/",
+      "surface": "product landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/vercel-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/vercel-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Near-white or dark ground, tight tracking on a geometric sans, screenshot over a soft gradient.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Agentic Infrastructure - Vercel"
+    },
+    {
+      "id": "linear",
+      "territory": "editorial-enterprise",
+      "name": "Linear",
+      "url": "https://linear.app/",
+      "surface": "product landing",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/linear-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/linear-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/linear-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Same formula as Vercel. Not distinctive enough to build on.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Linear – The system for product development"
+    },
+    {
+      "id": "37signals",
+      "territory": "editorial-enterprise",
+      "name": "37signals",
+      "url": "https://37signals.com/",
+      "surface": "company site",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/37signals-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/37signals-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Plain, text-led, no imagery in the first viewport. The outlier of its group.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "37signals"
+    },
+    {
+      "id": "teenage-engineering",
+      "territory": "tactile",
+      "name": "Teenage Engineering",
+      "url": "https://teenage.engineering/",
+      "surface": "product catalogue",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/teenage-engineering-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/teenage-engineering-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/teenage-engineering-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Row of large custom pictograms as navigation, die-cut orange ticket hero in a heavy rounded display face, cookie notice as a yellow warning triangle with a hand pictogram. Strongest formal position in the set, least applicable to a financial product.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "teenage engineering"
+    },
+    {
+      "id": "panic",
+      "territory": "tactile",
+      "name": "Panic",
+      "url": "https://panic.com/",
+      "surface": "software studio",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/panic-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/panic-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Same tactile studio family as Teenage Engineering, less extreme; not separately analysed.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Panic - We code apps, publish games, and make Playdate."
+    },
+    {
+      "id": "area17",
+      "territory": "tactile",
+      "name": "AREA 17",
+      "url": "https://area17.com/",
+      "surface": "studio site",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/area17-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/area17-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Left-aligned ~56 px statement in a neutral grotesque, ~240 px of air above, then a full-bleed image band. No colour in the first viewport.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "AREA 17 — Brand, experience, and technology transformation"
+    },
+    {
+      "id": "rive",
+      "territory": "material",
+      "name": "Rive",
+      "url": "https://rive.app/",
+      "surface": "runtime product landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/rive-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/rive-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "Argues in motion; the still says nothing. Would not survive prefers-reduced-motion.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Rive — the interactive experience engine"
+    },
+    {
+      "id": "spline",
+      "territory": "material",
+      "name": "Spline",
+      "url": "https://spline.design/",
+      "surface": "3D tool landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/spline-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/spline-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "As Rive. Recorded, not carried forward.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Spline - 3D Design tool in the browser with real-time collaboration"
+    },
+    {
+      "id": "mercury",
+      "territory": "financial",
+      "name": "Mercury",
+      "url": "https://mercury.com/",
+      "surface": "banking landing",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/mercury-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/mercury-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/mercury-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Full-bleed photographic composite, headline in white at ~44 px over sky, and a persistent dark band pinning the required 'not an FDIC-insured bank' disclosure to every viewport. The expressive-surface-plus-mandatory-disclosure tension is the closest structural parallel to Mordant in the set.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Online Business Banking For Startups, Small Businesses & Scaling Companies"
+    },
+    {
+      "id": "ramp",
+      "territory": "financial",
+      "name": "Ramp",
+      "url": "https://ramp.com/",
+      "surface": "spend management landing",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/ramp-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/ramp-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "EXCLUDED. Served a plain-text 'Machine Version' page addressed to AI agents, not the interface. Not a design reference.",
+      "usableAsDesignReference": false,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": ""
+    },
+    {
+      "id": "monzo",
+      "territory": "financial",
+      "name": "Monzo",
+      "url": "https://monzo.com/",
+      "surface": "consumer banking",
+      "mobile": true,
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/monzo-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/monzo-laptop.png"
+        },
+        "mobile": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/monzo-mobile.png"
+        }
+      },
+      "captured": 3,
+      "observation": "Bright flat colour, rounded geometric sans, device-framed product shots. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": true,
+      "capturedTitle": "Monzo | Your New Favourite Bank"
+    },
+    {
+      "id": "wise",
+      "territory": "financial",
+      "name": "Wise",
+      "url": "https://wise.com/",
+      "surface": "cross-border payments",
+      "shots": {
+        "desktop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/wise-desktop.png"
+        },
+        "laptop": {
+          "ok": true,
+          "status": 200,
+          "file": "docs/design/m17/references/wise-laptop.png"
+        }
+      },
+      "captured": 2,
+      "observation": "As Monzo. Category-standard.",
+      "usableAsDesignReference": true,
+      "consentWallObstructsLowerBand": false,
+      "capturedTitle": "Wise: The international account | Money without borders | Wise France"
+    }
+  ],
+  "pngsInMain": false,
+  "pngLocation": "branch m17-references-and-semantics, docs/design/m17/references/",
+  "excluded": [
+    "ramp"
+  ],
+  "consentWallObstructed": [
+    "area17",
+    "mercury",
+    "monzo",
+    "stripe-docs",
+    "teenage-engineering",
+    "tldraw"
+  ]
+}
