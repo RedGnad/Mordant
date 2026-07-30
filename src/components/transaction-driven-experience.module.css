@@ -225,7 +225,6 @@
 }
 
 .workspaceQueue header,
-.workspaceQueue li,
 .workspaceDecision,
 .workspaceDecision > div,
 .protocolDiagnosis article,
@@ -240,8 +239,6 @@
 }
 
 .workspaceQueue header p,
-.workspaceQueue > p,
-.workspaceQueue li span,
 .workspaceDecision > p,
 .workspaceDecision > div p,
 .protocolDiagnosis article > p {
@@ -257,37 +254,156 @@
 }
 
 .workspaceQueue ol {
+  display: grid;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .workspaceQueue li {
-  gap: 5px;
-  padding: 18px 8px 18px 0;
+  min-width: 0;
+}
+
+.workspaceQueue button {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-content: center;
+  padding: 8px 8px 8px 0;
+  border: 0;
   border-top: 1px solid var(--nws-soft-rule);
+  background: transparent;
+  color: var(--nws-ink);
+  text-align: left;
 }
 
-.workspaceQueue li[data-current="true"] {
-  padding-left: 14px;
+.workspaceQueue button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nws-action) 12%, var(--nws-ground));
+}
+
+.workspaceQueue button[data-selected="true"] {
+  padding-left: 10px;
   border-left: 3px solid var(--nws-action);
+  background: color-mix(in srgb, var(--nws-action) 16%, var(--nws-ground));
 }
 
-.workspaceQueue li strong {
-  font-size: 16px;
+.workspaceQueue button > span {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--nws-action-ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+}
+
+.workspaceQueue button strong {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.workspaceQueue button small {
+  color: var(--nws-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.workspaceQueue button:disabled {
+  border-color: var(--nws-rule);
+  color: var(--nws-muted);
+  cursor: not-allowed;
+}
+
+.checkpointStrip {
+  min-width: 0;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--nws-rule);
+}
+
+.checkpointStrip header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+}
+
+.checkpointStrip header p,
+.checkpointStrip header strong {
+  margin: 0;
+  font-size: 11px;
   font-weight: 500;
 }
 
-.workspaceQueue li small,
-.workspaceQueue > p {
+.checkpointStrip header p {
   color: var(--nws-muted);
-  font-size: 12px;
 }
 
-.workspaceQueue > p {
-  max-width: 190px;
-  margin: 20px 0 0;
-  line-height: 1.45;
+.checkpointStrip ol {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(118px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkpointStrip li {
+  min-width: 0;
+}
+
+.checkpointStrip button {
+  display: grid;
+  width: 100%;
+  min-height: 68px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 2px 6px;
+  align-content: center;
+  padding: 8px;
+  border: 0;
+  border-top: 1px solid var(--nws-soft-rule);
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--nws-ink);
+  text-align: left;
+}
+
+.checkpointStrip li + li button {
+  border-left: 1px solid var(--nws-soft-rule);
+}
+
+.checkpointStrip button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nws-action) 12%, var(--nws-ground));
+}
+
+.checkpointStrip button[data-selected="true"] {
+  border-bottom-color: var(--nws-action);
+  background: color-mix(in srgb, var(--nws-action) 16%, var(--nws-ground));
+}
+
+.checkpointStrip button > span {
+  grid-row: 1 / 3;
+  color: var(--nws-action-ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 9px;
+}
+
+.checkpointStrip button strong {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.checkpointStrip button small {
+  color: var(--nws-muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.checkpointStrip button:disabled {
+  border-color: var(--nws-rule);
+  color: var(--nws-muted);
+  cursor: not-allowed;
 }
 
 .workspaceFocus {
@@ -519,8 +635,11 @@
 }
 
 .execute:disabled,
-.secondaryControls button:disabled {
-  opacity: 0.42;
+.secondaryControls button:disabled,
+.proofLink:disabled {
+  border-color: var(--nws-rule);
+  background: transparent;
+  color: var(--nws-muted);
   cursor: not-allowed;
 }
 
@@ -647,7 +766,7 @@
   grid-template-columns: 116px minmax(0, 1fr);
   gap: 14px;
   padding: 10px 0;
-  border-top: 1px solid rgb(243 244 239 / 28%);
+  border-top: 1px solid rgb(243 244 239 / 38%);
 }
 
 .receiptSummary dt,
@@ -683,8 +802,8 @@
   display: grid;
   grid-column: 1 / 13;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid rgb(243 244 239 / 34%);
-  border-bottom: 1px solid rgb(243 244 239 / 34%);
+  border-top: 1px solid rgb(243 244 239 / 38%);
+  border-bottom: 1px solid rgb(243 244 239 / 38%);
 }
 
 .transitionProof article {
@@ -697,7 +816,7 @@
 }
 
 .transitionProof article + article {
-  border-left: 1px solid rgb(243 244 239 / 24%);
+  border-left: 1px solid rgb(243 244 239 / 38%);
 }
 
 .transitionProof span,
@@ -722,7 +841,7 @@
 .events {
   margin: 4px 0 20px;
   padding-top: 14px;
-  border-top: 1px solid rgb(243 244 239 / 18%);
+  border-top: 1px solid rgb(243 244 239 / 38%);
 }
 
 .events > p {
@@ -741,8 +860,8 @@
 
 .technical {
   grid-column: 1 / 13;
-  border-top: 1px solid rgb(243 244 239 / 34%);
-  border-bottom: 1px solid rgb(243 244 239 / 34%);
+  border-top: 1px solid rgb(243 244 239 / 38%);
+  border-bottom: 1px solid rgb(243 244 239 / 38%);
 }
 
 .technical summary {
@@ -842,21 +961,36 @@
   }
 
   .workspaceQueue li {
-    width: 112px;
-    min-width: 112px;
-    padding: 12px 8px 12px 0;
+    width: 140px;
+    min-width: 140px;
   }
 
-  .workspaceQueue li strong {
-    font-size: 14px;
+  .workspaceQueue button {
+    min-height: 68px;
+    padding-right: 8px;
   }
 
-  .workspaceQueue li[data-current="true"] {
-    padding-left: 10px;
+  .checkpointStrip {
+    padding-bottom: 12px;
   }
 
-  .workspaceQueue > p {
+  .checkpointStrip ol {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .checkpointStrip ol::-webkit-scrollbar {
     display: none;
+  }
+
+  .checkpointStrip li {
+    width: 136px;
+    min-width: 136px;
+  }
+
+  .checkpointStrip button {
+    min-height: 64px;
   }
 
   .workspaceFocus {
@@ -1084,7 +1218,7 @@
   }
 
   .transitionProof article + article {
-    border-top: 1px solid rgb(243 244 239 / 24%);
+    border-top: 1px solid rgb(243 244 239 / 38%);
     border-left: 0;
   }
 

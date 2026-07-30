@@ -23,6 +23,7 @@
     "test": "tsc --noEmit && pnpm test:unit && forge test --root contracts -vvv",
     "validate": "eslint . && tsc --noEmit && pnpm test:unit && pnpm test:runner && forge test --root contracts -vvv && forge fmt --root contracts --check && pnpm evidence:cleanverse && pnpm secret:scan && next build --webpack",
     "secret:scan": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/secret-scan-cli.js",
+    "audit:contrast": "node scripts/audit-mux2-contrast.mjs",
     "localnet": "node scripts/localnet.mjs",
     "localnet:deploy": "node scripts/localnet.mjs --once",
     "preflight:monad": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/preflight/cli.js",

@@ -97,6 +97,13 @@ function targetHash(href: string) {
   return hashIndex === -1 ? "" : href.slice(hashIndex);
 }
 
+function withCheckpoint(href: string, checkpoint: string): string {
+  if (!checkpoint) return href;
+  const destination = new URL(href, "https://mordant.local");
+  destination.searchParams.set("checkpoint", checkpoint);
+  return `${destination.pathname}${destination.search}${destination.hash}`;
+}
+
 function revealHashTarget(hash: string, moveFocus = false) {
   if (!hash) return false;
 
@@ -136,29 +143,33 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
   const shell: ShellDefinition = mEx2Mode ? {
     ...baseShell,
     wallet: transactionDemo ? "Controlled demo signer" : "Recorded signer",
-    freshness: transactionDemo ? "Receipt-derived state" : "Block 27",
+    freshness: transactionDemo ? "Receipt-derived state" : "Checkpoint selected",
     navigation: transactionDemo
       ? TRANSACTION_DEMO_NAVIGATION[active]
       : EXECUTED_REVIEW_NAVIGATION[active],
   } : baseShell;
   const participantShell = active === "deal-room";
   const [activeHash, setActiveHash] = useState("");
+  const [activeCheckpoint, setActiveCheckpoint] = useState("");
   const [navigationStatus, setNavigationStatus] = useState("");
 
   useEffect(() => {
     function syncHash() {
       const hash = window.location.hash;
       setActiveHash(hash);
+      setActiveCheckpoint(new URL(window.location.href).searchParams.get("checkpoint") ?? "");
       if (hash) window.requestAnimationFrame(() => revealHashTarget(hash));
     }
 
     syncHash();
     window.addEventListener("hashchange", syncHash);
     window.addEventListener("popstate", syncHash);
+    window.addEventListener("mordant-checkpoint-change", syncHash);
 
     return () => {
       window.removeEventListener("hashchange", syncHash);
       window.removeEventListener("popstate", syncHash);
+      window.removeEventListener("mordant-checkpoint-change", syncHash);
     };
   }, []);
 
@@ -196,7 +207,9 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
         <div className={`${styles.brandLockup} brand-lockup`}>
           <Link
             className="brand-link"
-            href={transactionDemo ? "/?demo=transactions" : "/"}
+            href={mEx2Mode
+              ? withCheckpoint(transactionDemo ? "/?demo=transactions" : "/", activeCheckpoint)
+              : "/"}
             aria-label="Mordant workspace"
           >
             <span className="brand-wordmark">Mordant</span>
@@ -208,7 +221,8 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
           <nav className={`${styles.navigation} role-navigation`} aria-label={`${shell.role} navigation`}>
             <ul>
               {shell.navigation.map((item) => {
-                const hash = targetHash(item.href);
+                const href = mEx2Mode ? withCheckpoint(item.href, activeCheckpoint) : item.href;
+                const hash = targetHash(href);
                 const isCurrent = activeHash ? activeHash === hash : item.current;
 
                 return (
@@ -220,9 +234,9 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
                     ) : (
                       <Link
                         className={isCurrent ? "role-navigation-link is-current" : "role-navigation-link"}
-                        href={item.href}
+                        href={href}
                         aria-current={isCurrent ? "location" : undefined}
-                        onClick={(event) => handleSectionNavigation(event, item.href, item.label)}
+                        onClick={(event) => handleSectionNavigation(event, href, item.label)}
                       >
                         {item.label}
                       </Link>

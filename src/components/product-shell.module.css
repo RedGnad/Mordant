@@ -7,8 +7,8 @@
   --nws-action-ink: #8a4800;
   --nws-proof: #0b1f33;
   --nws-muted: #4a5865;
-  --nws-rule: rgb(11 31 51 / 38%);
-  --nws-soft-rule: rgb(11 31 51 / 17%);
+  --nws-rule: rgb(11 31 51 / 52%);
+  --nws-soft-rule: rgb(11 31 51 / 48%);
   --chrome-bar-height: 56px;
   --fixture-height: 24px;
   --chrome-height: calc(var(--chrome-bar-height) + var(--fixture-height));
@@ -20,7 +20,7 @@
   --text-primary: var(--nws-ink);
   --text-secondary: var(--nws-muted);
   --text-on-proof: var(--nws-ground);
-  --border-structural: rgb(11 31 51 / 48%);
+  --border-structural: rgb(11 31 51 / 52%);
   --border-subtle: var(--nws-soft-rule);
   --action-primary: var(--nws-action);
   --action-primary-hover: #d08700;
@@ -335,6 +335,11 @@
 .shell:global(.product-shell-protocol) .chrome :global(.role-navigation-link.is-current) {
   background: transparent;
   color: var(--nws-ink);
+}
+
+.shell:global(.product-shell-protocol) :global(:is(button, a, summary, [tabindex]):focus-visible) {
+  --focus-outer: var(--nws-ink);
+  --focus-gap: var(--nws-ground);
 }
 
 @media (max-width: 1080px) {

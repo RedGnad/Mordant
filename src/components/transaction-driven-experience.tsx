@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  DEFAULT_RECORDED_CHECKPOINT_ID,
   PROTECTION_STATES,
   RECEIVABLE_STATES,
+  RECORDED_CHECKPOINTS,
   compactTechnicalValue,
   deriveLivingView,
   formatDemoAmount,
+  isRecordedCheckpointId,
   latestReceiptAction,
+  selectRecordedCheckpoint,
+  type LivingActionRecord,
   type LivingRunArtifact,
   type LivingSurface,
+  type RecordedCheckpointId,
 } from "@/lib/dealroom/living-demo";
 
 import styles from "./transaction-driven-experience.module.css";
@@ -35,13 +41,6 @@ function surfaceLabel(surface: LivingSurface): string {
   return "Protocol operations";
 }
 
-function activityLabel(actionId: string, fallback: string): string {
-  if (actionId === "commit") return "Conflict commitment";
-  if (actionId === "positions") return "Position allocation";
-  if (actionId === "activate") return "Invoice funding";
-  return fallback;
-}
-
 function SourceBoundary({ message }: { readonly message: string }) {
   return (
     <section className={styles.unavailable} data-testid="living-demo-unavailable">
@@ -51,6 +50,63 @@ function SourceBoundary({ message }: { readonly message: string }) {
       <code>pnpm localnet</code>
       <p>The normal product surfaces remain available without `?demo=transactions`.</p>
     </section>
+  );
+}
+
+function RecordedCheckpointRail({
+  run,
+  selectedId,
+  surface,
+  onSelect,
+}: {
+  readonly run: LivingRunArtifact;
+  readonly selectedId: RecordedCheckpointId;
+  readonly surface: LivingSurface;
+  readonly onSelect: (id: RecordedCheckpointId) => void;
+}) {
+  const listRef = useRef<HTMLOListElement>(null);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const selected = list?.querySelector<HTMLElement>("[data-selected='true']");
+    if (list === null || list === undefined || selected === null || selected === undefined) return;
+    list.scrollLeft = Math.max(0, selected.offsetLeft - (list.clientWidth - selected.offsetWidth) / 2);
+  }, [selectedId]);
+
+  return (
+    <nav
+      className={surface === "workspace" ? styles.workspaceQueue : styles.checkpointStrip}
+      aria-label="Recorded run checkpoints"
+      data-testid="recorded-checkpoint-rail"
+    >
+      <header>
+        <p>Recorded run</p>
+        <strong>{RECORDED_CHECKPOINTS.length} checkpoints</strong>
+      </header>
+      <ol ref={listRef}>
+        {RECORDED_CHECKPOINTS.map((checkpoint, index) => {
+          const action = run.actions.find((candidate) => candidate.id === checkpoint.actionId);
+          const selected = checkpoint.id === selectedId;
+          return (
+            <li key={checkpoint.id}>
+              <button
+                type="button"
+                aria-current={selected ? "step" : undefined}
+                aria-pressed={selected}
+                data-checkpoint-id={checkpoint.id}
+                data-selected={selected ? "true" : "false"}
+                disabled={action?.status !== "confirmed"}
+                onClick={() => onSelect(checkpoint.id)}
+              >
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{checkpoint.label}</strong>
+                <small>{action?.receipt === undefined ? "Block checkpoint" : "Confirmed receipt"}</small>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -67,6 +123,7 @@ export function TransactionDrivenExperience({
   const [error, setError] = useState<string | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [proofOpen, setProofOpen] = useState(false);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<RecordedCheckpointId>(DEFAULT_RECORDED_CHECKPOINT_ID);
   const proofTitleRef = useRef<HTMLHeadingElement>(null);
   const proofTriggerRef = useRef<HTMLButtonElement>(null);
   const requestSequence = useRef(0);
@@ -99,6 +156,26 @@ export function TransactionDrivenExperience({
       requestSequence.current += 1;
     };
   }, [readOnly, refresh]);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    const syncCheckpoint = () => {
+      const requested = new URL(window.location.href).searchParams.get("checkpoint");
+      setSelectedCheckpointId(isRecordedCheckpointId(requested) ? requested : DEFAULT_RECORDED_CHECKPOINT_ID);
+    };
+    syncCheckpoint();
+    window.addEventListener("popstate", syncCheckpoint);
+    return () => window.removeEventListener("popstate", syncCheckpoint);
+  }, [readOnly]);
+
+  const selectCheckpoint = useCallback((id: RecordedCheckpointId) => {
+    setSelectedCheckpointId(id);
+    setProofOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.set("checkpoint", id);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    window.dispatchEvent(new CustomEvent("mordant-checkpoint-change", { detail: { id } }));
+  }, []);
 
   const mutate = useCallback(async (body: object, state: RequestState) => {
     requestSequence.current += 1;
@@ -141,9 +218,14 @@ export function TransactionDrivenExperience({
     return () => window.removeEventListener("keydown", onEscape);
   }, [closeProof, proofOpen]);
 
+  const recordedSelection = useMemo(
+    () => run === null || !readOnly ? null : selectRecordedCheckpoint(run, selectedCheckpointId),
+    [readOnly, run, selectedCheckpointId],
+  );
+  const displayedRun = recordedSelection?.run ?? run;
   const view = useMemo(
-    () => run === null ? null : deriveLivingView(run, surface),
-    [run, surface],
+    () => displayedRun === null ? null : deriveLivingView(displayedRun, surface),
+    [displayedRun, surface],
   );
 
   if (run === null) {
@@ -156,29 +238,25 @@ export function TransactionDrivenExperience({
     );
   }
 
-  if (view === null) return null;
+  if (view === null || displayedRun === null) return null;
 
-  const latestReceipt = latestReceiptAction(run);
-  const nextAction = run.nextAction;
+  const proofAction: LivingActionRecord | null = recordedSelection?.action ?? latestReceiptAction(displayedRun);
+  const nextAction = displayedRun.nextAction;
   const currentAction = nextAction === null
-    ? null : run.actions.find((action) => action.id === nextAction.id) ?? null;
-  const actionPending = run.status === "running" || requestState === "executing";
-  const actionLabel = run.status === "failed" ? `Retry · ${nextAction?.title ?? "failed action"}`
+    ? null : displayedRun.actions.find((action) => action.id === nextAction.id) ?? null;
+  const actionPending = displayedRun.status === "running" || requestState === "executing";
+  const actionLabel = displayedRun.status === "failed" ? `Retry · ${nextAction?.title ?? "failed action"}`
     : surface === "participant" && nextAction?.id === "claim-a" ? "Claim your protection"
       : nextAction?.title ?? "Canonical run complete";
-  const protectionLabel = PROTECTION_STATES[run.current.protectionState] ?? "Unknown";
-  const receivableLabel = RECEIVABLE_STATES[run.current.receivableState] ?? "Unknown";
-  const receipt = latestReceipt?.receipt;
-  const capturedRecovery = readOnly && surface === "protocol";
+  const protectionLabel = PROTECTION_STATES[displayedRun.current.protectionState] ?? "Unknown";
+  const receivableLabel = RECEIVABLE_STATES[displayedRun.current.receivableState] ?? "Unknown";
+  const receipt = proofAction?.receipt;
+  const proofButtonLabel = receipt === undefined ? "Open checkpoint proof" : "Open receipt proof";
   const recordedNextStep = nextAction?.id === "cure-window"
     ? "Wait for the recorded cure deadline"
     : nextAction?.title ?? "No further action";
-  const recentConfirmedActions = run.actions
-    .filter((action) => action.status === "confirmed" && action.receipt !== undefined && action.id !== latestReceipt?.id)
-    .slice(-2)
-    .reverse();
 
-  if (proofOpen && latestReceipt !== null && receipt !== undefined) {
+  if (proofOpen && proofAction !== null) {
     return (
       <section
         className={styles.proof}
@@ -187,35 +265,37 @@ export function TransactionDrivenExperience({
         aria-labelledby="living-proof-title"
       >
         <header className={styles.proofLead}>
-          <p className={styles.sourceLabel}>Receipt proof</p>
+          <p className={styles.sourceLabel}>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</p>
           <h1 id="living-proof-title" ref={proofTitleRef} tabIndex={-1}>
-            {latestReceipt.title} confirmed.
+            {proofAction.title} {receipt === undefined ? "recorded." : "confirmed."}
           </h1>
-          <p>The receipt with its before and after contract reads.</p>
+          <p>{receipt === undefined
+            ? "The controlled block checkpoint with its before and after contract reads."
+            : "The receipt with its before and after contract reads."}</p>
         </header>
 
         <dl className={styles.receiptSummary}>
-          <div><dt>Actor</dt><dd>{latestReceipt.actorLabel}</dd></div>
-          <div><dt>Transaction</dt><dd className={styles.technicalValue}>{compactTechnicalValue(receipt.transactionHash)}</dd></div>
-          <div><dt>Block</dt><dd className={styles.technicalValue}>{receipt.blockNumber}</dd></div>
-          <div><dt>Status</dt><dd>{receipt.status}</dd></div>
+          <div><dt>Actor</dt><dd>{proofAction.actorLabel}</dd></div>
+          <div><dt>Transaction</dt><dd className={styles.technicalValue}>{receipt === undefined ? "No transaction" : compactTechnicalValue(receipt.transactionHash)}</dd></div>
+          <div><dt>Block</dt><dd className={styles.technicalValue}>{receipt?.blockNumber ?? proofAction.after?.blockNumber ?? proofAction.before.blockNumber}</dd></div>
+          <div><dt>Status</dt><dd>{receipt?.status ?? proofAction.status}</dd></div>
         </dl>
 
         <section className={styles.transitionProof} aria-label="Before action after proof">
           <article>
-            <span>Before · block {latestReceipt.before.blockNumber}</span>
-            <strong>{PROTECTION_STATES[latestReceipt.before.protectionState]}</strong>
-            <small>Receivable · {RECEIVABLE_STATES[latestReceipt.before.receivableState]}</small>
+            <span>Before · block {proofAction.before.blockNumber}</span>
+            <strong>{PROTECTION_STATES[proofAction.before.protectionState]}</strong>
+            <small>Receivable · {RECEIVABLE_STATES[proofAction.before.receivableState]}</small>
           </article>
           <article className={styles.proofAction}>
             <span>Action</span>
-            <strong>{latestReceipt.title}</strong>
-            <small>{latestReceipt.actorLabel}</small>
+            <strong>{proofAction.title}</strong>
+            <small>{proofAction.actorLabel}</small>
           </article>
           <article>
-            <span>After · block {latestReceipt.after?.blockNumber}</span>
-            <strong>{PROTECTION_STATES[latestReceipt.after?.protectionState ?? latestReceipt.before.protectionState]}</strong>
-            <small>Receivable · {RECEIVABLE_STATES[latestReceipt.after?.receivableState ?? latestReceipt.before.receivableState]}</small>
+            <span>After · block {proofAction.after?.blockNumber}</span>
+            <strong>{PROTECTION_STATES[proofAction.after?.protectionState ?? proofAction.before.protectionState]}</strong>
+            <small>Receivable · {RECEIVABLE_STATES[proofAction.after?.receivableState ?? proofAction.before.receivableState]}</small>
           </article>
         </section>
 
@@ -224,16 +304,17 @@ export function TransactionDrivenExperience({
           <dl>
             <div><dt>Source</dt><dd>{run.source.label}</dd></div>
             <div><dt>Run</dt><dd>{run.runId}</dd></div>
-            {latestReceipt.contract === null ? null : <div><dt>Contract</dt><dd>{latestReceipt.contract}</dd></div>}
-            {latestReceipt.method === null ? null : <div><dt>Method</dt><dd>{latestReceipt.method}</dd></div>}
+            <div><dt>Checkpoint</dt><dd>{recordedSelection?.checkpoint.label ?? proofAction.title}</dd></div>
+            {proofAction.contract === null ? null : <div><dt>Contract</dt><dd>{proofAction.contract}</dd></div>}
+            {proofAction.method === null ? null : <div><dt>Method</dt><dd>{proofAction.method}</dd></div>}
             <div><dt>Deal</dt><dd>{run.deal.id}</dd></div>
             <div><dt>Vault</dt><dd>{run.deal.vault}</dd></div>
             <div><dt>Invoice root</dt><dd>{run.deal.invoiceRoot}</dd></div>
-            <div><dt>Transaction hash</dt><dd>{receipt.transactionHash}</dd></div>
-            <div><dt>Block hash</dt><dd>{receipt.blockHash}</dd></div>
-            <div><dt>Gas used</dt><dd>{receipt.gasUsed}</dd></div>
+            {receipt === undefined ? null : <div><dt>Transaction hash</dt><dd>{receipt.transactionHash}</dd></div>}
+            <div><dt>Block hash</dt><dd>{receipt?.blockHash ?? proofAction.after?.blockHash ?? proofAction.before.blockHash}</dd></div>
+            {receipt === undefined ? null : <div><dt>Gas used</dt><dd>{receipt.gasUsed}</dd></div>}
           </dl>
-          {receipt.events.length > 0 ? (
+          {receipt !== undefined && receipt.events.length > 0 ? (
             <section className={styles.events} aria-label="Observed events">
               <p>Observed events</p>
               <ul>{receipt.events.map((event) => <li key={event}>{event}</li>)}</ul>
@@ -242,7 +323,7 @@ export function TransactionDrivenExperience({
         </details>
 
         <footer className={styles.proofControls}>
-          <button type="button" onClick={closeProof}>Back to current decision</button>
+          <button type="button" onClick={closeProof}>Back to selected checkpoint</button>
         </footer>
       </section>
     );
@@ -257,7 +338,8 @@ export function TransactionDrivenExperience({
       data-vault={run.deal.vault}
       data-invoice-root={run.deal.invoiceRoot}
       data-source={run.source.kind}
-      data-status={run.status}
+      data-status={displayedRun.status}
+      data-checkpoint={recordedSelection?.checkpoint.id}
       data-execution-mode={mode}
       data-abnormal={view.abnormal ? "true" : "false"}
       data-resolved={view.resolved ? "true" : "false"}
@@ -265,34 +347,30 @@ export function TransactionDrivenExperience({
       {readOnly ? null : (
         <header className={styles.runContext}>
           <p className={styles.sourceLabel} data-testid="living-source">{run.source.label}</p>
-          <p>{surfaceLabel(surface)} · current block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
+          <p>{surfaceLabel(surface)} · current block <strong data-testid="living-block">{displayedRun.current.blockNumber}</strong></p>
           <p>Protocol doubles</p>
         </header>
       )}
 
+      {readOnly && recordedSelection !== null && surface !== "workspace" ? (
+        <RecordedCheckpointRail
+          run={run}
+          selectedId={recordedSelection.checkpoint.id}
+          surface={surface}
+          onSelect={selectCheckpoint}
+        />
+      ) : null}
+
       {surface === "workspace" ? (
         <div className={styles.workspaceLayout}>
-          <aside className={styles.workspaceQueue} aria-label="Deal activity">
-            <header>
-              <p>Deal activity</p>
-              <strong>1 recorded deal</strong>
-            </header>
-            <ol>
-              <li data-current="true">
-                <span>Selected deal</span>
-                <strong>Needs attention</strong>
-                <small>{view.responsible}</small>
-              </li>
-              {recentConfirmedActions.map((action) => (
-                <li key={action.id}>
-                  <span>Confirmed</span>
-                  <strong>{activityLabel(action.id, action.title)}</strong>
-                  <small>{action.actorLabel}</small>
-                </li>
-              ))}
-            </ol>
-            <p>No other open exception in this recorded run.</p>
-          </aside>
+          {readOnly && recordedSelection !== null ? (
+            <RecordedCheckpointRail
+              run={run}
+              selectedId={recordedSelection.checkpoint.id}
+              surface={surface}
+              onSelect={selectCheckpoint}
+            />
+          ) : <div />}
 
           <section className={styles.workspaceFocus} data-region="truth" data-dominant="true">
             <p className={styles.eyebrow}>{view.eyebrow}</p>
@@ -323,10 +401,10 @@ export function TransactionDrivenExperience({
                 type="button"
                 ref={proofTriggerRef}
                 className={styles.proofLink}
-                disabled={latestReceipt === null}
+                disabled={proofAction === null}
                 onClick={() => setProofOpen(true)}
               >
-                Open receipt proof
+                {proofButtonLabel}
               </button>
             ) : null}
           </aside>
@@ -342,7 +420,7 @@ export function TransactionDrivenExperience({
           <section className={styles.economics} data-region="economics" aria-label="Your separate positions">
             <article className={styles.receivable} data-testid="living-receivable-anchor">
               <p>Your receivable</p>
-              <strong>{formatDemoAmount(run.current.holderAUnits)} <small>units</small></strong>
+              <strong>{formatDemoAmount(displayedRun.current.holderAUnits)} <small>units</small></strong>
               <span>{receivableLabel}</span>
             </article>
             <article className={styles.protection}>
@@ -357,10 +435,10 @@ export function TransactionDrivenExperience({
             <strong>{view.responsible}</strong>
             {view.deadline === null ? null : <time>{view.deadline}</time>}
             <span>{view.consequence}</span>
-            <em>Your action · {view.safeAction}</em>
+            <em>Your current status · {view.safeAction}</em>
             {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={latestReceipt === null} onClick={() => setProofOpen(true)}>
-                Open receipt proof
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={() => setProofOpen(true)}>
+                {proofButtonLabel}
               </button>
             ) : null}
           </aside>
@@ -370,7 +448,9 @@ export function TransactionDrivenExperience({
           <section className={styles.protocolTruth} data-region="truth" data-dominant="true">
             <p className={styles.eyebrow}>{view.eyebrow}</p>
             <h1 data-testid="living-conclusion">{view.title}</h1>
-            <p>{latestReceipt?.actorLabel ?? view.responsible} completed the transition and the contract state was read back.</p>
+            <p>{receipt === undefined
+              ? "The controlled checkpoint advanced and the contract state was read back."
+              : `${proofAction?.actorLabel ?? view.responsible} completed the transition and the contract state was read back.`}</p>
           </section>
 
           <section className={styles.protocolDiagnosis} aria-label="Impact, last safe state, and recovery">
@@ -380,22 +460,22 @@ export function TransactionDrivenExperience({
             </article>
             <article>
               <p>{readOnly ? "Last safe state" : "Last safe block"}</p>
-              <strong>Receivable · {receivableLabel}</strong>
-              <span>Protection · {protectionLabel}</span>
+              <strong>Receivable · {RECEIVABLE_STATES[proofAction?.before.receivableState ?? displayedRun.lastSafeState.receivableState]}</strong>
+              <span>Protection · {PROTECTION_STATES[proofAction?.before.protectionState ?? displayedRun.lastSafeState.protectionState]}</span>
             </article>
             <article className={styles.protocolRecovery}>
               <p>Recovery</p>
-              <strong>{capturedRecovery ? "Cure window open in the recorded state" : view.safeAction}</strong>
+              <strong>{recordedNextStep}</strong>
               {view.deadline === null ? null : <time>{view.deadline}</time>}
-              <span>{capturedRecovery ? "Protocol operations owns the recorded recovery." : `${view.responsible} is responsible.`}</span>
+              <span>{view.responsible} is responsible.</span>
             </article>
           </section>
 
           <footer className={styles.protocolProofControl}>
-            <p><strong>Receipt proof</strong><span>Before → action → after</span></p>
+            <p><strong>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</strong><span>Before → action → after</span></p>
             {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={latestReceipt === null} onClick={() => setProofOpen(true)}>
-                Open receipt proof
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={() => setProofOpen(true)}>
+                {proofButtonLabel}
               </button>
             ) : null}
           </footer>
@@ -433,14 +513,14 @@ export function TransactionDrivenExperience({
           <button
             type="button"
             ref={proofTriggerRef}
-            disabled={latestReceipt === null}
+            disabled={proofAction === null}
             onClick={() => setProofOpen(true)}
           >
             Open receipt proof
           </button>
           <button
             type="button"
-            disabled={requestState !== "idle" || run.status === "running"}
+            disabled={requestState !== "idle" || displayedRun.status === "running"}
             onClick={() => {
               if (window.confirm("Reset this controlled chain to the canonical clean deal?")) {
                 void mutate({ intent: "reset" }, "resetting");
@@ -455,7 +535,7 @@ export function TransactionDrivenExperience({
 
       {error === null ? null : <p className={styles.requestError} role="alert">{error}</p>}
       <p className="visually-hidden" aria-live="polite" aria-atomic="true">
-        Revision {run.revision}. {view.title}
+        Revision {displayedRun.revision}. {view.title}
       </p>
     </section>
   );

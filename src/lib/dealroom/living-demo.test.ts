@@ -7,6 +7,7 @@ import type { DealRoomState, Role } from "./journey";
 import {
   CONTROLLED_CHAIN_SOURCE,
   deriveLivingView,
+  selectRecordedCheckpoint,
   type LivingActionRecord,
   type LivingRunArtifact,
 } from "./living-demo";
@@ -205,4 +206,46 @@ test("resolution preserves protection and receivable outcomes as separate amount
   assert.equal(participant.title, "Your invoice position has been paid.");
   assert.equal(participant.consequence, "72.00 dSETTLE received across both domains.");
   assert.equal(workspace.consequence, "110.00 dSETTLE face value redeemed.");
+});
+
+test("a recorded checkpoint projects one continuous run without changing its deal", () => {
+  const fundingAfter = state({
+    blockNumber: "23",
+    protectionState: 0,
+    receivableState: 0,
+    totalSupply: "0",
+    bondLocked: "0",
+    holderAUnits: "0",
+    holderBUnits: "0",
+  });
+  const activationAfter = state({ blockNumber: "24", protectionState: 1 });
+  const funding: LivingActionRecord = {
+    ...confirmedReveal(fundingAfter),
+    id: "approve-funding",
+    title: "Approve the funding transfer",
+    before: state({ blockNumber: "22", protectionState: 0, receivableState: 0 }),
+    after: fundingAfter,
+  };
+  const activation: LivingActionRecord = {
+    ...confirmedReveal(activationAfter),
+    id: "activate",
+    title: "Finance the invoice",
+    before: fundingAfter,
+    after: activationAfter,
+  };
+  const complete = {
+    ...run(activationAfter, [funding, activation]),
+    status: "complete" as const,
+    nextAction: null,
+  };
+
+  const selected = selectRecordedCheckpoint(complete, "funding");
+
+  assert.equal(selected.checkpoint.id, "funding");
+  assert.equal(selected.action.id, "approve-funding");
+  assert.equal(selected.run.deal.id, complete.deal.id);
+  assert.equal(selected.run.current.blockNumber, "23");
+  assert.equal(selected.run.actions.length, 1);
+  assert.equal(selected.run.nextAction?.id, "activate");
+  assert.equal(deriveLivingView(selected.run, "workspace").title, "Funding approval is confirmed.");
 });
