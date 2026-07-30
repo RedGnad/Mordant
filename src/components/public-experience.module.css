@@ -680,83 +680,135 @@
 
 .flow {
   position: relative;
-  display: grid;
-  min-height: 220px;
-  grid-template-columns: minmax(180px, 1fr) 44px minmax(220px, 1.15fr) 44px minmax(180px, 1fr);
-  align-items: center;
-  gap: clamp(8px, 1.2vw, 18px);
-  text-align: center;
+  min-height: 270px;
 }
 
-.flow::before {
-  position: absolute;
-  z-index: 0;
-  right: 4%;
-  left: 4%;
-  height: 5px;
-  background: linear-gradient(90deg, var(--receivable) 0 48%, var(--protection) 48% 72%, var(--action) 72% 100%);
-  content: "";
-  transform-origin: left center;
+.flowGraphic {
+  display: block;
+  width: 100%;
+  overflow: visible;
 }
 
-.flow > button {
-  position: relative;
-  z-index: 2;
+.flowBase,
+.flowException,
+.flowRecourse {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  transition: opacity 180ms ease-out, stroke-dashoffset 360ms cubic-bezier(0, 0, 0.3, 1);
+}
+
+.flowBase {
+  stroke: var(--receivable);
+  stroke-width: 8;
+}
+
+.flowException {
+  stroke: var(--protection);
+  stroke-width: 14;
+  stroke-dasharray: 430;
+  stroke-dashoffset: 430;
+  opacity: 0;
+}
+
+.flowRecourse {
+  stroke: var(--action);
+  stroke-width: 14;
+  stroke-dasharray: 500;
+  stroke-dashoffset: 500;
+  opacity: 0;
+}
+
+.integrationSignal {
+  fill: var(--protection);
+  transform-origin: center;
+  transition: fill 180ms ease-out, transform 340ms cubic-bezier(0.4, 0.14, 0.3, 1);
+}
+
+.integrationCheckpoint {
+  fill: var(--ground);
+  stroke: var(--action);
+  stroke-width: 10;
+  opacity: 0;
+  transform: scale(0.45);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 160ms 160ms ease-out, transform 240ms 160ms cubic-bezier(0, 0, 0.3, 1);
+}
+
+.flow[data-step="1"] .flowException,
+.flow[data-step="2"] .flowException {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+.flow[data-step="1"] .integrationSignal {
+  transform: translate(442px, -68px);
+}
+
+.flow[data-step="2"] .flowRecourse {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+.flow[data-step="2"] .integrationSignal {
+  fill: var(--action);
+  transform: translate(880px, 0);
+}
+
+.flow[data-step="2"] .integrationCheckpoint {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.integrationStages {
   display: grid;
-  min-height: 92px;
-  align-content: center;
-  gap: 7px;
-  padding: 20px;
-  border: 1px solid var(--rule);
-  background: var(--ground);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 3vw, 44px);
+  margin-top: -10px;
+}
+
+.integrationStages button {
+  display: grid;
+  min-height: 82px;
+  align-content: start;
+  gap: 8px;
+  padding: 14px 4px;
+  border: 0;
+  border-top: 5px solid transparent;
+  background: transparent;
   color: var(--ink);
-  text-align: center;
-  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+  text-align: left;
 }
 
-.flow > button strong {
-  font-size: 20px;
+.integrationStages button:hover,
+.integrationStages button:focus-visible {
+  border-top-color: var(--rule);
+}
+
+.integrationStages button:first-child[aria-pressed="true"] {
+  border-top-color: var(--receivable);
+}
+
+.integrationStages button:nth-child(2)[aria-pressed="true"] {
+  border-top-color: var(--protection);
+}
+
+.integrationStages button:nth-child(3)[aria-pressed="true"] {
+  border-top-color: var(--action);
+}
+
+.integrationStages strong {
+  font-size: 19px;
   font-weight: 500;
 }
 
-.flow > button small {
+.integrationStages small {
   color: var(--muted);
   font-family: var(--font-proof), monospace;
   font-size: 9px;
   letter-spacing: 0.045em;
   text-transform: uppercase;
-}
-
-.flow > button:hover,
-.flow > button:focus-visible {
-  border-color: var(--action);
-}
-
-.flow > button[aria-pressed="true"] {
-  border-color: var(--action);
-  background: var(--action);
-}
-
-.flow > button[aria-pressed="true"] small {
-  color: rgb(11 31 51 / 72%);
-}
-
-.flow i {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-self: center;
-  place-items: center;
-  border: 1px solid var(--ink);
-  background: var(--ground);
-  font-style: normal;
-}
-
-.flow i::before {
-  content: "→";
-  font-size: 16px;
 }
 
 .integrationStory {
@@ -773,6 +825,10 @@
 
 .integrationStory span {
   display: block;
+}
+
+.flow[data-step="2"] + .integrationStory {
+  border-left-color: var(--action);
 }
 
 .io {
@@ -881,44 +937,33 @@
     transition: opacity 240ms ease-out, transform 240ms ease-out;
   }
 
-  .page[data-motion-ready="true"] .integration[data-reveal] .flow::before {
-    transform: scaleX(0);
-  }
-
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow::before {
-    transform: scaleX(1);
-    transition: transform 420ms 120ms cubic-bezier(0, 0, 0.3, 1);
-  }
-
-  .page[data-motion-ready="true"] .integration[data-reveal] .flow > * {
+  .page[data-motion-ready="true"] .integration[data-reveal] .flowGraphic,
+  .page[data-motion-ready="true"] .integration[data-reveal] .integrationStages button {
     opacity: 0;
     transform: translateY(12px);
   }
 
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > * {
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .flowGraphic,
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .integrationStages button {
     opacity: 1;
     transform: translateY(0);
     transition: opacity 180ms ease-out, transform 220ms cubic-bezier(0, 0, 0.3, 1);
   }
 
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > :nth-child(1) {
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .flowGraphic {
     transition-delay: 100ms;
   }
 
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > :nth-child(2) {
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .integrationStages button:nth-child(1) {
     transition-delay: 170ms;
   }
 
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > :nth-child(3) {
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .integrationStages button:nth-child(2) {
     transition-delay: 240ms;
   }
 
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > :nth-child(4) {
+  .page[data-motion-ready="true"] .integration[data-visible="true"] .integrationStages button:nth-child(3) {
     transition-delay: 310ms;
-  }
-
-  .page[data-motion-ready="true"] .integration[data-visible="true"] .flow > :nth-child(5) {
-    transition-delay: 380ms;
   }
 
   .integrationStory span {
@@ -1013,12 +1058,12 @@
 
 @keyframes public-hero-cut {
   from {
-    clip-path: inset(0 0 100% 0);
+    opacity: 0;
     transform: translateY(24px);
   }
 
   to {
-    clip-path: inset(0);
+    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -1290,33 +1335,26 @@
   }
 
   .flow {
-    display: flex;
     min-height: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
   }
 
-  .flow::before {
-    top: 6%;
-    bottom: 6%;
-    left: 50%;
-    width: 5px;
-    height: auto;
-    background: linear-gradient(180deg, var(--receivable) 0 48%, var(--protection) 48% 72%, var(--action) 72% 100%);
-    transform-origin: center top;
+  .integrationStages {
+    gap: 8px;
+    margin-top: 0;
   }
 
-  .flow > button {
-    min-height: 76px;
+  .integrationStages button {
+    min-height: 92px;
+    padding-inline: 2px;
   }
 
-  .flow i {
-    flex: 0 0 34px;
+  .integrationStages strong {
+    font-size: 13px;
+    line-height: 1.15;
   }
 
-  .flow i::before {
-    content: "↓";
+  .integrationStages small {
+    font-size: 7px;
   }
 
   .io {
@@ -1371,7 +1409,9 @@
   .protectionLane::before,
   .claim,
   .recourseLock,
-  .receiptNode {
+  .receiptNode,
+  .flowGraphic *,
+  .integrationStory span {
     animation: none !important;
     transition: none !important;
   }
