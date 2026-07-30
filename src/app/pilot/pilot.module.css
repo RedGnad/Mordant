@@ -1,9 +1,9 @@
 .page {
   --ground: #f4f1e8;
-  --ink: #0b1f33;
-  --muted: #4a5865;
-  --rule: rgb(11 31 51 / 52%);
-  --receivable: #005f8f;
+  --ink: #211923;
+  --muted: #655d68;
+  --rule: rgb(33 25 35 / 52%);
+  --receivable: #49305c;
   --protection: #b4233f;
   --action: #c67a00;
   min-height: 100svh;

@@ -1,14 +1,14 @@
 .shell {
   --nws-ground: #f4f1e8;
-  --nws-ink: #0b1f33;
-  --nws-receivable: #005f8f;
+  --nws-ink: #211923;
+  --nws-receivable: #49305c;
   --nws-protection: #b4233f;
   --nws-action: #c67a00;
   --nws-action-ink: #8a4800;
-  --nws-proof: #0b1f33;
-  --nws-muted: #4a5865;
-  --nws-rule: rgb(11 31 51 / 52%);
-  --nws-soft-rule: rgb(11 31 51 / 48%);
+  --nws-proof: #241a2a;
+  --nws-muted: #655d68;
+  --nws-rule: rgb(33 25 35 / 52%);
+  --nws-soft-rule: rgb(33 25 35 / 48%);
   --chrome-bar-height: 56px;
   --fixture-height: 24px;
   --chrome-height: calc(var(--chrome-bar-height) + var(--fixture-height));
@@ -16,11 +16,11 @@
   --background-operational: #e6e2d8;
   --surface-raised: #fcfaf4;
   --surface-proof: var(--nws-proof);
-  --surface-proof-raised: #15324a;
+  --surface-proof-raised: #302434;
   --text-primary: var(--nws-ink);
   --text-secondary: var(--nws-muted);
   --text-on-proof: var(--nws-ground);
-  --border-structural: rgb(11 31 51 / 52%);
+  --border-structural: rgb(33 25 35 / 52%);
   --border-subtle: var(--nws-soft-rule);
   --action-primary: var(--nws-action);
   --action-primary-hover: #d08700;

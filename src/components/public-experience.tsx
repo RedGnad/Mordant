@@ -134,21 +134,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
-          <p className={styles.heroCategory}>Recourse infrastructure / tokenized receivables</p>
           <h1 id="hero-title">
             <span>Conflict</span>
             <span>becomes recourse.</span>
           </h1>
           <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
-          <p className={styles.heroAudience}>For credit / operations teams</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">See the transformation</Link>
             <Link className={styles.secondary} href="#integrate">Evaluate the integration</Link>
-          </div>
-          <div className={styles.heroSeed} aria-hidden="true">
-            <span>Receivable / stable</span>
-            <i />
-            <span>Protection / aligned</span>
           </div>
         </section>
 
@@ -160,11 +153,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           ref={transformationRef}
         >
           <div className={styles.transformationSticky}>
-            <header className={styles.transformationHeader}>
-              <p>Conflict / accountable recourse</p>
-              <span aria-live="polite">{moment.label}</span>
-            </header>
-
             <div className={styles.transformationTitle}>
               <h2 id="transformation-title" aria-live="polite">{moment.title}</h2>
               <p>Receivable remains unchanged.</p>
@@ -217,7 +205,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
         <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
           <header>
-            <p>Evidence retained</p>
             <h2 id="proof-title">One receipt. One verifiable transition.</h2>
           </header>
           <dl>
@@ -234,7 +221,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
         <section className={styles.integration} id="integrate" aria-labelledby="integration-title" data-reveal>
           <header>
-            <p>For receivable platforms</p>
             <h2 id="integration-title">Your platform records the asset. Mordant establishes what happens next.</h2>
           </header>
           <div className={styles.integrationBody}>
