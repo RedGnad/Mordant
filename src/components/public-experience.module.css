@@ -1118,15 +1118,15 @@
   }
 
   25% {
-    transform: translate3d(6px, -4px, 0) rotate(0.6deg);
+    transform: translate3d(6px, -4px, 0) rotate(1deg);
   }
 
   50% {
-    transform: translate3d(-2px, 5px, 0) rotate(-0.45deg);
+    transform: translate3d(-2px, 5px, 0) rotate(-0.8deg);
   }
 
   75% {
-    transform: translate3d(-6px, -2px, 0) rotate(0.35deg);
+    transform: translate3d(-6px, -2px, 0) rotate(0.65deg);
   }
 }
 
