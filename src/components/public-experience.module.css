@@ -290,7 +290,7 @@
   overflow: clip;
   font-size: clamp(50px, 6vw, 86px);
   font-weight: 600;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.04em;
   line-height: 0.86;
 }
 
@@ -320,7 +320,7 @@
   --anchor-width: 83.3333%;
   --conditional-width: 66.6667%;
   --conditional-shift-x: 25%;
-  --conditional-shift-y: 16px;
+  --conditional-shift-y: 30px;
   --junction-x: 83.3333%;
   --signal-stroke: clamp(3px, 0.31vw, 4px);
   --junction-size: clamp(40px, 3.8vw, 54px);
@@ -361,39 +361,45 @@
   transition:
     background-color 180ms ease-out,
     opacity 180ms ease-out,
-    transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
+    transform 260ms cubic-bezier(0.4, 0.14, 0.3, 1);
   will-change: transform;
 }
 
-.protectionLane::before {
+.protectionRail {
   position: absolute;
-  top: 0;
+  top: calc(-1 * var(--conditional-shift-y));
   left: 0;
   width: 100%;
-  height: var(--signal-stroke);
-  background: var(--protection);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-  content: "";
-  transition:
-    top 320ms cubic-bezier(0.4, 0.14, 0.3, 1),
-    height 320ms cubic-bezier(0.4, 0.14, 0.3, 1),
-    clip-path 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  height: var(--conditional-shift-y);
+  overflow: visible;
+  pointer-events: none;
 }
 
-.receivableLane span,
-.protectionLane span,
+.protectionRailPath {
+  d: path("M 0 16 L 100 16");
+  fill: none;
+  shape-rendering: geometricPrecision;
+  stroke: var(--protection);
+  stroke-linecap: butt;
+  stroke-width: var(--signal-stroke);
+  transition:
+    d 260ms cubic-bezier(0.4, 0.14, 0.3, 1),
+    stroke-width 180ms ease-out;
+}
+
 .receivableLane small,
 .protectionLane small,
 .recourseLock span,
 .receiptNode span,
 .receiptNode small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.2;
 }
 
 .receivableLane strong,
 .protectionLane strong {
+  grid-column: 2;
   font-size: clamp(32px, 4.1vw, 60px);
   font-weight: 500;
   letter-spacing: -0.045em;
@@ -402,6 +408,7 @@
 
 .receivableLane small,
 .protectionLane small {
+  grid-column: 3;
   text-align: right;
 }
 
@@ -425,7 +432,7 @@
   content: "";
   transform: scaleY(0);
   transform-origin: top center;
-  transition: transform 300ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  transition: transform 260ms cubic-bezier(0.4, 0.14, 0.3, 1);
 }
 
 .claim span {
@@ -435,7 +442,7 @@
   width: max-content;
   color: var(--protection);
   font-family: var(--font-proof), monospace;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   opacity: 0;
   text-transform: uppercase;
@@ -453,9 +460,9 @@
   transform: translate(-50%, 50%) rotate(7deg) scale(0.45);
   transform-origin: center;
   transition:
-    fill 160ms ease-out,
+    fill 180ms 40ms ease-out,
     opacity 140ms 100ms ease-out,
-    transform 220ms 100ms cubic-bezier(0, 0, 0.3, 1);
+    transform 180ms 40ms cubic-bezier(0, 0, 0.3, 1);
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .claim::before {
@@ -481,15 +488,10 @@
   transform: translate3d(var(--conditional-shift-x), var(--conditional-shift-y), 0);
 }
 
-.transformation[data-state="conflict"] .protectionLane::before {
-  top: calc(-1 * var(--conditional-shift-y));
-  height: calc(var(--conditional-shift-y) + var(--signal-stroke));
-  clip-path: polygon(
-    0 0,
-    100% calc(100% - var(--signal-stroke)),
-    100% 100%,
-    0 var(--signal-stroke)
-  );
+.transformation[data-state="conflict"] .protectionRailPath {
+  d: path("M 0 0 L 100 16");
+  stroke-width: calc(var(--signal-stroke) * 1.55);
+  transition-duration: 320ms, 180ms;
 }
 
 .recourseLock {
@@ -505,7 +507,7 @@
   color: var(--ink);
   opacity: 0;
   transform: translateX(14.2857%);
-  transition: opacity 180ms 130ms ease-out, transform 280ms 130ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 200ms 170ms ease-out, transform 220ms 170ms cubic-bezier(0, 0, 0.3, 1);
 }
 
 .recourseLock div {
@@ -610,7 +612,7 @@
   border: 0;
   background: transparent;
   color: inherit;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -667,7 +669,7 @@
   margin: 0;
   font-size: clamp(46px, 5.8vw, 82px);
   font-weight: 600;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.038em;
   line-height: 0.9;
 }
 
@@ -701,7 +703,7 @@
 
 .proof dt {
   color: rgb(244 241 232 / 66%);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .proof dd {
@@ -886,7 +888,7 @@
 .integrationStages small {
   color: var(--muted);
   font-family: var(--font-proof), monospace;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.045em;
   text-transform: uppercase;
 }
@@ -1382,13 +1384,13 @@
 
   .transformationTitle p {
     margin-top: 10px;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .scene {
     --anchor-y: 13%;
     --conditional-y: 43%;
-    --conditional-shift-y: 16px;
+    --conditional-shift-y: 24px;
     --junction-size: 34px;
     --signal-stroke: 3px;
     min-height: 420px;
@@ -1402,16 +1404,16 @@
     padding: 10px 8px 12px;
   }
 
-  .receivableLane span,
-  .protectionLane span,
   .receivableLane small,
   .protectionLane small {
-    font-size: 8px;
+    grid-column: auto;
+    font-size: 11px;
     text-align: left;
   }
 
   .receivableLane strong,
   .protectionLane strong {
+    grid-column: auto;
     font-size: 30px;
   }
 
@@ -1422,7 +1424,7 @@
   .claim span {
     right: 10px;
     left: auto;
-    font-size: 7px;
+    font-size: 10px;
     text-align: right;
   }
 
@@ -1433,17 +1435,17 @@
   }
 
   .recourseLock div {
-    min-height: 72px;
+    min-height: 84px;
     gap: 8px;
     padding: 8px;
   }
 
   .recourseLock span {
-    font-size: 7px;
+    font-size: 11px;
   }
 
   .recourseLock strong {
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .receiptNode {
@@ -1463,9 +1465,9 @@
   }
 
   .stateControls button {
-    min-height: 42px;
+    min-height: 44px;
     padding: 0 4px;
-    font-size: 7px;
+    font-size: 11px;
   }
 
   .proof,
@@ -1580,7 +1582,7 @@
   }
 
   .integrationStages small {
-    font-size: 7px;
+    font-size: 11px;
   }
 
   .io {
@@ -1634,7 +1636,7 @@
   .transformationSticky,
   .transformationTitle h2 span,
   .protectionLane,
-  .protectionLane::before,
+  .protectionRailPath,
   .claim,
   .claim::before,
   .claim span,

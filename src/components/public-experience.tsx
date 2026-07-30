@@ -259,7 +259,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
             <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
               <div className={styles.receivableLane}>
-                <span>Stable anchor</span>
                 <strong>Receivable</strong>
                 <small>Outstanding</small>
               </div>
@@ -275,7 +274,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               </div>
 
               <div className={styles.protectionLane}>
-                <span>Conditional domain</span>
+                <svg className={styles.protectionRail} viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
+                  <path className={styles.protectionRailPath} d="M 0 16 L 100 16" vectorEffect="non-scaling-stroke" />
+                </svg>
                 <strong>Protection</strong>
                 <small key={moment.id}>{moment.protection}</small>
               </div>
