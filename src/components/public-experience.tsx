@@ -199,12 +199,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </span>
           </h1>
           <div className={styles.heroSymbolField} aria-hidden="true">
-            <svg className={styles.heroSymbol} viewBox="0 0 100 100">
-              <rect x="44" width="12" height="100" />
-              <rect y="44" width="100" height="12" />
-              <rect x="44" width="12" height="100" transform="rotate(45 50 50)" />
-              <rect x="44" width="12" height="100" transform="rotate(-45 50 50)" />
-            </svg>
+            <div className={styles.heroSymbolDrift}>
+              <svg className={styles.heroSymbol} viewBox="0 0 100 100">
+                <rect x="41" width="18" height="100" />
+                <rect y="41" width="100" height="18" />
+                <rect x="41" width="18" height="100" transform="rotate(45 50 50)" />
+                <rect x="41" width="18" height="100" transform="rotate(-45 50 50)" />
+              </svg>
+            </div>
           </div>
           <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
           <div className={styles.actions}>
