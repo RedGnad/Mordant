@@ -135,8 +135,8 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
   const baseShell = SHELLS[active];
   const shell: ShellDefinition = mEx2Mode ? {
     ...baseShell,
-    wallet: transactionDemo ? "Controlled demo signer" : "Retained execution",
-    freshness: transactionDemo ? "Receipt-derived state" : "Confirmed · block 27",
+    wallet: transactionDemo ? "Controlled demo signer" : "Recorded signer",
+    freshness: transactionDemo ? "Receipt-derived state" : "Block 27",
     navigation: transactionDemo
       ? TRANSACTION_DEMO_NAVIGATION[active]
       : EXECUTED_REVIEW_NAVIGATION[active],
@@ -251,14 +251,11 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
                 <div><dt>Freshness</dt><dd className={`${styles.technicalValue} ${shell.caution ? "session-restricted" : "session-fresh"}`}>{shell.freshness}</dd></div>
                 <div><dt>View</dt><dd>{participantShell ? "Participant" : active === "protocol" ? "Operations" : "Originator"}</dd></div>
               </dl>
-              <Link
-                className={styles.demoModeLink}
-                href={transactionDemo || executedReview ? surfacePath : `${surfacePath}?demo=transactions`}
-              >
-                {transactionDemo
-                  ? "Open retained review"
-                  : executedReview ? "Retained review active" : "Open transaction demo"}
-              </Link>
+              {transactionDemo ? (
+                <Link className={styles.demoModeLink} href={surfacePath}>
+                  Return to recorded view
+                </Link>
+              ) : null}
             </div>
           </details>
         </div>
@@ -267,10 +264,10 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
       <div className={`${styles.fixture} fixture-notice`}>
         <span>
           {mEx2Mode
-            ? transactionDemo ? "Controlled mode · no real funds" : "No real funds · retained receipt"
+            ? "Recorded demo run · test assets · read-only"
             : participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}
         </span>
-        {!participantShell && !transactionDemo ? (
+        {!mEx2Mode && !participantShell && !transactionDemo ? (
           <span aria-hidden="true">{active === "protocol" ? "Operations" : "Originator"} view</span>
         ) : null}
       </div>

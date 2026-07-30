@@ -138,7 +138,7 @@ test("all product perspectives derive different conclusions from one retained de
   assert.equal(workspace.support, "The receivable remains outstanding.");
   assert.equal(participant.title, "Nothing you need to do.");
   assert.equal(participant.support, "Your invoice units are unchanged.");
-  assert.equal(protocol.title, "Facility B revealed a conflicting pledge at block 27.");
+  assert.equal(protocol.title, "Facility B revealed a conflicting pledge.");
   assert.equal(
     protocol.consequence,
     "No invoice units moved; protection remains reserved through cure or deadline.",

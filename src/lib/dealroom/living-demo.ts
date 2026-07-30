@@ -325,16 +325,16 @@ export function deriveLivingView(run: LivingRunArtifact, surface: LivingSurface)
   }
   const latest = latestReceiptAction(run);
   const protocolTitle = resolved
-    ? `Receivable redemption completed at block ${latest?.receipt?.blockNumber}.`
+    ? "Receivable redemption completed."
     : state.protectionState === 2
-      ? `Facility B sealed a conflict commitment at block ${latest?.receipt?.blockNumber}.`
+      ? "Facility B sealed a conflict commitment."
     : state.protectionState === 3
-      ? `${facility} revealed a conflicting pledge at block ${latest?.receipt?.blockNumber}.`
+      ? `${facility} revealed a conflicting pledge.`
       : state.protectionState === 4 && latest?.id === "finalize"
-        ? `The unresolved conflict activated protection at block ${latest.receipt?.blockNumber}.`
+        ? "The unresolved conflict activated protection."
         : latest === null
             ? "The canonical deal is ready to execute."
-            : `${latest.title} confirmed at block ${latest.receipt?.blockNumber}.`;
+            : `${latest.title} confirmed.`;
   const protocolConsequence = resolved
     ? `${formatDemoAmount(state.redeemedFace)} dSETTLE face value redeemed independently of protection.`
     : state.protectionState === 2

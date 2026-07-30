@@ -35,6 +35,13 @@ function surfaceLabel(surface: LivingSurface): string {
   return "Protocol operations";
 }
 
+function activityLabel(actionId: string, fallback: string): string {
+  if (actionId === "commit") return "Conflict commitment";
+  if (actionId === "positions") return "Position allocation";
+  if (actionId === "activate") return "Invoice funding";
+  return fallback;
+}
+
 function SourceBoundary({ message }: { readonly message: string }) {
   return (
     <section className={styles.unavailable} data-testid="living-demo-unavailable">
@@ -163,6 +170,13 @@ export function TransactionDrivenExperience({
   const receivableLabel = RECEIVABLE_STATES[run.current.receivableState] ?? "Unknown";
   const receipt = latestReceipt?.receipt;
   const capturedRecovery = readOnly && surface === "protocol";
+  const recordedNextStep = nextAction?.id === "cure-window"
+    ? "Wait for the recorded cure deadline"
+    : nextAction?.title ?? "No further action";
+  const recentConfirmedActions = run.actions
+    .filter((action) => action.status === "confirmed" && action.receipt !== undefined && action.id !== latestReceipt?.id)
+    .slice(-2)
+    .reverse();
 
   if (proofOpen && latestReceipt !== null && receipt !== undefined) {
     return (
@@ -173,11 +187,11 @@ export function TransactionDrivenExperience({
         aria-labelledby="living-proof-title"
       >
         <header className={styles.proofLead}>
-          <p className={styles.sourceLabel}>{run.source.label}</p>
+          <p className={styles.sourceLabel}>Receipt proof</p>
           <h1 id="living-proof-title" ref={proofTitleRef} tabIndex={-1}>
             {latestReceipt.title} confirmed.
           </h1>
-          <p>One retained receipt and its block-pinned before and after reads.</p>
+          <p>The receipt with its before and after contract reads.</p>
         </header>
 
         <dl className={styles.receiptSummary}>
@@ -208,6 +222,8 @@ export function TransactionDrivenExperience({
         <details className={styles.technical} data-testid="living-technical-proof">
           <summary>Technical record</summary>
           <dl>
+            <div><dt>Source</dt><dd>{run.source.label}</dd></div>
+            <div><dt>Run</dt><dd>{run.runId}</dd></div>
             {latestReceipt.contract === null ? null : <div><dt>Contract</dt><dd>{latestReceipt.contract}</dd></div>}
             {latestReceipt.method === null ? null : <div><dt>Method</dt><dd>{latestReceipt.method}</dd></div>}
             <div><dt>Deal</dt><dd>{run.deal.id}</dd></div>
@@ -246,69 +262,149 @@ export function TransactionDrivenExperience({
       data-abnormal={view.abnormal ? "true" : "false"}
       data-resolved={view.resolved ? "true" : "false"}
     >
-      <header className={styles.runContext}>
-        <p className={styles.sourceLabel} data-testid="living-source">{run.source.label}</p>
-        <p>{surfaceLabel(surface)} · {readOnly ? "captured" : "current"} block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
-        {readOnly ? null : <p>Protocol doubles</p>}
-      </header>
+      {readOnly ? null : (
+        <header className={styles.runContext}>
+          <p className={styles.sourceLabel} data-testid="living-source">{run.source.label}</p>
+          <p>{surfaceLabel(surface)} · current block <strong data-testid="living-block">{run.current.blockNumber}</strong></p>
+          <p>Protocol doubles</p>
+        </header>
+      )}
 
-      <div className={styles.scene}>
-        <section className={styles.truth} data-region="truth" data-dominant="true">
-          <p className={styles.eyebrow}>{view.eyebrow}</p>
-          <h1 data-testid="living-conclusion">{view.title}</h1>
-          <p>{view.support}</p>
-        </section>
+      {surface === "workspace" ? (
+        <div className={styles.workspaceLayout}>
+          <aside className={styles.workspaceQueue} aria-label="Deal activity">
+            <header>
+              <p>Deal activity</p>
+              <strong>1 recorded deal</strong>
+            </header>
+            <ol>
+              <li data-current="true">
+                <span>Selected deal</span>
+                <strong>Needs attention</strong>
+                <small>{view.responsible}</small>
+              </li>
+              {recentConfirmedActions.map((action) => (
+                <li key={action.id}>
+                  <span>Confirmed</span>
+                  <strong>{activityLabel(action.id, action.title)}</strong>
+                  <small>{action.actorLabel}</small>
+                </li>
+              ))}
+            </ol>
+            <p>No other open exception in this recorded run.</p>
+          </aside>
 
-        <section className={styles.economics} data-region="economics" aria-label="Separate economic domains">
-          <article className={styles.receivable} data-testid="living-receivable-anchor">
-            <p>Receivable</p>
-            <strong>{formatDemoAmount(run.deal.faceValue)} <small>dSETTLE</small></strong>
-            <span>{receivableLabel}</span>
-            {surface === "participant" ? <em>{formatDemoAmount(run.current.holderAUnits)} units remain yours</em> : null}
-          </article>
-          <article className={styles.protection} data-shift={view.abnormal ? "true" : undefined}>
-            <p>Protection</p>
-            <strong>{formatDemoAmount(run.deal.protectionAmount)} <small>dSETTLE</small></strong>
-            <span>{protectionLabel}</span>
-          </article>
-        </section>
+          <section className={styles.workspaceFocus} data-region="truth" data-dominant="true">
+            <p className={styles.eyebrow}>{view.eyebrow}</p>
+            <h1 data-testid="living-conclusion">{view.title}</h1>
+            <p>{view.support}</p>
+            <div className={styles.workspaceEconomics} aria-label="Separate economic domains">
+              <article className={styles.receivable} data-testid="living-receivable-anchor">
+                <p>Receivable</p>
+                <strong>{formatDemoAmount(run.deal.faceValue)} <small>dSETTLE</small></strong>
+                <span>{receivableLabel}</span>
+              </article>
+              <article className={styles.protection}>
+                <p>Protection</p>
+                <strong>{formatDemoAmount(run.deal.protectionAmount)} <small>dSETTLE</small></strong>
+                <span>{protectionLabel}</span>
+              </article>
+            </div>
+          </section>
 
-        <aside className={styles.responsibility} data-region="responsibility" data-shift={view.abnormal ? "true" : undefined}>
-          <p>{capturedRecovery ? "Captured recovery checkpoint" : surface === "protocol" ? "Recovery" : surface === "participant" ? "Your safe next step" : "Responsible now"}</p>
-          <strong>{capturedRecovery ? "Cure window open at capture" : surface === "protocol" ? view.safeAction : view.responsible}</strong>
-          {view.deadline === null ? null : (
-            <time>
-              {capturedRecovery ? <small>Recorded deadline</small> : null}
-              {view.deadline}
-            </time>
-          )}
-          <span>{view.consequence}</span>
-          {surface === "participant" ? <em>{view.safeAction}</em> : null}
-          {surface === "protocol" ? <em>{readOnly ? "Captured safe state" : "Last safe block"} · block {run.lastSafeState.blockNumber}</em> : null}
-        </aside>
-      </div>
+          <aside className={styles.workspaceDecision} data-region="responsibility">
+            <p>Responsible now</p>
+            <strong>{view.responsible}</strong>
+            {view.deadline === null ? null : <time>{view.deadline}</time>}
+            <div><p>Consequence</p><span>{view.consequence}</span></div>
+            <div><p>Recorded next step</p><span>{recordedNextStep}</span></div>
+            {readOnly ? (
+              <button
+                type="button"
+                ref={proofTriggerRef}
+                className={styles.proofLink}
+                disabled={latestReceipt === null}
+                onClick={() => setProofOpen(true)}
+              >
+                Open receipt proof
+              </button>
+            ) : null}
+          </aside>
+        </div>
+      ) : surface === "participant" ? (
+        <div className={`${styles.scene} ${styles.participantScene}`}>
+          <section className={styles.truth} data-region="truth" data-dominant="true">
+            <p className={styles.eyebrow}>{view.eyebrow}</p>
+            <h1 data-testid="living-conclusion">{view.title}</h1>
+            <p>{view.support}</p>
+          </section>
 
-      {readOnly ? (
+          <section className={styles.economics} data-region="economics" aria-label="Your separate positions">
+            <article className={styles.receivable} data-testid="living-receivable-anchor">
+              <p>Your receivable</p>
+              <strong>{formatDemoAmount(run.current.holderAUnits)} <small>units</small></strong>
+              <span>{receivableLabel}</span>
+            </article>
+            <article className={styles.protection}>
+              <p>Protection reserve</p>
+              <strong>{formatDemoAmount(run.deal.protectionAmount)} <small>dSETTLE</small></strong>
+              <span>{protectionLabel}</span>
+            </article>
+          </section>
+
+          <aside className={styles.responsibility} data-region="responsibility">
+            <p>Responsible before deadline</p>
+            <strong>{view.responsible}</strong>
+            {view.deadline === null ? null : <time>{view.deadline}</time>}
+            <span>{view.consequence}</span>
+            <em>Your action · {view.safeAction}</em>
+            {readOnly ? (
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={latestReceipt === null} onClick={() => setProofOpen(true)}>
+                Open receipt proof
+              </button>
+            ) : null}
+          </aside>
+        </div>
+      ) : (
+        <div className={styles.protocolLayout}>
+          <section className={styles.protocolTruth} data-region="truth" data-dominant="true">
+            <p className={styles.eyebrow}>{view.eyebrow}</p>
+            <h1 data-testid="living-conclusion">{view.title}</h1>
+            <p>{latestReceipt?.actorLabel ?? view.responsible} completed the transition and the contract state was read back.</p>
+          </section>
+
+          <section className={styles.protocolDiagnosis} aria-label="Impact, last safe state, and recovery">
+            <article>
+              <p>Impact</p>
+              <strong>{view.consequence}</strong>
+            </article>
+            <article>
+              <p>{readOnly ? "Last safe state" : "Last safe block"}</p>
+              <strong>Receivable · {receivableLabel}</strong>
+              <span>Protection · {protectionLabel}</span>
+            </article>
+            <article className={styles.protocolRecovery}>
+              <p>Recovery</p>
+              <strong>{capturedRecovery ? "Cure window open in the recorded state" : view.safeAction}</strong>
+              {view.deadline === null ? null : <time>{view.deadline}</time>}
+              <span>{capturedRecovery ? "Protocol operations owns the recorded recovery." : `${view.responsible} is responsible.`}</span>
+            </article>
+          </section>
+
+          <footer className={styles.protocolProofControl}>
+            <p><strong>Receipt proof</strong><span>Before → action → after</span></p>
+            {readOnly ? (
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={latestReceipt === null} onClick={() => setProofOpen(true)}>
+                Open receipt proof
+              </button>
+            ) : null}
+          </footer>
+        </div>
+      )}
+
+      {readOnly ? null : (
         <footer className={styles.controls}>
           <div className={styles.executionControl}>
-            <p>
-              <span>Captured checkpoint</span>
-              <strong>Conflict reveal confirmed · block {receipt?.blockNumber}</strong>
-            </p>
-            <button
-              type="button"
-              ref={proofTriggerRef}
-              className={styles.execute}
-              disabled={latestReceipt === null}
-              onClick={() => setProofOpen(true)}
-            >
-              Review receipt proof
-            </button>
-          </div>
-        </footer>
-      ) : (
-      <footer className={styles.controls}>
-        <div className={styles.executionControl}>
           <p>
             <span>Controlled execution</span>
             <strong>{nextAction === null ? "Complete" : `${nextAction.actorLabel} · ${nextAction.kind}`}</strong>
@@ -331,9 +427,9 @@ export function TransactionDrivenExperience({
           {currentAction?.status === "failed" ? (
             <p className={styles.failed} role="alert" data-testid="living-failed">{currentAction.error}</p>
           ) : null}
-        </div>
+          </div>
 
-        <div className={styles.secondaryControls}>
+          <div className={styles.secondaryControls}>
           <button
             type="button"
             ref={proofTriggerRef}
@@ -353,8 +449,8 @@ export function TransactionDrivenExperience({
           >
             {requestState === "resetting" ? "Resetting…" : "Reset canonical run"}
           </button>
-        </div>
-      </footer>
+          </div>
+        </footer>
       )}
 
       {error === null ? null : <p className={styles.requestError} role="alert">{error}</p>}

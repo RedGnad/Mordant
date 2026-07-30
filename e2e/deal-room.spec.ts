@@ -93,7 +93,7 @@ test("one canonical receipt-driven deal stays truthful across all three product 
   await page.getByRole("link", { name: "Protocol" }).click();
   await expect(page).toHaveURL(/\/protocol\?demo=transactions$/);
   await expect(page.getByTestId("living-conclusion")).toContainText(
-    "Facility B revealed a conflicting pledge at block",
+    "Facility B revealed a conflicting pledge.",
   );
   await expect(page.getByTestId("living-experience")).toContainText("Last safe block");
   await expect(identity(page)).resolves.toEqual(canonicalIdentity);
