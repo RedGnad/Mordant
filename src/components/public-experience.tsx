@@ -199,12 +199,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </span>
           </h1>
           <div className={styles.heroSymbolField} aria-hidden="true">
-            <div className={styles.heroSymbolDrift}>
+            <div className={styles.heroSymbolRotation}>
               <svg className={styles.heroSymbol} viewBox="0 0 100 100">
-                <rect x="44" width="12" height="100" />
-                <rect y="44" width="100" height="12" />
-                <rect x="44" width="12" height="100" transform="rotate(45 50 50)" />
-                <rect x="44" width="12" height="100" transform="rotate(-45 50 50)" />
+                <rect x="43" width="14" height="100" />
+                <rect y="43" width="100" height="14" />
+                <rect x="43" width="14" height="100" transform="rotate(45 50 50)" />
+                <rect x="43" width="14" height="100" transform="rotate(-45 50 50)" />
               </svg>
             </div>
           </div>
