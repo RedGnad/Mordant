@@ -24,6 +24,7 @@ export default function Home() {
       before: PROTECTION_STATES[action.before.protectionState],
       after: PROTECTION_STATES[action.after.protectionState],
       block: action.receipt.blockNumber,
+      transactionHash: action.receipt.transactionHash,
     }} />
   );
 }
