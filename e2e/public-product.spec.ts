@@ -17,9 +17,9 @@ test("the public story stays specific and its causal control does not move", asy
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: "Conflict becomes recourse.",
+    name: "Conflict became recourse.",
   })).toBeVisible();
-  await expect(page.getByText("Mordant establishes responsibility, deadline, consequence, and proof.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Governed execution and evidence for receivables exceptions.", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "See the transformation" })).toHaveAttribute("href", "#product");
   await expect(page.getByRole("link", { name: "Evaluate the integration" })).toHaveAttribute("href", "#integrate");
 

@@ -195,7 +195,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           <h1 id="hero-title">
             <span className={styles.heroLine}><span>Conflict</span></span>
             <span className={styles.heroLine}>
-              <span className={styles.heroPhrase}><span>becomes</span> <span>recourse.</span></span>
+              <span className={styles.heroPhrase}><span>became</span> <span>recourse.</span></span>
             </span>
           </h1>
           <div className={styles.heroSymbolField} aria-hidden="true">
@@ -208,7 +208,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               </svg>
             </div>
           </div>
-          <p className={styles.heroSupport}>Know who acts, by when, and what follows.</p>
+          <p className={styles.heroSupport}>Governed execution and evidence for receivables exceptions.</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">See the transformation</Link>
             <Link className={styles.secondary} href="#integrate">Evaluate the integration</Link>
