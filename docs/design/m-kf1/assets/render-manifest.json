@@ -1,0 +1,15 @@
+{
+  "mission": "M-KF1",
+  "generatedAt": "2026-07-30T15:35:43.163Z",
+  "directions": {
+    "A": "Civic Ledger",
+    "B": "Operational Dispatch",
+    "C": "Evidence Cut"
+  },
+  "desktop": "1440x960",
+  "mobile": "390x844",
+  "palette": "High-contrast civic",
+  "productType": "Chillax",
+  "proofType": "IBM Plex Mono",
+  "productionImplementation": false
+}
