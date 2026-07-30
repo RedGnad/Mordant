@@ -12,44 +12,41 @@ type PublicProof = {
   before: string;
   after: string;
   block: number | string;
+  deadline: string;
 };
 
 const TRANSFORMATION = [
   {
-    label: "Receivable funded",
-    title: "The receivable is funded.",
-    detail: "Ownership is recorded and the economic position is clear.",
-    nextAction: "Introduce a conflicting claim",
+    id: "stable",
+    label: "Stable",
+    title: "One receivable. One valid position.",
+    protection: "Aligned",
   },
   {
-    label: "Conflict detected",
-    title: "A conflicting claim is detected.",
-    detail: "The receivable stays intact while protection leaves alignment.",
-    nextAction: "Assign responsibility",
+    id: "conflict",
+    label: "Conflict",
+    title: "Two claims. One obligation.",
+    protection: "Conflict detected",
   },
   {
-    label: "Responsibility assigned",
-    title: "The responsible party is identified.",
-    detail: "Everyone sees who must act. No one has to interpret the contract state.",
-    nextAction: "Establish the deadline",
+    id: "recourse",
+    label: "Recourse",
+    title: "Responsibility becomes explicit.",
+    protection: "Accountable path",
   },
   {
-    label: "Deadline established",
-    title: "A deadline and consequence are established.",
-    detail: "Inaction now has a known protocol consequence.",
-    nextAction: "Retain the proof",
-  },
-  {
-    label: "Proof retained",
-    title: "The state change is retained as proof.",
-    detail: "The decision is replaced by a verifiable before and after record.",
-    nextAction: "Start again",
+    id: "proof",
+    label: "Proof",
+    title: "The transition is retained.",
+    protection: "Receipt issued",
   },
 ] as const;
 
 export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [step, setStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
+  const transformationRef = useRef<HTMLElement>(null);
+  const scrollFrame = useRef<number | null>(null);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -74,6 +71,48 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const section = transformationRef.current;
+    if (section === null) return;
+
+    const updateFromScroll = () => {
+      scrollFrame.current = null;
+      const bounds = section.getBoundingClientRect();
+      const range = Math.max(1, section.offsetHeight - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, -bounds.top / range));
+      const nextStep = Math.min(TRANSFORMATION.length - 1, Math.floor(progress * TRANSFORMATION.length));
+      setStep((current) => current === nextStep ? current : nextStep);
+    };
+
+    const onScroll = () => {
+      if (scrollFrame.current !== null) return;
+      scrollFrame.current = window.requestAnimationFrame(updateFromScroll);
+    };
+
+    updateFromScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
+    };
+  }, []);
+
+  const selectStep = (index: number) => {
+    const section = transformationRef.current;
+    if (section === null) return;
+    setStep(index);
+    const range = Math.max(0, section.offsetHeight - window.innerHeight);
+    const position = section.offsetTop + (range * index / (TRANSFORMATION.length - 1));
+    const previousBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo({ top: position, behavior: "auto" });
+    window.requestAnimationFrame(() => {
+      document.documentElement.style.scrollBehavior = previousBehavior;
+    });
+  };
+
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
@@ -81,64 +120,102 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
-          <p>Programmable recourse for tokenized receivables</p>
-          <h1 id="hero-title">Tokenized assets automate ownership. Mordant automates recourse.</h1>
-          <p>Turn confirmed conflicts into clear responsibility, deadlines, economic consequences, and verifiable evidence for tokenized receivables.</p>
+          <p className={styles.heroCategory}>Recourse infrastructure / tokenized receivables</p>
+          <h1 id="hero-title">
+            <span>Conflict</span>
+            <span>becomes recourse.</span>
+          </h1>
+          <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
+          <p className={styles.heroAudience}>For credit / operations teams</p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href="/demo">See Mordant resolve a conflict</Link>
-            <Link className={styles.secondary} href="/pilot">Apply for a shadow pilot</Link>
+            <Link className={styles.primary} href="#product">See the transformation</Link>
+            <Link className={styles.secondary} href="#integrate">Evaluate the integration</Link>
+          </div>
+          <div className={styles.heroSeed} aria-hidden="true">
+            <span>Receivable / stable</span>
+            <i />
+            <span>Protection / aligned</span>
           </div>
         </section>
 
-        <section className={styles.gap} id="problem" aria-labelledby="gap-title" data-reveal>
-          <p>Where ownership stops</p>
-          <h2 id="gap-title">Tokenization records who owns an asset. It does not decide what happens when obligations conflict.</h2>
-        </section>
+        <section
+          className={styles.transformation}
+          id="product"
+          aria-labelledby="transformation-title"
+          data-state={moment.id}
+          ref={transformationRef}
+        >
+          <div className={styles.transformationSticky}>
+            <header className={styles.transformationHeader}>
+              <p>Conflict / accountable recourse</p>
+              <span aria-live="polite">{moment.label}</span>
+            </header>
 
-        <section className={styles.transformation} id="product" aria-labelledby="transformation-title" data-reveal>
-          <header>
-            <p>From conflict to recourse</p>
-          </header>
-          <div
-            className={styles.scene}
-            data-displaced={step > 0 && step < TRANSFORMATION.length - 1 ? "true" : "false"}
-            data-resolved={step === TRANSFORMATION.length - 1 ? "true" : "false"}
-          >
-            <article className={styles.receivable}>
-              <span>Stable anchor</span>
-              <strong>Receivable</strong>
-              <small>Ownership remains unchanged</small>
-            </article>
-            <article className={styles.protection}>
-              <span>Conditional domain</span>
-              <strong>Protection</strong>
-              <small>{moment.label}</small>
-              <div className={styles.sceneStatus} data-visible={step >= 2 && step < TRANSFORMATION.length - 1 ? "true" : "false"}>
-                <span>Responsible party identified</span>
-                <time data-visible={step >= 3 ? "true" : "false"}>Deadline established</time>
-              </div>
-            </article>
-          </div>
-          <div className={styles.sceneCopy} aria-live="polite">
-            <div>
-              <h2 id="transformation-title">{moment.title}</h2>
-              <p>{moment.detail}</p>
+            <div className={styles.transformationTitle}>
+              <h2 id="transformation-title" aria-live="polite">{moment.title}</h2>
+              <p>Receivable remains unchanged.</p>
             </div>
-            <button type="button" onClick={() => setStep((current) => (current + 1) % TRANSFORMATION.length)}>
-              {moment.nextAction}
-            </button>
+
+            <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
+              <div className={styles.receivableLane}>
+                <span>Stable anchor</span>
+                <strong>Receivable</strong>
+                <small>Outstanding</small>
+              </div>
+
+              <div className={styles.claim} aria-hidden={step === 0}>
+                <span>Second claim</span>
+              </div>
+
+              <div className={styles.protectionLane}>
+                <span>Conditional domain</span>
+                <strong>Protection</strong>
+                <small>{moment.protection}</small>
+              </div>
+
+              <div className={styles.recourseLock} aria-hidden={step < 2}>
+                <div><span>Responsible</span><strong>{proof.actor}</strong></div>
+                <div><span>Deadline</span><strong>{proof.deadline}</strong></div>
+                <div><span>Consequence</span><strong>Protection becomes claimable</strong></div>
+              </div>
+
+              <div className={styles.receiptNode} aria-hidden={step < 3}>
+                <span>Receipt</span>
+                <strong>{proof.action}</strong>
+                <small>Block {proof.block}</small>
+              </div>
+            </div>
+
+            <nav className={styles.stateControls} aria-label="Transformation states">
+              {TRANSFORMATION.map((state, index) => (
+                <button
+                  type="button"
+                  key={state.id}
+                  aria-pressed={index === step}
+                  onClick={() => selectStep(index)}
+                >
+                  {state.label}
+                </button>
+              ))}
+            </nav>
           </div>
         </section>
 
-        <section className={styles.value} aria-labelledby="value-title" data-reveal>
+        <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
           <header>
-            <p>What the protocol establishes</p>
-            <h2 id="value-title">Conflict becomes an operational path.</h2>
+            <p>Evidence retained</p>
+            <h2 id="proof-title">One receipt. One verifiable transition.</h2>
           </header>
-          <div>
-            <article><h3>Know who must act</h3></article>
-            <article><h3>Know what happens next</h3></article>
-            <article><h3>Prove how the state changed</h3></article>
+          <dl>
+            <div><dt>Actor</dt><dd>{proof.actor}</dd></div>
+            <div><dt>Action</dt><dd>{proof.action}</dd></div>
+            <div><dt>Before</dt><dd>{proof.before}</dd></div>
+            <div><dt>After</dt><dd>{proof.after}</dd></div>
+            <div><dt>Block</dt><dd>{proof.block}</dd></div>
+          </dl>
+          <div className={styles.proofActions}>
+            <Link className={styles.proofCta} href="/demo?checkpoint=reveal">Open the complete recorded demo</Link>
+            <Link className={styles.proofPrimary} href="/pilot">Apply for a shadow pilot</Link>
           </div>
         </section>
 
@@ -178,24 +255,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
           <Link className={styles.secondary} href="/workspace">View the product surfaces</Link>
           <p className={styles.accessNote}>Current access: recorded demo. Private pilots are permissioned; production access is closed.</p>
-        </section>
-
-        <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
-          <header>
-            <p>Evidence retained</p>
-            <h2 id="proof-title">One receipt. One verifiable transition.</h2>
-          </header>
-          <dl>
-            <div><dt>Actor</dt><dd>{proof.actor}</dd></div>
-            <div><dt>Action</dt><dd>{proof.action}</dd></div>
-            <div><dt>Before</dt><dd>{proof.before}</dd></div>
-            <div><dt>After</dt><dd>{proof.after}</dd></div>
-            <div><dt>Block</dt><dd>{proof.block}</dd></div>
-          </dl>
-          <div className={styles.proofActions}>
-            <Link className={styles.proofCta} href="/demo?checkpoint=reveal">Open the complete recorded demo</Link>
-            <Link className={styles.proofPrimary} href="/pilot">Apply for a shadow pilot</Link>
-          </div>
         </section>
       </main>
 

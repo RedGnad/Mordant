@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const PERSPECTIVES = ["workspace", "participant", "protocol"] as const;
 
@@ -13,66 +13,51 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
-async function relativeBounds(control: Locator) {
-  return control.evaluate((element) => {
-    const container = element.parentElement;
-    if (container === null) throw new Error("The transformation control lost its stable container.");
-    const bounds = element.getBoundingClientRect();
-    const containerBounds = container.getBoundingClientRect();
-    return {
-      x: bounds.x - containerBounds.x,
-      y: bounds.y - containerBounds.y,
-      width: bounds.width,
-      height: bounds.height,
-    };
-  });
-}
-
 test("the public story stays specific and its causal control does not move", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: "Tokenized assets automate ownership. Mordant automates recourse.",
+    name: "Conflict becomes recourse.",
   })).toBeVisible();
-  await expect(page.getByText("Turn confirmed conflicts into clear responsibility", { exact: false })).toBeVisible();
-  await expect(page.getByRole("link", { name: "See Mordant resolve a conflict" })).toHaveAttribute("href", "/demo");
-  await expect(page.getByRole("link", { name: "Apply for a shadow pilot" }).first()).toHaveAttribute("href", "/pilot");
+  await expect(page.getByText("Mordant establishes responsibility, deadline, consequence, and proof.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See the transformation" })).toHaveAttribute("href", "#product");
+  await expect(page.getByRole("link", { name: "Evaluate the integration" })).toHaveAttribute("href", "#integrate");
 
   const renderedText = await page.locator("body").innerText();
   expect(renderedText).not.toMatch(/\b0[1-5]\s*[·/]\s*/u);
   expect(renderedText).not.toContain("Continue");
 
-  const actions = [
-    "Introduce a conflicting claim",
-    "Assign responsibility",
-    "Establish the deadline",
-    "Retain the proof",
-    "Start again",
+  const states = [
+    "Stable",
+    "Conflict",
+    "Recourse",
+    "Proof",
   ] as const;
   let anchor: { x: number; y: number; width: number; height: number } | null = null;
-  const transformation = page.locator('[aria-live="polite"]');
+  const transformation = page.getByRole("navigation", { name: "Transformation states" });
   await transformation.scrollIntoViewIfNeeded();
 
-  for (const [index, label] of actions.entries()) {
+  for (const label of states) {
     const control = transformation.getByRole("button", { name: label });
     await expect(control).toBeVisible();
-    const bounds = await relativeBounds(control);
+    const bounds = await control.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    });
 
     if (anchor === null) {
       anchor = bounds;
     } else {
-      expect(Math.abs(bounds.x - anchor.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(bounds.y - anchor.y)).toBeLessThanOrEqual(1);
       expect(Math.abs(bounds.width - anchor.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(bounds.height - anchor.height)).toBeLessThanOrEqual(1);
     }
-
-    const nextAction = actions[index + 1];
-    if (nextAction !== undefined) {
-      await control.click();
-      await expect(transformation.getByRole("button", { name: nextAction })).toBeVisible();
-    }
   }
+
+  await transformation.getByRole("button", { name: "Conflict" }).click();
+  await expect(transformation.getByRole("button", { name: "Conflict" })).toHaveAttribute("aria-pressed", "true");
+  await transformation.getByRole("button", { name: "Proof" }).click();
+  await expect(transformation.getByRole("button", { name: "Proof" })).toHaveAttribute("aria-pressed", "true");
 
   await expectNoHorizontalOverflow(page);
 });

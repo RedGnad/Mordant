@@ -7,7 +7,7 @@ export function PublicHeader() {
     <header className={styles.header}>
       <Link className={styles.brand} href="/">Mordant</Link>
       <nav aria-label="Public navigation">
-        <Link className={styles.optionalNav} href="/#problem">Problem</Link>
+        <Link className={styles.optionalNav} href="/#product">Mechanism</Link>
         <Link className={styles.optionalNav} href="/#integrate">Integrate</Link>
         <Link href="/demo">Recorded demo</Link>
         <Link className={styles.navPrimary} href="/pilot">Apply for a shadow pilot</Link>
