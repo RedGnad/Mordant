@@ -83,6 +83,19 @@ function RecordedCheckpointRail({
   readonly onSelect: (id: RecordedCheckpointId) => void;
 }) {
   const listRef = useRef<HTMLOListElement>(null);
+  const railClass = surface === "workspace"
+    ? styles.workspaceQueue
+    : surface === "participant"
+      ? styles.participantHistory
+      : styles.protocolTimeline;
+  const railHeading = surface === "workspace"
+    ? "Recorded case activity"
+    : surface === "participant"
+      ? "Your deal history"
+      : "Confirmed transitions";
+  const railSummary = surface === "participant"
+    ? "Choose a moment"
+    : `${checkpoints.length} ${checkpoints === PUBLIC_RECORDED_CHECKPOINTS ? "moments" : "checkpoints"}`;
 
   useEffect(() => {
     const list = listRef.current;
@@ -93,19 +106,25 @@ function RecordedCheckpointRail({
 
   return (
     <nav
-      className={surface === "workspace" ? styles.workspaceQueue : styles.checkpointStrip}
+      className={railClass}
       aria-label="Recorded run checkpoints"
       data-testid="recorded-checkpoint-rail"
       data-count={checkpoints.length}
+      data-surface={surface}
     >
       <header>
-        <p>Recorded run</p>
-        <strong>{checkpoints.length} {checkpoints === PUBLIC_RECORDED_CHECKPOINTS ? "moments" : "checkpoints"}</strong>
+        <p>{railHeading}</p>
+        <strong>{railSummary}</strong>
       </header>
       <ol ref={listRef}>
-        {checkpoints.map((checkpoint, index) => {
+        {checkpoints.map((checkpoint) => {
           const action = run.actions.find((candidate) => candidate.id === checkpoint.actionId);
           const selected = checkpoint.id === selectedId;
+          const checkpointMeta = surface === "protocol"
+            ? `${action?.actorLabel ?? "Protocol"} · ${action?.status ?? "unavailable"}`
+            : selected
+              ? "Selected state"
+              : action?.status === "confirmed" ? "Recorded" : "Unavailable";
           return (
             <li key={checkpoint.id}>
               <button
@@ -117,9 +136,9 @@ function RecordedCheckpointRail({
                 disabled={action?.status !== "confirmed"}
                 onClick={() => onSelect(checkpoint.id)}
               >
-                <span>{String(index + 1).padStart(2, "0")}</span>
+                <span className={styles.checkpointMarker} aria-hidden="true" />
                 <strong>{checkpoint.label}</strong>
-                <small>{action?.receipt === undefined ? "Block checkpoint" : "Confirmed receipt"}</small>
+                <small>{checkpointMeta}</small>
               </button>
             </li>
           );
@@ -325,6 +344,7 @@ export function TransactionDrivenExperience({
   const recordedNextStep = nextAction?.id === "cure-window"
     ? "Wait for the recorded cure deadline"
     : nextAction?.title ?? "No further action";
+  const triageStatus = view.resolved ? "Resolved" : view.abnormal ? "Needs attention" : "Monitoring";
 
   if (proofOpen && proofAction !== null) {
     return (
@@ -438,30 +458,27 @@ export function TransactionDrivenExperience({
         </header>
       )}
 
-      {readOnly && recordedSelection !== null && surface !== "workspace" ? (
-        <RecordedCheckpointRail
-          run={run}
-          selectedId={recordedSelection.checkpoint.id}
-          surface={surface}
-          checkpoints={checkpoints}
-          onSelect={selectCheckpoint}
-        />
-      ) : null}
-
       {surface === "workspace" ? (
         <div className={styles.workspaceLayout}>
-          {readOnly && recordedSelection !== null ? (
-            <RecordedCheckpointRail
-              run={run}
-              selectedId={recordedSelection.checkpoint.id}
-              surface={surface}
-              checkpoints={checkpoints}
-              onSelect={selectCheckpoint}
-            />
-          ) : <div />}
+          <aside className={styles.workspaceQueueRegion} aria-label="Deal review queue">
+            <section className={styles.workspaceQueueSummary}>
+              <p>Review queue</p>
+              <strong>One receivable selected</strong>
+              <span data-status={triageStatus.toLowerCase().replaceAll(" ", "-")}>{triageStatus}</span>
+            </section>
+            {readOnly && recordedSelection !== null ? (
+              <RecordedCheckpointRail
+                run={run}
+                selectedId={recordedSelection.checkpoint.id}
+                surface={surface}
+                checkpoints={checkpoints}
+                onSelect={selectCheckpoint}
+              />
+            ) : <p className={styles.liveQueueNote}>The controlled run advances this selected receivable.</p>}
+          </aside>
 
           <section className={styles.workspaceFocus} data-region="truth" data-dominant="true">
-            <p className={styles.eyebrow}>{view.eyebrow}</p>
+            <p className={styles.eyebrow}>Selected deal · {view.eyebrow}</p>
             <h1 data-testid="living-conclusion">{view.title}</h1>
             <p>{view.support}</p>
             <div className={styles.workspaceEconomics} aria-label="Separate economic domains">
@@ -479,11 +496,11 @@ export function TransactionDrivenExperience({
           </section>
 
           <aside className={styles.workspaceDecision} data-region="responsibility">
-            <p>Responsible now</p>
-            <strong>{view.responsible}</strong>
-            {view.deadline === null ? null : <time>{view.deadline}</time>}
+            <p>Next decision</p>
+            <strong>{recordedNextStep}</strong>
+            <div><p>Responsible now</p><span>{view.responsible}</span></div>
+            {view.deadline === null ? null : <div><p>Deadline</p><time>{view.deadline}</time></div>}
             <div><p>Consequence</p><span>{view.consequence}</span></div>
-            <div><p>Recorded next step</p><span>{recordedNextStep}</span></div>
             {readOnly ? (
               <button
                 type="button"
@@ -498,75 +515,96 @@ export function TransactionDrivenExperience({
           </aside>
         </div>
       ) : surface === "participant" ? (
-        <div className={`${styles.scene} ${styles.participantScene}`}>
-          <section className={styles.truth} data-region="truth" data-dominant="true">
-            <p className={styles.eyebrow}>{view.eyebrow}</p>
-            <h1 data-testid="living-conclusion">{view.title}</h1>
-            <p>{view.support}</p>
-          </section>
+        <div className={styles.participantLayout}>
+          <div className={styles.participantRoom}>
+            <section className={styles.participantTruth} data-region="truth" data-dominant="true">
+              <p className={styles.participantStatus}>Your current status · {view.safeAction}</p>
+              <h1 data-testid="living-conclusion">{view.title}</h1>
+              <p>{view.support}</p>
+              {readOnly ? (
+                <button type="button" ref={proofTriggerRef} className={styles.participantProofLink} disabled={proofAction === null} onClick={openProof}>
+                  {proofButtonLabel}
+                </button>
+              ) : null}
+            </section>
 
-          <section className={styles.economics} data-region="economics" aria-label="Your separate positions">
-            <article className={styles.receivable} data-testid="living-receivable-anchor">
-              <p>Your receivable</p>
-              <strong>{formatDemoAmount(displayedRun.current.holderAUnits)} <small>units</small></strong>
-              <span>{receivableLabel}</span>
-            </article>
-            <article className={styles.protection}>
-              <p>Protection reserve</p>
-              <strong>{formatDemoAmount(run.deal.protectionAmount)} <small>dSETTLE</small></strong>
-              <span>{protectionLabel}</span>
-            </article>
-          </section>
+            <section className={styles.participantObligation} data-region="economics" aria-label="Your obligation summary">
+              <article className={styles.participantAnchor} data-testid="living-receivable-anchor">
+                <p>What remains yours</p>
+                <strong>{formatDemoAmount(displayedRun.current.holderAUnits)} <small>invoice units</small></strong>
+                <span>{receivableLabel}</span>
+              </article>
+              <dl className={styles.participantFacts}>
+                <div><dt>Responsible</dt><dd>{view.responsible}</dd></div>
+                {view.deadline === null ? null : <div><dt>Deadline</dt><dd><time>{view.deadline}</time></dd></div>}
+                <div><dt>Protection</dt><dd>{formatDemoAmount(run.deal.protectionAmount)} dSETTLE · {protectionLabel}</dd></div>
+                <div><dt>What it means</dt><dd>{view.consequence}</dd></div>
+              </dl>
+            </section>
+          </div>
 
-          <aside className={styles.responsibility} data-region="responsibility">
-            <p>Responsible before deadline</p>
-            <strong>{view.responsible}</strong>
-            {view.deadline === null ? null : <time>{view.deadline}</time>}
-            <span>{view.consequence}</span>
-            <em>Your current status · {view.safeAction}</em>
-            {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>
-                {proofButtonLabel}
-              </button>
-            ) : null}
-          </aside>
+          {readOnly && recordedSelection !== null ? (
+            <RecordedCheckpointRail
+              run={run}
+              selectedId={recordedSelection.checkpoint.id}
+              surface={surface}
+              checkpoints={checkpoints}
+              onSelect={selectCheckpoint}
+            />
+          ) : null}
         </div>
       ) : (
         <div className={styles.protocolLayout}>
-          <section className={styles.protocolTruth} data-region="truth" data-dominant="true">
-            <p className={styles.eyebrow}>{view.eyebrow}</p>
-            <h1 data-testid="living-conclusion">{view.title}</h1>
-            <p>{receipt === undefined
-              ? "The controlled checkpoint advanced and the contract state was read back."
-              : `${proofAction?.actorLabel ?? view.responsible} completed the transition and the contract state was read back.`}</p>
-          </section>
+          {readOnly && recordedSelection !== null ? (
+            <aside className={styles.protocolLog}>
+              <RecordedCheckpointRail
+                run={run}
+                selectedId={recordedSelection.checkpoint.id}
+                surface={surface}
+                checkpoints={checkpoints}
+                onSelect={selectCheckpoint}
+              />
+            </aside>
+          ) : null}
 
-          <section className={styles.protocolDiagnosis} aria-label="Impact, last safe state, and recovery">
-            <article>
-              <p>Impact</p>
-              <strong>{view.consequence}</strong>
-            </article>
-            <article>
-              <p>{readOnly ? "Last safe state" : "Last safe block"}</p>
-              <strong>Receivable · {RECEIVABLE_STATES[proofAction?.before.receivableState ?? displayedRun.lastSafeState.receivableState]}</strong>
-              <span>Protection · {PROTECTION_STATES[proofAction?.before.protectionState ?? displayedRun.lastSafeState.protectionState]}</span>
-            </article>
-            <article className={styles.protocolRecovery}>
-              <p>Recovery</p>
-              <strong>{recordedNextStep}</strong>
-              {view.deadline === null ? null : <time>{view.deadline}</time>}
-              <span>{view.responsible} is responsible.</span>
-            </article>
-          </section>
+          <div className={styles.protocolConsole}>
+            <section className={styles.protocolTruth} data-region="truth" data-dominant="true">
+              <p className={styles.eyebrow}>{view.abnormal ? "Incident" : "Protocol transition"}</p>
+              <h1 data-testid="living-conclusion">{view.title}</h1>
+              <div className={styles.protocolTransition}>
+                <p>Last confirmed transition</p>
+                <strong>{proofAction?.title ?? "No confirmed transition"}</strong>
+                <span>{proofAction?.actorLabel ?? view.responsible} · {receipt?.status ?? proofAction?.status ?? "ready"}</span>
+              </div>
+            </section>
 
-          <footer className={styles.protocolProofControl}>
-            <p><strong>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</strong><span>Before → action → after</span></p>
-            {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>
-                {proofButtonLabel}
-              </button>
-            ) : null}
-          </footer>
+            <section className={styles.protocolDiagnosis} aria-label="Impact, last safe state, and recovery">
+              <article className={styles.protocolImpact}>
+                <p>Impact</p>
+                <strong>{view.consequence}</strong>
+              </article>
+              <article>
+                <p>{readOnly ? "Last safe state" : "Last safe block"}</p>
+                <strong>Receivable · {RECEIVABLE_STATES[proofAction?.before.receivableState ?? displayedRun.lastSafeState.receivableState]}</strong>
+                <span>Protection · {PROTECTION_STATES[proofAction?.before.protectionState ?? displayedRun.lastSafeState.protectionState]}</span>
+              </article>
+              <article className={styles.protocolRecovery}>
+                <p>Recovery</p>
+                <strong>{recordedNextStep}</strong>
+                {view.deadline === null ? null : <time>{view.deadline}</time>}
+                <span>{view.responsible} is responsible.</span>
+              </article>
+            </section>
+
+            <footer className={styles.protocolProofControl}>
+              <p><strong>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</strong><span>Before → action → after</span></p>
+              {readOnly ? (
+                <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>
+                  {proofButtonLabel}
+                </button>
+              ) : null}
+            </footer>
+          </div>
         </div>
       )}
 

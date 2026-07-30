@@ -6,7 +6,7 @@ import { getLivingDemoReviewRun } from "@/lib/dealroom/living-demo-review-server
 
 export const metadata: Metadata = {
   title: "Recourse for tokenized receivables",
-  description: "Mordant detects conflicting claims, assigns responsibility, enforces deadlines, and retains verifiable evidence.",
+  description: "Mordant turns confirmed conflicts into accountable recourse: responsibility, deadlines, consequences, and verifiable evidence.",
 };
 
 export default function Home() {

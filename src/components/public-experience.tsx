@@ -18,26 +18,31 @@ const TRANSFORMATION = [
     label: "Receivable funded",
     title: "The receivable is funded.",
     detail: "Ownership is recorded and the economic position is clear.",
+    nextAction: "Introduce a conflicting claim",
   },
   {
     label: "Conflict detected",
     title: "A conflicting claim is detected.",
     detail: "The receivable stays intact while protection leaves alignment.",
+    nextAction: "Assign responsibility",
   },
   {
     label: "Responsibility assigned",
     title: "The responsible party is identified.",
     detail: "Everyone sees who must act. No one has to interpret the contract state.",
+    nextAction: "Establish the deadline",
   },
   {
     label: "Deadline established",
     title: "A deadline and consequence are established.",
-    detail: "Inaction now has a known, enforceable outcome.",
+    detail: "Inaction now has a known protocol consequence.",
+    nextAction: "Retain the proof",
   },
   {
     label: "Proof retained",
     title: "The state change is retained as proof.",
     detail: "The decision is replaced by a verifiable before and after record.",
+    nextAction: "Start again",
   },
 ] as const;
 
@@ -84,7 +89,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         <section className={styles.hero} aria-labelledby="hero-title">
           <p>Programmable recourse for tokenized receivables</p>
           <h1 id="hero-title">Tokenized assets automate ownership. Mordant automates recourse.</h1>
-          <p>Detect conflicting claims, assign responsibility, enforce deadlines, and retain verifiable evidence for tokenized receivables.</p>
+          <p>Turn confirmed conflicts into clear responsibility, deadlines, economic consequences, and verifiable evidence for tokenized receivables.</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="/demo">See Mordant resolve a conflict</Link>
             <a className={styles.secondary} href="#product">Explore the product</a>
@@ -92,14 +97,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         </section>
 
         <section className={styles.gap} id="problem" aria-labelledby="gap-title" data-reveal>
-          <p>01 · The gap</p>
+          <p>Where ownership stops</p>
           <h2 id="gap-title">Tokenization records who owns an asset. It does not decide what happens when obligations conflict.</h2>
         </section>
 
         <section className={styles.transformation} id="product" aria-labelledby="transformation-title" data-reveal>
           <header>
-            <p>02 · The transformation</p>
-            <span>{String(step + 1).padStart(2, "0")} / 05</span>
+            <p>From conflict to recourse</p>
           </header>
           <div
             className={styles.scene}
@@ -127,26 +131,26 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <p>{moment.detail}</p>
             </div>
             <button type="button" onClick={() => setStep((current) => (current + 1) % TRANSFORMATION.length)}>
-              {step === TRANSFORMATION.length - 1 ? "Restart" : "Continue"}
+              {moment.nextAction}
             </button>
           </div>
         </section>
 
         <section className={styles.value} aria-labelledby="value-title" data-reveal>
           <header>
-            <p>03 · The value</p>
+            <p>What the protocol establishes</p>
             <h2 id="value-title">Conflict becomes an operational path.</h2>
           </header>
           <div>
-            <article><span>01</span><h3>Know who must act</h3></article>
-            <article><span>02</span><h3>Know what happens next</h3></article>
-            <article><span>03</span><h3>Prove how the state changed</h3></article>
+            <article><h3>Know who must act</h3></article>
+            <article><h3>Know what happens next</h3></article>
+            <article><h3>Prove how the state changed</h3></article>
           </div>
         </section>
 
         <section className={styles.integration} id="integrate" aria-labelledby="integration-title" data-reveal>
           <header>
-            <p>04 · Built to integrate</p>
+            <p>For receivable platforms</p>
             <h2 id="integration-title">A policy and recourse layer between asset state and action.</h2>
           </header>
           <div className={styles.integrationBody}>
@@ -179,11 +183,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </div>
           </div>
           <Link className={styles.secondary} href="/workspace">View the product surfaces</Link>
+          <p className={styles.accessNote}>Current access: recorded demo. Private pilots are permissioned; production access is closed.</p>
         </section>
 
         <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
           <header>
-            <p>05 · Proof</p>
+            <p>Evidence retained</p>
             <h2 id="proof-title">One receipt. One verifiable transition.</h2>
           </header>
           <dl>

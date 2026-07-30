@@ -58,16 +58,19 @@
 }
 
 .brandLockup {
+  min-width: 0;
   padding-inline: clamp(16px, 2vw, 28px);
   border-right: 1px solid var(--nws-soft-rule);
 }
 
 .shell :global(.brand-wordmark) {
+  flex: 0 0 auto;
   margin-right: 14px;
   font-family: var(--font-product), Arial, sans-serif;
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 
 .shell :global(.brand-caption) {
@@ -480,6 +483,77 @@
 
   .fixture span + span {
     display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .shell {
+    --chrome-bar-height: 102px;
+  }
+
+  .chrome,
+  .participantChrome,
+  .shell[data-demo-mode] .chrome,
+  .shell[data-demo-mode] .participantChrome {
+    height: var(--chrome-bar-height);
+    grid-template-columns: minmax(92px, 1fr) auto;
+    grid-template-rows: 52px 50px;
+  }
+
+  .brandLockup {
+    grid-row: 1;
+    grid-column: 1;
+    padding-inline: 14px;
+    border-right: 0;
+  }
+
+  .navigation {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--nws-soft-rule);
+    border-right: 0;
+    overscroll-behavior-inline: contain;
+  }
+
+  .shell[data-demo-mode] .navigation :global(ul) {
+    min-width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .shell[data-demo-mode] .navigation :global(.role-navigation-link) {
+    min-height: 50px;
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+
+  .session {
+    grid-row: 1;
+    grid-column: 2;
+    gap: 10px;
+    padding-inline: 10px;
+    border-left: 1px solid var(--nws-soft-rule);
+  }
+
+  .shell .sessionIdentity,
+  .shell[data-demo-mode] .sessionIdentity {
+    display: flex;
+  }
+
+  .contextControl > summary,
+  .participantChrome .contextControl > summary {
+    min-width: 76px;
+    min-height: 38px;
+    padding-inline: 9px;
+    font-size: 10px;
+  }
+
+  .contextControl > summary::before,
+  .participantChrome .contextControl > summary::before {
+    display: none;
+  }
+
+  .contextControl > summary > i {
+    display: block;
   }
 }
 

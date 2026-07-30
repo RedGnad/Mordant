@@ -233,11 +233,6 @@
   gap: 24px;
 }
 
-.transformation > header span {
-  font-family: var(--font-proof), monospace;
-  font-size: 12px;
-}
-
 .scene {
   display: grid;
   min-height: 340px;
@@ -314,9 +309,10 @@
 
 .sceneCopy {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 190px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 36px;
-  align-items: end;
+  align-items: start;
   padding-top: 32px;
   border-top: 1px solid var(--rule);
 }
@@ -341,9 +337,11 @@
 }
 
 .sceneCopy button {
-  min-width: 160px;
+  width: 280px;
+  min-width: 280px;
   border-color: var(--action);
   background: var(--action);
+  text-align: center;
 }
 
 .value {
@@ -368,7 +366,9 @@
 }
 
 .value article {
+  display: flex;
   min-height: 190px;
+  align-items: center;
   padding: 24px;
 }
 
@@ -376,14 +376,9 @@
   border-left: 1px solid var(--rule);
 }
 
-.value article span {
-  color: #8a4800;
-  font-family: var(--font-proof), monospace;
-}
-
 .value h3 {
   max-width: 320px;
-  margin: 50px 0 0;
+  margin: 0;
   font-size: clamp(24px, 2.5vw, 34px);
   font-weight: 500;
   line-height: 1.05;
@@ -459,6 +454,14 @@
   color: var(--muted);
   font-size: 15px;
   list-style: none;
+}
+
+.accessNote {
+  max-width: 520px;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .proof {
@@ -636,8 +639,13 @@
     align-items: stretch;
   }
 
+  .sceneCopy > div {
+    min-height: 250px;
+  }
+
   .sceneCopy button {
     width: 100%;
+    min-width: 0;
   }
 
   .value {

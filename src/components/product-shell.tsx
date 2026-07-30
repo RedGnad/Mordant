@@ -213,7 +213,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
     <div
       className={`${styles.shell} product-shell product-shell-${active}`}
       data-surface={active}
-      data-demo-mode={transactionDemo ? "transactions" : executedReview ? "review" : undefined}
+      data-demo-mode={transactionDemo ? "transactions" : executedReview ? "review" : publicDemo ? "public" : undefined}
     >
       <a className="app-skip-link" href="#app-main">
         Skip to product surface
