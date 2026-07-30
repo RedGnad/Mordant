@@ -64,6 +64,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [step, setStep] = useState(0);
   const [integrationStep, setIntegrationStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
   const integrationFlowRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef<number | null>(null);
@@ -165,17 +166,46 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     setIntegrationStep(Math.floor(progress * INTEGRATION_STEPS.length));
   };
 
+  const moveHeroSymbol = (event: PointerEvent<HTMLElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 22;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 14;
+    event.currentTarget.style.setProperty("--symbol-x", `${x}px`);
+    event.currentTarget.style.setProperty("--symbol-y", `${y}px`);
+  };
+
+  const resetHeroSymbol = (event: PointerEvent<HTMLElement>) => {
+    event.currentTarget.style.setProperty("--symbol-x", "0px");
+    event.currentTarget.style.setProperty("--symbol-y", "0px");
+  };
+
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
       <PublicHeader />
 
       <main id="content">
-        <section className={styles.hero} aria-labelledby="hero-title">
+        <section
+          className={styles.hero}
+          aria-labelledby="hero-title"
+          ref={heroRef}
+          onPointerMove={moveHeroSymbol}
+          onPointerLeave={resetHeroSymbol}
+        >
           <h1 id="hero-title">
             <span className={styles.heroLine}><span>Conflict</span></span>
-            <span className={styles.heroLine}><span>becomes recourse.</span></span>
+            <span className={styles.heroLine}>
+              <span className={styles.heroPhrase}><span>becomes</span> <span>recourse.</span></span>
+            </span>
           </h1>
+          <div className={styles.heroSymbolField} aria-hidden="true">
+            <svg className={styles.heroSymbol} viewBox="0 0 100 100">
+              <rect x="44" width="12" height="100" />
+              <rect y="44" width="100" height="12" />
+              <rect x="44" width="12" height="100" transform="rotate(45 50 50)" />
+              <rect x="44" width="12" height="100" transform="rotate(-45 50 50)" />
+            </svg>
+          </div>
           <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">See the transformation</Link>
