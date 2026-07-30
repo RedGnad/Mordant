@@ -133,7 +133,7 @@
   align-self: center;
   flex-direction: column;
   margin: 20px 0 22px;
-  font-size: clamp(64px, min(9.4vw, 17svh), 136px);
+  font-size: clamp(64px, min(8.2vw, 17svh), 122px);
   font-weight: 600;
   letter-spacing: -0.065em;
   line-height: 0.8;
@@ -151,6 +151,7 @@
 
 .hero h1 span:last-child {
   margin-left: 8.5vw;
+  max-width: calc(100% - 8.5vw);
 }
 
 .heroSupport {
@@ -698,23 +699,46 @@
   transform-origin: left center;
 }
 
-.flow span,
-.flow strong {
+.flow > button {
   position: relative;
   z-index: 2;
   display: grid;
   min-height: 92px;
-  align-items: center;
+  align-content: center;
+  gap: 7px;
   padding: 20px;
   border: 1px solid var(--rule);
   background: var(--ground);
-  font-size: 19px;
+  color: var(--ink);
+  text-align: center;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.flow > button strong {
+  font-size: 20px;
   font-weight: 500;
 }
 
-.flow strong {
+.flow > button small {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 9px;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.flow > button:hover,
+.flow > button:focus-visible {
+  border-color: var(--action);
+}
+
+.flow > button[aria-pressed="true"] {
   border-color: var(--action);
   background: var(--action);
+}
+
+.flow > button[aria-pressed="true"] small {
+  color: rgb(11 31 51 / 72%);
 }
 
 .flow i {
@@ -733,6 +757,22 @@
 .flow i::before {
   content: "→";
   font-size: 16px;
+}
+
+.integrationStory {
+  width: min(72%, 920px);
+  min-height: 94px;
+  margin: 22px 0 42px auto;
+  padding: 8px 0 8px 28px;
+  border-left: 5px solid var(--protection);
+  font-size: clamp(23px, 2.3vw, 36px);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.integrationStory span {
+  display: block;
 }
 
 .io {
@@ -881,6 +921,10 @@
     transition-delay: 380ms;
   }
 
+  .integrationStory span {
+    animation: public-integration-story 220ms cubic-bezier(0, 0, 0.3, 1) both;
+  }
+
   .page[data-motion-ready="true"] .proof[data-reveal] dl {
     clip-path: inset(0 100% 0 0);
   }
@@ -888,6 +932,18 @@
   .page[data-motion-ready="true"] .proof[data-visible="true"] dl {
     clip-path: inset(0);
     transition: clip-path 420ms 100ms cubic-bezier(0, 0, 0.3, 1);
+  }
+}
+
+@keyframes public-integration-story {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -1025,6 +1081,7 @@
 
   .hero h1 span:last-child {
     width: min-content;
+    max-width: 100%;
     margin-top: 8px;
     margin-left: 0;
   }
@@ -1250,8 +1307,7 @@
     transform-origin: center top;
   }
 
-  .flow span,
-  .flow strong {
+  .flow > button {
     min-height: 76px;
   }
 
@@ -1267,6 +1323,14 @@
     width: 100%;
     grid-template-columns: 1fr;
     margin-top: 40px;
+  }
+
+  .integrationStory {
+    width: 100%;
+    min-height: 120px;
+    margin-block: 28px 38px;
+    padding-left: 18px;
+    font-size: 25px;
   }
 
   .io section + section {

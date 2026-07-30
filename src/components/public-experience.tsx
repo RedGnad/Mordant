@@ -42,8 +42,27 @@ const TRANSFORMATION = [
   },
 ] as const;
 
+const INTEGRATION_STEPS = [
+  {
+    label: "Your platform",
+    detail: "Asset state + events",
+    story: "Authorized receivable context enters without moving funds.",
+  },
+  {
+    label: "Mordant",
+    detail: "Responsibility + deadline",
+    story: "Policy turns an exception into responsibility, a deadline, and a consequence.",
+  },
+  {
+    label: "Your operations",
+    detail: "Action + receipt",
+    story: "Your team receives the next safe action and a verifiable receipt.",
+  },
+] as const;
+
 export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [step, setStep] = useState(0);
+  const [integrationStep, setIntegrationStep] = useState(1);
   const pageRef = useRef<HTMLDivElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
   const scrollFrame = useRef<number | null>(null);
@@ -216,16 +235,28 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         <section className={styles.integration} id="integrate" aria-labelledby="integration-title" data-reveal>
           <header>
             <p>For receivable platforms</p>
-            <h2 id="integration-title">A policy and recourse layer between asset state and action.</h2>
+            <h2 id="integration-title">Your platform records the asset. Mordant establishes what happens next.</h2>
           </header>
           <div className={styles.integrationBody}>
             <div className={styles.flow} aria-label="Integration flow">
-              <span>Your receivable platform</span>
+              <button type="button" aria-pressed={integrationStep === 0} onClick={() => setIntegrationStep(0)}>
+                <strong>{INTEGRATION_STEPS[0].label}</strong>
+                <small>{INTEGRATION_STEPS[0].detail}</small>
+              </button>
               <i aria-hidden="true" />
-              <strong>Mordant policy + recourse layer</strong>
+              <button type="button" aria-pressed={integrationStep === 1} onClick={() => setIntegrationStep(1)}>
+                <strong>{INTEGRATION_STEPS[1].label}</strong>
+                <small>{INTEGRATION_STEPS[1].detail}</small>
+              </button>
               <i aria-hidden="true" />
-              <span>Actions · deadlines · receipts</span>
+              <button type="button" aria-pressed={integrationStep === 2} onClick={() => setIntegrationStep(2)}>
+                <strong>{INTEGRATION_STEPS[2].label}</strong>
+                <small>{INTEGRATION_STEPS[2].detail}</small>
+              </button>
             </div>
+            <p className={styles.integrationStory} aria-live="polite">
+              <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
+            </p>
             <div className={styles.io}>
               <section>
                 <h3>Inputs</h3>
