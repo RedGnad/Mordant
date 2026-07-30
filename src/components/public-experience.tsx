@@ -17,27 +17,27 @@ type PublicProof = {
 
 const TRANSFORMATION = [
   {
-    id: "stable",
-    label: "Stable",
-    title: "One receivable. One valid position.",
+    id: "flow",
+    label: "In flow",
+    title: "The path is clear.",
     protection: "Aligned",
   },
   {
-    id: "conflict",
-    label: "Conflict",
-    title: "Two claims. One obligation.",
-    protection: "Conflict detected",
+    id: "change",
+    label: "Change observed",
+    title: "An obligation changes.",
+    protection: "Change observed",
   },
   {
-    id: "recourse",
-    label: "Recourse",
-    title: "Responsibility becomes explicit.",
-    protection: "Accountable path",
+    id: "path",
+    label: "Path assigned",
+    title: "The next move becomes clear.",
+    protection: "Path assigned",
   },
   {
     id: "proof",
-    label: "Proof",
-    title: "The transition is retained.",
+    label: "Proof retained",
+    title: "The decision is retained.",
     protection: "Receipt issued",
   },
 ] as const;
@@ -105,12 +105,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     setStep(index);
     const range = Math.max(0, section.offsetHeight - window.innerHeight);
     const position = section.offsetTop + (range * index / (TRANSFORMATION.length - 1));
-    const previousBehavior = document.documentElement.style.scrollBehavior;
-    document.documentElement.style.scrollBehavior = "auto";
-    window.scrollTo({ top: position, behavior: "auto" });
-    window.requestAnimationFrame(() => {
-      document.documentElement.style.scrollBehavior = previousBehavior;
-    });
+    window.scrollTo({ top: position, behavior: "instant" });
   };
 
   return (
@@ -120,21 +115,21 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
-          <p className={styles.heroCategory}>Recourse infrastructure / tokenized receivables</p>
+          <p className={styles.heroCategory}>Operational recourse / tokenized receivables</p>
           <h1 id="hero-title">
-            <span>Conflict</span>
-            <span>becomes recourse.</span>
+            <span>Exceptions</span>
+            <span>become clear action.</span>
           </h1>
-          <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
-          <p className={styles.heroAudience}>For credit / operations teams</p>
+          <p className={styles.heroSupport}>Mordant establishes who acts next, by when, and retains the proof.</p>
+          <p className={styles.heroAudience}>For credit &amp; operations teams</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">See the transformation</Link>
             <Link className={styles.secondary} href="#integrate">Evaluate the integration</Link>
           </div>
           <div className={styles.heroSeed} aria-hidden="true">
-            <span>Receivable / stable</span>
+            <span>Asset state / continuous</span>
             <i />
-            <span>Protection / aligned</span>
+            <span>Recourse / ready</span>
           </div>
         </section>
 
@@ -147,12 +142,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         >
           <div className={styles.transformationSticky}>
             <header className={styles.transformationHeader}>
-              <p>Conflict / accountable recourse</p>
+              <p>From change / to a clear path</p>
               <span aria-live="polite">{moment.label}</span>
             </header>
 
             <div className={styles.transformationTitle}>
-              <h2 id="transformation-title" aria-live="polite">{moment.title}</h2>
+              <h2 id="transformation-title" aria-live="polite">
+                <span key={moment.id}>{moment.title}</span>
+              </h2>
               <p>Receivable remains unchanged.</p>
             </div>
 
@@ -164,7 +161,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               </div>
 
               <div className={styles.claim} aria-hidden={step === 0}>
-                <span>Second claim</span>
+                <span>New obligation</span>
               </div>
 
               <div className={styles.protectionLane}>
