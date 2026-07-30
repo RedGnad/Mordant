@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 import { PublicFooter, PublicHeader } from "./public-chrome";
 import styles from "./public-experience.module.css";
@@ -65,7 +65,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [integrationStep, setIntegrationStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
+  const integrationFlowRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef<number | null>(null);
+  const integrationScrollFrame = useRef<number | null>(null);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -88,6 +90,35 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     }, { rootMargin: "0px 0px -12%", threshold: 0.08 });
     chapters.forEach((chapter) => observer.observe(chapter));
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const flow = integrationFlowRef.current;
+    if (flow === null) return;
+
+    const updateFromScroll = () => {
+      integrationScrollFrame.current = null;
+      const bounds = flow.getBoundingClientRect();
+      const start = window.innerHeight * 0.92;
+      const end = window.innerHeight * 0.38;
+      const progress = Math.min(1, Math.max(0, (start - bounds.top) / (start - end)));
+      const nextStep = Math.min(INTEGRATION_STEPS.length - 1, Math.floor(progress * INTEGRATION_STEPS.length));
+      setIntegrationStep((current) => current === nextStep ? current : nextStep);
+    };
+
+    const onScroll = () => {
+      if (integrationScrollFrame.current !== null) return;
+      integrationScrollFrame.current = window.requestAnimationFrame(updateFromScroll);
+    };
+
+    updateFromScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (integrationScrollFrame.current !== null) window.cancelAnimationFrame(integrationScrollFrame.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -127,6 +158,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     setStep(index);
   };
 
+  const selectIntegrationFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+    if (event.pointerType !== "mouse") return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const progress = Math.min(0.999, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+    setIntegrationStep(Math.floor(progress * INTEGRATION_STEPS.length));
+  };
+
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
@@ -135,8 +173,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
           <h1 id="hero-title">
-            <span>Conflict</span>
-            <span>becomes recourse.</span>
+            <span className={styles.heroLine}><span>Conflict</span></span>
+            <span className={styles.heroLine}><span>becomes recourse.</span></span>
           </h1>
           <p className={styles.heroSupport}>Mordant establishes responsibility, deadline, consequence, and proof.</p>
           <div className={styles.actions}>
@@ -224,14 +262,19 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <h2 id="integration-title">Your platform records the asset. Mordant establishes what happens next.</h2>
           </header>
           <div className={styles.integrationBody}>
-            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path">
-              <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
-                <path className={styles.flowBase} d="M40 102H960" />
-                <path className={styles.flowException} d="M350 102H420L500 34H590L670 102" />
-                <path className={styles.flowRecourse} d="M500 34H600L710 102H920" />
-                <rect className={styles.integrationSignal} x="40" y="84" width="36" height="36" />
-                <rect className={styles.integrationCheckpoint} x="920" y="80" width="44" height="44" />
-              </svg>
+            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
+              <div className={styles.flowCanvas}>
+                <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true" onPointerMove={selectIntegrationFromPointer}>
+                  <path className={styles.flowBase} d="M40 102H960" />
+                  <path className={styles.flowException} d="M350 102H420L500 34H590L670 102" />
+                  <path className={styles.flowRecourse} d="M500 34H600L710 102H920" />
+                  <rect className={styles.integrationSignal} x="40" y="84" width="36" height="36" />
+                  <rect className={styles.integrationCheckpoint} x="920" y="80" width="44" height="44" />
+                </svg>
+                <p className={styles.integrationStory} aria-live="polite">
+                  <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
+                </p>
+              </div>
               <div className={styles.integrationStages} aria-label="Integration stages">
                 {INTEGRATION_STEPS.map((stage, index) => (
                   <button
@@ -239,6 +282,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                     key={stage.label}
                     aria-pressed={integrationStep === index}
                     onClick={() => setIntegrationStep(index)}
+                    onFocus={() => setIntegrationStep(index)}
+                    onPointerEnter={() => setIntegrationStep(index)}
                   >
                     <strong>{stage.label}</strong>
                     <small>{stage.detail}</small>
@@ -246,9 +291,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                 ))}
               </div>
             </div>
-            <p className={styles.integrationStory} aria-live="polite">
-              <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
-            </p>
             <div className={styles.io}>
               <section>
                 <h3>Inputs</h3>
