@@ -8,10 +8,10 @@ const directory = path.dirname(fileURLToPath(import.meta.url));
 const baseUrl = process.env.M18NWS_INTEGRATION_URL ?? "http://127.0.0.1:3100";
 const captures = [
   { label: "Workspace / desktop", path: "/", file: "workspace-1440x960.png", width: 1440, height: 960 },
-  { label: "Participant / desktop", path: "/deal-room", file: "participant-1440x960.png", width: 1440, height: 960 },
+  { label: "Participant / desktop", path: "/participant", file: "participant-1440x960.png", width: 1440, height: 960 },
   { label: "Protocol / desktop", path: "/protocol", file: "protocol-1440x960.png", width: 1440, height: 960 },
   { label: "Workspace / mobile", path: "/", file: "workspace-390x844.png", width: 390, height: 844 },
-  { label: "Participant / mobile", path: "/deal-room", file: "participant-390x844.png", width: 390, height: 844 },
+  { label: "Participant / mobile", path: "/participant", file: "participant-390x844.png", width: 390, height: 844 },
   { label: "Protocol / mobile", path: "/protocol", file: "protocol-390x844.png", width: 390, height: 844 },
 ];
 

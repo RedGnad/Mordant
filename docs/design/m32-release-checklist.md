@@ -31,7 +31,7 @@ artifact/log link; a local recollection is not evidence.
 | Transaction review | Browser assertions inside `pnpm test:e2e` | Review stages, persistent failure states, keyboard escape/focus return and non-executing fixture boundary pass | `[ ]` |
 | Responsive and accessible baseline | Browser assertions inside `pnpm test:e2e` | `1280x800` and `390 px` layouts, no horizontal overflow, 44 px targets, focus visibility, contrast guard and reduced motion pass | `[ ]` |
 | Deployment identity | Vercel inspection plus Git metadata | Production deployment resolves to the recorded commit on `main`, is `READY`, and is newer than the previous placeholder deployment | `[ ]` |
-| Public smoke | HTTP/browser check on the immutable URL and alias | `/`, `/deal-room`, `/protocol`, `/protocol/local-journey` and `/design-system` return the expected release with fixture/prototype boundaries visible | `[ ]` |
+| Public smoke | HTTP/browser check on the immutable URL and alias | `/`, `/participant`, `/protocol`, `/protocol/local-journey` and `/design-system` return the expected release with fixture/prototype boundaries visible | `[ ]` |
 | Client-secret boundary | `pnpm validate` plus deployed bundle/log review | No Cleanverse credential, private key or server-only secret is present in client output or public fixtures | `[ ]` |
 
 Any failed, skipped, flaky or stale automated gate is a release **NO-GO**. Record warnings separately;

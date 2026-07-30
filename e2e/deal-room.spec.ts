@@ -44,7 +44,7 @@ async function identity(page: Page) {
 test("one canonical receipt-driven deal stays truthful across all three product perspectives", async ({ page }) => {
   test.slow();
   const clean = await reset(page);
-  await page.goto("/?demo=transactions");
+  await page.goto("/workspace?demo=transactions");
 
   await expect(page.getByTestId("living-source")).toHaveText(SOURCE);
   await expect(page.getByTestId("living-conclusion")).toHaveText("This receivable is ready for funding.");
@@ -86,7 +86,7 @@ test("one canonical receipt-driven deal stays truthful across all three product 
   await expect(page.getByRole("button", { name: "Open receipt proof" })).toBeFocused();
 
   await page.getByRole("link", { name: "Participant" }).click();
-  await expect(page).toHaveURL(/\/deal-room\?demo=transactions$/);
+  await expect(page).toHaveURL(/\/participant\?demo=transactions$/);
   await expect(page.getByTestId("living-conclusion")).toHaveText("Nothing you need to do.");
   await expect(identity(page)).resolves.toEqual(canonicalIdentity);
 
@@ -104,11 +104,11 @@ test("one canonical receipt-driven deal stays truthful across all three product 
   await expect(page.getByTestId("living-conclusion")).toHaveText(
     "6.00 dSETTLE is ready for you to claim.",
   );
-  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 units");
+  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 invoice units");
 
   await execute(page, "claim-a", "claim-b");
   await expect(page.getByTestId("living-conclusion")).toHaveText("Your protection was paid.");
-  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 units");
+  await expect(page.getByTestId("living-receivable-anchor")).toContainText("60.00 invoice units");
 
   await execute(page, "claim-b", "approve-redemption");
   await execute(page, "approve-redemption", "fund-redemption");
@@ -148,24 +148,24 @@ test("the execution API refuses discontinuous actions without changing contract-
 });
 
 test("a recorded checkpoint survives perspective changes and Proof", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/demo?perspective=workspace");
   await page.locator("[data-checkpoint-id=claims]").click();
-  await expect(page).toHaveURL(/\?checkpoint=claims$/);
+  await expect(page).toHaveURL(/\/demo\?perspective=workspace&checkpoint=claims$/);
   await expect(page.getByTestId("living-conclusion")).toHaveText("Protection claims are complete.");
 
   await page.getByRole("link", { name: "Participant" }).click();
-  await expect(page).toHaveURL(/\/deal-room\?checkpoint=claims$/);
+  await expect(page).toHaveURL(/\/demo\?perspective=participant&checkpoint=claims$/);
   await expect(page.getByTestId("living-experience")).toHaveAttribute("data-checkpoint", "claims");
   await expect(page.getByTestId("living-conclusion")).toHaveText("Your protection was paid.");
   await expect(page.getByText("Your current status · Wait for invoice payment")).toBeVisible();
 
   await page.getByRole("link", { name: "Protocol" }).click();
-  await expect(page).toHaveURL(/\/protocol\?checkpoint=claims$/);
+  await expect(page).toHaveURL(/\/demo\?perspective=protocol&checkpoint=claims$/);
   await expect(page.getByTestId("living-conclusion")).toHaveText("Protection claims completed.");
 
   await page.getByRole("button", { name: "Open receipt proof" }).click();
   await expect(page.getByTestId("living-proof")).toContainText("Holder B claims 4 from the reserve confirmed.");
   await page.getByRole("button", { name: "Back to selected checkpoint" }).click();
-  await expect(page).toHaveURL(/\/protocol\?checkpoint=claims$/);
+  await expect(page).toHaveURL(/\/demo\?perspective=protocol&checkpoint=claims$/);
   await expect(page.getByTestId("living-experience")).toHaveAttribute("data-checkpoint", "claims");
 });

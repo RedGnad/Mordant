@@ -8,7 +8,7 @@ const outputPath = process.argv.find((argument) => argument.startsWith("--output
 
 const views = [
   { name: "Workspace", path: "/" },
-  { name: "Participant", path: "/deal-room" },
+  { name: "Participant", path: "/participant" },
   { name: "Protocol", path: "/protocol" },
 ];
 const viewports = [

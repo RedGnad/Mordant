@@ -20,7 +20,7 @@ Run the full recourse journey as real transactions, on a deterministic local cha
 ```bash
 pnpm install
 pnpm localnet       # fresh Anvil + deployment, one command, reproducible from an empty chain
-pnpm dev            # then open http://localhost:3000/deal-room
+pnpm dev            # then open http://localhost:3000/participant
 ```
 
 Fourteen steps, each one a real transaction: fund the invoice 90/10, split the positions 60/40, sign

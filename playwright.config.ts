@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: true,
   retries: 0,
   reporter: "line",
@@ -13,18 +14,18 @@ export default defineConfig({
   projects: [
     {
       name: "desktop-chromium",
-      testIgnore: /deal-room\.spec\.ts/,
+      testMatch: /public-product\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "mobile-chromium",
-      testIgnore: /deal-room\.spec\.ts/,
+      testMatch: /public-product\.spec\.ts/,
       use: { ...devices["Pixel 7"] },
     },
     {
       // The deal room mutates one shared local chain, so it runs alone and in order.
-      name: "deal-room",
-      testMatch: /deal-room\.spec\.ts/,
+      name: "transaction-run",
+      testMatch: /(^|\/)deal-room\.spec\.ts$/,
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },

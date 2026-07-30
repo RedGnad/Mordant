@@ -9,7 +9,7 @@ design-lab route.
 The mode is explicit and uses the real product routes:
 
 - Workspace: `/?demo=transactions`
-- Participant Deal Room: `/deal-room?demo=transactions`
+- Participant Deal Room: `/participant?demo=transactions`
 - Protocol Operations: `/protocol?demo=transactions`
 
 The Context control on every normal product surface exposes the entry. The same navigation changes

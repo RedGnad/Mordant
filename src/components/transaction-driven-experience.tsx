@@ -19,7 +19,9 @@ import {
   type RecordedCheckpointId,
 } from "@/lib/dealroom/living-demo";
 
+import { RecordedCheckpointRail, type CheckpointOption } from "./recorded-checkpoint-rail";
 import styles from "./transaction-driven-experience.module.css";
+import { TransactionProof } from "./transaction-proof";
 
 const LIVE_ENDPOINT = "/api/dealroom/living-demo";
 const REVIEW_ENDPOINT = "/api/dealroom/living-demo?source=review";
@@ -27,11 +29,6 @@ const POLL_INTERVAL_MS = 400;
 
 type RequestState = "idle" | "executing" | "resetting";
 type CheckpointMotion = "idle" | "out-forward" | "out-backward" | "in-forward" | "in-backward";
-type CheckpointOption = {
-  id: RecordedCheckpointId;
-  label: string;
-  actionId: string;
-};
 
 const PUBLIC_RECORDED_CHECKPOINTS: ReadonlyArray<CheckpointOption> = [
   { id: "funding", label: "Funded", actionId: "approve-funding" },
@@ -66,85 +63,6 @@ function SourceBoundary({ message }: { readonly message: string }) {
       <code>pnpm localnet</code>
       <p>The normal product surfaces remain available without `?demo=transactions`.</p>
     </section>
-  );
-}
-
-function RecordedCheckpointRail({
-  run,
-  selectedId,
-  surface,
-  checkpoints,
-  onSelect,
-}: {
-  readonly run: LivingRunArtifact;
-  readonly selectedId: RecordedCheckpointId;
-  readonly surface: LivingSurface;
-  readonly checkpoints: ReadonlyArray<CheckpointOption>;
-  readonly onSelect: (id: RecordedCheckpointId) => void;
-}) {
-  const listRef = useRef<HTMLOListElement>(null);
-  const railClass = surface === "workspace"
-    ? styles.workspaceQueue
-    : surface === "participant"
-      ? styles.participantHistory
-      : styles.protocolTimeline;
-  const railHeading = surface === "workspace"
-    ? "Recorded case activity"
-    : surface === "participant"
-      ? "Your deal history"
-      : "Confirmed transitions";
-  const railSummary = surface === "participant"
-    ? "Choose a moment"
-    : `${checkpoints.length} ${checkpoints === PUBLIC_RECORDED_CHECKPOINTS ? "moments" : "checkpoints"}`;
-
-  useEffect(() => {
-    const list = listRef.current;
-    const selected = list?.querySelector<HTMLElement>("[data-selected='true']");
-    if (list === null || list === undefined || selected === null || selected === undefined) return;
-    list.scrollLeft = Math.max(0, selected.offsetLeft - (list.clientWidth - selected.offsetWidth) / 2);
-  }, [selectedId]);
-
-  return (
-    <nav
-      className={railClass}
-      aria-label="Recorded run checkpoints"
-      data-testid="recorded-checkpoint-rail"
-      data-count={checkpoints.length}
-      data-surface={surface}
-    >
-      <header>
-        <p>{railHeading}</p>
-        <strong>{railSummary}</strong>
-      </header>
-      <ol ref={listRef}>
-        {checkpoints.map((checkpoint) => {
-          const action = run.actions.find((candidate) => candidate.id === checkpoint.actionId);
-          const selected = checkpoint.id === selectedId;
-          const checkpointMeta = surface === "protocol"
-            ? `${action?.actorLabel ?? "Protocol"} · ${action?.status ?? "unavailable"}`
-            : selected
-              ? "Selected state"
-              : action?.status === "confirmed" ? "Recorded" : "Unavailable";
-          return (
-            <li key={checkpoint.id}>
-              <button
-                type="button"
-                aria-current={selected ? "step" : undefined}
-                aria-pressed={selected}
-                data-checkpoint-id={checkpoint.id}
-                data-selected={selected ? "true" : "false"}
-                disabled={action?.status !== "confirmed"}
-                onClick={() => onSelect(checkpoint.id)}
-              >
-                <span className={styles.checkpointMarker} aria-hidden="true" />
-                <strong>{checkpoint.label}</strong>
-                <small>{checkpointMeta}</small>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
   );
 }
 
@@ -348,88 +266,15 @@ export function TransactionDrivenExperience({
 
   if (proofOpen && proofAction !== null) {
     return (
-      <section
-        className={styles.proof}
-        data-testid="living-proof"
-        data-closing={proofClosing ? "true" : "false"}
-        data-deal-id={run.deal.id}
-        aria-labelledby="living-proof-title"
-      >
-        <header className={styles.proofLead}>
-          <p className={styles.sourceLabel}>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</p>
-          <h1 id="living-proof-title" ref={proofTitleRef} tabIndex={-1}>
-            {proofAction.title} {receipt === undefined ? "recorded." : "confirmed."}
-          </h1>
-          <p>{receipt === undefined
-            ? "The controlled block checkpoint with its before and after contract reads."
-            : "The receipt with its before and after contract reads."}</p>
-        </header>
-
-        <dl className={styles.receiptSummary}>
-          <div><dt>Actor</dt><dd>{proofAction.actorLabel}</dd></div>
-          <div><dt>Transaction</dt><dd className={styles.technicalValue}>{receipt === undefined ? "No transaction" : compactTechnicalValue(receipt.transactionHash)}</dd></div>
-          <div><dt>Block</dt><dd className={styles.technicalValue}>{receipt?.blockNumber ?? proofAction.after?.blockNumber ?? proofAction.before.blockNumber}</dd></div>
-          <div><dt>Status</dt><dd>{receipt?.status ?? proofAction.status}</dd></div>
-        </dl>
-
-        <section className={styles.transitionProof} aria-label="Before action after proof">
-          <article>
-            <span>Before · block {proofAction.before.blockNumber}</span>
-            <strong>{PROTECTION_STATES[proofAction.before.protectionState]}</strong>
-            <small>Receivable · {RECEIVABLE_STATES[proofAction.before.receivableState]}</small>
-          </article>
-          <article className={styles.proofAction}>
-            <span>Action</span>
-            <strong>{proofAction.title}</strong>
-            <small>{proofAction.actorLabel}</small>
-          </article>
-          <article>
-            <span>After · block {proofAction.after?.blockNumber}</span>
-            <strong>{PROTECTION_STATES[proofAction.after?.protectionState ?? proofAction.before.protectionState]}</strong>
-            <small>Receivable · {RECEIVABLE_STATES[proofAction.after?.receivableState ?? proofAction.before.receivableState]}</small>
-          </article>
-        </section>
-
-        <details className={styles.technical} data-testid="living-technical-proof">
-          <summary>Technical record</summary>
-          <dl>
-            <div><dt>Source</dt><dd>{run.source.label}</dd></div>
-            <div><dt>Run</dt><dd>{run.runId}</dd></div>
-            <div><dt>Checkpoint</dt><dd>{recordedSelection?.checkpoint.label ?? proofAction.title}</dd></div>
-            {proofAction.contract === null ? null : <div><dt>Contract</dt><dd>{proofAction.contract}</dd></div>}
-            {proofAction.method === null ? null : <div><dt>Method</dt><dd>{proofAction.method}</dd></div>}
-            <div><dt>Deal</dt><dd>{run.deal.id}</dd></div>
-            <div><dt>Vault</dt><dd>{run.deal.vault}</dd></div>
-            <div><dt>Invoice root</dt><dd>{run.deal.invoiceRoot}</dd></div>
-            {receipt === undefined ? null : <div><dt>Transaction hash</dt><dd>{receipt.transactionHash}</dd></div>}
-            <div><dt>Block hash</dt><dd>{receipt?.blockHash ?? proofAction.after?.blockHash ?? proofAction.before.blockHash}</dd></div>
-            {receipt === undefined ? null : <div><dt>Gas used</dt><dd>{receipt.gasUsed}</dd></div>}
-          </dl>
-          {receipt !== undefined && receipt.events.length > 0 ? (
-            <section className={styles.events} aria-label="Observed events">
-              <p>Observed events</p>
-              <ul>{receipt.events.map((event) => <li key={event}>{event}</li>)}</ul>
-            </section>
-          ) : null}
-          {timeline === "public" ? (
-            <section className={styles.completeRun} aria-label="Complete recorded run">
-              <p>Complete recorded run · {run.actions.filter((action) => action.receipt !== undefined).length} transactions</p>
-              <ol>
-                {run.actions.filter((action) => action.receipt !== undefined).map((action) => (
-                  <li key={action.id}>
-                    <span>{action.title}</span>
-                    <code>{compactTechnicalValue(action.receipt?.transactionHash ?? "")}</code>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ) : null}
-        </details>
-
-        <footer className={styles.proofControls}>
-          <button type="button" onClick={closeProof}>Back to selected checkpoint</button>
-        </footer>
-      </section>
+      <TransactionProof
+        run={run}
+        action={proofAction}
+        checkpointLabel={recordedSelection?.checkpoint.label ?? proofAction.title}
+        publicTimeline={timeline === "public"}
+        closing={proofClosing}
+        titleRef={proofTitleRef}
+        onClose={closeProof}
+      />
     );
   }
 
@@ -472,6 +317,7 @@ export function TransactionDrivenExperience({
                 selectedId={recordedSelection.checkpoint.id}
                 surface={surface}
                 checkpoints={checkpoints}
+                publicTimeline={timeline === "public"}
                 onSelect={selectCheckpoint}
               />
             ) : <p className={styles.liveQueueNote}>The controlled run advances this selected receivable.</p>}
@@ -549,6 +395,7 @@ export function TransactionDrivenExperience({
               selectedId={recordedSelection.checkpoint.id}
               surface={surface}
               checkpoints={checkpoints}
+              publicTimeline={timeline === "public"}
               onSelect={selectCheckpoint}
             />
           ) : null}
@@ -562,6 +409,7 @@ export function TransactionDrivenExperience({
                 selectedId={recordedSelection.checkpoint.id}
                 surface={surface}
                 checkpoints={checkpoints}
+                publicTimeline={timeline === "public"}
                 onSelect={selectCheckpoint}
               />
             </aside>
