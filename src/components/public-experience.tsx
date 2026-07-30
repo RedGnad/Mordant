@@ -210,8 +210,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
           <p className={styles.heroSupport}>Governed execution and evidence for receivables exceptions.</p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href="#product">See the transformation</Link>
-            <Link className={styles.secondary} href="#integrate">Evaluate the integration</Link>
+            <Link className={styles.primary} href="#product">See how Mordant works</Link>
+            <Link className={styles.secondary} href="#integrate">See how it integrates</Link>
           </div>
         </section>
 
