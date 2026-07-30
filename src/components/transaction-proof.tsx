@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { RefObject } from "react";
 
 import {
@@ -112,6 +113,7 @@ export function TransactionProof({
 
       <footer className={styles.proofControls}>
         <button type="button" onClick={onClose}>Back to selected checkpoint</button>
+        {publicTimeline ? <Link href="/pilot">Apply for a shadow pilot</Link> : null}
       </footer>
     </section>
   );

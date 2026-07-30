@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { PublicFooter, PublicHeader } from "./public-chrome";
 import styles from "./public-experience.module.css";
 
 type PublicProof = {
@@ -76,14 +77,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
-      <header className={styles.header}>
-        <Link className={styles.brand} href="/">Mordant</Link>
-        <nav aria-label="Public navigation">
-          <a href="#problem">Problem</a>
-          <a href="#integrate">Integrate</a>
-          <Link href="/demo">Recorded demo</Link>
-        </nav>
-      </header>
+      <PublicHeader />
 
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
@@ -92,7 +86,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           <p>Turn confirmed conflicts into clear responsibility, deadlines, economic consequences, and verifiable evidence for tokenized receivables.</p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="/demo">See Mordant resolve a conflict</Link>
-            <a className={styles.secondary} href="#product">Explore the product</a>
+            <Link className={styles.secondary} href="/pilot">Apply for a shadow pilot</Link>
           </div>
         </section>
 
@@ -198,14 +192,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <div><dt>After</dt><dd>{proof.after}</dd></div>
             <div><dt>Block</dt><dd>{proof.block}</dd></div>
           </dl>
-          <Link className={styles.proofCta} href="/demo?checkpoint=reveal">Open the complete recorded demo</Link>
+          <div className={styles.proofActions}>
+            <Link className={styles.proofCta} href="/demo?checkpoint=reveal">Open the complete recorded demo</Link>
+            <Link className={styles.proofPrimary} href="/pilot">Apply for a shadow pilot</Link>
+          </div>
         </section>
       </main>
 
-      <footer className={styles.footer}>
-        <strong>Mordant</strong>
-        <span>Recourse infrastructure for tokenized receivables.</span>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

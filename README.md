@@ -167,5 +167,8 @@ Next.js 16, React 19, TypeScript, Foundry, Monad testnet, and the Cleanverse pri
 | [Threat model](docs/threat-model.md) | Attacker classes and mitigations |
 | [Security review](docs/security-review.md) | Findings and residual risk |
 | [Production gates](docs/production-gates.md) | Hard gates before real funds |
+| [Shadow pilot definition](docs/product/shadow-pilot.md) | Scope, processing, outputs, and measurements for a permissioned pilot |
+| [Organization role model](docs/product/organization-role-model.md) | Future organization, permission, approval, and wallet boundaries |
+| [Customer discovery guide](docs/product/customer-discovery-guide.md) | Twelve questions for the first 5–8 prospects |
 
 Never commit Cleanverse credentials. Configure them in `.env.local`, which is git-ignored.

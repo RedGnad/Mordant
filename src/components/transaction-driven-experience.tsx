@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -506,6 +507,13 @@ export function TransactionDrivenExperience({
           </div>
         </footer>
       )}
+
+      {timeline === "public" ? (
+        <aside className={styles.pilotConversion} aria-label="Shadow pilot">
+          <p><strong>Use this workflow beside your current process.</strong><span>No funds moved. Human validation remains required.</span></p>
+          <Link href="/pilot">Apply for a shadow pilot</Link>
+        </aside>
+      ) : null}
 
       {error === null ? null : <p className={styles.requestError} role="alert">{error}</p>}
       <p className="visually-hidden" aria-live="polite" aria-atomic="true">

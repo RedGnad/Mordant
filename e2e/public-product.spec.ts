@@ -36,6 +36,7 @@ test("the public story stays specific and its causal control does not move", asy
   })).toBeVisible();
   await expect(page.getByText("Turn confirmed conflicts into clear responsibility", { exact: false })).toBeVisible();
   await expect(page.getByRole("link", { name: "See Mordant resolve a conflict" })).toHaveAttribute("href", "/demo");
+  await expect(page.getByRole("link", { name: "Apply for a shadow pilot" }).first()).toHaveAttribute("href", "/pilot");
 
   const renderedText = await page.locator("body").innerText();
   expect(renderedText).not.toMatch(/\b0[1-5]\s*[·/]\s*/u);
@@ -105,10 +106,12 @@ test("one recorded checkpoint keeps its facts across three distinct perspectives
   await expect(protocol).toHaveAttribute("data-surface", "protocol");
   await expect(page.getByText("Last confirmed transition", { exact: true })).toBeVisible();
   await expect(protocol).toHaveAttribute("data-deal-id", identity.deal ?? "");
+  await expect(page.getByRole("link", { name: "Apply for a shadow pilot" })).toHaveAttribute("href", "/pilot");
 
   await page.getByRole("button", { name: "Open receipt proof" }).click();
   await expect(page.getByTestId("living-proof")).toBeVisible();
   await expect(page.getByTestId("living-experience")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Apply for a shadow pilot" })).toHaveAttribute("href", "/pilot");
   await page.getByRole("button", { name: "Back to selected checkpoint" }).click();
   await expect(page).toHaveURL(/\/demo\?perspective=protocol&checkpoint=reveal$/u);
   await expect(page.getByTestId("living-experience")).toHaveAttribute("data-checkpoint", "reveal");
@@ -129,4 +132,64 @@ test("public and recorded product routes fit the viewport", async ({ page }) => 
     await expect(page.getByTestId("living-experience")).toHaveAttribute("data-surface", perspective);
     await expectNoHorizontalOverflow(page);
   }
+});
+
+test("the shadow pilot route asks only for pilot-fit information and never fakes delivery", async ({ page }) => {
+  await page.goto("/pilot");
+
+  await expect(page.getByRole("heading", { name: "Test accountable recourse against your current process." })).toBeVisible();
+  await expect(page.getByText(
+    "Run Mordant alongside your current process, without moving funds or automating production actions.",
+    { exact: true },
+  )).toBeVisible();
+
+  const form = page.getByTestId("pilot-application-form");
+  for (const label of [
+    "Organization",
+    "Your role",
+    "Portfolio type",
+    "Approximate receivables volume",
+    "How do you manage conflicting claims today?",
+    "System or data source used",
+    "Professional email",
+  ]) {
+    await expect(form.getByLabel(label, { exact: true })).toBeVisible();
+  }
+  await expect(form.getByRole("button", { name: "Apply for a shadow pilot" })).toBeDisabled();
+  await expect(form).toContainText("no data can be sent yet");
+  await expectNoHorizontalOverflow(page);
+
+  const invalid = await page.request.post("/api/pilot-applications", {
+    data: {
+      organization: "Example Factor",
+      role: "Credit or operations",
+      portfolioType: "Factoring",
+      approximateVolume: "10,000 receivables annually",
+      conflictProcess: "Email and spreadsheet escalation.",
+      dataSource: "Internal servicing platform",
+      workEmail: "operator@gmail.com",
+      website: "",
+    },
+  });
+  expect(invalid.status()).toBe(400);
+  await expect(invalid.json()).resolves.toMatchObject({
+    fields: { workEmail: ["Use your professional email address."] },
+  });
+
+  const unavailable = await page.request.post("/api/pilot-applications", {
+    data: {
+      organization: "Example Factor",
+      role: "Credit or operations",
+      portfolioType: "Factoring",
+      approximateVolume: "10,000 receivables annually",
+      conflictProcess: "Email and spreadsheet escalation.",
+      dataSource: "Internal servicing platform",
+      workEmail: "operator@example-factor.com",
+      website: "",
+    },
+  });
+  expect(unavailable.status()).toBe(503);
+  await expect(unavailable.json()).resolves.toEqual({
+    error: "Application intake is not connected yet. No data was sent.",
+  });
 });

@@ -22,3 +22,4 @@ contracts/broadcast/
 # Local deal-room deployment output
 .dealroom/
 docs/design/m17/references/
+.vercel

@@ -76,6 +76,17 @@
   background: color-mix(in srgb, var(--action) 14%, var(--ground));
 }
 
+.header nav .navPrimary {
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--ink);
+}
+
+.header nav .navPrimary:hover,
+.header nav .navPrimary:focus-visible {
+  background: #d08700;
+}
+
 .hero,
 .gap,
 .transformation,
@@ -520,6 +531,30 @@
   color: var(--ink);
 }
 
+.proofActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.proofPrimary {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.proofPrimary:hover,
+.proofPrimary:focus-visible {
+  background: #d08700;
+}
+
 .footer {
   display: flex;
   min-height: 120px;
@@ -556,9 +591,13 @@
     font-size: 11px;
   }
 
-  .header nav a:first-child,
-  .header nav a:nth-child(2) {
+  .header nav .optionalNav {
     display: none;
+  }
+
+  .header nav .navPrimary {
+    max-width: 130px;
+    text-align: center;
   }
 
   .hero {
@@ -722,7 +761,8 @@
     font-size: 16px;
   }
 
-  .proofCta {
+  .proofCta,
+  .proofPrimary {
     width: 100%;
   }
 

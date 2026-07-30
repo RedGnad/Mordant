@@ -901,6 +901,53 @@
   border-top: 1px solid var(--nws-rule);
 }
 
+.pilotConversion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--nws-rule);
+}
+
+.pilotConversion p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.pilotConversion strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.pilotConversion span {
+  color: var(--nws-muted);
+  font-size: 12px;
+}
+
+.pilotConversion a,
+.proofControls a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid var(--nws-action);
+  background: var(--nws-action);
+  color: var(--nws-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.pilotConversion a:hover,
+.pilotConversion a:focus-visible,
+.proofControls a:hover,
+.proofControls a:focus-visible {
+  background: var(--action-primary-hover);
+}
+
 .executionControl {
   display: grid;
   max-width: 880px;
@@ -1284,6 +1331,7 @@
 .proofControls {
   display: flex;
   grid-column: 1 / 13;
+  gap: 10px;
   justify-content: flex-start;
 }
 
@@ -1605,6 +1653,15 @@
     padding-top: 10px;
   }
 
+  .pilotConversion {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .pilotConversion a {
+    width: 100%;
+  }
+
   .executionControl {
     grid-template-columns: 1fr;
     gap: 7px;
@@ -1642,6 +1699,10 @@
   .technical,
   .proofControls {
     grid-column: 1 / -1;
+  }
+
+  .proofControls {
+    display: grid;
   }
 
   .proofLead h1 {
