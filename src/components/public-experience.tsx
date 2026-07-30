@@ -115,10 +115,15 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
       <main id="content">
         <section className={styles.hero} aria-labelledby="hero-title">
+          <div className={styles.heroField} aria-hidden="true">
+            <span className={styles.fieldGrid} />
+            <span className={styles.fieldBreak} />
+            <span className={styles.fieldNode} />
+          </div>
           <p className={styles.heroCategory}>Operational recourse / tokenized receivables</p>
           <h1 id="hero-title">
-            <span>Exceptions</span>
-            <span>become clear action.</span>
+            <span>Conflict</span>
+            <span>becomes recourse.</span>
           </h1>
           <p className={styles.heroSupport}>Mordant establishes who acts next, by when, and retains the proof.</p>
           <p className={styles.heroAudience}>For credit &amp; operations teams</p>
