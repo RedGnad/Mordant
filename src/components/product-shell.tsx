@@ -246,9 +246,9 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
             <div className={styles.contextPanel}>
               <strong>Session context</strong>
               <dl>
-                <div><dt>Wallet</dt><dd>{shell.wallet}</dd></div>
-                <div><dt>Network</dt><dd>{mEx2Mode ? "Controlled Anvil · 31337" : "Monad testnet · 10143"}</dd></div>
-                <div><dt>Freshness</dt><dd className={shell.caution ? "session-restricted" : "session-fresh"}>{shell.freshness}</dd></div>
+                <div><dt>Wallet</dt><dd className={styles.technicalValue}>{shell.wallet}</dd></div>
+                <div><dt>Network</dt><dd className={styles.technicalValue}>{mEx2Mode ? "Controlled Anvil · 31337" : "Monad testnet · 10143"}</dd></div>
+                <div><dt>Freshness</dt><dd className={`${styles.technicalValue} ${shell.caution ? "session-restricted" : "session-fresh"}`}>{shell.freshness}</dd></div>
                 <div><dt>View</dt><dd>{participantShell ? "Participant" : active === "protocol" ? "Operations" : "Originator"}</dd></div>
               </dl>
               <Link

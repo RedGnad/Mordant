@@ -29,17 +29,17 @@
   margin: 0;
 }
 
-.runContext p:not(:first-child) {
+.runContext strong {
   font-family: var(--font-proof), monospace;
+  font-weight: 500;
 }
 
 .sourceLabel,
 .eyebrow {
   margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .sourceLabel::before {
@@ -70,11 +70,11 @@
 .truth h1 {
   max-width: 740px;
   margin: 10px 0 8px;
-  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
-  font-size: clamp(42px, 4.9vw, 70px);
-  font-weight: 700;
-  letter-spacing: -0.045em;
-  line-height: 0.94;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: clamp(56px, 5vw, 72px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
   text-wrap: balance;
 }
 
@@ -83,6 +83,7 @@
   margin: 0;
   color: var(--nws-muted);
   font-size: 16px;
+  line-height: 1.45;
 }
 
 .economics {
@@ -123,25 +124,24 @@
 .protection p,
 .responsibility > p {
   margin: 0;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .receivable strong,
 .protection strong {
   margin: 8px 0 3px;
   font-size: clamp(28px, 3vw, 44px);
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   line-height: 0.95;
 }
 
 .receivable strong small,
 .protection strong small {
-  font-family: var(--font-proof), monospace;
-  font-size: 10px;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -150,8 +150,9 @@
 .protection span,
 .receivable em {
   color: var(--nws-muted);
-  font-size: 11px;
+  font-size: 13px;
   font-style: normal;
+  line-height: 1.4;
 }
 
 .receivable em {
@@ -176,35 +177,35 @@
 
 .responsibility strong {
   max-width: 420px;
-  font-size: clamp(25px, 2.7vw, 38px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 0.98;
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
 }
 
 .responsibility time {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--nws-action);
-  font-family: var(--font-proof), monospace;
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--nws-action-ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .responsibility time small {
   color: var(--nws-muted);
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .responsibility span,
 .responsibility em {
   max-width: 430px;
-  font-size: 13px;
+  font-size: 14px;
   font-style: normal;
+  line-height: 1.45;
 }
 
 .responsibility em {
@@ -238,13 +239,14 @@
 
 .executionControl > p:first-child span {
   color: var(--nws-muted);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .executionControl > p:first-child strong {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .execute,
@@ -255,7 +257,7 @@
   border-radius: 0;
   background: transparent;
   color: inherit;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .execute {
@@ -263,7 +265,7 @@
   padding: 0 18px;
   border-color: var(--nws-action);
   background: var(--nws-action);
-  color: var(--nws-ground);
+  color: var(--nws-ink);
 }
 
 .execute:hover:not(:disabled) {
@@ -280,12 +282,15 @@
 .failed {
   grid-column: 2;
   margin: 0;
+  font-size: 13px;
+}
+
+.technicalValue {
   font-family: var(--font-proof), monospace;
-  font-size: 11px;
 }
 
 .pending {
-  color: var(--nws-action);
+  color: var(--nws-action-ink);
 }
 
 .failed,
@@ -331,11 +336,11 @@
 .unavailable h1 {
   max-width: 840px;
   margin: 0;
-  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
-  font-size: clamp(44px, 6vw, 84px);
-  font-weight: 700;
-  letter-spacing: -0.045em;
-  line-height: 0.94;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: clamp(56px, 5.4vw, 76px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
 }
 
 .unavailable > p:not(.sourceLabel) {
@@ -369,11 +374,11 @@
 .proofLead h1 {
   max-width: 760px;
   margin: 12px 0 10px;
-  font-family: var(--font-product-hero), var(--font-product), Arial, sans-serif;
-  font-size: clamp(44px, 5vw, 70px);
-  font-weight: 700;
-  letter-spacing: -0.045em;
-  line-height: 0.94;
+  font-family: var(--font-product), Arial, sans-serif;
+  font-size: clamp(56px, 5vw, 72px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
 }
 
 .proofLead > p:last-child {
@@ -409,6 +414,14 @@
 .receiptSummary dt,
 .technical dt {
   color: rgb(243 244 239 / 62%);
+}
+
+.receiptSummary dt {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.technical dt {
   font-family: var(--font-proof), monospace;
   font-size: 9px;
   letter-spacing: 0.05em;
@@ -417,7 +430,7 @@
 
 .receiptSummary dd {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .transitionProof {
@@ -445,20 +458,19 @@
 .transitionProof small,
 .events > p {
   color: rgb(243 244 239 / 62%);
-  font-family: var(--font-proof), monospace;
-  font-size: 9px;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .transitionProof strong {
-  font-size: clamp(24px, 2.4vw, 36px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.015em;
 }
 
 .proofAction strong {
   color: var(--nws-ground);
-  font-size: clamp(22px, 2.2vw, 32px);
+  font-size: clamp(22px, 2vw, 28px);
 }
 
 .events {
@@ -492,7 +504,7 @@
   min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  font-weight: 700;
+  font-weight: 500;
   list-style: none;
 }
 
@@ -565,14 +577,14 @@
 
   .truth h1 {
     margin: 7px 0 5px;
-    font-size: clamp(31px, 9vw, 38px);
+    font-size: clamp(38px, 10vw, 44px);
     letter-spacing: -0.025em;
-    line-height: 1.02;
+    line-height: 1;
     text-wrap: pretty;
   }
 
   .truth > p:last-child {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .economics {
@@ -597,7 +609,7 @@
 
   .receivable strong,
   .protection strong {
-    font-size: 23px;
+    font-size: 26px;
   }
 
   .experience[data-surface="workspace"] .protection[data-shift="true"],
@@ -619,13 +631,13 @@
   }
 
   .responsibility strong {
-    font-size: 23px;
+    font-size: 22px;
   }
 
   .responsibility span,
   .responsibility em,
   .responsibility time {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .controls {
@@ -674,7 +686,7 @@
   }
 
   .proofLead h1 {
-    font-size: 38px;
+    font-size: 40px;
     letter-spacing: -0.025em;
     line-height: 1;
   }

@@ -38,15 +38,6 @@ const productFont = localFont({
   fallback: ["Arial", "sans-serif"],
 });
 
-const productHeroFont = localFont({
-  src: "./fonts/Chillax-Bold.woff2",
-  variable: "--font-product-hero",
-  weight: "700",
-  style: "normal",
-  display: "swap",
-  fallback: ["Arial", "sans-serif"],
-});
-
 export const metadata: Metadata = {
   title: {
     default: "Mordant — programmable recourse",
@@ -59,7 +50,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html
       lang="en"
-      className={`${identityFont.variable} ${interfaceFont.variable} ${proofFont.variable} ${productFont.variable} ${productHeroFont.variable}`}
+      className={`${identityFont.variable} ${interfaceFont.variable} ${proofFont.variable} ${productFont.variable}`}
       data-scroll-behavior="smooth"
     >
       <body>{children}</body>

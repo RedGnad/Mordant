@@ -1,33 +1,34 @@
 .shell {
-  --nws-ground: #f3f4ef;
-  --nws-ink: #12141a;
-  --nws-receivable: #006c9c;
-  --nws-protection: #d62e68;
-  --nws-action: #6750d8;
-  --nws-proof: #161c28;
-  --nws-muted: #545965;
-  --nws-rule: rgb(18 20 26 / 34%);
-  --nws-soft-rule: rgb(18 20 26 / 16%);
+  --nws-ground: #f4f1e8;
+  --nws-ink: #0b1f33;
+  --nws-receivable: #005f8f;
+  --nws-protection: #b4233f;
+  --nws-action: #c67a00;
+  --nws-action-ink: #8a4800;
+  --nws-proof: #0b1f33;
+  --nws-muted: #4a5865;
+  --nws-rule: rgb(11 31 51 / 38%);
+  --nws-soft-rule: rgb(11 31 51 / 17%);
   --chrome-bar-height: 56px;
   --fixture-height: 24px;
   --chrome-height: calc(var(--chrome-bar-height) + var(--fixture-height));
   --background-primary: var(--nws-ground);
-  --background-operational: #e9ebe6;
-  --surface-raised: #f8f9f4;
+  --background-operational: #e6e2d8;
+  --surface-raised: #fcfaf4;
   --surface-proof: var(--nws-proof);
-  --surface-proof-raised: #222a38;
+  --surface-proof-raised: #15324a;
   --text-primary: var(--nws-ink);
   --text-secondary: var(--nws-muted);
   --text-on-proof: var(--nws-ground);
-  --border-structural: rgb(18 20 26 / 44%);
+  --border-structural: rgb(11 31 51 / 48%);
   --border-subtle: var(--nws-soft-rule);
   --action-primary: var(--nws-action);
-  --action-primary-hover: #5039bc;
+  --action-primary-hover: #d08700;
   --domain-receivable: var(--nws-receivable);
   --domain-protection: var(--nws-protection);
-  --state-critical: #a61f50;
-  --state-attention: #7458d0;
-  --state-positive: #006c9c;
+  --state-critical: #8e1b32;
+  --state-attention: var(--nws-action-ink);
+  --state-positive: var(--nws-receivable);
   --state-neutral: var(--nws-muted);
   --type-identity: var(--font-product), Arial, sans-serif;
   --type-interface: var(--font-product), Arial, sans-serif;
@@ -37,6 +38,8 @@
   color: var(--nws-ink);
   font-family: var(--font-product), Arial, sans-serif;
   font-size: 14px;
+  font-synthesis: none;
+  font-kerning: normal;
 }
 
 .chrome {
@@ -63,7 +66,7 @@
   margin-right: 14px;
   font-family: var(--font-product), Arial, sans-serif;
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.04em;
 }
 
@@ -111,7 +114,7 @@
 
 .navigation :global(.role-navigation-link.is-current) {
   color: var(--nws-ink);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .navigation :global(.role-navigation-link.is-current::after) {
@@ -141,7 +144,7 @@
 }
 
 .sessionIdentity strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .session :global(.session-fresh),
@@ -165,7 +168,7 @@
   border: 1px solid var(--nws-soft-rule);
   color: var(--nws-muted);
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
   list-style: none;
 }
 
@@ -207,7 +210,7 @@
   display: block;
   margin-bottom: 11px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .contextPanel dl {
@@ -232,14 +235,16 @@
 .contextPanel dt {
   color: var(--nws-muted);
   font-size: 10px;
-  text-transform: uppercase;
 }
 
 .contextPanel dd {
   overflow-wrap: anywhere;
-  font-family: var(--font-proof), monospace;
   font-size: 10px;
   text-align: right;
+}
+
+.contextPanel dd.technicalValue {
+  font-family: var(--font-proof), monospace;
 }
 
 .demoModeLink {
@@ -251,13 +256,13 @@
   border: 1px solid var(--nws-ink);
   color: var(--nws-ink);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: center;
 }
 
 .demoModeLink:hover {
   border-color: var(--nws-action);
-  color: var(--nws-action);
+  color: var(--nws-action-ink);
 }
 
 .demoModeLink:focus-visible {
@@ -280,10 +285,9 @@
   border-bottom: 1px solid var(--nws-soft-rule);
   background: var(--nws-ground);
   color: var(--nws-muted);
-  font-family: var(--font-proof), monospace;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .fixture::before {
@@ -412,7 +416,7 @@
     color: var(--nws-muted);
     content: "Ctx";
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .contextControl > summary > i {
@@ -423,7 +427,7 @@
     gap: 0;
   }
 
-  .shell[data-demo-mode] .participantChrome .sessionIdentity {
+  .shell[data-demo-mode] .sessionIdentity {
     display: none;
   }
 

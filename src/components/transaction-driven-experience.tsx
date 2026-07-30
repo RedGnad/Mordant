@@ -182,8 +182,8 @@ export function TransactionDrivenExperience({
 
         <dl className={styles.receiptSummary}>
           <div><dt>Actor</dt><dd>{latestReceipt.actorLabel}</dd></div>
-          <div><dt>Transaction</dt><dd>{compactTechnicalValue(receipt.transactionHash)}</dd></div>
-          <div><dt>Block</dt><dd>{receipt.blockNumber}</dd></div>
+          <div><dt>Transaction</dt><dd className={styles.technicalValue}>{compactTechnicalValue(receipt.transactionHash)}</dd></div>
+          <div><dt>Block</dt><dd className={styles.technicalValue}>{receipt.blockNumber}</dd></div>
           <div><dt>Status</dt><dd>{receipt.status}</dd></div>
         </dl>
 
@@ -325,7 +325,7 @@ export function TransactionDrivenExperience({
           </button>
           {currentAction?.status === "pending" ? (
             <p className={styles.pending} role="status" data-testid="living-pending">
-              Pending{currentAction.transactionHash ? ` · ${compactTechnicalValue(currentAction.transactionHash)}` : " · preparing broadcast"}
+              Pending{currentAction.transactionHash ? <> · <span className={styles.technicalValue}>{compactTechnicalValue(currentAction.transactionHash)}</span></> : " · preparing broadcast"}
             </p>
           ) : null}
           {currentAction?.status === "failed" ? (
