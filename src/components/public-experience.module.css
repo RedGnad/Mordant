@@ -117,6 +117,7 @@
 .hero {
   --symbol-x: 0px;
   --symbol-y: 0px;
+  --symbol-scroll-y: 0px;
   position: relative;
   display: flex;
   min-height: calc(100svh - 64px);
@@ -182,7 +183,7 @@
   width: clamp(390px, 44vw, 680px);
   mix-blend-mode: difference;
   pointer-events: none;
-  transform: translate3d(var(--symbol-x), var(--symbol-y), 0);
+  transform: translate3d(var(--symbol-x), calc(var(--symbol-y) + var(--symbol-scroll-y)), 0);
   transition: transform 240ms cubic-bezier(0.2, 0, 0, 1);
   will-change: transform;
 }
@@ -276,7 +277,7 @@
 
 .transformationTitle {
   display: grid;
-  grid-template-columns: minmax(0, 9fr) minmax(180px, 3fr);
+  grid-template-columns: minmax(0, 8fr) minmax(180px, 4fr);
   gap: 24px;
   align-items: end;
   padding-top: clamp(16px, 2.2vw, 30px);
@@ -284,11 +285,17 @@
 
 .transformationTitle h2 {
   max-width: 1060px;
-  margin: 0;
+  padding-block: 0.15em;
+  margin: -0.15em 0;
+  overflow: clip;
   font-size: clamp(50px, 6vw, 86px);
   font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 0.86;
+}
+
+.transformationTitle h2 span {
+  display: block;
 }
 
 .transformation[data-state="conflict"] .transformationTitle h2 {
@@ -296,7 +303,9 @@
 }
 
 .transformationTitle p {
-  margin: 0 0 4px;
+  max-width: 260px;
+  margin: 0 3vw 4px 0;
+  justify-self: end;
   color: var(--muted);
   font-size: 13px;
 }
@@ -307,7 +316,7 @@
 
 .scene {
   position: relative;
-  min-height: 390px;
+  min-height: 410px;
   overflow: hidden;
   isolation: isolate;
 }
@@ -315,9 +324,7 @@
 .receivableLane,
 .protectionLane {
   position: absolute;
-  left: 0;
   display: grid;
-  width: 68%;
   min-height: 112px;
   grid-template-columns: minmax(110px, 2fr) minmax(220px, 5fr) minmax(90px, 2fr);
   align-items: end;
@@ -329,15 +336,24 @@
 
 .receivableLane {
   z-index: 4;
-  top: 17%;
+  top: 15%;
+  left: 0;
+  width: min(74%, 980px);
   border-color: var(--receivable);
 }
 
 .protectionLane {
   z-index: 3;
-  top: 52%;
+  top: 51%;
+  left: 8%;
+  width: min(58%, 800px);
   border-top: 0;
-  transition: background-color 180ms ease-out, opacity 180ms ease-out;
+  transform: translate3d(0, 0, 0);
+  transition:
+    background-color 180ms ease-out,
+    opacity 180ms ease-out,
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
 }
 
 .protectionLane::before {
@@ -380,13 +396,14 @@
 .claim {
   position: absolute;
   z-index: 2;
-  top: 11%;
-  left: 71%;
+  top: 10%;
+  left: 73%;
   width: clamp(74px, 8vw, 116px);
   height: 47%;
   border-left: 5px solid var(--protection);
   opacity: 0;
-  transform: translateY(-54px);
+  transform: translateY(-48px) scaleY(0.72);
+  transform-origin: top center;
   transition: opacity 160ms ease-out, transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
 }
 
@@ -414,11 +431,15 @@
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .claim {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scaleY(1);
+}
+
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
+  transform: translate3d(clamp(68px, 14vw, 190px), 26px, 0);
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane::before {
-  transform: translate(11vw, 30px) rotate(-1.1deg);
+  transform: rotate(-1.2deg) scaleX(1.15);
 }
 
 .recourseLock {
@@ -429,11 +450,12 @@
   display: grid;
   width: 62%;
   grid-template-columns: 1fr 1.15fr 1.7fr;
-  background: var(--action-fill);
+  align-items: end;
+  background: transparent;
   color: var(--ink);
   opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 180ms 150ms ease-out, transform 240ms 150ms cubic-bezier(0, 0, 0.3, 1);
+  transform: translateX(48px);
+  transition: opacity 180ms 130ms ease-out, transform 280ms 130ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .recourseLock div {
@@ -442,10 +464,19 @@
   align-content: space-between;
   gap: 12px;
   padding: 12px 14px;
+  background: var(--action-fill);
 }
 
 .recourseLock div + div {
   border-left: 1px solid rgb(33 25 35 / 48%);
+}
+
+.recourseLock div:nth-child(2) {
+  transform: translateY(-14px);
+}
+
+.recourseLock div:nth-child(3) {
+  transform: translateY(-5px);
 }
 
 .recourseLock span {
@@ -463,7 +494,7 @@
 
 .transformation[data-state="recourse"] .recourseLock {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateX(0);
 }
 
 .receiptNode {
@@ -525,8 +556,9 @@
 
 .stateControls {
   display: grid;
-  width: min(720px, 100%);
+  width: min(720px, 64%);
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-self: end;
   border-top: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
 }
@@ -931,6 +963,14 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .transformationTitle h2 span {
+    animation: public-state-title 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .protectionLane small {
+    animation: public-state-status 200ms 70ms cubic-bezier(0, 0, 0.3, 1) both;
+  }
+
   .heroSupport {
     animation: public-hero-in 320ms 440ms ease-out both;
   }
@@ -1022,6 +1062,30 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes public-state-title {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes public-state-status {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -1300,6 +1364,7 @@
   }
 
   .protectionLane {
+    left: 0;
     top: 43%;
   }
 
@@ -1328,8 +1393,12 @@
     font-size: 7px;
   }
 
+  .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
+    transform: translate3d(20vw, 18px, 0);
+  }
+
   .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane::before {
-    transform: translate(22%, 20px) rotate(-1.2deg);
+    transform: rotate(-1.2deg) scaleX(1.08);
   }
 
   .recourseLock {
@@ -1342,6 +1411,14 @@
     min-height: 72px;
     gap: 8px;
     padding: 8px;
+  }
+
+  .recourseLock div:nth-child(2) {
+    transform: translateY(-8px);
+  }
+
+  .recourseLock div:nth-child(3) {
+    transform: translateY(-3px);
   }
 
   .recourseLock span {
@@ -1365,6 +1442,7 @@
 
   .stateControls {
     width: 100%;
+    justify-self: stretch;
   }
 
   .stateControls button {
@@ -1537,6 +1615,8 @@
   .hero *,
   .page [data-reveal],
   .transformationSticky,
+  .transformationTitle h2 span,
+  .protectionLane,
   .protectionLane::before,
   .claim,
   .recourseLock,

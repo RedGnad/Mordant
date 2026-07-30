@@ -67,6 +67,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const heroRef = useRef<HTMLElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
   const integrationFlowRef = useRef<HTMLDivElement>(null);
+  const heroScrollFrame = useRef<number | null>(null);
   const scrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
   const moment = TRANSFORMATION[step];
@@ -91,6 +92,32 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     }, { rootMargin: "0px 0px -12%", threshold: 0.08 });
     chapters.forEach((chapter) => observer.observe(chapter));
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (hero === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const updateHeroParallax = () => {
+      heroScrollFrame.current = null;
+      const bounds = hero.getBoundingClientRect();
+      const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -26}px`);
+    };
+
+    const onHeroScroll = () => {
+      if (heroScrollFrame.current !== null) return;
+      heroScrollFrame.current = window.requestAnimationFrame(updateHeroParallax);
+    };
+
+    updateHeroParallax();
+    window.addEventListener("scroll", onHeroScroll, { passive: true });
+    window.addEventListener("resize", onHeroScroll);
+    return () => {
+      window.removeEventListener("scroll", onHeroScroll);
+      window.removeEventListener("resize", onHeroScroll);
+      if (heroScrollFrame.current !== null) window.cancelAnimationFrame(heroScrollFrame.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -224,7 +251,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         >
           <div className={styles.transformationSticky}>
             <div className={styles.transformationTitle}>
-              <h2 id="transformation-title" aria-live="polite">{moment.title}</h2>
+              <h2 id="transformation-title" aria-live="polite">
+                <span key={moment.id}>{moment.title}</span>
+              </h2>
               <p>Receivable remains unchanged.</p>
             </div>
 
@@ -242,7 +271,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <div className={styles.protectionLane}>
                 <span>Conditional domain</span>
                 <strong>Protection</strong>
-                <small>{moment.protection}</small>
+                <small key={moment.id}>{moment.protection}</small>
               </div>
 
               <div className={styles.recourseLock} aria-hidden={step < 2}>
