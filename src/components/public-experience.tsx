@@ -102,15 +102,10 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const selectStep = (index: number) => {
     const section = transformationRef.current;
     if (section === null) return;
-    setStep(index);
     const range = Math.max(0, section.offsetHeight - window.innerHeight);
     const position = section.offsetTop + (range * index / (TRANSFORMATION.length - 1));
-    const previousBehavior = document.documentElement.style.scrollBehavior;
-    document.documentElement.style.scrollBehavior = "auto";
-    window.scrollTo({ top: position, behavior: "auto" });
-    window.requestAnimationFrame(() => {
-      document.documentElement.style.scrollBehavior = previousBehavior;
-    });
+    window.scrollTo({ top: position, behavior: "instant" });
+    setStep(index);
   };
 
   return (
@@ -215,7 +210,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </dl>
           <div className={styles.proofActions}>
             <Link className={styles.proofCta} href="/demo?checkpoint=reveal">Open the complete recorded demo</Link>
-            <Link className={styles.proofPrimary} href="/pilot">Apply for a shadow pilot</Link>
           </div>
         </section>
 
@@ -227,9 +221,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           <div className={styles.integrationBody}>
             <div className={styles.flow} aria-label="Integration flow">
               <span>Your receivable platform</span>
-              <i aria-hidden="true">↓</i>
+              <i aria-hidden="true" />
               <strong>Mordant policy + recourse layer</strong>
-              <i aria-hidden="true">↓</i>
+              <i aria-hidden="true" />
               <span>Actions · deadlines · receipts</span>
             </div>
             <div className={styles.io}>
@@ -253,8 +247,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               </section>
             </div>
           </div>
-          <Link className={styles.secondary} href="/workspace">View the product surfaces</Link>
-          <p className={styles.accessNote}>Current access: recorded demo. Private pilots are permissioned; production access is closed.</p>
+          <div className={styles.integrationExit}>
+            <p className={styles.accessNote}>Recorded demo available. Private pilots are permissioned; production access is closed.</p>
+            <div>
+              <Link className={styles.secondary} href="/workspace">View the product surfaces</Link>
+              <Link className={styles.primary} href="/pilot">Apply for a shadow pilot</Link>
+            </div>
+          </div>
         </section>
       </main>
 
