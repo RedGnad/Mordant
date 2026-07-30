@@ -102,7 +102,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       heroScrollFrame.current = null;
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
-      hero.style.setProperty("--symbol-scroll-y", `${progress * -26}px`);
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -64}px`);
     };
 
     const onHeroScroll = () => {
@@ -266,6 +266,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>
+                <svg className={styles.claimMark} viewBox="0 0 100 100" aria-hidden="true">
+                  <rect x="43" width="14" height="100" />
+                  <rect y="43" width="100" height="14" />
+                  <rect x="43" width="14" height="100" transform="rotate(45 50 50)" />
+                  <rect x="43" width="14" height="100" transform="rotate(-45 50 50)" />
+                </svg>
               </div>
 
               <div className={styles.protectionLane}>

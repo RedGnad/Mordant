@@ -50,8 +50,8 @@
 .brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 0 clamp(18px, 3vw, 42px);
   border-right: 1px solid var(--rule);
   font-size: 22px;
@@ -315,6 +315,15 @@
 }
 
 .scene {
+  --anchor-y: 15%;
+  --conditional-y: 51%;
+  --anchor-width: 83.3333%;
+  --conditional-width: 66.6667%;
+  --conditional-shift-x: 25%;
+  --conditional-shift-y: 16px;
+  --junction-x: 83.3333%;
+  --signal-stroke: clamp(3px, 0.31vw, 4px);
+  --junction-size: clamp(40px, 3.8vw, 54px);
   position: relative;
   min-height: 410px;
   overflow: hidden;
@@ -330,29 +339,29 @@
   align-items: end;
   gap: 20px;
   padding: 14px 16px 18px;
-  border-top: 5px solid;
+  border-top: var(--signal-stroke) solid;
   background: var(--ground);
 }
 
 .receivableLane {
   z-index: 4;
-  top: 15%;
+  top: var(--anchor-y);
   left: 0;
-  width: min(74%, 980px);
+  width: var(--anchor-width);
   border-color: var(--receivable);
 }
 
 .protectionLane {
   z-index: 3;
-  top: 51%;
-  left: 8%;
-  width: min(58%, 800px);
+  top: var(--conditional-y);
+  left: 0;
+  width: var(--conditional-width);
   border-top: 0;
   transform: translate3d(0, 0, 0);
   transition:
     background-color 180ms ease-out,
     opacity 180ms ease-out,
-    transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
   will-change: transform;
 }
 
@@ -361,11 +370,10 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 5px;
+  height: var(--signal-stroke);
   background: var(--protection);
   content: "";
   transform-origin: left center;
-  transition: transform 360ms cubic-bezier(0.4, 0.14, 0.3, 1);
 }
 
 .receivableLane span,
@@ -395,51 +403,81 @@
 
 .claim {
   position: absolute;
-  z-index: 2;
-  top: 10%;
-  left: 73%;
-  width: clamp(74px, 8vw, 116px);
-  height: 47%;
-  border-left: 5px solid var(--protection);
-  opacity: 0;
-  transform: translateY(-48px) scaleY(0.72);
-  transform-origin: top center;
-  transition: opacity 160ms ease-out, transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  z-index: 5;
+  top: var(--anchor-y);
+  left: var(--junction-x);
+  width: 0;
+  height: calc((var(--conditional-y) - var(--anchor-y)) + var(--conditional-shift-y));
+  transition: opacity 160ms ease-out;
 }
 
-.claim::after {
+.claim::before {
   position: absolute;
-  right: 0;
+  top: 0;
   bottom: 0;
-  left: -5px;
-  height: 28px;
+  left: 0;
+  width: var(--signal-stroke);
   background: var(--protection);
   content: "";
+  transform: scaleY(0);
+  transform-origin: top center;
+  transition: transform 300ms cubic-bezier(0.4, 0.14, 0.3, 1);
 }
 
 .claim span {
   position: absolute;
-  top: -2px;
-  left: 12px;
+  top: -12px;
+  left: 14px;
   width: max-content;
   color: var(--protection);
   font-family: var(--font-proof), monospace;
   font-size: 9px;
   letter-spacing: 0.05em;
+  opacity: 0;
   text-transform: uppercase;
+  transform: translateY(-6px);
+  transition: opacity 140ms ease-out, transform 180ms cubic-bezier(0, 0, 0.3, 1);
 }
 
-.transformation:is([data-state="conflict"], [data-state="recourse"]) .claim {
+.claimMark {
+  position: absolute;
+  bottom: 0;
+  left: calc(var(--signal-stroke) / 2);
+  width: var(--junction-size);
+  fill: var(--protection);
+  opacity: 0;
+  transform: translate(-50%, 50%) rotate(7deg) scale(0.45);
+  transform-origin: center;
+  transition:
+    fill 160ms ease-out,
+    opacity 140ms 100ms ease-out,
+    transform 220ms 100ms cubic-bezier(0, 0, 0.3, 1);
+}
+
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .claim::before {
+  transform: scaleY(1);
+}
+
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .claim span {
   opacity: 1;
-  transform: translateY(0) scaleY(1);
+  transform: translateY(0);
+}
+
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .claimMark {
+  opacity: 1;
+  transform: translate(-50%, 50%) rotate(7deg) scale(1);
+}
+
+.transformation[data-state="recourse"] .claimMark {
+  fill: var(--action-fill);
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
-  transform: translate3d(clamp(68px, 14vw, 190px), 26px, 0);
+  transform: translate3d(var(--conditional-shift-x), var(--conditional-shift-y), 0);
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane::before {
-  transform: rotate(-1.2deg) scaleX(1.15);
+  transform: none;
 }
 
 .recourseLock {
@@ -448,13 +486,13 @@
   right: 0;
   bottom: 2%;
   display: grid;
-  width: 62%;
-  grid-template-columns: 1fr 1.15fr 1.7fr;
+  width: 58.3333%;
+  grid-template-columns: 2fr 2fr 3fr;
   align-items: end;
-  background: transparent;
+  background: var(--action-fill);
   color: var(--ink);
   opacity: 0;
-  transform: translateX(48px);
+  transform: translateX(14.2857%);
   transition: opacity 180ms 130ms ease-out, transform 280ms 130ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -464,19 +502,10 @@
   align-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--action-fill);
 }
 
 .recourseLock div + div {
   border-left: 1px solid rgb(33 25 35 / 48%);
-}
-
-.recourseLock div:nth-child(2) {
-  transform: translateY(-14px);
-}
-
-.recourseLock div:nth-child(3) {
-  transform: translateY(-5px);
 }
 
 .recourseLock span {
@@ -503,7 +532,7 @@
   right: 0;
   top: 36%;
   display: grid;
-  width: min(43%, 560px);
+  width: 50%;
   min-height: 154px;
   grid-template-columns: 1fr auto;
   align-content: space-between;
@@ -513,7 +542,7 @@
   background: var(--ground);
   color: var(--ink);
   opacity: 0;
-  transform: translateX(44px);
+  transform: translateX(16.6667%);
   transition: opacity 180ms 80ms ease-out, transform 260ms 80ms cubic-bezier(0, 0, 0.3, 1);
 }
 
@@ -556,7 +585,7 @@
 
 .stateControls {
   display: grid;
-  width: min(720px, 64%);
+  width: 66.6667%;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   justify-self: end;
   border-top: 1px solid currentColor;
@@ -968,7 +997,7 @@
   }
 
   .protectionLane small {
-    animation: public-state-status 200ms 70ms cubic-bezier(0, 0, 0.3, 1) both;
+    animation: public-state-status 140ms ease-out both;
   }
 
   .heroSupport {
@@ -1068,7 +1097,7 @@
 @keyframes public-state-title {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(12px);
   }
 
   to {
@@ -1080,12 +1109,10 @@
 @keyframes public-state-status {
   from {
     opacity: 0;
-    transform: translateX(12px);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -1347,25 +1374,20 @@
   }
 
   .scene {
+    --anchor-y: 13%;
+    --conditional-y: 43%;
+    --conditional-shift-y: 16px;
+    --junction-size: 34px;
+    --signal-stroke: 3px;
     min-height: 420px;
   }
 
   .receivableLane,
   .protectionLane {
-    width: 74%;
     min-height: 96px;
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 10px 8px 12px;
-  }
-
-  .receivableLane {
-    top: 13%;
-  }
-
-  .protectionLane {
-    left: 0;
-    top: 43%;
   }
 
   .receivableLane span,
@@ -1382,43 +1404,26 @@
   }
 
   .claim {
-    top: 7%;
-    left: 76%;
-    width: 56px;
-    height: 42%;
+    width: 0;
   }
 
   .claim span {
-    left: 8px;
+    right: 10px;
+    left: auto;
     font-size: 7px;
-  }
-
-  .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
-    transform: translate3d(20vw, 18px, 0);
-  }
-
-  .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane::before {
-    transform: rotate(-1.2deg) scaleX(1.08);
+    text-align: right;
   }
 
   .recourseLock {
     bottom: 3%;
     width: 100%;
-    grid-template-columns: 0.9fr 1.1fr 1.5fr;
+    grid-template-columns: 2fr 2fr 3fr;
   }
 
   .recourseLock div {
     min-height: 72px;
     gap: 8px;
     padding: 8px;
-  }
-
-  .recourseLock div:nth-child(2) {
-    transform: translateY(-8px);
-  }
-
-  .recourseLock div:nth-child(3) {
-    transform: translateY(-3px);
   }
 
   .recourseLock span {
@@ -1431,7 +1436,7 @@
 
   .receiptNode {
     top: 34%;
-    width: 88%;
+    width: 91.6667%;
     min-height: 138px;
     padding: 16px;
   }
@@ -1619,6 +1624,9 @@
   .protectionLane,
   .protectionLane::before,
   .claim,
+  .claim::before,
+  .claim span,
+  .claimMark,
   .recourseLock,
   .receiptNode,
   .flowGraphic *,
