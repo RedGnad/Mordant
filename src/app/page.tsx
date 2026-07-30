@@ -1,24 +1,29 @@
 import type { Metadata } from "next";
-import { ProductShell } from "@/components/product-shell";
-import { TransactionDrivenExperience } from "@/components/transaction-driven-experience";
-import { TRANSACTION_DEMO_QUERY } from "@/lib/dealroom/living-demo";
+
+import { PublicExperience } from "@/components/public-experience";
+import { PROTECTION_STATES } from "@/lib/dealroom/living-demo";
+import { getLivingDemoReviewRun } from "@/lib/dealroom/living-demo-review-server";
 
 export const metadata: Metadata = {
-  title: "Deal workspace",
-  description:
-    "Monitor responsibilities, action windows, and evidence across Mordant synthetic receivable deals.",
+  title: "Recourse for tokenized receivables",
+  description: "Mordant detects conflicting claims, assigns responsibility, enforces deadlines, and retains verifiable evidence.",
 };
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ demo?: string | string[] }>;
-}) {
-  const demo = process.env.NODE_ENV !== "production"
-    && (await searchParams).demo === TRANSACTION_DEMO_QUERY;
+export default function Home() {
+  const run = getLivingDemoReviewRun();
+  const action = run.actions.find((candidate) => candidate.id === "reveal");
+
+  if (action === undefined || action.after == null || action.receipt === undefined) {
+    throw new Error("The public proof checkpoint is missing from the retained run.");
+  }
+
   return (
-    <ProductShell active="workspace" mode={demo ? "transaction-demo" : "executed-review"}>
-      <TransactionDrivenExperience surface="workspace" mode={demo ? "live" : "review"} />
-    </ProductShell>
+    <PublicExperience proof={{
+      actor: action.actorLabel,
+      action: action.title,
+      before: PROTECTION_STATES[action.before.protectionState],
+      after: PROTECTION_STATES[action.after.protectionState],
+      block: action.receipt.blockNumber,
+    }} />
   );
 }

@@ -348,6 +348,10 @@
   list-style: none;
 }
 
+.checkpointStrip[data-count="5"] ol {
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
 .checkpointStrip li {
   min-width: 0;
 }
@@ -858,6 +862,44 @@
   list-style: none;
 }
 
+.completeRun {
+  margin: 4px 0 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(243 244 239 / 38%);
+}
+
+.completeRun > p {
+  margin: 0 0 8px;
+  color: rgb(243 244 239 / 62%);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.completeRun ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.completeRun li {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid rgb(243 244 239 / 38%);
+  font-size: 11px;
+}
+
+.completeRun code {
+  flex: 0 0 auto;
+  color: rgb(243 244 239 / 72%);
+  font-family: var(--font-proof), monospace;
+}
+
 .technical {
   grid-column: 1 / 13;
   border-top: 1px solid rgb(243 244 239 / 38%);
@@ -1223,6 +1265,10 @@
   }
 
   .technical dl {
+    grid-template-columns: 1fr;
+  }
+
+  .completeRun ol {
     grid-template-columns: 1fr;
   }
 }

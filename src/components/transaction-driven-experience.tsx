@@ -26,6 +26,19 @@ const REVIEW_ENDPOINT = "/api/dealroom/living-demo?source=review";
 const POLL_INTERVAL_MS = 400;
 
 type RequestState = "idle" | "executing" | "resetting";
+type CheckpointOption = {
+  id: RecordedCheckpointId;
+  label: string;
+  actionId: string;
+};
+
+const PUBLIC_RECORDED_CHECKPOINTS: ReadonlyArray<CheckpointOption> = [
+  { id: "funding", label: "Funded", actionId: "approve-funding" },
+  { id: "reveal", label: "Conflict detected", actionId: "reveal" },
+  { id: "deadline", label: "Responsibility assigned", actionId: "cure-window" },
+  { id: "entitlement", label: "Deadline outcome", actionId: "finalize" },
+  { id: "claims", label: "Proof retained", actionId: "claim-b" },
+];
 
 async function responseBody(response: Response): Promise<LivingRunArtifact> {
   const body = await response.json() as LivingRunArtifact | { error?: string };
@@ -57,11 +70,13 @@ function RecordedCheckpointRail({
   run,
   selectedId,
   surface,
+  checkpoints,
   onSelect,
 }: {
   readonly run: LivingRunArtifact;
   readonly selectedId: RecordedCheckpointId;
   readonly surface: LivingSurface;
+  readonly checkpoints: ReadonlyArray<CheckpointOption>;
   readonly onSelect: (id: RecordedCheckpointId) => void;
 }) {
   const listRef = useRef<HTMLOListElement>(null);
@@ -78,13 +93,14 @@ function RecordedCheckpointRail({
       className={surface === "workspace" ? styles.workspaceQueue : styles.checkpointStrip}
       aria-label="Recorded run checkpoints"
       data-testid="recorded-checkpoint-rail"
+      data-count={checkpoints.length}
     >
       <header>
         <p>Recorded run</p>
-        <strong>{RECORDED_CHECKPOINTS.length} checkpoints</strong>
+        <strong>{checkpoints.length} {checkpoints === PUBLIC_RECORDED_CHECKPOINTS ? "moments" : "checkpoints"}</strong>
       </header>
       <ol ref={listRef}>
-        {RECORDED_CHECKPOINTS.map((checkpoint, index) => {
+        {checkpoints.map((checkpoint, index) => {
           const action = run.actions.find((candidate) => candidate.id === checkpoint.actionId);
           const selected = checkpoint.id === selectedId;
           return (
@@ -113,9 +129,11 @@ function RecordedCheckpointRail({
 export function TransactionDrivenExperience({
   surface,
   mode = "live",
+  timeline = "complete",
 }: {
   readonly surface: LivingSurface;
   readonly mode?: "live" | "review";
+  readonly timeline?: "complete" | "public";
 }) {
   const endpoint = mode === "review" ? REVIEW_ENDPOINT : LIVE_ENDPOINT;
   const readOnly = mode === "review";
@@ -123,7 +141,9 @@ export function TransactionDrivenExperience({
   const [error, setError] = useState<string | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [proofOpen, setProofOpen] = useState(false);
-  const [selectedCheckpointId, setSelectedCheckpointId] = useState<RecordedCheckpointId>(DEFAULT_RECORDED_CHECKPOINT_ID);
+  const defaultCheckpointId = timeline === "public" ? "funding" : DEFAULT_RECORDED_CHECKPOINT_ID;
+  const checkpoints = timeline === "public" ? PUBLIC_RECORDED_CHECKPOINTS : RECORDED_CHECKPOINTS;
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<RecordedCheckpointId>(defaultCheckpointId);
   const proofTitleRef = useRef<HTMLHeadingElement>(null);
   const proofTriggerRef = useRef<HTMLButtonElement>(null);
   const requestSequence = useRef(0);
@@ -161,12 +181,15 @@ export function TransactionDrivenExperience({
     if (!readOnly) return;
     const syncCheckpoint = () => {
       const requested = new URL(window.location.href).searchParams.get("checkpoint");
-      setSelectedCheckpointId(isRecordedCheckpointId(requested) ? requested : DEFAULT_RECORDED_CHECKPOINT_ID);
+      const requestedCheckpoint = isRecordedCheckpointId(requested) ? requested : defaultCheckpointId;
+      setSelectedCheckpointId(checkpoints.some((checkpoint) => checkpoint.id === requestedCheckpoint)
+        ? requestedCheckpoint
+        : defaultCheckpointId);
     };
     syncCheckpoint();
     window.addEventListener("popstate", syncCheckpoint);
     return () => window.removeEventListener("popstate", syncCheckpoint);
-  }, [readOnly]);
+  }, [checkpoints, defaultCheckpointId, readOnly]);
 
   const selectCheckpoint = useCallback((id: RecordedCheckpointId) => {
     setSelectedCheckpointId(id);
@@ -320,6 +343,19 @@ export function TransactionDrivenExperience({
               <ul>{receipt.events.map((event) => <li key={event}>{event}</li>)}</ul>
             </section>
           ) : null}
+          {timeline === "public" ? (
+            <section className={styles.completeRun} aria-label="Complete recorded run">
+              <p>Complete recorded run · {run.actions.filter((action) => action.receipt !== undefined).length} transactions</p>
+              <ol>
+                {run.actions.filter((action) => action.receipt !== undefined).map((action) => (
+                  <li key={action.id}>
+                    <span>{action.title}</span>
+                    <code>{compactTechnicalValue(action.receipt?.transactionHash ?? "")}</code>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
         </details>
 
         <footer className={styles.proofControls}>
@@ -357,6 +393,7 @@ export function TransactionDrivenExperience({
           run={run}
           selectedId={recordedSelection.checkpoint.id}
           surface={surface}
+          checkpoints={checkpoints}
           onSelect={selectCheckpoint}
         />
       ) : null}
@@ -368,6 +405,7 @@ export function TransactionDrivenExperience({
               run={run}
               selectedId={recordedSelection.checkpoint.id}
               surface={surface}
+              checkpoints={checkpoints}
               onSelect={selectCheckpoint}
             />
           ) : <div />}

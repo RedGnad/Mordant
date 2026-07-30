@@ -10,7 +10,7 @@ type ProductSurface = "workspace" | "deal-room" | "protocol";
 type ProductShellProps = {
   active: ProductSurface;
   children: ReactNode;
-  mode?: "transaction-demo" | "executed-review";
+  mode?: "transaction-demo" | "executed-review" | "public-demo";
 };
 
 type ShellDefinition = {
@@ -58,37 +58,55 @@ const SHELLS: Readonly<Record<ProductSurface, ShellDefinition>> = {
 
 const TRANSACTION_DEMO_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
   workspace: [
-    { href: "/?demo=transactions", label: "Workspace", current: true },
-    { href: "/deal-room?demo=transactions", label: "Participant" },
+    { href: "/workspace?demo=transactions", label: "Workspace", current: true },
+    { href: "/participant?demo=transactions", label: "Participant" },
     { href: "/protocol?demo=transactions", label: "Protocol" },
   ],
   "deal-room": [
-    { href: "/?demo=transactions", label: "Workspace" },
-    { href: "/deal-room?demo=transactions", label: "Participant", current: true },
+    { href: "/workspace?demo=transactions", label: "Workspace" },
+    { href: "/participant?demo=transactions", label: "Participant", current: true },
     { href: "/protocol?demo=transactions", label: "Protocol" },
   ],
   protocol: [
-    { href: "/?demo=transactions", label: "Workspace" },
-    { href: "/deal-room?demo=transactions", label: "Participant" },
+    { href: "/workspace?demo=transactions", label: "Workspace" },
+    { href: "/participant?demo=transactions", label: "Participant" },
     { href: "/protocol?demo=transactions", label: "Protocol", current: true },
   ],
 };
 
 const EXECUTED_REVIEW_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
   workspace: [
-    { href: "/", label: "Workspace", current: true },
-    { href: "/deal-room", label: "Participant" },
+    { href: "/workspace", label: "Workspace", current: true },
+    { href: "/participant", label: "Participant" },
     { href: "/protocol", label: "Protocol" },
   ],
   "deal-room": [
-    { href: "/", label: "Workspace" },
-    { href: "/deal-room", label: "Participant", current: true },
+    { href: "/workspace", label: "Workspace" },
+    { href: "/participant", label: "Participant", current: true },
     { href: "/protocol", label: "Protocol" },
   ],
   protocol: [
-    { href: "/", label: "Workspace" },
-    { href: "/deal-room", label: "Participant" },
+    { href: "/workspace", label: "Workspace" },
+    { href: "/participant", label: "Participant" },
     { href: "/protocol", label: "Protocol", current: true },
+  ],
+};
+
+const PUBLIC_DEMO_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
+  workspace: [
+    { href: "/demo?perspective=workspace", label: "Workspace", current: true },
+    { href: "/demo?perspective=participant", label: "Participant" },
+    { href: "/demo?perspective=protocol", label: "Protocol" },
+  ],
+  "deal-room": [
+    { href: "/demo?perspective=workspace", label: "Workspace" },
+    { href: "/demo?perspective=participant", label: "Participant", current: true },
+    { href: "/demo?perspective=protocol", label: "Protocol" },
+  ],
+  protocol: [
+    { href: "/demo?perspective=workspace", label: "Workspace" },
+    { href: "/demo?perspective=participant", label: "Participant" },
+    { href: "/demo?perspective=protocol", label: "Protocol", current: true },
   ],
 };
 
@@ -137,16 +155,17 @@ function revealHashTarget(hash: string, moveFocus = false) {
 export function ProductShell({ active, children, mode }: ProductShellProps) {
   const transactionDemo = mode === "transaction-demo";
   const executedReview = mode === "executed-review";
-  const mEx2Mode = transactionDemo || executedReview;
-  const surfacePath = active === "workspace" ? "/" : active === "deal-room" ? "/deal-room" : "/protocol";
+  const publicDemo = mode === "public-demo";
+  const mEx2Mode = transactionDemo || executedReview || publicDemo;
+  const surfacePath = active === "workspace" ? "/workspace" : active === "deal-room" ? "/participant" : "/protocol";
   const baseShell = SHELLS[active];
   const shell: ShellDefinition = mEx2Mode ? {
     ...baseShell,
     wallet: transactionDemo ? "Controlled demo signer" : "Recorded signer",
     freshness: transactionDemo ? "Receipt-derived state" : "Checkpoint selected",
-    navigation: transactionDemo
-      ? TRANSACTION_DEMO_NAVIGATION[active]
-      : EXECUTED_REVIEW_NAVIGATION[active],
+    navigation: publicDemo
+      ? PUBLIC_DEMO_NAVIGATION[active]
+      : transactionDemo ? TRANSACTION_DEMO_NAVIGATION[active] : EXECUTED_REVIEW_NAVIGATION[active],
   } : baseShell;
   const participantShell = active === "deal-room";
   const [activeHash, setActiveHash] = useState("");
@@ -207,10 +226,10 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
         <div className={`${styles.brandLockup} brand-lockup`}>
           <Link
             className="brand-link"
-            href={mEx2Mode
-              ? withCheckpoint(transactionDemo ? "/?demo=transactions" : "/", activeCheckpoint)
+            href={publicDemo ? "/" : mEx2Mode
+              ? withCheckpoint(transactionDemo ? "/workspace?demo=transactions" : "/workspace", activeCheckpoint)
               : "/"}
-            aria-label="Mordant workspace"
+            aria-label={publicDemo ? "Mordant home" : "Mordant workspace"}
           >
             <span className="brand-wordmark">Mordant</span>
             {!participantShell ? <span className="brand-caption">Receivables, with recourse</span> : null}
@@ -277,7 +296,7 @@ export function ProductShell({ active, children, mode }: ProductShellProps) {
 
       <div className={`${styles.fixture} fixture-notice`}>
         <span>
-          {mEx2Mode
+          {publicDemo || mEx2Mode
             ? "Recorded demo run · test assets · read-only"
             : participantShell ? "Synthetic · no real funds" : "Synthetic design fixture · no real funds"}
         </span>
