@@ -17,9 +17,9 @@ test("the public story stays specific and its causal control does not move", asy
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
-    name: "Exceptions become clear action.",
+    name: "Conflict becomes recourse.",
   })).toBeVisible();
-  await expect(page.getByText("Mordant establishes who acts next, by when, and retains the proof.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Mordant establishes responsibility, deadline, consequence, and proof.", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "See the transformation" })).toHaveAttribute("href", "#product");
   await expect(page.getByRole("link", { name: "Evaluate the integration" })).toHaveAttribute("href", "#integrate");
 
@@ -28,10 +28,10 @@ test("the public story stays specific and its causal control does not move", asy
   expect(renderedText).not.toContain("Continue");
 
   const states = [
-    "In flow",
-    "Change observed",
-    "Path assigned",
-    "Proof retained",
+    "Stable",
+    "Conflict",
+    "Recourse",
+    "Proof",
   ] as const;
   let anchor: { x: number; y: number; width: number; height: number } | null = null;
   const transformation = page.getByRole("navigation", { name: "Transformation states" });
@@ -54,10 +54,10 @@ test("the public story stays specific and its causal control does not move", asy
     }
   }
 
-  await transformation.getByRole("button", { name: "Change observed" }).click();
-  await expect(transformation.getByRole("button", { name: "Change observed" })).toHaveAttribute("aria-pressed", "true");
-  await transformation.getByRole("button", { name: "Proof retained" }).click();
-  await expect(transformation.getByRole("button", { name: "Proof retained" })).toHaveAttribute("aria-pressed", "true");
+  await transformation.getByRole("button", { name: "Conflict" }).click();
+  await expect(transformation.getByRole("button", { name: "Conflict" })).toHaveAttribute("aria-pressed", "true");
+  await transformation.getByRole("button", { name: "Proof" }).click();
+  await expect(transformation.getByRole("button", { name: "Proof" })).toHaveAttribute("aria-pressed", "true");
 
   await expectNoHorizontalOverflow(page);
 });

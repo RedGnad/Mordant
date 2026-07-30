@@ -146,7 +146,7 @@
 }
 
 .hero h1 span:first-child {
-  color: var(--ink);
+  color: var(--protection);
 }
 
 .hero h1 span:last-child {
@@ -163,11 +163,13 @@
 
 .heroAudience {
   position: absolute;
-  top: clamp(34px, 5vw, 68px);
+  top: 48%;
   right: clamp(20px, 2.2vw, 34px);
   margin: 0;
   color: var(--muted);
   font-size: 9px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 
 .actions {
@@ -222,32 +224,8 @@
 }
 
 .heroSeed i {
-  position: relative;
   height: 4px;
-  background: linear-gradient(90deg, var(--receivable) 0 66%, transparent 66% 100%);
-}
-
-.heroSeed i::before {
-  position: absolute;
-  top: 0;
-  left: 66%;
-  width: 28%;
-  height: 4px;
-  background: var(--action);
-  content: "";
-  transform-origin: left;
-}
-
-.heroSeed i::after {
-  position: absolute;
-  top: 50%;
-  left: calc(94% - 6px);
-  width: 12px;
-  height: 12px;
-  border: 3px solid var(--ink);
-  background: var(--ground);
-  content: "";
-  transform: translateY(-50%);
+  background: linear-gradient(90deg, var(--receivable) 0 72%, var(--protection) 72% 100%);
 }
 
 .transformation {
@@ -291,15 +269,11 @@
 }
 
 .transformationHeader span {
-  color: var(--receivable);
+  color: var(--protection);
   font-weight: 600;
 }
 
-.transformation[data-state="change"] .transformationHeader span {
-  color: var(--protection);
-}
-
-.transformation[data-state="path"] .transformationHeader span {
+.transformation[data-state="recourse"] .transformationHeader span {
   color: var(--action);
 }
 
@@ -324,8 +298,8 @@
   line-height: 0.86;
 }
 
-.transformationTitle h2 span {
-  display: block;
+.transformation[data-state="conflict"] .transformationTitle h2 {
+  color: var(--protection);
 }
 
 .transformationTitle p {
@@ -369,7 +343,7 @@
 .protectionLane {
   z-index: 3;
   top: 52%;
-  border-color: var(--action);
+  border-color: var(--protection);
   transition: transform 360ms cubic-bezier(0.4, 0.14, 0.3, 1), background-color 180ms ease-out, opacity 180ms ease-out;
 }
 
@@ -405,21 +379,20 @@
   left: 71%;
   width: clamp(74px, 8vw, 116px);
   height: 47%;
-  border-left: 3px solid var(--protection);
+  border-left: 5px solid var(--protection);
   opacity: 0;
   transform: translateY(-54px);
-  transition: border-color 180ms ease-out, opacity 160ms ease-out, transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  transition: opacity 160ms ease-out, transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
 }
 
 .claim::after {
   position: absolute;
+  right: 0;
   bottom: 0;
-  left: -3px;
-  width: 24px;
-  height: 12px;
+  left: -5px;
+  height: 28px;
   background: var(--protection);
   content: "";
-  transition: background-color 180ms ease-out;
 }
 
 .claim span {
@@ -427,29 +400,20 @@
   top: -2px;
   left: 12px;
   width: max-content;
-  color: var(--muted);
+  color: var(--protection);
   font-family: var(--font-proof), monospace;
   font-size: 9px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.transformation:is([data-state="change"], [data-state="path"]) .claim {
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .claim {
   opacity: 1;
   transform: translateY(0);
 }
 
-.transformation[data-state="change"] .protectionLane {
-  transform: translate(11vw, 30px);
-}
-
-.transformation[data-state="path"] .claim {
-  border-color: var(--action);
-  opacity: 0.34;
-}
-
-.transformation[data-state="path"] .claim::after {
-  background: var(--action);
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
+  transform: translate(11vw, 30px) rotate(-1.1deg);
 }
 
 .recourseLock {
@@ -492,7 +456,7 @@
   line-height: 1.15;
 }
 
-.transformation[data-state="path"] .recourseLock {
+.transformation[data-state="recourse"] .recourseLock {
   opacity: 1;
   transform: translateY(0);
 }
@@ -586,7 +550,11 @@
   color: var(--ground);
 }
 
-.transformation:is([data-state="change"], [data-state="path"]) .stateControls button[aria-pressed="true"] {
+.transformation[data-state="conflict"] .stateControls button[aria-pressed="true"] {
+  background: var(--protection);
+}
+
+.transformation[data-state="recourse"] .stateControls button[aria-pressed="true"] {
   background: var(--action);
   color: var(--ink);
 }
@@ -803,18 +771,6 @@
     animation-delay: 55ms;
   }
 
-  .heroSeed i::before {
-    animation: public-path-lock 520ms 360ms cubic-bezier(0, 0, 0.3, 1) both;
-  }
-
-  .heroSeed i::after {
-    animation: public-node-lock 360ms 700ms cubic-bezier(0, 0, 0.3, 1) both;
-  }
-
-  .transformationTitle h2 span {
-    animation: public-state-copy 220ms cubic-bezier(0, 0, 0.3, 1) both;
-  }
-
   .page[data-motion-ready="true"] [data-reveal]:not([data-visible="true"]) {
     opacity: 0;
     transform: translateY(16px);
@@ -824,42 +780,6 @@
     opacity: 1;
     transform: translateY(0);
     transition: opacity 240ms ease-out, transform 240ms ease-out;
-  }
-}
-
-@keyframes public-path-lock {
-  from {
-    opacity: 0.2;
-    transform: scaleX(0.08) translateX(24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: scaleX(1) translateX(0);
-  }
-}
-
-@keyframes public-node-lock {
-  from {
-    opacity: 0;
-    transform: translate(18px, -50%);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(0, -50%);
-  }
-}
-
-@keyframes public-state-copy {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -927,15 +847,12 @@
 
   .hero h1 {
     margin: 38px 0 30px;
-    font-size: clamp(56px, 15vw, 64px);
+    font-size: clamp(58px, 16.3vw, 68px);
     line-height: 0.83;
   }
 
-  .hero h1 span {
-    width: 100%;
-  }
-
   .hero h1 span:last-child {
+    width: min-content;
     margin-top: 8px;
     margin-left: 0;
   }
@@ -950,6 +867,8 @@
     order: 4;
     margin-top: 18px;
     font-size: 8px;
+    writing-mode: initial;
+    transform: none;
   }
 
   .actions {
@@ -1042,8 +961,8 @@
     font-size: 7px;
   }
 
-  .transformation[data-state="change"] .protectionLane {
-    transform: translate(22%, 20px);
+  .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
+    transform: translate(22%, 20px) rotate(-1.2deg);
   }
 
   .recourseLock {
