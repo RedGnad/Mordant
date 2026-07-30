@@ -26,6 +26,7 @@ const REVIEW_ENDPOINT = "/api/dealroom/living-demo?source=review";
 const POLL_INTERVAL_MS = 400;
 
 type RequestState = "idle" | "executing" | "resetting";
+type CheckpointMotion = "idle" | "out-forward" | "out-backward" | "in-forward" | "in-backward";
 type CheckpointOption = {
   id: RecordedCheckpointId;
   label: string;
@@ -39,6 +40,8 @@ const PUBLIC_RECORDED_CHECKPOINTS: ReadonlyArray<CheckpointOption> = [
   { id: "entitlement", label: "Deadline outcome", actionId: "finalize" },
   { id: "claims", label: "Proof retained", actionId: "claim-b" },
 ];
+
+let retainedReviewRun: LivingRunArtifact | null = null;
 
 async function responseBody(response: Response): Promise<LivingRunArtifact> {
   const body = await response.json() as LivingRunArtifact | { error?: string };
@@ -130,22 +133,28 @@ export function TransactionDrivenExperience({
   surface,
   mode = "live",
   timeline = "complete",
+  initialCheckpoint,
 }: {
   readonly surface: LivingSurface;
   readonly mode?: "live" | "review";
   readonly timeline?: "complete" | "public";
+  readonly initialCheckpoint?: RecordedCheckpointId;
 }) {
   const endpoint = mode === "review" ? REVIEW_ENDPOINT : LIVE_ENDPOINT;
   const readOnly = mode === "review";
-  const [run, setRun] = useState<LivingRunArtifact | null>(null);
+  const [run, setRun] = useState<LivingRunArtifact | null>(() => readOnly ? retainedReviewRun : null);
   const [error, setError] = useState<string | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [proofOpen, setProofOpen] = useState(false);
+  const [proofClosing, setProofClosing] = useState(false);
+  const [checkpointMotion, setCheckpointMotion] = useState<CheckpointMotion>("idle");
   const defaultCheckpointId = timeline === "public" ? "funding" : DEFAULT_RECORDED_CHECKPOINT_ID;
   const checkpoints = timeline === "public" ? PUBLIC_RECORDED_CHECKPOINTS : RECORDED_CHECKPOINTS;
-  const [selectedCheckpointId, setSelectedCheckpointId] = useState<RecordedCheckpointId>(defaultCheckpointId);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState<RecordedCheckpointId>(initialCheckpoint ?? defaultCheckpointId);
   const proofTitleRef = useRef<HTMLHeadingElement>(null);
   const proofTriggerRef = useRef<HTMLButtonElement>(null);
+  const checkpointTimerRef = useRef<number | null>(null);
+  const proofTimerRef = useRef<number | null>(null);
   const requestSequence = useRef(0);
 
   const refresh = useCallback(async (quiet = false) => {
@@ -155,6 +164,7 @@ export function TransactionDrivenExperience({
       const response = await fetch(endpoint, { cache: "no-store" });
       const next = await responseBody(response);
       if (requestSequence.current === sequence) {
+        if (readOnly) retainedReviewRun = next;
         setRun(next);
         setError(null);
       }
@@ -163,7 +173,7 @@ export function TransactionDrivenExperience({
         setError(nextError instanceof Error ? nextError.message : "Unknown controlled run error");
       }
     }
-  }, [endpoint]);
+  }, [endpoint, readOnly]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
@@ -173,6 +183,8 @@ export function TransactionDrivenExperience({
     return () => {
       window.clearTimeout(initial);
       if (interval !== undefined) window.clearInterval(interval);
+      if (checkpointTimerRef.current !== null) window.clearTimeout(checkpointTimerRef.current);
+      if (proofTimerRef.current !== null) window.clearTimeout(proofTimerRef.current);
       requestSequence.current += 1;
     };
   }, [readOnly, refresh]);
@@ -191,7 +203,7 @@ export function TransactionDrivenExperience({
     return () => window.removeEventListener("popstate", syncCheckpoint);
   }, [checkpoints, defaultCheckpointId, readOnly]);
 
-  const selectCheckpoint = useCallback((id: RecordedCheckpointId) => {
+  const commitCheckpoint = useCallback((id: RecordedCheckpointId) => {
     setSelectedCheckpointId(id);
     setProofOpen(false);
     const url = new URL(window.location.href);
@@ -199,6 +211,26 @@ export function TransactionDrivenExperience({
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new CustomEvent("mordant-checkpoint-change", { detail: { id } }));
   }, []);
+
+  const selectCheckpoint = useCallback((id: RecordedCheckpointId) => {
+    if (id === selectedCheckpointId || checkpointMotion !== "idle") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      commitCheckpoint(id);
+      return;
+    }
+
+    const currentIndex = checkpoints.findIndex((checkpoint) => checkpoint.id === selectedCheckpointId);
+    const nextIndex = checkpoints.findIndex((checkpoint) => checkpoint.id === id);
+    const direction = nextIndex >= currentIndex ? "forward" : "backward";
+    setCheckpointMotion(`out-${direction}`);
+    checkpointTimerRef.current = window.setTimeout(() => {
+      commitCheckpoint(id);
+      setCheckpointMotion(`in-${direction}`);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => setCheckpointMotion("idle"));
+      });
+    }, 100);
+  }, [checkpointMotion, checkpoints, commitCheckpoint, selectedCheckpointId]);
 
   const mutate = useCallback(async (body: object, state: RequestState) => {
     requestSequence.current += 1;
@@ -224,11 +256,26 @@ export function TransactionDrivenExperience({
     }
   }, [endpoint, refresh]);
 
-  const closeProof = useCallback(() => {
+  const finishProofClose = useCallback(() => {
+    setProofClosing(false);
     setProofOpen(false);
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => proofTriggerRef.current?.focus({ preventScroll: true }));
     });
+  }, []);
+
+  const closeProof = useCallback(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishProofClose();
+      return;
+    }
+    setProofClosing(true);
+    proofTimerRef.current = window.setTimeout(finishProofClose, 180);
+  }, [finishProofClose]);
+
+  const openProof = useCallback(() => {
+    setProofClosing(false);
+    setProofOpen(true);
   }, []);
 
   useEffect(() => {
@@ -284,6 +331,7 @@ export function TransactionDrivenExperience({
       <section
         className={styles.proof}
         data-testid="living-proof"
+        data-closing={proofClosing ? "true" : "false"}
         data-deal-id={run.deal.id}
         aria-labelledby="living-proof-title"
       >
@@ -376,7 +424,9 @@ export function TransactionDrivenExperience({
       data-source={run.source.kind}
       data-status={displayedRun.status}
       data-checkpoint={recordedSelection?.checkpoint.id}
+      data-checkpoint-motion={checkpointMotion}
       data-execution-mode={mode}
+      data-timeline={timeline}
       data-abnormal={view.abnormal ? "true" : "false"}
       data-resolved={view.resolved ? "true" : "false"}
     >
@@ -440,7 +490,7 @@ export function TransactionDrivenExperience({
                 ref={proofTriggerRef}
                 className={styles.proofLink}
                 disabled={proofAction === null}
-                onClick={() => setProofOpen(true)}
+                onClick={openProof}
               >
                 {proofButtonLabel}
               </button>
@@ -475,7 +525,7 @@ export function TransactionDrivenExperience({
             <span>{view.consequence}</span>
             <em>Your current status · {view.safeAction}</em>
             {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={() => setProofOpen(true)}>
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>
                 {proofButtonLabel}
               </button>
             ) : null}
@@ -512,7 +562,7 @@ export function TransactionDrivenExperience({
           <footer className={styles.protocolProofControl}>
             <p><strong>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</strong><span>Before → action → after</span></p>
             {readOnly ? (
-              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={() => setProofOpen(true)}>
+              <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>
                 {proofButtonLabel}
               </button>
             ) : null}
@@ -552,7 +602,7 @@ export function TransactionDrivenExperience({
             type="button"
             ref={proofTriggerRef}
             disabled={proofAction === null}
-            onClick={() => setProofOpen(true)}
+            onClick={openProof}
           >
             Open receipt proof
           </button>

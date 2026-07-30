@@ -14,6 +14,102 @@
   padding: clamp(18px, 2.4vw, 34px) clamp(16px, 3vw, 44px) 22px;
 }
 
+.experience :is(
+  .workspaceFocus,
+  .workspaceDecision,
+  .participantScene .truth,
+  .participantScene .economics,
+  .participantScene .responsibility,
+  .protocolTruth,
+  .protocolDiagnosis,
+  .protocolProofControl
+) {
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.experience[data-checkpoint-motion="out-forward"] :is(
+  .workspaceFocus,
+  .workspaceDecision,
+  .participantScene .truth,
+  .participantScene .economics,
+  .participantScene .responsibility,
+  .protocolTruth,
+  .protocolDiagnosis,
+  .protocolProofControl
+) {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.experience[data-checkpoint-motion="out-backward"] :is(
+  .workspaceFocus,
+  .workspaceDecision,
+  .participantScene .truth,
+  .participantScene .economics,
+  .participantScene .responsibility,
+  .protocolTruth,
+  .protocolDiagnosis,
+  .protocolProofControl
+) {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.experience[data-checkpoint-motion="in-forward"] :is(
+  .workspaceFocus,
+  .workspaceDecision,
+  .participantScene .truth,
+  .participantScene .economics,
+  .participantScene .responsibility,
+  .protocolTruth,
+  .protocolDiagnosis,
+  .protocolProofControl
+) {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.experience[data-checkpoint-motion="in-backward"] :is(
+  .workspaceFocus,
+  .workspaceDecision,
+  .participantScene .truth,
+  .participantScene .economics,
+  .participantScene .responsibility,
+  .protocolTruth,
+  .protocolDiagnosis,
+  .protocolProofControl
+) {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .experience[data-timeline="public"] :is(
+    .workspaceFocus > p,
+    .workspaceFocus > h1,
+    .workspaceDecision,
+    .participantScene .truth,
+    .participantScene .responsibility,
+    .protocolTruth,
+    .protocolDiagnosis,
+    .protocolProofControl
+  ) {
+    animation: perspective-hierarchy-in 220ms ease-out both;
+  }
+}
+
+@keyframes perspective-hierarchy-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .runContext {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -733,6 +829,34 @@
   padding: clamp(28px, 5vw, 68px) clamp(16px, 4vw, 58px) 28px;
   background: var(--nws-proof);
   color: var(--nws-ground);
+  animation: proof-background-in 240ms ease-out both;
+}
+
+.proof > * {
+  animation: proof-content-in 180ms 60ms ease-out both;
+}
+
+.proof[data-closing="true"] {
+  opacity: 0;
+  animation: none;
+  transition: opacity 180ms ease-in;
+}
+
+@keyframes proof-background-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes proof-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .proofLead {
@@ -1270,5 +1394,23 @@
 
   .completeRun ol {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience :is(
+    .workspaceFocus,
+    .workspaceDecision,
+    .participantScene .truth,
+    .participantScene .economics,
+    .participantScene .responsibility,
+    .protocolTruth,
+    .protocolDiagnosis,
+    .protocolProofControl
+  ),
+  .proof,
+  .proof > * {
+    animation: none !important;
+    transition: none !important;
   }
 }

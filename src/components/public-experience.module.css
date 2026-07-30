@@ -124,6 +124,41 @@
   line-height: 1.45;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .hero > p:first-child,
+  .hero h1 {
+    animation: public-hero-in 320ms ease-out both;
+  }
+
+  .hero > p:nth-of-type(2),
+  .hero .actions {
+    animation: public-hero-in 320ms 70ms ease-out both;
+  }
+
+  .page[data-motion-ready="true"] [data-reveal]:not([data-visible="true"]) {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  .page[data-motion-ready="true"] [data-reveal][data-visible="true"] {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 240ms ease-out, transform 240ms ease-out;
+  }
+}
+
+@keyframes public-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -239,10 +274,42 @@
 
 .protection {
   border-color: var(--protection);
+  transition: transform 260ms ease-out;
 }
 
 .scene[data-displaced="true"] .protection {
-  transform: translateY(54px);
+  transform: translateY(26px);
+}
+
+.sceneStatus {
+  display: grid;
+  min-height: 34px;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 180ms 260ms ease-out, transform 180ms 260ms ease-out;
+}
+
+.sceneStatus[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sceneStatus span,
+.sceneStatus time {
+  color: var(--ink);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.sceneStatus time {
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.sceneStatus time[data-visible="true"] {
+  opacity: 1;
 }
 
 .sceneCopy {
@@ -561,7 +628,7 @@
   }
 
   .scene[data-displaced="true"] .protection {
-    transform: translateY(42px);
+    transform: translateY(24px);
   }
 
   .sceneCopy {
@@ -656,5 +723,16 @@
     align-items: flex-start;
     flex-direction: column;
     justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero > *,
+  .page [data-reveal],
+  .protection,
+  .sceneStatus,
+  .sceneStatus time {
+    animation: none !important;
+    transition: none !important;
   }
 }

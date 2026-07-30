@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./public-experience.module.css";
 
@@ -43,10 +43,33 @@ const TRANSFORMATION = [
 
 export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [step, setStep] = useState(0);
+  const pageRef = useRef<HTMLDivElement>(null);
   const moment = TRANSFORMATION[step];
 
+  useEffect(() => {
+    const page = pageRef.current;
+    if (page === null) return;
+    const chapters = Array.from(page.querySelectorAll<HTMLElement>("[data-reveal]"));
+    page.dataset.motionReady = "true";
+
+    if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      chapters.forEach((chapter) => { chapter.dataset.visible = "true"; });
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        (entry.target as HTMLElement).dataset.visible = "true";
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "0px 0px -12%", threshold: 0.08 });
+    chapters.forEach((chapter) => observer.observe(chapter));
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
       <header className={styles.header}>
         <Link className={styles.brand} href="/">Mordant</Link>
@@ -68,17 +91,21 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
         </section>
 
-        <section className={styles.gap} id="problem" aria-labelledby="gap-title">
+        <section className={styles.gap} id="problem" aria-labelledby="gap-title" data-reveal>
           <p>01 · The gap</p>
           <h2 id="gap-title">Tokenization records who owns an asset. It does not decide what happens when obligations conflict.</h2>
         </section>
 
-        <section className={styles.transformation} id="product" aria-labelledby="transformation-title">
+        <section className={styles.transformation} id="product" aria-labelledby="transformation-title" data-reveal>
           <header>
             <p>02 · The transformation</p>
             <span>{String(step + 1).padStart(2, "0")} / 05</span>
           </header>
-          <div className={styles.scene} data-displaced={step > 0 ? "true" : "false"}>
+          <div
+            className={styles.scene}
+            data-displaced={step > 0 && step < TRANSFORMATION.length - 1 ? "true" : "false"}
+            data-resolved={step === TRANSFORMATION.length - 1 ? "true" : "false"}
+          >
             <article className={styles.receivable}>
               <span>Stable anchor</span>
               <strong>Receivable</strong>
@@ -88,6 +115,10 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <span>Conditional domain</span>
               <strong>Protection</strong>
               <small>{moment.label}</small>
+              <div className={styles.sceneStatus} data-visible={step >= 2 && step < TRANSFORMATION.length - 1 ? "true" : "false"}>
+                <span>Responsible party identified</span>
+                <time data-visible={step >= 3 ? "true" : "false"}>Deadline established</time>
+              </div>
             </article>
           </div>
           <div className={styles.sceneCopy} aria-live="polite">
@@ -101,7 +132,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
         </section>
 
-        <section className={styles.value} aria-labelledby="value-title">
+        <section className={styles.value} aria-labelledby="value-title" data-reveal>
           <header>
             <p>03 · The value</p>
             <h2 id="value-title">Conflict becomes an operational path.</h2>
@@ -113,7 +144,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
         </section>
 
-        <section className={styles.integration} id="integrate" aria-labelledby="integration-title">
+        <section className={styles.integration} id="integrate" aria-labelledby="integration-title" data-reveal>
           <header>
             <p>04 · Built to integrate</p>
             <h2 id="integration-title">A policy and recourse layer between asset state and action.</h2>
@@ -150,7 +181,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           <Link className={styles.secondary} href="/workspace">View the product surfaces</Link>
         </section>
 
-        <section className={styles.proof} aria-labelledby="proof-title">
+        <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
           <header>
             <p>05 · Proof</p>
             <h2 id="proof-title">One receipt. One verifiable transition.</h2>
