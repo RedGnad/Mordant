@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	fhe "mordant.dev/fhe-lab/lattigo"
@@ -24,6 +26,18 @@ const (
 	publicValidUntil     = uint64(2_000_000_300)
 	publicCureDeadline   = uint64(2_000_003_600)
 )
+
+var errInvalidWorkflowTarget = errors.New("invalid public workflow target")
+
+type workflowConfig struct {
+	Target       synthetic.PublicTarget
+	Now          uint64
+	Nonce        uint64
+	ValidUntil   uint64
+	CureDeadline uint64
+	SessionID    [32]byte
+	Label        string
+}
 
 type providerOutput struct {
 	SchemaVersion string              `json:"schemaVersion"`
@@ -79,6 +93,10 @@ func main() {
 }
 
 func run() error {
+	config, err := parseConfig()
+	if err != nil {
+		return err
+	}
 	runtime, _, err := fhe.NewRuntime()
 	if err != nil {
 		return err
@@ -92,23 +110,25 @@ func run() error {
 		return err
 	}
 
-	now := time.Unix(2_000_000_000, 0)
+	now := time.Unix(int64(config.Now), 0)
 	issuerPublicKey, issuerPrivateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return err
 	}
-	if _, err := runtime.RegisterEnrollmentIssuer(issuerPublicKey, now.Add(-time.Hour), now.Add(2*time.Hour)); err != nil {
+	if _, err := runtime.RegisterEnrollmentIssuer(
+		issuerPublicKey, now.Add(-time.Hour), time.Unix(int64(config.ValidUntil), 0),
+	); err != nil {
 		return err
 	}
 	mode := fhe.IdentityPublicCommitment
-	a, b, err := synthetic.Pair(runtime, "workflow", mode)
+	a, b, err := synthetic.PairForTarget(runtime, config.Label, mode, config.Target)
 	if err != nil {
 		return err
 	}
-	contextA := synthetic.InputContext(0, 101)
-	contextB := synthetic.InputContext(1, 102)
-	claimA := synthetic.AuthorizationClaim("a-workflow-external", 101)
-	claimB := synthetic.AuthorizationClaim("b-workflow-external", 102)
+	contextA := synthetic.InputContextForTarget(config.Target, 0, config.Nonce*2+1)
+	contextB := synthetic.InputContextForTarget(config.Target, 1, config.Nonce*2+2)
+	claimA := synthetic.AuthorizationClaimForTarget(config.Target, "a-"+config.Label, config.Nonce*2+1)
+	claimB := synthetic.AuthorizationClaimForTarget(config.Target, "b-"+config.Label, config.Nonce*2+2)
 	a.AuthorizationCommitment, err = client.SubmitterAuthorizationCommitment(claimA)
 	if err != nil {
 		return err
@@ -127,14 +147,14 @@ func run() error {
 	}
 	enrollmentA, err := fhe.SignCiphertextEnrollment(
 		client, encA, mode, contextA, claimA, now.Add(-time.Second),
-		time.Unix(int64(publicValidUntil), 0), sha256.Sum256([]byte("workflow-enrollment-a")), issuerPrivateKey,
+		time.Unix(int64(config.ValidUntil), 0), sha256.Sum256(append(config.SessionID[:], []byte("enrollment-a")...)), issuerPrivateKey,
 	)
 	if err != nil {
 		return err
 	}
 	enrollmentB, err := fhe.SignCiphertextEnrollment(
 		client, encB, mode, contextB, claimB, now.Add(-time.Second),
-		time.Unix(int64(publicValidUntil), 0), sha256.Sum256([]byte("workflow-enrollment-b")), issuerPrivateKey,
+		time.Unix(int64(config.ValidUntil), 0), sha256.Sum256(append(config.SessionID[:], []byte("enrollment-b")...)), issuerPrivateKey,
 	)
 	if err != nil {
 		return err
@@ -150,12 +170,12 @@ func run() error {
 		return err
 	}
 	var requestNonce [32]byte
-	binary.BigEndian.PutUint64(requestNonce[24:], publicNonce)
+	binary.BigEndian.PutUint64(requestNonce[24:], config.Nonce)
 	request := fhe.EvaluationRequest{
 		KeyID:         runtime.KeyID(),
-		PolicyVersion: fhe.PolicyVersion,
+		PolicyVersion: config.Target.PolicyVersion,
 		Nonce:         requestNonce,
-		ValidUntil:    time.Unix(int64(publicValidUntil), 0),
+		ValidUntil:    time.Unix(int64(config.ValidUntil), 0),
 		IdentityMode:  mode,
 		A:             encA,
 		B:             encB,
@@ -188,17 +208,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	thresholdSessionID := sha256.Sum256([]byte("mordant-controlled-threshold-session-v1"))
 	descriptor := fhe.ReleaseDescriptor{
-		SessionID:                  thresholdSessionID,
+		SessionID:                  config.SessionID,
 		KeyID:                      runtime.KeyIDBytes(),
 		ParameterFingerprint:       runtime.ParameterFingerprint(),
-		PolicyID:                   synthetic.PolicyID,
-		PolicyVersion:              fhe.PolicyVersion,
+		PolicyID:                   config.Target.PolicyID,
+		PolicyVersion:              config.Target.PolicyVersion,
 		InputCommitmentA:           inputA,
 		InputCommitmentB:           inputB,
-		ResultNonce:                fhe.Uint256{0, 0, 0, publicNonce},
-		ValidUntil:                 publicValidUntil,
+		ResultNonce:                fhe.Uint256{0, 0, 0, config.Nonce},
+		ValidUntil:                 config.ValidUntil,
 		ResultCiphertextCommitment: decision.ResultCiphertextCommitment,
 		ProtocolBinding:            protocolBinding,
 		Coalition: [2]uint64{
@@ -232,14 +251,14 @@ func run() error {
 	cureDeadline := uint64(0)
 	if confirmed {
 		role = synthetic.Role
-		cureDeadline = publicCureDeadline
+		cureDeadline = config.CureDeadline
 	}
 	thresholdKeyCommitment, err := fhe.ThresholdKeyCommitment(manifest)
 	if err != nil {
 		return err
 	}
 	policyCircuitCommitment, err := fhe.PolicyCircuitCommitment(
-		runtime.ParameterFingerprint(), synthetic.PolicyID, fhe.PolicyVersion,
+		runtime.ParameterFingerprint(), config.Target.PolicyID, config.Target.PolicyVersion,
 	)
 	if err != nil {
 		return err
@@ -247,7 +266,7 @@ func run() error {
 	proof := fhe.ProviderProof{
 		ResultCiphertextCommitment:    decision.ResultCiphertextCommitment,
 		ThresholdTranscriptCommitment: thresholdTranscriptCommitment,
-		ThresholdSessionID:            thresholdSessionID,
+		ThresholdSessionID:            config.SessionID,
 		ThresholdKeyCommitment:        thresholdKeyCommitment,
 		PolicyCircuitCommitment:       policyCircuitCommitment,
 	}
@@ -256,17 +275,17 @@ func run() error {
 		return err
 	}
 	core := fhe.PublicPolicyResultCore{
-		ChainID:                 fhe.Uint256{0, 0, 0, synthetic.ChainID},
-		Vault:                   synthetic.Vault,
-		PolicyID:                synthetic.PolicyID,
-		PolicyVersion:           fhe.PolicyVersion,
+		ChainID:                 fhe.Uint256{0, 0, 0, config.Target.ChainID},
+		Vault:                   config.Target.Vault,
+		PolicyID:                config.Target.PolicyID,
+		PolicyVersion:           config.Target.PolicyVersion,
 		InputCommitmentA:        inputA,
 		InputCommitmentB:        inputB,
 		ConflictConfirmed:       confirmed,
 		ResponsibleRole:         role,
 		CureDeadline:            cureDeadline,
-		Nonce:                   fhe.Uint256{0, 0, 0, publicNonce},
-		ValidUntil:              publicValidUntil,
+		Nonce:                   fhe.Uint256{0, 0, 0, config.Nonce},
+		ValidUntil:              config.ValidUntil,
 		ProviderProofCommitment: providerProofCommitment,
 	}
 	resultCommitment, err := fhe.ResultCommitment(core)
@@ -278,17 +297,17 @@ func run() error {
 		OK:            true,
 		Result: publicResult{
 			SchemaVersion:           resultSchema,
-			ChainID:                 fmt.Sprint(synthetic.ChainID),
-			Vault:                   hex20(synthetic.Vault),
-			PolicyID:                hex32(synthetic.PolicyID),
-			PolicyVersion:           fmt.Sprint(fhe.PolicyVersion),
+			ChainID:                 fmt.Sprint(config.Target.ChainID),
+			Vault:                   hex20(config.Target.Vault),
+			PolicyID:                hex32(config.Target.PolicyID),
+			PolicyVersion:           fmt.Sprint(config.Target.PolicyVersion),
 			InputCommitmentA:        hex32(inputA),
 			InputCommitmentB:        hex32(inputB),
 			ConflictConfirmed:       confirmed,
 			ResponsibleRole:         hex32(role),
 			CureDeadline:            fmt.Sprint(cureDeadline),
-			Nonce:                   fmt.Sprint(publicNonce),
-			ValidUntil:              fmt.Sprint(publicValidUntil),
+			Nonce:                   fmt.Sprint(config.Nonce),
+			ValidUntil:              fmt.Sprint(config.ValidUntil),
 			ProviderProofCommitment: hex32(providerProofCommitment),
 			ResultCommitment:        hex32(resultCommitment),
 		},
@@ -303,6 +322,58 @@ func run() error {
 		},
 	}
 	return json.NewEncoder(os.Stdout).Encode(output)
+}
+
+func parseConfig() (workflowConfig, error) {
+	defaultTarget := synthetic.DefaultPublicTarget()
+	chainID := flag.Uint64("chain-id", defaultTarget.ChainID, "public EVM chain ID")
+	vault := flag.String("vault", hex20(defaultTarget.Vault), "public synthetic vault anchor")
+	nonce := flag.Uint64("nonce", publicNonce, "public result nonce")
+	validUntil := flag.Uint64("valid-until", publicValidUntil, "public result expiry as Unix seconds")
+	now := flag.Uint64("now", 2_000_000_000, "evaluation time as Unix seconds")
+	cureDeadline := flag.Uint64("cure-deadline", publicCureDeadline, "public cure deadline as Unix seconds")
+	fresh := flag.Bool("fresh", false, "generate a fresh threshold session identifier")
+	flag.Parse()
+
+	parsedVault, err := parseHex20(*vault)
+	if err != nil || *chainID == 0 || *nonce == 0 || *now == 0 || *validUntil <= *now || *cureDeadline == 0 {
+		return workflowConfig{}, errInvalidWorkflowTarget
+	}
+	if *validUntil > uint64(^uint64(0)>>1) || *now > uint64(^uint64(0)>>1) {
+		return workflowConfig{}, errInvalidWorkflowTarget
+	}
+
+	config := workflowConfig{
+		Target: synthetic.PublicTarget{
+			ChainID:             *chainID,
+			Vault:               parsedVault,
+			PolicyID:            defaultTarget.PolicyID,
+			PolicyVersion:       defaultTarget.PolicyVersion,
+			AuthorizationExpiry: *validUntil,
+		},
+		Now:          *now,
+		Nonce:        *nonce,
+		ValidUntil:   *validUntil,
+		CureDeadline: *cureDeadline,
+		SessionID:    sha256.Sum256([]byte("mordant-controlled-threshold-session-v1")),
+		Label:        "workflow",
+	}
+	if *fresh {
+		if _, err := rand.Read(config.SessionID[:]); err != nil {
+			return workflowConfig{}, err
+		}
+		config.Label = "fresh-" + hex.EncodeToString(config.SessionID[:8])
+	}
+	return config, nil
+}
+
+func parseHex20(value string) (out [20]byte, err error) {
+	decoded, err := hex.DecodeString(strings.TrimPrefix(value, "0x"))
+	if err != nil || len(decoded) != len(out) {
+		return [20]byte{}, errInvalidWorkflowTarget
+	}
+	copy(out[:], decoded)
+	return out, nil
 }
 
 func errorCode(err error) string {

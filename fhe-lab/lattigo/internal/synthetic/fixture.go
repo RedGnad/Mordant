@@ -21,20 +21,47 @@ var (
 	Role     = keccakLabel("mordant.role.facility.v1")
 )
 
+// PublicTarget is the public chain context bound into the encrypted inputs and the emitted
+// result. It intentionally contains no pledge values, ciphertexts, shares, or credentials.
+type PublicTarget struct {
+	ChainID             uint64
+	Vault               [20]byte
+	PolicyID            [32]byte
+	PolicyVersion       uint32
+	AuthorizationExpiry uint64
+}
+
+func DefaultPublicTarget() PublicTarget {
+	return PublicTarget{
+		ChainID:             ChainID,
+		Vault:               Vault,
+		PolicyID:            PolicyID,
+		PolicyVersion:       fhe.PolicyVersion,
+		AuthorizationExpiry: AuthorizationExpiry,
+	}
+}
+
 // Pair materializes synthetic private values in client-process memory only.
 // Callers must never include these PlainPledge values in output or logs.
 func Pair(runtime *fhe.Runtime, label string, mode fhe.IdentityMode) (fhe.PlainPledge, fhe.PlainPledge, error) {
+	return PairForTarget(runtime, label, mode, DefaultPublicTarget())
+}
+
+// PairForTarget keeps the private synthetic fixtures inside the client process while binding their
+// public receivable link to the caller-selected test target. It is used only by the bounded testnet
+// acceptance runner; the default vectors above remain unchanged.
+func PairForTarget(runtime *fhe.Runtime, label string, mode fhe.IdentityMode, target PublicTarget) (fhe.PlainPledge, fhe.PlainPledge, error) {
 	invoiceID := sha256.Sum256([]byte("synthetic-invoice-id"))
-	link := fhe.ReceivableLinkCommitment(Vault, fhe.PolicyVersion, invoiceID, sha256.Sum256([]byte("synthetic-link-salt")))
+	link := fhe.ReceivableLinkCommitment(target.Vault, target.PolicyVersion, invoiceID, sha256.Sum256([]byte("synthetic-link-salt")))
 	if mode == fhe.IdentityFullFHE256 {
 		link = [32]byte{}
 	}
 
-	authA, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaim("a-"+label, 101))
+	authA, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaimForTarget(target, "a-"+label, 101))
 	if err != nil {
 		return fhe.PlainPledge{}, fhe.PlainPledge{}, err
 	}
-	authB, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaim("b-"+label, 102))
+	authB, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaimForTarget(target, "b-"+label, 102))
 	if err != nil {
 		return fhe.PlainPledge{}, fhe.PlainPledge{}, err
 	}
@@ -74,11 +101,15 @@ func GrantPair(runtime *fhe.Runtime, a, b fhe.PlainPledge) error {
 }
 
 func InputContext(slot uint8, clientNonce uint64) fhe.InputCommitmentContext {
+	return InputContextForTarget(DefaultPublicTarget(), slot, clientNonce)
+}
+
+func InputContextForTarget(target PublicTarget, slot uint8, clientNonce uint64) fhe.InputCommitmentContext {
 	return fhe.InputCommitmentContext{
-		ChainID:       fhe.Uint256{0, 0, 0, ChainID},
-		Vault:         Vault,
-		PolicyID:      PolicyID,
-		PolicyVersion: fhe.PolicyVersion,
+		ChainID:       fhe.Uint256{0, 0, 0, target.ChainID},
+		Vault:         target.Vault,
+		PolicyID:      target.PolicyID,
+		PolicyVersion: target.PolicyVersion,
 		InputSlot:     slot,
 		ClientNonce:   fhe.Uint256{0, 0, 0, clientNonce},
 	}
@@ -87,13 +118,17 @@ func InputContext(slot uint8, clientNonce uint64) fhe.InputCommitmentContext {
 // AuthorizationClaim returns the deterministic test-assets-only ingress claim
 // used by the external-client workflow. It contains no plaintext pledge data.
 func AuthorizationClaim(subject string, nonce uint64) fhe.AuthorizationClaim {
+	return AuthorizationClaimForTarget(DefaultPublicTarget(), subject, nonce)
+}
+
+func AuthorizationClaimForTarget(target PublicTarget, subject string, nonce uint64) fhe.AuthorizationClaim {
 	return fhe.AuthorizationClaim{
 		SubjectCommitment: sha256.Sum256([]byte("synthetic-subject-" + subject)),
 		Role:              Role,
-		Vault:             Vault,
-		PolicyID:          PolicyID,
-		PolicyVersion:     fhe.PolicyVersion,
-		ValidUntil:        AuthorizationExpiry,
+		Vault:             target.Vault,
+		PolicyID:          target.PolicyID,
+		PolicyVersion:     target.PolicyVersion,
+		ValidUntil:        target.AuthorizationExpiry,
 		Nonce:             fhe.Uint256{0, 0, 0, nonce},
 	}
 }
