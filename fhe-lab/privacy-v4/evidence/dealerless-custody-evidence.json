@@ -4,171 +4,171 @@
   "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0",
   "custodyModel": "dealerless-ceremony",
   "sourceBinding": {
-    "commit": "f487c2dd911206381d822b8047b6eeaa3d251119",
+    "commit": "6da8adb5d7837460395eb25710f29dabe3d08b48",
     "workingTree": "clean (no modified tracked files)",
     "untrackedPathCount": 0,
-    "sourceTreeSha256": "97139e6d3e78190c376b9cfee0d4365452c1357de864e2979086c98d3f736ead",
+    "sourceTreeSha256": "3bbe21c71fc484a36dcf09b7401f0d1ffa9a6e1b97a9882ed122da3bb9f5ef72",
     "binarySha256": {
-      "ceremony-client": "b57a002a224a7f072e7f569b311018592548d39946b49cc90b59668956cb1571",
-      "ceremony-coordinator": "86c70f7f89e61e6bc31e1d7c0a5ffae69d5a46208439b6e09bcc8d6eda88b9a1",
-      "ceremony-evaluator": "3ed0e343f41e9b44a8c1b721e0183fe83f4298d80475251fde16f40c66d9a57f",
-      "ceremony-operator": "14efd141c37cf20b60c1acd7dd38f01268f1bbb59a6435ae320c049d212bdc43"
+      "ceremony-client": "479d021a400b8ae638b4e41112285eeb4616e78d75033acdedc013bc0ff5d8ed",
+      "ceremony-coordinator": "b18ff3a9ff99acae74d7d82b9f86e962c60b45bf3a5093cfe487c33ed59edbd1",
+      "ceremony-evaluator": "c4098b00475b463ae7b00aefdc5c500a9c58ba4ef29821e43906a153de9edcc4",
+      "ceremony-operator": "f8d6e560c545d62890059209beeb4be388f372879d595f2af839778ef8416313"
     }
   },
   "processes": [
     {
       "role": "operator-1-identity",
-      "pid": 39370,
+      "pid": 40098,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "identity",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/1"
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/1"
       ],
-      "startTime": "2026-07-31T18:17:34.516201Z",
-      "exitTime": "2026-07-31T18:17:35.478361Z",
+      "startTime": "2026-07-31T18:21:49.270146Z",
+      "exitTime": "2026-07-31T18:21:50.261105Z",
       "exit": "0"
     },
     {
       "role": "operator-2-identity",
-      "pid": 39372,
+      "pid": 40100,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "identity",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/2"
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/2"
       ],
-      "startTime": "2026-07-31T18:17:35.481595Z",
-      "exitTime": "2026-07-31T18:17:35.531525Z",
+      "startTime": "2026-07-31T18:21:50.266344Z",
+      "exitTime": "2026-07-31T18:21:50.321639Z",
       "exit": "0"
     },
     {
       "role": "operator-3-identity",
-      "pid": 39373,
+      "pid": 40101,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "identity",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/3"
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/3"
       ],
-      "startTime": "2026-07-31T18:17:35.532512Z",
-      "exitTime": "2026-07-31T18:17:35.57512Z",
+      "startTime": "2026-07-31T18:21:50.322682Z",
+      "exitTime": "2026-07-31T18:21:50.363685Z",
       "exit": "0"
     },
     {
       "role": "coordinator-identity",
-      "pid": 39374,
+      "pid": 40102,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-coordinator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-coordinator",
         "-mode",
         "identity",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator"
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator"
       ],
-      "startTime": "2026-07-31T18:17:35.575917Z",
-      "exitTime": "2026-07-31T18:17:36.471501Z",
+      "startTime": "2026-07-31T18:21:50.364834Z",
+      "exitTime": "2026-07-31T18:21:51.243124Z",
       "exit": "0"
     },
     {
       "role": "threshold-operator-1",
-      "pid": 39378,
+      "pid": 40104,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "serve",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/1",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/1",
         "-listen",
-        "127.0.0.1:62272",
+        "127.0.0.1:65385",
         "-tls-cert",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/1/tls.crt",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/1/tls.crt",
         "-peer-ca",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/pki/ca.pem",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/pki/ca.pem",
         "-coordinator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator/identity.pub",
         "-evaluator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/evaluator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/evaluator/identity.pub",
         "-roster",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/roster.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/roster.json",
         "-point",
         "1"
       ],
-      "startTime": "2026-07-31T18:17:36.546952Z"
+      "startTime": "2026-07-31T18:21:51.318529Z"
     },
     {
       "role": "threshold-operator-2",
-      "pid": 39379,
+      "pid": 40105,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "serve",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/2",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/2",
         "-listen",
-        "127.0.0.1:62273",
+        "127.0.0.1:65386",
         "-tls-cert",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/2/tls.crt",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/2/tls.crt",
         "-peer-ca",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/pki/ca.pem",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/pki/ca.pem",
         "-coordinator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator/identity.pub",
         "-evaluator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/evaluator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/evaluator/identity.pub",
         "-roster",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/roster.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/roster.json",
         "-point",
         "2"
       ],
-      "startTime": "2026-07-31T18:17:36.553875Z"
+      "startTime": "2026-07-31T18:21:51.323932Z"
     },
     {
       "role": "threshold-operator-3",
-      "pid": 39380,
+      "pid": 40106,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-operator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-operator",
         "-mode",
         "serve",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/3",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/3",
         "-listen",
-        "127.0.0.1:62275",
+        "127.0.0.1:65387",
         "-tls-cert",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/operators/3/tls.crt",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/operators/3/tls.crt",
         "-peer-ca",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/pki/ca.pem",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/pki/ca.pem",
         "-coordinator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator/identity.pub",
         "-evaluator-key",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/evaluator/identity.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/evaluator/identity.pub",
         "-roster",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/roster.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/roster.json",
         "-point",
         "3"
       ],
-      "startTime": "2026-07-31T18:17:36.560476Z"
+      "startTime": "2026-07-31T18:21:51.329615Z"
     },
     {
       "role": "ceremony-coordinator",
-      "pid": 39381,
+      "pid": 40109,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-coordinator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-coordinator",
         "-mode",
         "conduct",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator",
         "-tls-cert",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/coordinator/tls.crt",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/coordinator/tls.crt",
         "-peer-ca",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/pki/ca.pem",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/pki/ca.pem",
         "-roster",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/roster.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/roster.json",
         "-operators",
-        "1=https://127.0.0.1:62272,2=https://127.0.0.1:62273,3=https://127.0.0.1:62275",
+        "1=https://127.0.0.1:65385,2=https://127.0.0.1:65386,3=https://127.0.0.1:65387",
         "-out",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public",
         "-chain-id",
         "10143",
         "-policy-id",
@@ -176,129 +176,129 @@
         "-validity-seconds",
         "3600"
       ],
-      "startTime": "2026-07-31T18:17:36.770948Z",
-      "exitTime": "2026-07-31T18:17:55.179651Z",
+      "startTime": "2026-07-31T18:21:51.539591Z",
+      "exitTime": "2026-07-31T18:22:08.027325Z",
       "exit": "0"
     },
     {
       "role": "ceremony-client-a",
-      "pid": 39397,
+      "pid": 40142,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-client",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-client",
         "-party",
         "a",
         "-public-material",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-public-material.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-public-material.bin",
         "-key-manifest",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/key-manifest.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/key-manifest.json",
         "-evaluation-keys",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-evaluation-keys.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-evaluation-keys.bin",
         "-issuer-key",
         "[redacted]",
         "-out",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/envelopes/a.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/envelopes/a.bin",
         "-private-manifest",
         "[redacted]",
         "-roster-digest",
-        "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+        "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
         "-vault",
         "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
         "-policy-id",
         "3d45d248cd669df64618bb3917de938208acd3129b30131d200ffabb177fd5da",
         "-session-id",
-        "7527c0d44637011f4351205008468ae523b227441c30658dc1da1158330e0d33",
+        "23fbd40020138a272462d6becda0e331aaf4e03c8fa1622ee82c5985f65ab8d6",
         "-chain-id",
         "10143",
         "-policy-version",
         "1",
         "-nonce",
-        "685407966",
+        "533176195",
         "-valid-until",
-        "1785523675",
+        "1785523928",
         "-key-epoch",
         "1",
         "-threshold",
         "2"
       ],
-      "startTime": "2026-07-31T18:17:55.185153Z",
-      "exitTime": "2026-07-31T18:17:59.448452Z",
+      "startTime": "2026-07-31T18:22:08.032671Z",
+      "exitTime": "2026-07-31T18:22:12.002302Z",
       "exit": "0"
     },
     {
       "role": "ceremony-client-b",
-      "pid": 39405,
+      "pid": 40153,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-client",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-client",
         "-party",
         "b",
         "-public-material",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-public-material.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-public-material.bin",
         "-key-manifest",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/key-manifest.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/key-manifest.json",
         "-evaluation-keys",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-evaluation-keys.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-evaluation-keys.bin",
         "-issuer-key",
         "[redacted]",
         "-out",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/envelopes/b.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/envelopes/b.bin",
         "-private-manifest",
         "[redacted]",
         "-roster-digest",
-        "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+        "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
         "-vault",
         "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
         "-policy-id",
         "3d45d248cd669df64618bb3917de938208acd3129b30131d200ffabb177fd5da",
         "-session-id",
-        "7527c0d44637011f4351205008468ae523b227441c30658dc1da1158330e0d33",
+        "23fbd40020138a272462d6becda0e331aaf4e03c8fa1622ee82c5985f65ab8d6",
         "-chain-id",
         "10143",
         "-policy-version",
         "1",
         "-nonce",
-        "685407966",
+        "533176195",
         "-valid-until",
-        "1785523675",
+        "1785523928",
         "-key-epoch",
         "1",
         "-threshold",
         "2"
       ],
-      "startTime": "2026-07-31T18:17:59.449099Z",
-      "exitTime": "2026-07-31T18:18:02.294405Z",
+      "startTime": "2026-07-31T18:22:12.003332Z",
+      "exitTime": "2026-07-31T18:22:15.608224Z",
       "exit": "0"
     },
     {
       "role": "ceremony-evaluator",
-      "pid": 39408,
+      "pid": 40164,
       "command": [
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/bin/ceremony-evaluator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/bin/ceremony-evaluator",
         "-public-material",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-public-material.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-public-material.bin",
         "-evaluation-keys",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/collective-evaluation-keys.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/collective-evaluation-keys.bin",
         "-key-manifest",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/key-manifest.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/key-manifest.json",
         "-issuer-public",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/clients/issuer.pub",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/clients/issuer.pub",
         "-input-a",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/envelopes/a.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/envelopes/a.bin",
         "-input-b",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/envelopes/b.bin",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/envelopes/b.bin",
         "-out",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/public/evaluator-result.json",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/public/evaluator-result.json",
         "-storage",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/evaluator",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/evaluator",
         "-tls-cert",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/evaluator/tls.crt",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/evaluator/tls.crt",
         "-peer-ca",
-        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-final/pki/ca.pem",
+        "/private/tmp/claude-501/-Users-red-g-CascadeProjects-Master-Mordant/782da544-7968-4d6c-b849-9fd49c63101e/scratchpad/v4-root-tip/pki/ca.pem",
         "-operators",
-        "1=https://127.0.0.1:62272,2=https://127.0.0.1:62273,3=https://127.0.0.1:62275",
+        "1=https://127.0.0.1:65385,2=https://127.0.0.1:65386,3=https://127.0.0.1:65387",
         "-coalition",
         "1,2",
         "-session-id",
-        "fadec28b4723eadecec512c88cf496996fd1e5bff713f91251737bdb759947d9",
+        "145b9b56c6b91e407fac4c7d0d630afbdf9cf84b7dacc9d3e2b8f4593d151ffe",
         "-vault",
         "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
         "-policy-id",
@@ -308,17 +308,17 @@
         "-policy-version",
         "1",
         "-nonce",
-        "685407966",
+        "533176195",
         "-valid-until",
-        "1785523675"
+        "1785523928"
       ],
-      "startTime": "2026-07-31T18:18:02.295381Z",
-      "exitTime": "2026-07-31T18:18:13.112111Z",
+      "startTime": "2026-07-31T18:22:15.609725Z",
+      "exitTime": "2026-07-31T18:22:30.216521Z",
       "exit": "0"
     }
   ],
   "roster": {
-    "ceremonyId": "8a44d26130e3494655467134ffef096a824658e58c387c79fea0bd2babfddd8d",
+    "ceremonyId": "4cd7a3bd057e72b6e7488c4f51aa6ba044c7d7c4d9b7f573c2fcda3e0cf8c736",
     "keyEpoch": 1,
     "parameterFingerprint": "d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
     "points": [
@@ -327,24 +327,24 @@
       3
     ],
     "signingPublicKeys": [
-      "68b73cd2a120093fe7f5e213b57a6be92b6da98167c568550d16a421242887ef",
-      "318f758d41ede940d591b932094a137af71bf95f6c9ebd36e63b14bd40e585ee",
-      "506bd53cd7746143ee6a6cd33ea1b7c959ca728290a2e87a47419a06f5183e8e"
+      "568da5753e60a8f2dd169a95c4ab23e0938245df71c0ecae0eecca53bc8c3c59",
+      "9658543f60af6a1975259c5c0298d0d63bd4f8b7cd0151e8a9691d044833b22e",
+      "ac1f06273ff30bd82fc1b19feb8b9f7ce3bdaf872d047a89bc305fe756217889"
     ],
     "threshold": 2
   },
-  "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+  "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
   "ceremonyEvidence": {
     "schemaVersion": "mordant.dealerless-ceremony-evidence/4",
     "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0",
     "custodyModel": "dealerless-ceremony",
-    "ceremonyId": "8a44d26130e3494655467134ffef096a824658e58c387c79fea0bd2babfddd8d",
+    "ceremonyId": "4cd7a3bd057e72b6e7488c4f51aa6ba044c7d7c4d9b7f573c2fcda3e0cf8c736",
     "keyEpoch": 1,
-    "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+    "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
     "threshold": 2,
-    "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+    "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
     "crsDerivation": "collaborative: sha256(domain, rosterDigest, parameterFingerprint, ceremonyId, keyEpoch, each operator contribution in point order); no fixed kill-test seed",
-    "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
+    "keyId": "1c3a11a0ca5bb484f3763613affc588a0c73b479776f2965cc8f5b9868134a3d",
     "publicKeyBytes": 7865218,
     "evaluationKeyBytes": 314584742,
     "galoisElements": [
@@ -359,20 +359,20 @@
       15873
     ],
     "roundDurationMillis": {
-      "collective-public-key": 318,
-      "crs-contributions": 17,
-      "crs-seal": 75,
-      "galois-keys": 8438,
-      "private-reshare": 403,
-      "relinearization-key": 2644,
-      "seal-manifest": 284
+      "collective-public-key": 315,
+      "crs-contributions": 12,
+      "crs-seal": 76,
+      "galois-keys": 7263,
+      "private-reshare": 422,
+      "relinearization-key": 2714,
+      "seal-manifest": 291
     },
     "operatorStatus": [
       {
         "statement": {
           "point": 1,
-          "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-          "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+          "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+          "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
           "sealed": true,
           "holdsLocalSecretKey": false,
           "holdsOwnShareOnly": true,
@@ -380,113 +380,113 @@
             {
               "operation": 1,
               "name": "crs-contribution",
-              "at": "2026-07-31T18:17:36.873218Z"
+              "at": "2026-07-31T18:21:51.638403Z"
             },
             {
               "operation": 2,
               "name": "crs-sealed",
-              "at": "2026-07-31T18:17:36.930276Z",
-              "detail": "crs=2129c59692cff132"
+              "at": "2026-07-31T18:21:51.692474Z",
+              "detail": "crs=de27490cf8ea5481"
             },
             {
               "operation": 3,
               "name": "private-reshare-sent",
-              "at": "2026-07-31T18:17:37.11572Z",
+              "at": "2026-07-31T18:21:51.876176Z",
               "detail": "recipients=3"
             },
             {
               "operation": 4,
               "name": "threshold-share-sealed",
-              "at": "2026-07-31T18:17:37.360749Z"
+              "at": "2026-07-31T18:21:52.14363Z"
             },
             {
               "operation": 5,
               "name": "collective-public-key-share",
-              "at": "2026-07-31T18:17:37.408536Z",
+              "at": "2026-07-31T18:21:52.192888Z",
               "detail": "bytes=3932296"
             },
             {
               "operation": 6,
               "name": "relinearization-round-one",
-              "at": "2026-07-31T18:17:37.923034Z",
+              "at": "2026-07-31T18:21:52.700429Z",
               "detail": "bytes=31458448"
             },
             {
               "operation": 7,
               "name": "relinearization-round-two",
-              "at": "2026-07-31T18:17:39.224442Z",
+              "at": "2026-07-31T18:21:53.962118Z",
               "detail": "bytes=15729264"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:40.519501Z",
+              "at": "2026-07-31T18:21:55.355317Z",
               "detail": "element=5"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:41.323262Z",
+              "at": "2026-07-31T18:21:56.143962Z",
               "detail": "element=25"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:42.319081Z",
+              "at": "2026-07-31T18:21:56.926685Z",
               "detail": "element=625"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:43.542925Z",
+              "at": "2026-07-31T18:21:57.772305Z",
               "detail": "element=62945"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:44.417096Z",
+              "at": "2026-07-31T18:21:58.588112Z",
               "detail": "element=28609"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:45.298561Z",
+              "at": "2026-07-31T18:21:59.376447Z",
               "detail": "element=61313"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:46.14914Z",
+              "at": "2026-07-31T18:22:00.160277Z",
               "detail": "element=7937"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:46.992032Z",
+              "at": "2026-07-31T18:22:01.059595Z",
               "detail": "element=57601"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:48.041348Z",
+              "at": "2026-07-31T18:22:01.931928Z",
               "detail": "element=15873"
             },
             {
               "operation": 9,
               "name": "manifest-sealed",
-              "at": "2026-07-31T18:17:50.303412Z"
+              "at": "2026-07-31T18:22:04.001137Z"
             }
           ],
-          "observedAt": "2026-07-31T18:17:55.031023Z"
+          "observedAt": "2026-07-31T18:22:07.957295Z"
         },
         "point": 1,
-        "signature": "664ef5a286a70f75a5485ed047df273e8e8a50b485e47265deaf0ffb6772af97cb9091f2eacf7be1f5db66b63c2432923a7006148b2cb4b61da19ca16f12160d"
+        "signature": "6134dbc63dde2979cf37f76dc9ff501ecd1cc928ff7196c5671165691c933f9ea1bff39d6676dabd4c609995b393f508e3b7d144812fa35a48a55d33dd0e9308"
       },
       {
         "statement": {
           "point": 2,
-          "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-          "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+          "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+          "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
           "sealed": true,
           "holdsLocalSecretKey": false,
           "holdsOwnShareOnly": true,
@@ -494,113 +494,113 @@
             {
               "operation": 1,
               "name": "crs-contribution",
-              "at": "2026-07-31T18:17:36.879046Z"
+              "at": "2026-07-31T18:21:51.641887Z"
             },
             {
               "operation": 2,
               "name": "crs-sealed",
-              "at": "2026-07-31T18:17:36.944536Z",
-              "detail": "crs=2129c59692cff132"
+              "at": "2026-07-31T18:21:51.707073Z",
+              "detail": "crs=de27490cf8ea5481"
             },
             {
               "operation": 3,
               "name": "private-reshare-sent",
-              "at": "2026-07-31T18:17:37.244434Z",
+              "at": "2026-07-31T18:21:52.031219Z",
               "detail": "recipients=3"
             },
             {
               "operation": 4,
               "name": "threshold-share-sealed",
-              "at": "2026-07-31T18:17:37.361237Z"
+              "at": "2026-07-31T18:21:52.144054Z"
             },
             {
               "operation": 5,
               "name": "collective-public-key-share",
-              "at": "2026-07-31T18:17:37.473056Z",
+              "at": "2026-07-31T18:21:52.256012Z",
               "detail": "bytes=3932296"
             },
             {
               "operation": 6,
               "name": "relinearization-round-one",
-              "at": "2026-07-31T18:17:38.327851Z",
+              "at": "2026-07-31T18:21:53.112382Z",
               "detail": "bytes=31458448"
             },
             {
               "operation": 7,
               "name": "relinearization-round-two",
-              "at": "2026-07-31T18:17:39.686424Z",
+              "at": "2026-07-31T18:21:54.484394Z",
               "detail": "bytes=15729264"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:40.73853Z",
+              "at": "2026-07-31T18:21:55.603675Z",
               "detail": "element=5"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:41.531965Z",
+              "at": "2026-07-31T18:21:56.354665Z",
               "detail": "element=25"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:42.541587Z",
+              "at": "2026-07-31T18:21:57.154889Z",
               "detail": "element=625"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:43.820716Z",
+              "at": "2026-07-31T18:21:57.973925Z",
               "detail": "element=62945"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:44.666794Z",
+              "at": "2026-07-31T18:21:58.800543Z",
               "detail": "element=28609"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:45.519599Z",
+              "at": "2026-07-31T18:21:59.601583Z",
               "detail": "element=61313"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:46.383348Z",
+              "at": "2026-07-31T18:22:00.441392Z",
               "detail": "element=7937"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:47.262496Z",
+              "at": "2026-07-31T18:22:01.307863Z",
               "detail": "element=57601"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:48.343825Z",
+              "at": "2026-07-31T18:22:02.155146Z",
               "detail": "element=15873"
             },
             {
               "operation": 9,
               "name": "manifest-sealed",
-              "at": "2026-07-31T18:17:50.384449Z"
+              "at": "2026-07-31T18:22:04.096677Z"
             }
           ],
-          "observedAt": "2026-07-31T18:17:55.037576Z"
+          "observedAt": "2026-07-31T18:22:07.958679Z"
         },
         "point": 2,
-        "signature": "d3099bcbf20aeb58da5a227a4d6fe21e500216df9d53f9b46d9826c60aafb2f1003f7b200e6e8e5411260264e12cd05b927ec93770a4ababf69e3f0b34da5f0a"
+        "signature": "13d683b368b9b5d5d0ddaa35a38c8966f8c51feb2065a8c63e5e651247089b7cc4d8394d77e1b41c70d3612a88d106d22d64558b6fce9ecdd2a1f58becaacf00"
       },
       {
         "statement": {
           "point": 3,
-          "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-          "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+          "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+          "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
           "sealed": true,
           "holdsLocalSecretKey": false,
           "holdsOwnShareOnly": true,
@@ -608,107 +608,107 @@
             {
               "operation": 1,
               "name": "crs-contribution",
-              "at": "2026-07-31T18:17:36.881964Z"
+              "at": "2026-07-31T18:21:51.644553Z"
             },
             {
               "operation": 2,
               "name": "crs-sealed",
-              "at": "2026-07-31T18:17:36.957991Z",
-              "detail": "crs=2129c59692cff132"
+              "at": "2026-07-31T18:21:51.721229Z",
+              "detail": "crs=de27490cf8ea5481"
             },
             {
               "operation": 3,
               "name": "private-reshare-sent",
-              "at": "2026-07-31T18:17:37.359847Z",
+              "at": "2026-07-31T18:21:52.1425Z",
               "detail": "recipients=3"
             },
             {
               "operation": 4,
               "name": "threshold-share-sealed",
-              "at": "2026-07-31T18:17:37.361512Z"
+              "at": "2026-07-31T18:21:52.144339Z"
             },
             {
               "operation": 5,
               "name": "collective-public-key-share",
-              "at": "2026-07-31T18:17:37.531264Z",
+              "at": "2026-07-31T18:21:52.312226Z",
               "detail": "bytes=3932296"
             },
             {
               "operation": 6,
               "name": "relinearization-round-one",
-              "at": "2026-07-31T18:17:38.656461Z",
+              "at": "2026-07-31T18:21:53.438327Z",
               "detail": "bytes=31458448"
             },
             {
               "operation": 7,
               "name": "relinearization-round-two",
-              "at": "2026-07-31T18:17:40.151884Z",
+              "at": "2026-07-31T18:21:54.957421Z",
               "detail": "bytes=15729264"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:40.954097Z",
+              "at": "2026-07-31T18:21:55.804807Z",
               "detail": "element=5"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:41.841603Z",
+              "at": "2026-07-31T18:21:56.567016Z",
               "detail": "element=25"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:42.999198Z",
+              "at": "2026-07-31T18:21:57.371058Z",
               "detail": "element=625"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:44.046026Z",
+              "at": "2026-07-31T18:21:58.190626Z",
               "detail": "element=62945"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:44.898004Z",
+              "at": "2026-07-31T18:21:59.030251Z",
               "detail": "element=28609"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:45.739031Z",
+              "at": "2026-07-31T18:21:59.802919Z",
               "detail": "element=61313"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:46.612459Z",
+              "at": "2026-07-31T18:22:00.677806Z",
               "detail": "element=7937"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:47.592076Z",
+              "at": "2026-07-31T18:22:01.561172Z",
               "detail": "element=57601"
             },
             {
               "operation": 8,
               "name": "galois-share",
-              "at": "2026-07-31T18:17:48.627332Z",
+              "at": "2026-07-31T18:22:02.401161Z",
               "detail": "element=15873"
             },
             {
               "operation": 9,
               "name": "manifest-sealed",
-              "at": "2026-07-31T18:17:50.490774Z"
+              "at": "2026-07-31T18:22:04.186601Z"
             }
           ],
-          "observedAt": "2026-07-31T18:17:55.040064Z"
+          "observedAt": "2026-07-31T18:22:07.959813Z"
         },
         "point": 3,
-        "signature": "3ac9a6badf2dc74e3c59f4811c6fad28cb084fb410ff730607b393b439168d98923d0db268956f33e02c5acfbdb479c74ad5a08f6240052c9e7a1d7274ae690e"
+        "signature": "4cff6c991b7aa8385500c55d993150e774708d3ec4e7c64fc9f6f69079efc3f4331c470fa976c77747517a8a5eb6ceb97b272ed6729a35c09a34f47296caca09"
       }
     ],
     "privateShareChannel": "operator-to-operator mTLS with pinned roster keys; coordinator excluded",
@@ -726,13 +726,13 @@
     "custodyModel": "dealerless-ceremony",
     "parameterFingerprint": "d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
     "threshold": 2,
-    "ceremonyId": "8a44d26130e3494655467134ffef096a824658e58c387c79fea0bd2babfddd8d",
+    "ceremonyId": "4cd7a3bd057e72b6e7488c4f51aa6ba044c7d7c4d9b7f573c2fcda3e0cf8c736",
     "keyEpoch": 1,
-    "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+    "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
     "operators": [
-      "68b73cd2a120093fe7f5e213b57a6be92b6da98167c568550d16a421242887ef",
-      "318f758d41ede940d591b932094a137af71bf95f6c9ebd36e63b14bd40e585ee",
-      "506bd53cd7746143ee6a6cd33ea1b7c959ca728290a2e87a47419a06f5183e8e"
+      "568da5753e60a8f2dd169a95c4ab23e0938245df71c0ecae0eecca53bc8c3c59",
+      "9658543f60af6a1975259c5c0298d0d63bd4f8b7cd0151e8a9691d044833b22e",
+      "ac1f06273ff30bd82fc1b19feb8b9f7ce3bdaf872d047a89bc305fe756217889"
     ],
     "operatorPoints": [
       1,
@@ -742,19 +742,19 @@
     "chainId": 10143,
     "policyId": "3d45d248cd669df64618bb3917de938208acd3129b30131d200ffabb177fd5da",
     "policyVersion": 1,
-    "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
-    "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
-    "publicKeyCommitment": "511985b54b8505b04e0eeeac03cda2a9fd0695b2d18c9fa9fb6c69b9ad75d64f",
-    "relinearizationKeyCommitment": "28e0d7363eae3cab45be6eb6e764fd3dc7eb9707913a625b8eaab8f13b7bdcf8",
-    "galoisKeyCommitment": "3c43b630d5c0e6320f1cdafac4806127d0dd391c9dd420c105a6376fef542f21",
+    "keyId": "1c3a11a0ca5bb484f3763613affc588a0c73b479776f2965cc8f5b9868134a3d",
+    "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
+    "publicKeyCommitment": "e322b4762694292ef812319e3e7277d3da3197e9bbc83eddf0ed78996f0edc0c",
+    "relinearizationKeyCommitment": "861f1716a5f0555dcc44fcfffa1b93a63d7d8b85795c6faf905ddf3c428a4ee3",
+    "galoisKeyCommitment": "9f3460f4aa56147873b827c1d7c4fe167cda4b33da821b57d39d239da5aea953",
     "policyCircuitCommitment": "e29547a713ce723b104b38f171d0fd9cc96030ee11d8dd6e05975bf3ffe18a6d",
-    "activatesAtUnix": 1785521810,
-    "expiresAtUnix": 1785525470,
+    "activatesAtUnix": 1785522064,
+    "expiresAtUnix": 1785525724,
     "revoked": false,
     "attestations": [
-      "1:1884098e98acc495164e1480f385a905be6a22a9db7ebd9be89374d3f007d85fa0a6a1461f50e4f9dd0cb089ea079b722a3a8aebf3f87836a24b0eb3c84eae0d",
-      "2:d40268e70d9a9dd1379756111706250faf7de9bf2bfc4ea15ecbf397092b1fae72f0f9792296558826409e7f99107f397c7cdcc52aecae8ba79989a6e9cb150a",
-      "3:475a37a68e5aec7290b58244bf9d693c5b6957ef1c594130cf512c9a1846c093b0d8604377df5f0ebaf3428aaa279301c9fcd36ed1953210087b9af6e3301008"
+      "1:2e86ed84c5d9e7f1c5f6019a8b85656622a29105201ba6b6ada4fe2d74903877d6dfa9818514fe3c0daa54c67577f9eb86fa8706e262920655d867b30df9d40e",
+      "2:0f6eb80a4795424b15d407b3fbeb875fa0d9f0fbe292bf032024b2111ffc2715e06046b001892f58e3b62ab2f7631c09a6af406dccaf6ae667702a31fd550809",
+      "3:44c2af496ebc8d70cba896e89506e98b65a7e6c0531e9f4e0d49a69bf583aec1f0ac41274177c2585855a90d4cd9eedf3818cabbdee12ff5af6417f645201601"
     ]
   },
   "operatorStatements": [
@@ -765,8 +765,8 @@
       "holdsLocalSecretKey": false,
       "statement": {
         "point": 1,
-        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+        "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
         "sealed": true,
         "holdsLocalSecretKey": false,
         "holdsOwnShareOnly": true,
@@ -774,104 +774,104 @@
           {
             "operation": 1,
             "name": "crs-contribution",
-            "at": "2026-07-31T18:17:36.873218Z"
+            "at": "2026-07-31T18:21:51.638403Z"
           },
           {
             "operation": 2,
             "name": "crs-sealed",
-            "at": "2026-07-31T18:17:36.930276Z",
-            "detail": "crs=2129c59692cff132"
+            "at": "2026-07-31T18:21:51.692474Z",
+            "detail": "crs=de27490cf8ea5481"
           },
           {
             "operation": 3,
             "name": "private-reshare-sent",
-            "at": "2026-07-31T18:17:37.11572Z",
+            "at": "2026-07-31T18:21:51.876176Z",
             "detail": "recipients=3"
           },
           {
             "operation": 4,
             "name": "threshold-share-sealed",
-            "at": "2026-07-31T18:17:37.360749Z"
+            "at": "2026-07-31T18:21:52.14363Z"
           },
           {
             "operation": 5,
             "name": "collective-public-key-share",
-            "at": "2026-07-31T18:17:37.408536Z",
+            "at": "2026-07-31T18:21:52.192888Z",
             "detail": "bytes=3932296"
           },
           {
             "operation": 6,
             "name": "relinearization-round-one",
-            "at": "2026-07-31T18:17:37.923034Z",
+            "at": "2026-07-31T18:21:52.700429Z",
             "detail": "bytes=31458448"
           },
           {
             "operation": 7,
             "name": "relinearization-round-two",
-            "at": "2026-07-31T18:17:39.224442Z",
+            "at": "2026-07-31T18:21:53.962118Z",
             "detail": "bytes=15729264"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:40.519501Z",
+            "at": "2026-07-31T18:21:55.355317Z",
             "detail": "element=5"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:41.323262Z",
+            "at": "2026-07-31T18:21:56.143962Z",
             "detail": "element=25"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:42.319081Z",
+            "at": "2026-07-31T18:21:56.926685Z",
             "detail": "element=625"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:43.542925Z",
+            "at": "2026-07-31T18:21:57.772305Z",
             "detail": "element=62945"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:44.417096Z",
+            "at": "2026-07-31T18:21:58.588112Z",
             "detail": "element=28609"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:45.298561Z",
+            "at": "2026-07-31T18:21:59.376447Z",
             "detail": "element=61313"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:46.14914Z",
+            "at": "2026-07-31T18:22:00.160277Z",
             "detail": "element=7937"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:46.992032Z",
+            "at": "2026-07-31T18:22:01.059595Z",
             "detail": "element=57601"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:48.041348Z",
+            "at": "2026-07-31T18:22:01.931928Z",
             "detail": "element=15873"
           },
           {
             "operation": 9,
             "name": "manifest-sealed",
-            "at": "2026-07-31T18:17:50.303412Z"
+            "at": "2026-07-31T18:22:04.001137Z"
           }
         ],
-        "observedAt": "2026-07-31T18:18:13.167579Z"
+        "observedAt": "2026-07-31T18:22:30.282312Z"
       }
     },
     {
@@ -881,8 +881,8 @@
       "holdsLocalSecretKey": false,
       "statement": {
         "point": 2,
-        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+        "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
         "sealed": true,
         "holdsLocalSecretKey": false,
         "holdsOwnShareOnly": true,
@@ -890,104 +890,104 @@
           {
             "operation": 1,
             "name": "crs-contribution",
-            "at": "2026-07-31T18:17:36.879046Z"
+            "at": "2026-07-31T18:21:51.641887Z"
           },
           {
             "operation": 2,
             "name": "crs-sealed",
-            "at": "2026-07-31T18:17:36.944536Z",
-            "detail": "crs=2129c59692cff132"
+            "at": "2026-07-31T18:21:51.707073Z",
+            "detail": "crs=de27490cf8ea5481"
           },
           {
             "operation": 3,
             "name": "private-reshare-sent",
-            "at": "2026-07-31T18:17:37.244434Z",
+            "at": "2026-07-31T18:21:52.031219Z",
             "detail": "recipients=3"
           },
           {
             "operation": 4,
             "name": "threshold-share-sealed",
-            "at": "2026-07-31T18:17:37.361237Z"
+            "at": "2026-07-31T18:21:52.144054Z"
           },
           {
             "operation": 5,
             "name": "collective-public-key-share",
-            "at": "2026-07-31T18:17:37.473056Z",
+            "at": "2026-07-31T18:21:52.256012Z",
             "detail": "bytes=3932296"
           },
           {
             "operation": 6,
             "name": "relinearization-round-one",
-            "at": "2026-07-31T18:17:38.327851Z",
+            "at": "2026-07-31T18:21:53.112382Z",
             "detail": "bytes=31458448"
           },
           {
             "operation": 7,
             "name": "relinearization-round-two",
-            "at": "2026-07-31T18:17:39.686424Z",
+            "at": "2026-07-31T18:21:54.484394Z",
             "detail": "bytes=15729264"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:40.73853Z",
+            "at": "2026-07-31T18:21:55.603675Z",
             "detail": "element=5"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:41.531965Z",
+            "at": "2026-07-31T18:21:56.354665Z",
             "detail": "element=25"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:42.541587Z",
+            "at": "2026-07-31T18:21:57.154889Z",
             "detail": "element=625"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:43.820716Z",
+            "at": "2026-07-31T18:21:57.973925Z",
             "detail": "element=62945"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:44.666794Z",
+            "at": "2026-07-31T18:21:58.800543Z",
             "detail": "element=28609"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:45.519599Z",
+            "at": "2026-07-31T18:21:59.601583Z",
             "detail": "element=61313"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:46.383348Z",
+            "at": "2026-07-31T18:22:00.441392Z",
             "detail": "element=7937"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:47.262496Z",
+            "at": "2026-07-31T18:22:01.307863Z",
             "detail": "element=57601"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:48.343825Z",
+            "at": "2026-07-31T18:22:02.155146Z",
             "detail": "element=15873"
           },
           {
             "operation": 9,
             "name": "manifest-sealed",
-            "at": "2026-07-31T18:17:50.384449Z"
+            "at": "2026-07-31T18:22:04.096677Z"
           }
         ],
-        "observedAt": "2026-07-31T18:18:13.179248Z"
+        "observedAt": "2026-07-31T18:22:30.293753Z"
       }
     },
     {
@@ -997,8 +997,8 @@
       "holdsLocalSecretKey": false,
       "statement": {
         "point": 3,
-        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
-        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "rosterDigest": "94d26340af9cadde5a4d31493dfc425f43041c86a20714f3dbc0a21487dfaedf",
+        "crsCommitment": "de27490cf8ea5481f0c5caaafe897489d47938750669f08d93e4c8c9d0f766e8",
         "sealed": true,
         "holdsLocalSecretKey": false,
         "holdsOwnShareOnly": true,
@@ -1006,104 +1006,104 @@
           {
             "operation": 1,
             "name": "crs-contribution",
-            "at": "2026-07-31T18:17:36.881964Z"
+            "at": "2026-07-31T18:21:51.644553Z"
           },
           {
             "operation": 2,
             "name": "crs-sealed",
-            "at": "2026-07-31T18:17:36.957991Z",
-            "detail": "crs=2129c59692cff132"
+            "at": "2026-07-31T18:21:51.721229Z",
+            "detail": "crs=de27490cf8ea5481"
           },
           {
             "operation": 3,
             "name": "private-reshare-sent",
-            "at": "2026-07-31T18:17:37.359847Z",
+            "at": "2026-07-31T18:21:52.1425Z",
             "detail": "recipients=3"
           },
           {
             "operation": 4,
             "name": "threshold-share-sealed",
-            "at": "2026-07-31T18:17:37.361512Z"
+            "at": "2026-07-31T18:21:52.144339Z"
           },
           {
             "operation": 5,
             "name": "collective-public-key-share",
-            "at": "2026-07-31T18:17:37.531264Z",
+            "at": "2026-07-31T18:21:52.312226Z",
             "detail": "bytes=3932296"
           },
           {
             "operation": 6,
             "name": "relinearization-round-one",
-            "at": "2026-07-31T18:17:38.656461Z",
+            "at": "2026-07-31T18:21:53.438327Z",
             "detail": "bytes=31458448"
           },
           {
             "operation": 7,
             "name": "relinearization-round-two",
-            "at": "2026-07-31T18:17:40.151884Z",
+            "at": "2026-07-31T18:21:54.957421Z",
             "detail": "bytes=15729264"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:40.954097Z",
+            "at": "2026-07-31T18:21:55.804807Z",
             "detail": "element=5"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:41.841603Z",
+            "at": "2026-07-31T18:21:56.567016Z",
             "detail": "element=25"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:42.999198Z",
+            "at": "2026-07-31T18:21:57.371058Z",
             "detail": "element=625"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:44.046026Z",
+            "at": "2026-07-31T18:21:58.190626Z",
             "detail": "element=62945"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:44.898004Z",
+            "at": "2026-07-31T18:21:59.030251Z",
             "detail": "element=28609"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:45.739031Z",
+            "at": "2026-07-31T18:21:59.802919Z",
             "detail": "element=61313"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:46.612459Z",
+            "at": "2026-07-31T18:22:00.677806Z",
             "detail": "element=7937"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:47.592076Z",
+            "at": "2026-07-31T18:22:01.561172Z",
             "detail": "element=57601"
           },
           {
             "operation": 8,
             "name": "galois-share",
-            "at": "2026-07-31T18:17:48.627332Z",
+            "at": "2026-07-31T18:22:02.401161Z",
             "detail": "element=15873"
           },
           {
             "operation": 9,
             "name": "manifest-sealed",
-            "at": "2026-07-31T18:17:50.490774Z"
+            "at": "2026-07-31T18:22:04.186601Z"
           }
         ],
-        "observedAt": "2026-07-31T18:18:13.182613Z"
+        "observedAt": "2026-07-31T18:22:30.296904Z"
       }
     }
   ],
@@ -1111,13 +1111,13 @@
     "schemaVersion": "mordant.dealerless-evaluator-output/4",
     "ok": true,
     "custodyModel": "dealerless-ceremony",
-    "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
+    "keyId": "1c3a11a0ca5bb484f3763613affc588a0c73b479776f2965cc8f5b9868134a3d",
     "conflictConfirmed": true,
-    "inputCommitmentA": "0x329ced089dce05db9810948dcb828c8fde1a7ff8390570fe1e06bddb1505435e",
-    "inputCommitmentB": "0x8c5262e4fbf2fb318984d7a1e8ca4938b2e70814494e3f793fab5f52e0cdd9cc",
-    "resultCommitment": "0x7196e0355ced30ab117bd4ca8ad4d40a3da9088bc1278b5ca1e7a39d262e5f0e",
-    "providerProofCommitment": "0x02e4054a89f6cc637f353d2ccc8b09288be322702a7f9c5b703c53adfc929081",
-    "thresholdTranscriptCommitment": "0x67e7754c2c6eabf66f5e35b95a231cd866be57a470471c95dc474af46c706b41",
+    "inputCommitmentA": "0xd2b083128c338b5cc8481d799139069b9c93a367398e3f96b55b269b4e101948",
+    "inputCommitmentB": "0x59d32e7c4aa8534eb8fca88a6ae3be5fe777f1e8e4435f1f30a6470c2f858adf",
+    "resultCommitment": "0xff23e3d4d66ab7014908cb564b1f7f34f3e79c072d2364240484c56529fe0b49",
+    "providerProofCommitment": "0xf4dd43c54bc22329c3d4310d80648241931d3dd2fde7d7b6a6336329e6dbbc25",
+    "thresholdTranscriptCommitment": "0x888c8314018803c1364f65958fb0a58a8865accf7aa658f93a94967264eb7ec9",
     "coalition": [
       1,
       2
@@ -1168,7 +1168,7 @@
     "Three processes on one host under one administrator is process separation, not independent organizational custody.",
     "Not production authorized."
   ],
-  "completedAtUtc": "2026-07-31T18:18:14.434695Z",
+  "completedAtUtc": "2026-07-31T18:22:33.774712Z",
   "keyEpoch": 1,
   "selectedCoalition": [
     1,
