@@ -304,7 +304,7 @@ export function TransactionDrivenExperience({
         </header>
       )}
 
-      {readOnly && timeline === "public" && recordedSelection !== null ? (
+      {readOnly && timeline === "public" && surface === "participant" && recordedSelection !== null ? (
         <RecordedCheckpointRail
           run={run}
           selectedId={recordedSelection.checkpoint.id}
@@ -325,13 +325,13 @@ export function TransactionDrivenExperience({
               <span data-status={triageStatus.toLowerCase().replaceAll(" ", "-")}>{triageStatus}</span>
             </section>
             {readOnly ? (
-              timeline !== "public" && recordedSelection !== null ? (
+              recordedSelection !== null ? (
                 <RecordedCheckpointRail
                   run={run}
                   selectedId={recordedSelection.checkpoint.id}
                   surface={surface}
                   checkpoints={checkpoints}
-                  publicTimeline={false}
+                  publicTimeline={timeline === "public"}
                   onSelect={selectCheckpoint}
                 />
               ) : null
@@ -417,14 +417,14 @@ export function TransactionDrivenExperience({
         </div>
       ) : (
         <div className={styles.protocolLayout}>
-          {readOnly && timeline !== "public" && recordedSelection !== null ? (
+          {readOnly && recordedSelection !== null ? (
             <aside className={styles.protocolLog}>
               <RecordedCheckpointRail
                 run={run}
                 selectedId={recordedSelection.checkpoint.id}
                 surface={surface}
                 checkpoints={checkpoints}
-                publicTimeline={false}
+                publicTimeline={timeline === "public"}
                 onSelect={selectCheckpoint}
               />
             </aside>

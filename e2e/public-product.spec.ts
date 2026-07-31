@@ -69,6 +69,7 @@ test("one recorded checkpoint keeps its facts across three distinct perspectives
   await expect(workspace).toHaveAttribute("data-surface", "workspace");
   await expect(workspace).toHaveAttribute("data-checkpoint", "reveal");
   await expect(page.getByText("Review queue", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("recorded-checkpoint-rail")).toHaveAttribute("data-density", "full");
 
   const identity = {
     deal: await workspace.getAttribute("data-deal-id"),
@@ -81,6 +82,7 @@ test("one recorded checkpoint keeps its facts across three distinct perspectives
   const participant = page.getByTestId("living-experience");
   await expect(participant).toHaveAttribute("data-surface", "participant");
   await expect(page.getByText("Your current status · Wait", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("recorded-checkpoint-rail")).toHaveAttribute("data-density", "compact");
   await expect(participant).toHaveAttribute("data-deal-id", identity.deal ?? "");
   await expect(participant).toHaveAttribute("data-vault", identity.vault ?? "");
   await expect(participant).toHaveAttribute("data-invoice-root", identity.root ?? "");
@@ -90,6 +92,7 @@ test("one recorded checkpoint keeps its facts across three distinct perspectives
   const protocol = page.getByTestId("living-experience");
   await expect(protocol).toHaveAttribute("data-surface", "protocol");
   await expect(page.getByText("Last confirmed transition", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("recorded-checkpoint-rail")).toHaveAttribute("data-density", "full");
   await expect(protocol).toHaveAttribute("data-deal-id", identity.deal ?? "");
   await expect(page.getByRole("link", { name: "Apply for a shadow pilot" })).toHaveAttribute("href", "/pilot");
 

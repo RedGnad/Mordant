@@ -182,8 +182,13 @@
 }
 
 .workspaceQueueSummary span[data-status="needs-attention"] {
-  border-color: var(--nws-action);
-  color: var(--nws-action-ink);
+  border-color: var(--nws-protection);
+  color: var(--nws-protection);
+}
+
+.workspaceQueueSummary span[data-status="resolved"] {
+  border-color: var(--nws-receivable);
+  color: var(--nws-receivable);
 }
 
 .liveQueueNote {
@@ -627,24 +632,42 @@
 }
 
 .experience[data-timeline="public"] .workspaceEconomics .protection {
-  border-color: var(--nws-rule);
+  border-color: var(--nws-protection);
   transition: none;
   transform: none;
   will-change: auto;
 }
 
 .experience[data-timeline="public"] .workspaceEconomics .receivable {
+  border-color: var(--nws-receivable);
+}
+
+.experience[data-timeline="public"][data-checkpoint="funding"] .workspaceEconomics .protection {
   border-color: var(--nws-rule);
 }
 
-.experience[data-timeline="public"] .workspaceDecision,
+.experience[data-timeline="public"]:is([data-checkpoint="deadline"], [data-checkpoint="entitlement"]) .workspaceEconomics .protection {
+  border-color: var(--nws-action);
+}
+
+.experience[data-timeline="public"][data-checkpoint="claims"] .workspaceEconomics .protection {
+  border-color: var(--nws-ink);
+}
+
+.experience[data-timeline="public"] .workspaceDecision {
+  border-color: var(--nws-action);
+}
+
 .experience[data-timeline="public"] .protocolTransition {
-  border-color: var(--nws-rule);
-  border-width: 1px;
+  border-color: var(--nws-receivable);
+}
+
+.experience[data-timeline="public"][data-abnormal="true"] .protocolTransition {
+  border-color: var(--nws-protection);
 }
 
 .experience[data-timeline="public"] .protocolRecovery {
-  border-top: 1px solid var(--nws-soft-rule);
+  border-top-color: var(--nws-action);
 }
 
 .workspaceDecision {
@@ -781,7 +804,7 @@
 }
 
 .experience[data-timeline="public"] .participantObligation {
-  border-color: var(--nws-rule);
+  border-color: var(--nws-receivable);
 }
 
 .participantAnchor {
