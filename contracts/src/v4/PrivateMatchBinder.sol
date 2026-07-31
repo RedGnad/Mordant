@@ -2,85 +2,82 @@
 pragma solidity 0.8.28;
 
 import {MordantAssetIdentity} from "../identity/MordantAssetIdentity.sol";
+import {MordantIssuerRegistry} from "../identity/MordantIssuerRegistry.sol";
 import {MordantMatchResult as Match} from "../identity/MordantMatchResult.sol";
-import {MordantSessionPrecommitRegistry} from "../identity/MordantSessionPrecommitRegistry.sol";
 import {MordantSourceIdentityRegistry} from "../identity/MordantSourceIdentityRegistry.sol";
 import {ECDSAQuorumMatchVerifierV4} from "./ECDSAQuorumMatchVerifierV4.sol";
 import {IAnchoredReceivable} from "./IAnchoredReceivable.sol";
 import {MordantScopeGovernanceRegistry as Governance} from "./MordantScopeGovernanceRegistry.sol";
 
-/// @notice Binds a confidential exact match to a real tokenized receivable and
-/// opens one non-economic recourse record.
+/// @notice Reveals one committed bilateral session, binds its confirmed exact
+/// match to a real tokenized receivable, and opens a non-economic recourse
+/// record.
 ///
-/// @dev What this contract does NOT do is the point of it.
+/// @dev This contract is where a private session becomes public, and it is the
+/// only place that happens. Everything it verifies was committed beforehand and
+/// kept opaque until both parties consented.
 ///
-/// It never learns an `assetId`. The only identity value that reaches the chain
-/// is the anchor's own salted `assetCommitment`, which the anchor already
-/// published at creation, and the session's input commitments. Nothing here
-/// opens either one.
+/// What it does NOT do is the point of it.
+///
+/// It never learns an `assetId`. The identity values that reach the chain are
+/// the anchors' own salted commitments, which the anchors already published at
+/// creation. Nothing here opens one.
 ///
 /// It is non-economic. It holds no balance, has no token interface, and reaches
 /// the receivable only through a view-only interface, so a confirmed conflict
-/// produces a record and nothing else. Whether that record has consequences is a
-/// question for the anchor's own protection machinery, not for this contract.
+/// produces a record and nothing else.
 ///
-/// Five independently verified authorization conditions, every one of them
-/// resolved from state that existed before the private result did:
+/// Six independently verified authorization conditions, each resolved from state
+/// that existed before the private result did:
 ///
-///   1. the anchor published its identity commitment when it was created
-///   2. an authorized issuer pre-committed THIS session against THAT commitment,
-///      and did so before the session was opened
-///   3. both sources were registered before the session was opened
-///   4. both scope controllers, as frozen at session initiation, consented to
-///      disclose this specific result
-///   5. a validator quorum endorsed the result under that same frozen context
+///   1. both scope authorizations existed and were live when the session was
+///      committed, and neither has been emergency-revoked since
+///   2. both controllers signed the identical session intent, before commitment
+///   3. an authorized issuer signed the same intent, naming this anchor's
+///      commitment, so the anchor was pre-authorized rather than chosen after
+///   4. both anchors were registered before the commitment was published
+///   5. both controllers, as named by the frozen records, consented to disclose
+///      this specific result
+///   6. a validator quorum endorsed the result against that same commitment
 ///
 /// Organizational independence between those conditions is a production
 /// deployment property. It holds only once the administrative domains are
 /// actually separated, and this contract does not and cannot establish it.
-///
-/// Temporal integrity is the design rule throughout: no authority may be created
-/// or replaced after a result is known and then be applied to that result.
-/// Controllers are read from the governance record frozen at session initiation,
-/// never from a mutable current mapping, so controller rotation is append-only
-/// and non-retroactive by construction.
 contract PrivateMatchBinder {
     error ZeroAddress();
     error InvalidConfiguration();
     error EnvelopeNotForThisBinder(address supplied);
     error UnexpectedPolicy(bytes32 policyId, uint32 policyVersion);
+    error IntentPolicyMismatch(bytes32 policyId, uint32 policyVersion);
     error AnchorNotDeployed(address anchor);
     error AnchorSchemeMismatch(uint16 supplied, uint16 expected);
     error AnchorCommitmentNotInSession(bytes32 anchorCommitment);
+    error AnchorNotPreAuthorized(bytes32 observed, bytes32 intended);
+    error AnchorSourceMismatch(bytes32 observed, bytes32 intended);
     error SelfMatch(bytes32 inputCommitment);
-    error SessionNotPrecommittedForAnchor(bytes32 sessionId, bytes32 anchorCommitment);
-    error PrecommitmentIssuerMismatch(bytes32 recorded, bytes32 anchorIssuer);
-    error PrecommitmentAfterSessionOpened(uint64 recordedAt, uint64 openedAt);
-    error PrecommittedGovernanceMismatch(bytes32 precommitted, bytes32 frozen);
     error CounterpartyCommitmentMismatch(bytes32 observed, bytes32 expected);
-    error CounterpartyRegisteredAfterSessionOpened(uint64 registeredAt, uint64 openedAt);
-    error CounterpartyVaultMismatch(bytes32 observed, bytes32 expected);
+    error CounterpartyRegisteredAfterCommitment(uint64 registeredAt, uint64 committedAt);
     error AnchorCountMismatch(uint8 supplied);
     error AnchorNotOutstanding(uint8 receivableState);
     error AnchorProtectionInactive(uint8 protectionState);
     error AnchorHasNoUnits();
-    error SessionAlreadyBound(bytes32 sessionId);
-    error GovernanceContextMismatch(bytes32 supplied, bytes32 frozen);
+    error SessionAlreadyBound(bytes32 sessionCommitment);
+    error RevealNotForEnvelope(bytes32 revealed, bytes32 supplied);
     error ConsentRecordNotFrozenForSession(bytes32 scopeCommitment, bytes32 governanceRecord);
     error ConsentScopeMismatch(bytes32 supplied, bytes32 expected);
     error DisclosureConsentMissing(bytes32 scopeCommitment);
     error DisclosureConsentExpired(bytes32 scopeCommitment, uint64 validUntil);
     error DisclosureVersionMismatch(uint32 supplied, uint32 expected);
     error ConsentNonceConsumed(bytes32 scopeCommitment, uint256 nonce);
+    error ControllerEmergencyRevoked(bytes32 recordDigest, uint64 hardRevokedAt);
     error MalformedSignature();
 
     event PrivateMatchBound(
-        bytes32 indexed sessionId,
+        bytes32 indexed sessionCommitment,
         address indexed anchor,
         bytes32 indexed matchCommitment,
         bytes32 anchorCommitment,
         bytes32 counterpartyCommitment,
-        bytes32 governanceContextDigest,
         bool conflictConfirmed,
         uint64 cureDeadline
     );
@@ -98,7 +95,7 @@ contract PrivateMatchBinder {
     string public constant DOMAIN_VERSION = "1";
 
     bytes32 public constant DISCLOSURE_CONSENT_TYPEHASH = keccak256(
-        "DisclosureConsent(uint256 chainId,address binder,bytes32 policyId,uint32 policyVersion,bytes32 sessionId,bytes32 resultCommitment,bytes32 matchCommitment,bytes32 governanceContextDigest,bytes32 scopeCommitment,bytes32 governanceRecord,bytes32 controllerKeyId,uint32 controllerEpoch,uint32 scopeAuthorizationVersion,address anchor,uint32 disclosureVersion,uint64 validUntil,uint256 nonce)"
+        "DisclosureConsent(uint256 chainId,address binder,bytes32 policyId,uint32 policyVersion,bytes32 sessionCommitment,bytes32 resultCommitment,bytes32 matchCommitment,bytes32 scopeCommitment,bytes32 governanceRecord,bytes32 controllerKeyId,uint32 controllerEpoch,uint32 scopeAuthorizationVersion,address anchor,uint32 disclosureVersion,uint64 validUntil,uint256 nonce)"
     );
     bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
@@ -106,15 +103,11 @@ contract PrivateMatchBinder {
     uint256 private constant SECP256K1_HALF_ORDER =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
-    /// @notice The counterparty side of the session.
-    /// @dev Always a source-identity registration, because that record carries a
-    /// registration timestamp and a vault does not. Requiring it for both kinds
-    /// is what lets the binder prove the counterparty was anticipated before the
-    /// session opened rather than produced afterwards. `vault` is optional and,
-    /// when supplied, must be a live anchor carrying the same commitment.
-    struct Counterparty {
-        bytes32 anchorId;
-        address vault;
+    /// @notice The preimage of the opaque commitment, opened once at binding.
+    struct SessionReveal {
+        Governance.BilateralSessionIntent intent;
+        bytes32 salt;
+        Governance.InitiationSignatures signatures;
     }
 
     /// @notice One side's consent to disclose that this session matched.
@@ -124,9 +117,9 @@ contract PrivateMatchBinder {
     /// private mode exists to prevent.
     ///
     /// `governanceRecord` names the historical authorization the consent is made
-    /// under. It must be one of the two records frozen when the session was
-    /// opened, so a controller appointed later cannot consent for an earlier
-    /// session, and a controller since replaced still can.
+    /// under. It must be one of the two records the intent named, so a controller
+    /// appointed later cannot consent for an earlier session, and a controller
+    /// since retired still can.
     struct DisclosureConsent {
         bytes32 scopeCommitment;
         bytes32 governanceRecord;
@@ -137,13 +130,12 @@ contract PrivateMatchBinder {
     }
 
     struct RecourseRecord {
-        bytes32 sessionId;
+        bytes32 sessionCommitment;
         bytes32 resultCommitment;
         bytes32 matchCommitment;
         bytes32 anchorCommitment;
         bytes32 counterpartyCommitment;
         bytes32 providerProofCommitment;
-        bytes32 governanceContextDigest;
         address anchor;
         bytes32 policyId;
         uint32 policyVersion;
@@ -155,7 +147,7 @@ contract PrivateMatchBinder {
 
     ECDSAQuorumMatchVerifierV4 public immutable verifier;
     Governance public immutable governance;
-    MordantSessionPrecommitRegistry public immutable precommitRegistry;
+    MordantIssuerRegistry public immutable issuerRegistry;
     MordantSourceIdentityRegistry public immutable sourceRegistry;
     bytes32 public immutable policyId;
     uint32 public immutable policyVersion;
@@ -163,7 +155,7 @@ contract PrivateMatchBinder {
     uint64 public immutable curePeriod;
     bytes32 public immutable consequenceId;
 
-    mapping(bytes32 sessionId => RecourseRecord record) public recourses;
+    mapping(bytes32 sessionCommitment => RecourseRecord record) public recourses;
     mapping(bytes32 scopeCommitment => mapping(uint256 nonce => bool used)) public consumedConsentNonce;
 
     /// @dev There is deliberately no owner and no setter on this contract. Every
@@ -172,7 +164,7 @@ contract PrivateMatchBinder {
     constructor(
         ECDSAQuorumMatchVerifierV4 verifier_,
         Governance governance_,
-        MordantSessionPrecommitRegistry precommitRegistry_,
+        MordantIssuerRegistry issuerRegistry_,
         MordantSourceIdentityRegistry sourceRegistry_,
         bytes32 policyId_,
         uint32 policyVersion_,
@@ -182,7 +174,7 @@ contract PrivateMatchBinder {
     ) {
         if (
             address(verifier_) == address(0) || address(governance_) == address(0)
-                || address(precommitRegistry_) == address(0) || address(sourceRegistry_) == address(0)
+                || address(issuerRegistry_) == address(0) || address(sourceRegistry_) == address(0)
         ) revert ZeroAddress();
         if (
             policyId_ == bytes32(0) || policyVersion_ == 0 || responsibleRole_ == bytes32(0)
@@ -190,7 +182,7 @@ contract PrivateMatchBinder {
         ) revert InvalidConfiguration();
         verifier = verifier_;
         governance = governance_;
-        precommitRegistry = precommitRegistry_;
+        issuerRegistry = issuerRegistry_;
         sourceRegistry = sourceRegistry_;
         policyId = policyId_;
         policyVersion = policyVersion_;
@@ -216,10 +208,9 @@ contract PrivateMatchBinder {
     /// from the named governance record, not supplied by the caller, so a consent
     /// cannot be presented under a governance record it was not signed for.
     function consentDigest(
-        bytes32 sessionId,
+        bytes32 sessionCommitment,
         bytes32 resultCommitment,
         bytes32 matchCommitment,
-        bytes32 governanceContextDigest,
         address anchor,
         DisclosureConsent memory consent
     ) public view returns (bytes32) {
@@ -233,12 +224,11 @@ contract PrivateMatchBinder {
                     address(this),
                     policyId,
                     policyVersion,
-                    sessionId,
+                    sessionCommitment,
                     resultCommitment
                 ),
                 abi.encode(
                     matchCommitment,
-                    governanceContextDigest,
                     consent.scopeCommitment,
                     consent.governanceRecord,
                     authorization.controllerKeyId,
@@ -251,46 +241,52 @@ contract PrivateMatchBinder {
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
     }
 
-    /// @notice Binds one confirmed exact match to `anchor` and opens a record.
+    /// @notice Binds one confirmed exact match and opens a recourse record.
     /// @param envelope The quorum-signed result. Its `binder` must be this contract.
     /// @param attestation The validator attestation, passed through unread.
+    /// @param reveal The committed session's preimage and initiation signatures.
     /// @param anchor The local tokenized receivable this side of the match owns.
-    /// @param counterparty The other side's pre-session source registration.
     /// @param consentA Disclosure consent for scope A, under its frozen record.
     /// @param consentB Disclosure consent for scope B, under its frozen record.
     function bindRecourse(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
         bytes calldata attestation,
+        SessionReveal calldata reveal,
         IAnchoredReceivable anchor,
-        Counterparty calldata counterparty,
         DisclosureConsent calldata consentA,
         DisclosureConsent calldata consentB
-    ) external returns (bytes32 sessionId) {
-        sessionId = envelope.result.sessionId;
+    ) external returns (bytes32 sessionCommitment) {
+        sessionCommitment = envelope.sessionCommitment;
         if (envelope.binder != address(this)) revert EnvelopeNotForThisBinder(envelope.binder);
         if (envelope.policyId != policyId || envelope.policyVersion != policyVersion) {
             revert UnexpectedPolicy(envelope.policyId, envelope.policyVersion);
         }
-        if (recourses[sessionId].open) revert SessionAlreadyBound(sessionId);
-
-        // The governance context is read from the registry, not from the caller,
-        // and the envelope must name the one that was frozen at initiation.
-        Governance.SessionGovernance memory session = governance.sessionGovernance(sessionId);
-        if (session.contextDigest != envelope.governanceContextDigest) {
-            revert GovernanceContextMismatch(
-                envelope.governanceContextDigest, session.contextDigest
-            );
+        if (reveal.intent.policyId != policyId || reveal.intent.policyVersion != policyVersion) {
+            revert IntentPolicyMismatch(reveal.intent.policyId, reveal.intent.policyVersion);
         }
+        if (recourses[sessionCommitment].open) revert SessionAlreadyBound(sessionCommitment);
 
-        bytes32 anchorCommitment = _assertAnchorLive(anchor);
+        // Opening the commitment is the moment the pairing becomes public. It
+        // verifies both initiation signatures, both governance records, the
+        // neutrality of the submitter and the one-time use of the commitment.
+        Governance.ResolvedSession memory session =
+            governance.resolveSession(reveal.intent, reveal.salt, reveal.signatures);
+        if (session.sessionCommitment != sessionCommitment) {
+            revert RevealNotForEnvelope(session.sessionCommitment, sessionCommitment);
+        }
+        // The issuer that pre-authorized this anchor must have been an authorized
+        // issuer key. This is the pre-commitment, carried privately.
+        issuerRegistry.requireAuthorized(
+            session.issuerKeyId, session.issuerSigner, session.identityEpoch
+        );
+
+        bytes32 anchorCommitment = _assertAnchorLive(anchor, session);
         bytes32 counterpartyCommitment =
-            _resolveSides(envelope.result, anchorCommitment, counterparty, session.openedAt);
-        _assertPrecommitment(session, sessionId, anchorCommitment, anchor.issuerKeyId());
+            _resolveSides(envelope.result, anchorCommitment, session);
         _requireBilateralConsent(envelope, session, address(anchor), consentA, consentB);
 
         // The quorum is checked last, and it is the step that consumes the
-        // result's one-time identities. Everything above is free to revert
-        // without burning a valid result.
+        // result's one-time identities.
         verifier.acceptMatch(envelope, attestation);
 
         _consumeConsent(consentA);
@@ -298,14 +294,14 @@ contract PrivateMatchBinder {
         _open(envelope, address(anchor), anchorCommitment, counterpartyCommitment);
     }
 
-    function recourseOf(bytes32 sessionId) external view returns (RecourseRecord memory) {
-        return recourses[sessionId];
+    function recourseOf(bytes32 sessionCommitment) external view returns (RecourseRecord memory) {
+        return recourses[sessionCommitment];
     }
 
     /// @notice Whether the receivable behind a record is still in the state that
     /// makes the record meaningful.
-    function anchorLive(bytes32 sessionId) external view returns (bool) {
-        RecourseRecord memory record = recourses[sessionId];
+    function anchorLive(bytes32 sessionCommitment) external view returns (bool) {
+        RecourseRecord memory record = recourses[sessionCommitment];
         if (!record.open || record.anchor.code.length == 0) return false;
         IAnchoredReceivable anchor = IAnchoredReceivable(record.anchor);
         return anchor.assetCommitment() == record.anchorCommitment
@@ -313,9 +309,7 @@ contract PrivateMatchBinder {
             && anchor.protectionState() == PROTECTION_ACTIVE;
     }
 
-    /// @dev Split out of `bindRecourse` only to keep the stack shallow. The
-    /// policy is written from the immutables, which were already checked to equal
-    /// the envelope's.
+    /// @dev Split out of `bindRecourse` only to keep the stack shallow.
     function _open(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
         address anchor,
@@ -324,14 +318,13 @@ contract PrivateMatchBinder {
     ) private {
         uint64 boundAt = uint64(block.timestamp);
         uint64 cureDeadline = boundAt + curePeriod;
-        recourses[envelope.result.sessionId] = RecourseRecord({
-            sessionId: envelope.result.sessionId,
+        recourses[envelope.sessionCommitment] = RecourseRecord({
+            sessionCommitment: envelope.sessionCommitment,
             resultCommitment: envelope.resultCommitment,
             matchCommitment: envelope.result.matchCommitment,
             anchorCommitment: anchorCommitment,
             counterpartyCommitment: counterpartyCommitment,
             providerProofCommitment: envelope.result.providerProofCommitment,
-            governanceContextDigest: envelope.governanceContextDigest,
             anchor: anchor,
             policyId: policyId,
             policyVersion: policyVersion,
@@ -342,19 +335,22 @@ contract PrivateMatchBinder {
         });
 
         emit PrivateMatchBound(
-            envelope.result.sessionId,
+            envelope.sessionCommitment,
             anchor,
             envelope.result.matchCommitment,
             anchorCommitment,
             counterpartyCommitment,
-            envelope.governanceContextDigest,
             envelope.result.conflictConfirmed,
             cureDeadline
         );
     }
 
-    /// @dev Reads the anchor's own commitment. It is never supplied by a caller.
-    function _assertAnchorLive(IAnchoredReceivable anchor) private view returns (bytes32) {
+    /// @dev Reads the anchor's own commitment and checks the issuer named exactly
+    /// this anchor in the intent it signed before the session was committed.
+    function _assertAnchorLive(
+        IAnchoredReceivable anchor,
+        Governance.ResolvedSession memory session
+    ) private view returns (bytes32) {
         if (address(anchor).code.length == 0) revert AnchorNotDeployed(address(anchor));
         uint16 scheme = anchor.identitySchemeVersion();
         if (scheme != MordantAssetIdentity.IDENTITY_SCHEME_VERSION) {
@@ -365,21 +361,28 @@ contract PrivateMatchBinder {
         uint8 protection = anchor.protectionState();
         if (protection != PROTECTION_ACTIVE) revert AnchorProtectionInactive(protection);
         if (anchor.totalSupply() == 0) revert AnchorHasNoUnits();
+
         bytes32 commitment = anchor.assetCommitment();
         if (commitment == bytes32(0)) revert InvalidConfiguration();
+        if (commitment != session.strictAssetCommitmentA) {
+            revert AnchorNotPreAuthorized(commitment, session.strictAssetCommitmentA);
+        }
+        bytes32 attestationDigest = anchor.sourceAttestationDigest();
+        if (attestationDigest != session.sourceRecordA) {
+            revert AnchorSourceMismatch(attestationDigest, session.sourceRecordA);
+        }
         return commitment;
     }
 
     /// @dev Places the anchor on one side of the session and proves the other
-    /// side was registered before the session opened. The two commitments are
-    /// salted independently, so they are never equal and this contract cannot and
-    /// does not compare them for identity: that equality is what the FHE
-    /// evaluation established.
+    /// side was registered before the commitment was published. The two
+    /// commitments are salted independently, so they are never equal and this
+    /// contract cannot and does not compare them for identity: that equality is
+    /// what the FHE evaluation established.
     function _resolveSides(
         Match.ConfidentialMatchResultV4 calldata result,
         bytes32 anchorCommitment,
-        Counterparty calldata counterparty,
-        uint64 openedAt
+        Governance.ResolvedSession memory session
     ) private view returns (bytes32 counterpartyCommitment) {
         if (result.anchorCount != EXPECTED_ANCHOR_COUNT) {
             revert AnchorCountMismatch(result.anchorCount);
@@ -397,61 +400,20 @@ contract PrivateMatchBinder {
         }
 
         MordantSourceIdentityRegistry.SourceAnchor memory source =
-            sourceRegistry.anchor(counterparty.anchorId);
+            sourceRegistry.anchor(session.sourceRecordB);
         if (source.assetCommitment != counterpartyCommitment) {
             revert CounterpartyCommitmentMismatch(source.assetCommitment, counterpartyCommitment);
         }
-        // A source produced after the session opened was not anticipated by it,
-        // so a result cannot be attached to a counterparty invented afterwards.
-        if (source.registeredAt > openedAt) {
-            revert CounterpartyRegisteredAfterSessionOpened(source.registeredAt, openedAt);
-        }
-        if (counterparty.vault != address(0)) {
-            if (counterparty.vault.code.length == 0) revert AnchorNotDeployed(counterparty.vault);
-            bytes32 observed = IAnchoredReceivable(counterparty.vault).assetCommitment();
-            if (observed != counterpartyCommitment) {
-                revert CounterpartyVaultMismatch(observed, counterpartyCommitment);
-            }
-        }
-    }
-
-    /// @dev The pre-commitment is the registry's answer, never the caller's
-    /// claim, and it is the reason `requireBindable` can be trusted at all: the
-    /// issuer named this session against this anchor's commitment before the
-    /// session was opened, so a match cannot be shopped to a convenient anchor
-    /// after the fact.
-    function _assertPrecommitment(
-        Governance.SessionGovernance memory session,
-        bytes32 sessionId,
-        bytes32 anchorCommitment,
-        bytes32 anchorIssuer
-    ) private view {
-        bool precommitted = precommitRegistry.isSessionPrecommitted(sessionId, anchorCommitment);
-        if (!precommitted) revert SessionNotPrecommittedForAnchor(sessionId, anchorCommitment);
-        MordantSessionPrecommitRegistry.Precommitment memory record =
-            precommitRegistry.precommitmentOf(sessionId);
-        // The issuer that pre-committed must be the issuer that attested the
-        // anchor. Otherwise any authorized issuer could pre-commit a session
-        // against someone else's published commitment.
-        if (record.issuerKeyId != anchorIssuer) {
-            revert PrecommitmentIssuerMismatch(record.issuerKeyId, anchorIssuer);
-        }
-        if (record.recordedAt > session.openedAt) {
-            revert PrecommitmentAfterSessionOpened(record.recordedAt, session.openedAt);
-        }
-        // The issuer named the governance records it expected before the session
-        // was opened, so the controllers cannot have been chosen afterwards.
-        if (record.governanceRecordA != session.recordA) {
-            revert PrecommittedGovernanceMismatch(record.governanceRecordA, session.recordA);
-        }
-        if (record.governanceRecordB != session.recordB) {
-            revert PrecommittedGovernanceMismatch(record.governanceRecordB, session.recordB);
+        // A source produced after the commitment was not anticipated by it, so a
+        // result cannot be attached to a counterparty invented afterwards.
+        if (source.registeredAt > session.committedAt) {
+            revert CounterpartyRegisteredAfterCommitment(source.registeredAt, session.committedAt);
         }
     }
 
     function _requireBilateralConsent(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
-        Governance.SessionGovernance memory session,
+        Governance.ResolvedSession memory session,
         address anchor,
         DisclosureConsent calldata consentA,
         DisclosureConsent calldata consentB
@@ -459,22 +421,18 @@ contract PrivateMatchBinder {
         // Consents are matched to sides by content, not by argument order, so a
         // caller cannot satisfy both sides with two signatures from one party.
         if (consentA.scopeCommitment != envelope.result.scopeCommitmentA) {
-            revert ConsentScopeMismatch(
-                consentA.scopeCommitment, envelope.result.scopeCommitmentA
-            );
+            revert ConsentScopeMismatch(consentA.scopeCommitment, envelope.result.scopeCommitmentA);
         }
         if (consentB.scopeCommitment != envelope.result.scopeCommitmentB) {
-            revert ConsentScopeMismatch(
-                consentB.scopeCommitment, envelope.result.scopeCommitmentB
-            );
+            revert ConsentScopeMismatch(consentB.scopeCommitment, envelope.result.scopeCommitmentB);
         }
-        _requireConsent(envelope, session.recordA, anchor, consentA);
-        _requireConsent(envelope, session.recordB, anchor, consentB);
+        _requireConsent(envelope, session.governanceRecordA, anchor, consentA);
+        _requireConsent(envelope, session.governanceRecordB, anchor, consentB);
     }
 
-    /// @dev `frozenRecord` comes from the session's governance context. A consent
-    /// made under any other record, whether a later rotation or an earlier one,
-    /// is refused before its signature is even recovered.
+    /// @dev `frozenRecord` comes from the intent both controllers signed. A
+    /// consent made under any other record, whether a later rotation or an
+    /// earlier one, is refused before its signature is even recovered.
     function _requireConsent(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
         bytes32 frozenRecord,
@@ -482,9 +440,7 @@ contract PrivateMatchBinder {
         DisclosureConsent calldata consent
     ) private view {
         if (consent.governanceRecord != frozenRecord) {
-            revert ConsentRecordNotFrozenForSession(
-                consent.scopeCommitment, consent.governanceRecord
-            );
+            revert ConsentRecordNotFrozenForSession(consent.scopeCommitment, consent.governanceRecord);
         }
         if (consent.disclosureVersion != DISCLOSURE_VERSION) {
             revert DisclosureVersionMismatch(consent.disclosureVersion, DISCLOSURE_VERSION);
@@ -499,11 +455,15 @@ contract PrivateMatchBinder {
         if (authorization.scopeCommitment != consent.scopeCommitment) {
             revert ConsentScopeMismatch(consent.scopeCommitment, authorization.scopeCommitment);
         }
+        // A compromised key does not get to consent, and a consent it gave
+        // before the compromise was noticed does not get to bind afterwards.
+        if (authorization.hardRevokedAt != 0) {
+            revert ControllerEmergencyRevoked(frozenRecord, authorization.hardRevokedAt);
+        }
         bytes32 digest = consentDigest(
-            envelope.result.sessionId,
+            envelope.sessionCommitment,
             envelope.resultCommitment,
             envelope.result.matchCommitment,
-            envelope.governanceContextDigest,
             anchor,
             consent
         );

@@ -3,7 +3,7 @@ import test from "node:test";
 import { keccak256, stringToBytes } from "viem";
 import {
   BilateralSession, runSession, requireComparable, interpret,
-  boundCandidateAliasCommitment, enrollmentBinding, Outcome, ProtocolError,
+  boundCandidateAliasCommitment, enrollmentBinding, evaluatorRequest, Outcome, ProtocolError,
 } from "./session-protocol.mjs";
 import { IdentityTier, Profile, namespace, normalize } from "./asset-identity.mjs";
 
@@ -22,7 +22,8 @@ function identity(overrides = {}) {
 
 const SCOPE_A = keccak256(stringToBytes("scope-a"));
 const SCOPE_B = keccak256(stringToBytes("scope-b"));
-const OPENED_AT = 1_000_000;
+const COMMITTED_AT = 1_000_000;
+const SESSION_COMMITMENT = keccak256(stringToBytes("session-commitment-1"));
 
 function record(scopeCommitment, overrides = {}) {
   return {
@@ -33,15 +34,18 @@ function record(scopeCommitment, overrides = {}) {
     controllerEpoch: 1,
     authorizationVersion: 1,
     scopeCommitment,
-    validFrom: OPENED_AT - 3600,
+    validFrom: COMMITTED_AT - 3600,
     ...overrides,
   };
 }
 
 function governance(overrides = {}) {
   return {
-    contextDigest: keccak256(stringToBytes("governance-context-1")),
-    openedAt: OPENED_AT,
+    sessionCommitment: SESSION_COMMITMENT,
+    committedAt: COMMITTED_AT,
+    initiationSignatureA: "0xaa",
+    initiationSignatureB: "0xbb",
+    candidateAuthorized: true,
     recordA: record(SCOPE_A),
     recordB: record(SCOPE_B),
     ...overrides,
@@ -50,7 +54,7 @@ function governance(overrides = {}) {
 
 function session(overrides = {}) {
   return new BilateralSession({
-    sessionId: keccak256(stringToBytes("session-1")),
+    sessionId: SESSION_COMMITMENT,
     scopeA: SCOPE_A,
     scopeB: SCOPE_B,
     budget: 4,
@@ -185,7 +189,7 @@ test("a candidate alias is bound to its issuer, session, scope and enrollment", 
     issuerKeyId: keccak256(stringToBytes("issuer")),
     candidateProfile: Profile.INVOICE_CASE_INSENSITIVE,
     sourceRecordDigest: keccak256(stringToBytes("source")),
-    sessionId: keccak256(stringToBytes("session-1")),
+    sessionId: SESSION_COMMITMENT,
     scopeCommitment: keccak256(stringToBytes("scope-a")),
     enrollmentDigest: keccak256(stringToBytes("enrollment")),
     aliasCommitment: keccak256(stringToBytes("alias")),
@@ -233,8 +237,75 @@ test("a session cannot run without a frozen governance context", () => {
     new RegExp(ProtocolError.GOVERNANCE_NOT_FROZEN),
   );
   assert.throws(
-    () => session({ governance: governance({ contextDigest: `0x${"00".repeat(32)}` }) }),
-    /SESSION_GOVERNANCE_INCOMPLETE:contextDigest/,
+    () => session({ governance: governance({ sessionCommitment: `0x${"00".repeat(32)}` }) }),
+    new RegExp(ProtocolError.COMMITMENT_MISSING),
+  );
+});
+
+test("a session cannot run before its commitment is published", () => {
+  assert.throws(
+    () => session({ governance: governance({ committedAt: 0 }) }),
+    new RegExp(ProtocolError.COMMITMENT_NOT_PUBLISHED),
+  );
+});
+
+test("one controller alone cannot initiate a session", () => {
+  assert.throws(
+    () => session({ governance: governance({ initiationSignatureB: undefined }) }),
+    new RegExp(ProtocolError.INITIATION_NOT_BILATERAL),
+  );
+  // The same signature twice is one party signing, not two agreeing.
+  assert.throws(
+    () => session({ governance: governance({ initiationSignatureB: "0xaa" }) }),
+    /SESSION_INITIATION_NOT_BILATERAL:identical/,
+  );
+});
+
+test("the session id is the opaque commitment and nothing else", () => {
+  assert.throws(
+    () => session({ sessionId: keccak256(stringToBytes("some-other-id")) }),
+    new RegExp(ProtocolError.COMMITMENT_MISSING),
+  );
+  assert.equal(session().sessionCommitment, SESSION_COMMITMENT);
+});
+
+test("candidate matching cannot exceed the committed permission", () => {
+  // Both parties ask for it at runtime, but the committed intent says exact-only.
+  const active = session({
+    governance: governance({ candidateAuthorized: false }),
+    candidateAuthorizedByA: true,
+    candidateAuthorizedByB: true,
+  });
+  assert.equal(active.candidateAuthorized, false);
+  const result = runSession({
+    session: active, identityA: identity(), identityB: identity(),
+    evaluateExact: no, evaluateCandidate: never,
+  });
+  assert.equal(result.outcome, Outcome.NO_MATCH_FOR_SUBMITTED_IDENTITIES);
+});
+
+test("an evaluator request binds the commitment and both enrollments", () => {
+  const active = session();
+  const base = {
+    sessionCommitment: SESSION_COMMITMENT,
+    enrollmentBindingA: active.enrollmentBindingA,
+    enrollmentBindingB: active.enrollmentBindingB,
+    tolerant: false,
+  };
+  const request = evaluatorRequest(base);
+  assert.notEqual(
+    evaluatorRequest({ ...base, sessionCommitment: keccak256(stringToBytes("other")) }),
+    request,
+  );
+  assert.notEqual(evaluatorRequest({ ...base, tolerant: true }), request);
+  assert.notEqual(
+    evaluatorRequest({ ...base, enrollmentBindingA: active.enrollmentBindingB }),
+    request,
+  );
+  // An evaluator may not be asked to work against an unpublished commitment.
+  assert.throws(
+    () => evaluatorRequest({ ...base, sessionCommitment: `0x${"00".repeat(32)}` }),
+    /SESSION_COMMITMENT_MISSING:sessionCommitment/,
   );
 });
 
@@ -243,7 +314,7 @@ test("an authorization created after initiation cannot govern the session", () =
   // controller chosen after the fact, which is exactly what must not apply.
   assert.throws(
     () => session({
-      governance: governance({ recordA: record(SCOPE_A, { validFrom: OPENED_AT + 1 }) }),
+      governance: governance({ recordA: record(SCOPE_A, { validFrom: COMMITTED_AT + 1 }) }),
     }),
     /SCOPE_AUTHORIZATION_NOT_PRE_SESSION:A/,
   );
@@ -279,9 +350,8 @@ test("an incomplete governance record fails closed", () => {
 
 test("an enrollment binds the authority it was made under", () => {
   const base = {
-    sessionId: keccak256(stringToBytes("session-1")),
+    sessionCommitment: SESSION_COMMITMENT,
     scopeCommitment: SCOPE_A,
-    governanceContextDigest: keccak256(stringToBytes("governance-context-1")),
     record: record(SCOPE_A),
   };
   const bound = enrollmentBinding(base);
@@ -300,13 +370,9 @@ test("an enrollment binds the authority it was made under", () => {
       `${field} must be bound into enrollment`,
     );
   }
-  // A different session or context is a different enrollment.
+  // A different committed session is a different enrollment.
   assert.notEqual(
-    enrollmentBinding({ ...base, sessionId: keccak256(stringToBytes("session-2")) }),
-    bound,
-  );
-  assert.notEqual(
-    enrollmentBinding({ ...base, governanceContextDigest: keccak256(stringToBytes("other-context")) }),
+    enrollmentBinding({ ...base, sessionCommitment: keccak256(stringToBytes("session-2")) }),
     bound,
   );
 });
@@ -316,19 +382,19 @@ test("the two sides enroll under different bindings", () => {
   assert.notEqual(active.enrollmentBindingA, active.enrollmentBindingB);
 });
 
-test("every outcome carries the frozen governance context", () => {
-  const context = keccak256(stringToBytes("governance-context-1"));
+test("every outcome carries its session commitment", () => {
+  const context = SESSION_COMMITMENT;
   const exact = runSession({
     session: session(), identityA: identity(), identityB: identity(),
     evaluateExact: yes, evaluateCandidate: never,
   });
-  assert.equal(exact.governanceContextDigest, context);
+  assert.equal(exact.sessionCommitment, context);
 
   const noMatch = runSession({
     session: session(), identityA: identity(), identityB: identity(),
     evaluateExact: no, evaluateCandidate: never,
   });
-  assert.equal(noMatch.governanceContextDigest, context);
+  assert.equal(noMatch.sessionCommitment, context);
 
   // Even the outcome that runs no cryptography reports the authority it ran under.
   const incomparable = runSession({
@@ -337,5 +403,5 @@ test("every outcome carries the frozen governance context", () => {
     identityB: identity({ tier: IdentityTier.RegistryDocument }),
     evaluateExact: never, evaluateCandidate: never,
   });
-  assert.equal(incomparable.governanceContextDigest, context);
+  assert.equal(incomparable.sessionCommitment, context);
 });

@@ -30,13 +30,17 @@ export const ProtocolError = Object.freeze({
   BUDGET_EXHAUSTED: "SCOPE_BUDGET_EXHAUSTED",
   ALIAS_NOT_BOUND: "CANDIDATE_ALIAS_NOT_BOUND",
   GOVERNANCE_NOT_FROZEN: "SESSION_GOVERNANCE_NOT_FROZEN",
+  COMMITMENT_MISSING: "SESSION_COMMITMENT_MISSING",
+  COMMITMENT_NOT_PUBLISHED: "SESSION_COMMITMENT_NOT_PUBLISHED",
+  INITIATION_NOT_BILATERAL: "SESSION_INITIATION_NOT_BILATERAL",
   GOVERNANCE_INCOMPLETE: "SESSION_GOVERNANCE_INCOMPLETE",
   GOVERNANCE_SCOPE_MISMATCH: "SESSION_GOVERNANCE_SCOPE_MISMATCH",
   AUTHORIZATION_NOT_PRE_SESSION: "SCOPE_AUTHORIZATION_NOT_PRE_SESSION",
 });
 
 const CANDIDATE_BINDING_DOMAIN = keccak256(stringToBytes("mordant.candidate-alias-binding/1"));
-const ENROLLMENT_BINDING_DOMAIN = keccak256(stringToBytes("mordant.session-enrollment-binding/1"));
+const ENROLLMENT_BINDING_DOMAIN = keccak256(stringToBytes("mordant.session-enrollment-binding/2"));
+const EVALUATOR_REQUEST_DOMAIN = keccak256(stringToBytes("mordant.session-evaluator-request/1"));
 const IDENTITY_SCHEME_VERSION = 3;
 const ZERO32 = `0x${"00".repeat(32)}`;
 
@@ -77,10 +81,10 @@ function requireFrozenRecord(side, record, scopeCommitment, openedAt) {
  * controller and every enrollment binding for the new record differs, so an old
  * enrollment cannot be presented as belonging to the new session.
  */
-export function enrollmentBinding({ sessionId, scopeCommitment, governanceContextDigest, record }) {
+export function enrollmentBinding({ sessionCommitment, scopeCommitment, record }) {
   requireFrozenRecord("enrollment", record, scopeCommitment, record?.validFrom ?? 0);
-  if (!governanceContextDigest || governanceContextDigest === ZERO32) {
-    throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:governanceContextDigest`);
+  if (!sessionCommitment || sessionCommitment === ZERO32) {
+    throw new Error(ProtocolError.COMMITMENT_MISSING);
   }
   const authority = keccak256(
     encodeAbiParameters(
@@ -96,8 +100,30 @@ export function enrollmentBinding({ sessionId, scopeCommitment, governanceContex
   );
   return keccak256(
     encodeAbiParameters(
-      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }],
-      [ENROLLMENT_BINDING_DOMAIN, sessionId, scopeCommitment, governanceContextDigest, authority],
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }],
+      [ENROLLMENT_BINDING_DOMAIN, sessionCommitment, scopeCommitment, authority],
+    ),
+  );
+}
+
+/**
+ * What the evaluator is asked to compute, bound to the committed session.
+ *
+ * The evaluator must refuse work that does not name a published commitment, and
+ * validators must refuse to sign a result whose commitment they cannot see
+ * on-chain at a block at or before the one they observed. That is the only
+ * ordering guarantee available: the chain proves the commitment came first, and
+ * the quorum attests that the computation came after it. Neither proves when the
+ * FHE evaluation actually ran, and nothing here should be read as doing so.
+ */
+export function evaluatorRequest({ sessionCommitment, enrollmentBindingA, enrollmentBindingB, tolerant }) {
+  for (const [name, value] of Object.entries({ sessionCommitment, enrollmentBindingA, enrollmentBindingB })) {
+    if (!value || value === ZERO32) throw new Error(`${ProtocolError.COMMITMENT_MISSING}:${name}`);
+  }
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bool" }],
+      [EVALUATOR_REQUEST_DOMAIN, sessionCommitment, enrollmentBindingA, enrollmentBindingB, Boolean(tolerant)],
     ),
   );
 }
@@ -182,37 +208,54 @@ export class BilateralSession {
     // "who was authorized" a question with one answer rather than a lookup that
     // changes underneath the result.
     if (!governance) throw new Error(ProtocolError.GOVERNANCE_NOT_FROZEN);
-    if (!governance.contextDigest || governance.contextDigest === ZERO32) {
-      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:contextDigest`);
+    if (!governance.sessionCommitment || governance.sessionCommitment === ZERO32) {
+      throw new Error(ProtocolError.COMMITMENT_MISSING);
     }
-    if (!Number.isInteger(Number(governance.openedAt)) || Number(governance.openedAt) <= 0) {
-      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:openedAt`);
+    // The session id IS the opaque commitment. There is no separate public
+    // identifier, because a second identifier is a second correlation handle.
+    if (sessionId !== governance.sessionCommitment) throw new Error(ProtocolError.COMMITMENT_MISSING);
+    // The commitment must already be on-chain. An evaluator that accepts work
+    // for an unpublished commitment destroys the ordering guarantee entirely.
+    if (!Number.isInteger(Number(governance.committedAt)) || Number(governance.committedAt) <= 0) {
+      throw new Error(ProtocolError.COMMITMENT_NOT_PUBLISHED);
     }
-    const recordA = requireFrozenRecord("A", governance.recordA, scopeA, governance.openedAt);
-    const recordB = requireFrozenRecord("B", governance.recordB, scopeB, governance.openedAt);
+    // One controller alone cannot bring a bilateral comparison into existence.
+    if (!governance.initiationSignatureA || !governance.initiationSignatureB) {
+      throw new Error(ProtocolError.INITIATION_NOT_BILATERAL);
+    }
+    if (governance.initiationSignatureA === governance.initiationSignatureB) {
+      throw new Error(`${ProtocolError.INITIATION_NOT_BILATERAL}:identical`);
+    }
+    const recordA = requireFrozenRecord("A", governance.recordA, scopeA, governance.committedAt);
+    const recordB = requireFrozenRecord("B", governance.recordB, scopeB, governance.committedAt);
     if (recordA.recordDigest === recordB.recordDigest) {
       throw new Error(`${ProtocolError.GOVERNANCE_SCOPE_MISMATCH}:identical`);
     }
+    // Candidate matching is a committed permission, not a runtime choice.
+    const committedCandidate = Boolean(governance.candidateAuthorized);
 
     this.sessionId = sessionId;
+    this.sessionCommitment = governance.sessionCommitment;
     this.scopeA = scopeA;
     this.scopeB = scopeB;
     this.budget = budget;
     this.spent = 0;
     this.governance = { ...governance, recordA, recordB };
-    // Each side's enrollment carries the authority it was made under.
+    // Each side's enrollment carries the commitment and the authority it was
+    // made under.
     this.enrollmentBindingA = enrollmentBinding({
-      sessionId, scopeCommitment: scopeA,
-      governanceContextDigest: governance.contextDigest, record: recordA,
+      sessionCommitment: governance.sessionCommitment, scopeCommitment: scopeA, record: recordA,
     });
     this.enrollmentBindingB = enrollmentBinding({
-      sessionId, scopeCommitment: scopeB,
-      governanceContextDigest: governance.contextDigest, record: recordB,
+      sessionCommitment: governance.sessionCommitment, scopeCommitment: scopeB, record: recordB,
     });
     // Authorization is bilateral and fixed at initiation. It cannot be granted
     // later, which is what stops a tolerant query being slipped in after an
     // exact query returned false.
-    this.candidateAuthorized = Boolean(candidateAuthorizedByA) && Boolean(candidateAuthorizedByB);
+    // Both parties must have declared it AND it must be what the committed
+    // intent says, so a runtime flag cannot widen what was agreed.
+    this.candidateAuthorized =
+      Boolean(candidateAuthorizedByA) && Boolean(candidateAuthorizedByB) && committedCandidate;
     this.outcome = null;
   }
 
@@ -245,7 +288,7 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
       protocolError: error.message,
       evaluated: false,
       bindable: false,
-      governanceContextDigest: session.governance.contextDigest,
+      sessionCommitment: session.sessionCommitment,
     };
     return session.outcome;
   }
@@ -258,7 +301,7 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
       outcome: Outcome.EXACT_MATCH,
       evaluated: true,
       bindable: true,
-      governanceContextDigest: session.governance.contextDigest,
+      sessionCommitment: session.sessionCommitment,
     };
     return session.outcome;
   }
@@ -270,7 +313,7 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
       outcome: Outcome.NO_MATCH_FOR_SUBMITTED_IDENTITIES,
       evaluated: true,
       bindable: false,
-      governanceContextDigest: session.governance.contextDigest,
+      sessionCommitment: session.sessionCommitment,
       // Scoped deliberately: this says the two submitted identifiers were not
       // equal. It is not evidence about any other pledge or platform.
       meaning: "the two identifiers submitted in this session were not equal",
@@ -281,19 +324,19 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
   session.spend(1);
 
   const candidate = evaluateCandidate();
-  const context = session.governance.contextDigest;
+  const context = session.sessionCommitment;
   session.outcome = candidate
     ? {
       outcome: Outcome.RECONCILIATION_REQUIRED,
       evaluated: true,
       bindable: false,
-      governanceContextDigest: context,
+      sessionCommitment: context,
     }
     : {
       outcome: Outcome.NO_MATCH_FOR_SUBMITTED_IDENTITIES,
       evaluated: true,
       bindable: false,
-      governanceContextDigest: context,
+      sessionCommitment: context,
       meaning: "the two identifiers submitted in this session were not equal",
     };
   return session.outcome;
