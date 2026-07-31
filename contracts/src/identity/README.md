@@ -57,11 +57,22 @@ What the receivable currently *says*. Amendable, versioned, and bound to the ass
 | `relatedStableAssetId` | the asset a credit note, replacement or novation points at |
 | `effectiveFrom` | when the terms take effect |
 
-### Namespaces
+### Namespace registry
 
-A registry, not free text: `lei`, `duns`, `vat`, `gln`, `eth`. The namespace is part of the identity,
-so the same digits under `duns` and under `vat` are different parties. Adding a namespace does not
-require a scheme bump; removing or re-meaning one does.
+A registry, not free text. Each entry fixes the normalization profile its registry mandates.
+
+| Namespace | Kind | Profile | Fixed length |
+|---|---|---|---|
+| `lei` | party | 1 `ALNUM_UPPER_FIXED` | 20 |
+| `duns` | party | 2 `DIGITS_FIXED` | 9 |
+| `gln` | party | 2 `DIGITS_FIXED` | 13 |
+| `vat` | party | 3 `VAT` | variable |
+| `eth` | party | 4 `HEX_ADDRESS` | 42 |
+| `peppol`, `sdi`, `irn` | invoice (registry) | 5 `INVOICE_CASE_SENSITIVE` | variable |
+| `seller` | invoice (fallback) | 5 or 6, **declared by the issuer** | variable |
+
+The namespace is part of the identity, so the same digits under `duns` and under `vat` are different
+parties. Adding a namespace does not require a scheme bump; removing or re-meaning one does.
 
 ## Normalization profiles
 
