@@ -34,3 +34,19 @@ Run the public-output scanner only against a generated evidence directory:
 ```bash
 node fhe-lab/privacy-v3/leak-scan.mjs path/to/evidence
 ```
+# Process-separated evidence
+
+`process-run.mjs` is the controlled laboratory capture used by the V3 Monad
+runner. It launches six application processes: Client A, Client B, evaluator /
+coordinator, and three separate mTLS threshold nodes. Only nodes 1 and 2 are
+selected; node 3 is authenticated through its status endpoint and records no
+threshold session. The parent orchestrates paths and lifecycles only. It never
+opens either client-private canary manifest.
+
+After termination, the offline audit scans all public files against the client
+canaries and deletes the private manifests. The resulting classification is
+`PROCESS-SEPARATED CONTROLLED LAB`, not independent organizational custody.
+
+Run the public testnet preflight with `pnpm fhe:privacy:check`. The write path
+is `pnpm fhe:privacy:run`; it deploys only V3 laboratory contracts and opens a
+non-economic recourse record when all gates pass.

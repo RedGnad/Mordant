@@ -50,7 +50,9 @@
     "m14:manifest": "node --env-file=.env scripts/m14-manifest.mjs",
     "m15:phase": "node --env-file=.env scripts/m15-phase-runner.mjs",
     "fhe:monad:check": "node --env-file=.env fhe-lab/monad-testnet/run.mjs --check",
-    "fhe:monad:run": "node --env-file=.env fhe-lab/monad-testnet/run.mjs --run --out fhe-lab/monad-testnet/artifacts/latest.json"
+    "fhe:monad:run": "node --env-file=.env fhe-lab/monad-testnet/run.mjs --run --out fhe-lab/monad-testnet/artifacts/latest.json",
+    "fhe:privacy:check": "node --env-file=.env fhe-lab/monad-testnet/run-v3.mjs --check",
+    "fhe:privacy:run": "node --env-file=.env fhe-lab/monad-testnet/run-v3.mjs --run --out fhe-lab/monad-testnet/artifacts/privacy-v3-latest.json"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

@@ -31,6 +31,7 @@ const (
 	preparePath         = "/v1/prepare"
 	commitPath          = "/v1/commit"
 	ackPath             = "/v1/ack"
+	statusPath          = "/v1/status"
 )
 
 type operation uint8
@@ -71,7 +72,28 @@ func (server *OperatorServer) Handler() http.Handler {
 	mux.HandleFunc(preparePath, server.handlePrepare)
 	mux.HandleFunc(commitPath, server.handleCommit)
 	mux.HandleFunc(ackPath, server.handleAck)
+	mux.HandleFunc(statusPath, server.handleStatus)
 	return mux
+}
+
+// handleStatus is a deliberately small mTLS liveness assertion. It exposes
+// only a public operator identity and never touches a threshold share or the
+// durable session ledger. The coordinator uses it to demonstrate that a
+// running, authenticated third node was not selected for a release.
+func (server *OperatorServer) handleStatus(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet || request.TLS == nil || len(request.TLS.VerifiedChains) == 0 ||
+		server.Operator == nil || len(server.CoordinatorPublicKey) != ed25519.PublicKeySize {
+		writeBoundedError(writer, http.StatusUnauthorized, "coordinator authentication required")
+		return
+	}
+	peerKey, ok := request.TLS.PeerCertificates[0].PublicKey.(ed25519.PublicKey)
+	if !ok || subtle.ConstantTimeCompare(peerKey, server.CoordinatorPublicKey) != 1 {
+		writeBoundedError(writer, http.StatusUnauthorized, "coordinator authentication required")
+		return
+	}
+	operator := server.Operator.Public()
+	writer.Header().Set("Content-Type", "application/json")
+	_, _ = fmt.Fprintf(writer, `{"operatorId":"%x","point":%d,"mtls":"authenticated"}`+"\n", operator.OperatorID, operator.Point)
 }
 
 // ServerTLSConfig enforces TLS 1.3 and a client certificate rooted in clientCAs.

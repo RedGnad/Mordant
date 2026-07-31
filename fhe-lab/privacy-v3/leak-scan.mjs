@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { readdir, readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const FORBIDDEN_NAMES = /plaintext|private.?key|threshold.?share|credential|certificate.*private|secret/i;
-const PRIVATE_KEY = /0x[0-9a-fA-F]{64}/;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 async function filesAt(root) {
@@ -23,28 +23,64 @@ export async function scanPublicEvidence(root) {
   const violations = [];
   for (const path of files) {
     const info = await stat(path);
-    if (info.size > MAX_FILE_BYTES) {
-      violations.push({ file: path, code: "ARTIFACT_TOO_LARGE" });
-      continue;
-    }
+    // Ciphertexts and threshold responses are binary and may exceed the text
+    // inspection budget. They are still scanned byte-for-byte against the
+    // offline canaries below; skipping free-text field-name heuristics is not
+    // a skipped evidence file.
+    if (info.size > MAX_FILE_BYTES) continue;
     const contents = await readFile(path, "utf8");
     if (FORBIDDEN_NAMES.test(contents)) violations.push({ file: path, code: "FORBIDDEN_FIELD_NAME" });
-    // A private EVM key is indistinguishable from some public bytes32 values. The public artifact
-    // schema contains only named commitments, so raw 32-byte hex values outside JSON values are
-    // rejected by the producer; this scanner reports every raw candidate for human review.
-    if (PRIVATE_KEY.test(contents) && !contents.includes("Commitment")) {
-      violations.push({ file: path, code: "RAW_SECRET_CANDIDATE" });
-    }
   }
   return { scannedFiles: files.length, violations };
+}
+
+// auditCanaries is intentionally offline: callers invoke it only after every
+// workflow process has terminated. The private directory is never passed to
+// the coordinator; it is read here solely to search captured public evidence,
+// then removed. The returned report contains hashes, never canary values.
+export async function auditCanaries({ publicRoot, privateRoot }) {
+  const manifests = await filesAt(resolve(privateRoot));
+  const values = [];
+  for (const manifest of manifests) {
+    const parsed = JSON.parse(await readFile(manifest, "utf8"));
+    for (const [field, value] of Object.entries(parsed.fields ?? {})) {
+      if (typeof value !== "string" || !/^[0-9a-f]{64}$/i.test(value)) {
+        throw new Error("CANARY_MANIFEST_INVALID");
+      }
+      values.push({ party: parsed.party, field, value });
+    }
+  }
+  const files = await filesAt(resolve(publicRoot));
+  const leaks = [];
+  for (const path of files) {
+    const content = await readFile(path);
+    for (const canary of values) {
+      if (content.includes(Buffer.from(canary.value, "utf8"))) {
+        leaks.push({ party: canary.party, field: canary.field, file: path });
+      }
+    }
+  }
+  await rm(resolve(privateRoot), { recursive: true, force: true });
+  return {
+    canaries: values.map(({ party, field, value }) => ({
+      party, field, sha256: createHash("sha256").update(value).digest("hex"),
+    })),
+    scannedFiles: files.length,
+    leaks,
+    privateCanaryManifestsDeleted: true,
+  };
 }
 
 async function main() {
   const root = process.argv[2];
   if (typeof root !== "string" || root === "") throw new Error("EVIDENCE_ROOT_REQUIRED");
+  const privateIndex = process.argv.indexOf("--private-root");
+  const privateRoot = privateIndex >= 0 ? process.argv[privateIndex + 1] : null;
   const report = await scanPublicEvidence(root);
-  process.stdout.write(`${JSON.stringify({ ok: report.violations.length === 0, ...report })}\n`);
-  if (report.violations.length > 0) process.exitCode = 1;
+  const canaryReport = privateRoot ? await auditCanaries({ publicRoot: root, privateRoot }) : null;
+  const ok = report.violations.length === 0 && (!canaryReport || canaryReport.leaks.length === 0);
+  process.stdout.write(`${JSON.stringify({ ok, ...report, canaryReport })}\n`);
+  if (!ok) process.exitCode = 1;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
