@@ -329,7 +329,8 @@ func (l *lab) runNegativeChecks(manifestBytes []byte) (map[string]string, error)
 			ProvisionOperatorsAttempt string `json:"provisionOperatorsAttempt"`
 			ReleaseShareAttempt       string `json:"releaseShareAttempt"`
 		} `json:"evaluatorCapabilities"`
-		ConflictConfirmed bool `json:"conflictConfirmed"`
+		ConflictConfirmed bool   `json:"conflictConfirmed"`
+		IdentityMode      string `json:"identityMode"`
 	}
 	if err := json.Unmarshal(evaluatorRaw, &evaluatorParsed); err != nil {
 		return nil, err
@@ -345,6 +346,7 @@ func (l *lab) runNegativeChecks(manifestBytes []byte) (map[string]string, error)
 	results["evaluatorProvisionOperators"] = evaluatorParsed.EvaluatorCapabilities.ProvisionOperatorsAttempt
 	results["evaluatorCreateReleaseShare"] = evaluatorParsed.EvaluatorCapabilities.ReleaseShareAttempt
 	results["exactPolicyConflictConfirmed"] = "true"
+	results["identityMode"] = evaluatorParsed.IdentityMode
 
 	// Static evidence: the evaluator binary's source must not reference the
 	// trusted-dealer constructors at all.

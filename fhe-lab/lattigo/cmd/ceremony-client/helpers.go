@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	fhe "mordant.dev/fhe-lab/lattigo"
 )
 
 func parse(arguments []string) (config, error) {
@@ -37,12 +39,20 @@ func parse(arguments []string) (config, error) {
 	f.Uint64Var(&c.validUntil, "valid-until", 0, "unix seconds")
 	f.Uint64Var(&c.keyEpoch, "key-epoch", 0, "expected key epoch")
 	f.Uint64Var(&c.threshold, "threshold", 0, "expected threshold")
+	f.StringVar(&c.identityMode, "identity-mode", string(fhe.IdentityPublicCommitment),
+		"public_salted_commitment or full_fhe_256")
+	f.StringVar(&c.assetID, "asset-id", "",
+		"strict stable asset identity, encrypted bit-by-bit in full_fhe_256 mode")
+	f.StringVar(&c.enrollmentBinding, "enrollment-binding", "",
+		"32-byte binding carried as the signed enrollment nonce")
 	if err := f.Parse(arguments); err != nil || f.NArg() != 0 ||
 		(c.party != "a" && c.party != "b") || c.chainID == 0 || c.policyVersion == 0 ||
 		c.validUntil <= uint64(time.Now().Unix()) || c.publicMaterial == "" || c.manifest == "" ||
 		c.evaluationKeys == "" || c.issuerKey == "" || c.output == "" || c.privateManifest == "" ||
 		c.rosterDigest == "" || c.vault == "" || c.policyID == "" || c.sessionID == "" ||
-		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" || c.currencyCode == "" {
+		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" || c.currencyCode == "" ||
+		(c.identityMode != string(fhe.IdentityPublicCommitment) && c.identityMode != string(fhe.IdentityFullFHE256)) ||
+		(c.identityMode == string(fhe.IdentityFullFHE256) && (c.assetID == "" || c.enrollmentBinding == "")) {
 		return config{}, errors.New("invalid ceremony client configuration")
 	}
 	return c, nil

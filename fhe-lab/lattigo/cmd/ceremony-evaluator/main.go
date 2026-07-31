@@ -38,6 +38,7 @@ type config struct {
 	publicMaterial, evaluationKeys, manifest, issuerPublic string
 	inputA, inputB, out, storage, certificate, peerCA      string
 	operators, coalition, sessionID, vault, policyID       string
+	identityMode                                           string
 	chainID, policyVersion, nonce, validUntil              uint64
 }
 
@@ -47,6 +48,7 @@ type evaluatorOutput struct {
 	CustodyModel            string   `json:"custodyModel"`
 	KeyID                   string   `json:"keyId"`
 	ConflictConfirmed       bool     `json:"conflictConfirmed"`
+	IdentityMode            string   `json:"identityMode"`
 	InputCommitmentA        string   `json:"inputCommitmentA"`
 	InputCommitmentB        string   `json:"inputCommitmentB"`
 	ResultCommitment        string   `json:"resultCommitment"`
@@ -261,6 +263,11 @@ func run(arguments []string) error {
 	output.CustodyModel = string(fhe.CustodyDealerlessCeremony)
 	output.KeyID = hex.EncodeToString(keyID[:])
 	output.ConflictConfirmed = confirmed
+	// Recorded so the evidence proves which identity mode produced the bit. In
+	// full_fhe_256 the released bit is the conjunction overlap AND flags AND
+	// currency AND encrypted-identity-equality, so a true bit proves strict
+	// identity equality without ever releasing it separately.
+	output.IdentityMode = c.identityMode
 	output.InputCommitmentA = "0x" + hex.EncodeToString(inputA[:])
 	output.InputCommitmentB = "0x" + hex.EncodeToString(inputB[:])
 	output.ResultCommitment = "0x" + hex.EncodeToString(decision.ResultCiphertextCommitment[:])
@@ -382,7 +389,7 @@ func decodeRequest(runtime *fhe.Runtime, a, b []byte, c config) (fhe.EvaluationR
 	}
 	return fhe.EvaluationRequest{
 		KeyID: runtime.KeyID(), PolicyVersion: uint32(c.policyVersion), Nonce: nonce,
-		ValidUntil: time.Unix(int64(c.validUntil), 0), IdentityMode: fhe.IdentityPublicCommitment,
+		ValidUntil: time.Unix(int64(c.validUntil), 0), IdentityMode: fhe.IdentityMode(c.identityMode),
 		A: pledgeA, B: pledgeB, EnrollmentA: enrollmentA, EnrollmentB: enrollmentB,
 	}, nil
 }
@@ -485,6 +492,8 @@ func parse(arguments []string) (config, error) {
 	f.StringVar(&c.sessionID, "session-id", "", "release session id")
 	f.StringVar(&c.vault, "vault", "", "vault address")
 	f.StringVar(&c.policyID, "policy-id", "", "policy id")
+	f.StringVar(&c.identityMode, "identity-mode", string(fhe.IdentityPublicCommitment),
+		"public_salted_commitment or full_fhe_256")
 	f.Uint64Var(&c.chainID, "chain-id", 0, "chain id")
 	f.Uint64Var(&c.policyVersion, "policy-version", 0, "policy version")
 	f.Uint64Var(&c.nonce, "nonce", 0, "result nonce")
@@ -493,7 +502,8 @@ func parse(arguments []string) (config, error) {
 		c.publicMaterial == "" || c.evaluationKeys == "" || c.manifest == "" || c.issuerPublic == "" ||
 		c.inputA == "" || c.inputB == "" || c.out == "" || c.storage == "" || c.certificate == "" ||
 		c.peerCA == "" || c.operators == "" || c.coalition == "" || c.sessionID == "" ||
-		c.policyID == "" || c.chainID == 0 || c.policyVersion == 0 || c.validUntil == 0 {
+		c.policyID == "" || c.chainID == 0 || c.policyVersion == 0 || c.validUntil == 0 ||
+		(c.identityMode != string(fhe.IdentityPublicCommitment) && c.identityMode != string(fhe.IdentityFullFHE256)) {
 		return config{}, errors.New("invalid ceremony-evaluator configuration")
 	}
 	return c, nil

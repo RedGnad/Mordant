@@ -101,6 +101,7 @@ func main() {
 
 func run() error {
 	var root, out, repo, vault, policyLabel, anchorRootHex string
+	var identityMode, assetIDHex, bindingAHex, bindingBHex string
 	var keepRunning bool
 	flag.StringVar(&root, "root", "", "lab working directory (default: temp dir)")
 	flag.StringVar(&out, "out", "", "evidence output directory")
@@ -109,6 +110,12 @@ func run() error {
 	flag.StringVar(&vault, "vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8", "policy-scope vault or receivable anchor address")
 	flag.StringVar(&policyLabel, "policy-label", "mordant.dealerless.policy/v4", "policy identity label")
 	flag.StringVar(&anchorRootHex, "anchor-root", "", "invoice root of a deployed receivable anchor")
+	flag.StringVar(&identityMode, "identity-mode", "public_salted_commitment",
+		"public_salted_commitment or full_fhe_256")
+	flag.StringVar(&assetIDHex, "asset-id", "",
+		"strict stable asset identity, required in full_fhe_256")
+	flag.StringVar(&bindingAHex, "enrollment-binding-a", "", "runner-computed enrollment binding for side A")
+	flag.StringVar(&bindingBHex, "enrollment-binding-b", "", "runner-computed enrollment binding for side B")
 	flag.Parse()
 	if out == "" {
 		return errors.New("--out is required")
@@ -132,7 +139,16 @@ func run() error {
 		}
 		copy(anchorRoot[:], raw)
 	}
-	lab := &lab{root: root, out: out, repo: repo, vault: vault, policyID: policyID, anchorRoot: anchorRoot}
+	if identityMode != "public_salted_commitment" && identityMode != "full_fhe_256" {
+		return errors.New("unsupported identity mode")
+	}
+	if identityMode == "full_fhe_256" && (assetIDHex == "" || bindingAHex == "" || bindingBHex == "") {
+		return errors.New("full_fhe_256 requires an asset id and both enrollment bindings")
+	}
+	lab := &lab{
+		root: root, out: out, repo: repo, vault: vault, policyID: policyID, anchorRoot: anchorRoot,
+		identityMode: identityMode, assetID: assetIDHex, bindingA: bindingAHex, bindingB: bindingBHex,
+	}
 	return lab.execute()
 }
 
@@ -141,6 +157,10 @@ type lab struct {
 	vault           string
 	policyID        [32]byte
 	anchorRoot      [32]byte
+	identityMode    string
+	assetID         string
+	bindingA        string
+	bindingB        string
 	processes       []processRecord
 	running         []*exec.Cmd
 	binaries        map[string]string
@@ -152,6 +172,16 @@ type lab struct {
 	ports           map[uint64]int
 	labCert         tls.Certificate
 	roots           *x509.CertPool
+}
+
+// enrollmentBinding returns the runner-computed binding for one side. It is
+// carried as that side's signed enrollment nonce, so both enrollments provably
+// name the same committed session.
+func (l *lab) enrollmentBinding(party string) string {
+	if party == "a" {
+		return l.bindingA
+	}
+	return l.bindingB
 }
 
 func (l *lab) execute() (runErr error) {
@@ -497,6 +527,9 @@ func (l *lab) runClientsAndEvaluator() error {
 			"-valid-until", fmt.Sprintf("%d", validUntil),
 			"-key-epoch", "1",
 			"-threshold", "2",
+			"-identity-mode", l.identityMode,
+			"-asset-id", l.assetID,
+			"-enrollment-binding", l.enrollmentBinding(party),
 		); err != nil {
 			return err
 		}
@@ -525,6 +558,7 @@ func (l *lab) runClientsAndEvaluator() error {
 		"-policy-version", "1",
 		"-nonce", fmt.Sprintf("%d", nonce),
 		"-valid-until", fmt.Sprintf("%d", validUntil),
+		"-identity-mode", l.identityMode,
 	)
 }
 

@@ -25,6 +25,7 @@ import (
 type config struct {
 	party, publicMaterial, manifest, evaluationKeys, issuerKey, output, privateManifest string
 	rosterDigest, vault, policyID, sessionID, coverage, anchorRoot, currencyCode        string
+	identityMode, assetID, enrollmentBinding                                            string
 	chainID, policyVersion, nonce, validUntil, keyEpoch, windowBase                     uint64
 	threshold                                                                           uint64
 }
@@ -93,22 +94,44 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
+	mode := fhe.IdentityMode(c.identityMode)
 	pledge, claim, context, err := makePledge(c, vault, policy, shared, terms)
 	if err != nil {
 		return err
 	}
+	// In full_fhe_256 the strict stable asset identity is encrypted bit by bit
+	// and there is no public link commitment at all, so nothing about the
+	// receivable is testable by anyone holding only the ciphertext.
+	if mode == fhe.IdentityFullFHE256 {
+		assetID, assetErr := decode32(c.assetID)
+		if assetErr != nil {
+			return assetErr
+		}
+		pledge.ReceivableID = assetID
+		pledge.ReceivableCommitment = [32]byte{}
+	}
 	if pledge.AuthorizationCommitment, err = client.SubmitterAuthorizationCommitment(claim); err != nil {
 		return err
 	}
-	cipher, _, err := client.EncryptPledgeForMode(pledge, fhe.IdentityPublicCommitment)
+	cipher, _, err := client.EncryptPledgeForMode(pledge, mode)
 	if err != nil {
 		return err
 	}
+	// The enrollment nonce carries the runner-computed binding: the opaque
+	// session commitment, this side's frozen governance record, its source
+	// registration, scope, policy and key epoch. The issuer signs the enrollment,
+	// so the binding is authenticated and the runner can verify that both sides
+	// enrolled against the same committed session.
+	enrollmentNonce := sha256.Sum256(append(session[:], []byte("enrollment-"+c.party)...))
+	if c.enrollmentBinding != "" {
+		if enrollmentNonce, err = decode32(c.enrollmentBinding); err != nil {
+			return err
+		}
+	}
 	now := time.Now().UTC()
 	enrollment, err := fhe.SignCiphertextEnrollment(
-		client, cipher, fhe.IdentityPublicCommitment, context, claim,
-		now.Add(-time.Second), time.Unix(int64(c.validUntil), 0),
-		sha256.Sum256(append(session[:], []byte("enrollment-"+c.party)...)), issuer,
+		client, cipher, mode, context, claim,
+		now.Add(-time.Second), time.Unix(int64(c.validUntil), 0), enrollmentNonce, issuer,
 	)
 	if err != nil {
 		return err
