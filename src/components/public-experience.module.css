@@ -471,16 +471,16 @@
 .claimMarkSatelliteOne {
   --mark-delay: 125ms;
   --mark-offset-x: clamp(-400px, -24vw, -115px);
-  --mark-offset-y: -52px;
+  --mark-offset-y: -126px;
   --mark-resolved-rotation: 6deg;
   --mark-rotation: -8deg;
-  --mark-size: clamp(19px, 1.55vw, 24px);
+  --mark-size: clamp(44px, 5vw, 72px);
 }
 
 .claimMarkSatelliteTwo {
   --mark-delay: 150ms;
   --mark-offset-x: clamp(-880px, -60vw, -270px);
-  --mark-offset-y: 142px;
+  --mark-offset-y: 104px;
   --mark-resolved-rotation: 28deg;
   --mark-rotation: 14deg;
   --mark-size: clamp(18px, 1.6vw, 24px);
