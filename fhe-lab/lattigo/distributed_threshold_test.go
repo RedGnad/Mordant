@@ -8,7 +8,10 @@ import (
 )
 
 func TestSeparatedThresholdOperatorsReleaseBoundBoolean(t *testing.T) {
-	runtime := sharedTestRuntime(t)
+	// This test asserts that the coordinator loses its local decrypt capability
+	// after provisioning, which permanently detaches the threshold parties. It
+	// therefore owns its runtime rather than sharing the package singleton.
+	runtime := dedicatedTestRuntime(t)
 	a, b := fixturePair("separated-threshold")
 	authorizePair(t, runtime, a, b)
 	encA, _, err := runtime.EncryptPledge(a)

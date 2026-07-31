@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "mordant.fhe-provider-output/3-lab",
+  "ok": true,
+  "result": {
+    "schemaVersion": "mordant.confidential-policy-result/3-lab",
+    "chainId": "10143",
+    "consumer": "0xb23a3c3492b9ba83d80c8abc9a5484d2885f058a",
+    "vault": "0x7531d467f19d1055accf6b0d22286184f87adbd8",
+    "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+    "policyVersion": "1",
+    "inputCommitmentA": "0x9e29fbc7cc0c6d520317cbec7d78a3f2bac41688e9a3a1437beed3f9dc466ade",
+    "inputCommitmentB": "0xa90f6dbbb0a17a09a3c0affa85b60f9cfc698cba3cefdbb9ecdab3c06ad7ed48",
+    "conflictConfirmed": true,
+    "nonce": "4281141463025089708",
+    "validUntil": "1785515992",
+    "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+    "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b"
+  },
+  "providerProof": {
+    "resultCiphertextCommitment": "0x6f1a27a7c1b642b9e32430c654f3b9c62d90f53db9a3e3cfd7505553cf164b0e",
+    "thresholdTranscriptCommitment": "0x492c29794f88ddea79ae6ded93f96b955c7b0286ea5cd6f37617b7435063d870",
+    "thresholdSessionId": "0x0efc7e1581ccf5695b052869014b414bf094a2feddd32ad45c4f5d0992fd5d9c",
+    "thresholdKeyCommitment": "0x12dcdf5d851601a116d323d00ffb9ba5b1a9b042e394ae0349196d09ddbba0da",
+    "policyCircuitCommitment": "0x1634d16c88b18ba8eb200692fd6a32be8d3e335b0fd3dcf08d53ca48c2120a96",
+    "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1"
+  },
+  "nodes": [
+    {
+      "role": "threshold-node-1",
+      "pid": 27905,
+      "mtls": "authenticated",
+      "selected": true,
+      "ledgerState": "ACKED",
+      "exit": "terminated-cleanly"
+    },
+    {
+      "role": "threshold-node-2",
+      "pid": 27906,
+      "mtls": "authenticated",
+      "selected": true,
+      "ledgerState": "ACKED",
+      "exit": "terminated-cleanly"
+    },
+    {
+      "role": "threshold-node-3",
+      "pid": 27907,
+      "mtls": "authenticated",
+      "selected": false,
+      "ledgerState": "NOT_SELECTED",
+      "exit": "terminated-cleanly"
+    }
+  ]
+}

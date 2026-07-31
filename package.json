@@ -52,7 +52,8 @@
     "fhe:monad:check": "node --env-file=.env fhe-lab/monad-testnet/run.mjs --check",
     "fhe:monad:run": "node --env-file=.env fhe-lab/monad-testnet/run.mjs --run --out fhe-lab/monad-testnet/artifacts/latest.json",
     "fhe:privacy:check": "node --env-file=.env fhe-lab/monad-testnet/run-v3.mjs --check",
-    "fhe:privacy:run": "node --env-file=.env fhe-lab/monad-testnet/run-v3.mjs --run --out fhe-lab/monad-testnet/artifacts/privacy-v3-latest.json"
+    "fhe:privacy:run": "node --env-file=.env fhe-lab/monad-testnet/run-v3.mjs --run --out fhe-lab/monad-testnet/artifacts/privacy-v3-latest.json",
+    "fhe:test": "node --test fhe-lab/monad-testnet/run.test.mjs fhe-lab/monad-testnet/run-v3.test.mjs fhe-lab/privacy-v3/leak-scan.test.mjs fhe-lab/shared/scripts/canonical-v3.test.mjs fhe-lab/workflow/workflow.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

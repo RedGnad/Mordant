@@ -26,6 +26,20 @@ func sharedTestRuntime(t *testing.T) *Runtime {
 	return testRuntime
 }
 
+// dedicatedTestRuntime is for tests that deliberately destroy runtime state,
+// such as detaching the co-located threshold parties. Those tests must not run
+// against the shared runtime: DetachThresholdParties is irreversible, so every
+// later test in the package would lose the in-process coalition and fail with
+// ErrInsufficientShare purely because of execution order.
+func dedicatedTestRuntime(t *testing.T) *Runtime {
+	t.Helper()
+	runtime, _, err := NewRuntime()
+	if err != nil {
+		t.Fatalf("dedicated setup failed: %v", err)
+	}
+	return runtime
+}
+
 func TestEncryptedPolicyCases(t *testing.T) {
 	runtime := sharedTestRuntime(t)
 	tests := []struct {

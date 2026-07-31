@@ -38,7 +38,12 @@ export async function scanPublicEvidence(root) {
 // workflow process has terminated. The private directory is never passed to
 // the coordinator; it is read here solely to search captured public evidence,
 // then removed. The returned report contains hashes, never canary values.
-export async function auditCanaries({ publicRoot, privateRoot }) {
+//
+// `extraRoots` lets a caller fold later-produced public evidence (the Monad
+// journal, receipt, calldata and readbacks) into the same canary sweep.
+// `deleteManifests: false` defers removal so a caller can run one final sweep
+// over those artifacts; the caller must still delete before it reports success.
+export async function auditCanaries({ publicRoot, privateRoot, extraRoots = [], deleteManifests = true }) {
   const manifests = await filesAt(resolve(privateRoot));
   const values = [];
   for (const manifest of manifests) {
@@ -50,7 +55,9 @@ export async function auditCanaries({ publicRoot, privateRoot }) {
       values.push({ party: parsed.party, field, value });
     }
   }
-  const files = await filesAt(resolve(publicRoot));
+  const roots = [resolve(publicRoot), ...extraRoots.map((root) => resolve(root))];
+  const files = [];
+  for (const root of roots) files.push(...await filesAt(root));
   const leaks = [];
   for (const path of files) {
     const content = await readFile(path);
@@ -60,14 +67,15 @@ export async function auditCanaries({ publicRoot, privateRoot }) {
       }
     }
   }
-  await rm(resolve(privateRoot), { recursive: true, force: true });
+  if (deleteManifests) await rm(resolve(privateRoot), { recursive: true, force: true });
   return {
     canaries: values.map(({ party, field, value }) => ({
       party, field, sha256: createHash("sha256").update(value).digest("hex"),
     })),
+    scannedRoots: roots,
     scannedFiles: files.length,
     leaks,
-    privateCanaryManifestsDeleted: true,
+    privateCanaryManifestsDeleted: deleteManifests,
   };
 }
 

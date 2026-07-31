@@ -1,0 +1,87 @@
+{
+  "ok": true,
+  "generic": {
+    "scannedFiles": 18,
+    "violations": []
+  },
+  "canaries": {
+    "canaries": [
+      {
+        "party": "a",
+        "field": "active_periods",
+        "sha256": "b1263befe042cc8b6746e61ffe09a2659858ad76f95fcac6c73fecae203f18ce"
+      },
+      {
+        "party": "a",
+        "field": "amount",
+        "sha256": "84081b9a357d57027be5c67724b5f30260abff0a9ca10e61df955393e8c2490e"
+      },
+      {
+        "party": "a",
+        "field": "currency",
+        "sha256": "3cc5b205e71613317785497502edefc80621244cbda9b881cbcb6d6066121109"
+      },
+      {
+        "party": "a",
+        "field": "exclusivity",
+        "sha256": "895c476877a5e9fc00107e3219b3209b41c928c0a346ab428b832f3dac92b0a2"
+      },
+      {
+        "party": "a",
+        "field": "identity_authorization",
+        "sha256": "5767497f8da424f4b6168d5639d5e379ee293d7a51e61994408ed89e71ce3eec"
+      },
+      {
+        "party": "a",
+        "field": "invoice_identifier",
+        "sha256": "8190b7fae857a838807ff15434fccb116061248f8b99da8fed53fd82adc73809"
+      },
+      {
+        "party": "a",
+        "field": "obligation_id",
+        "sha256": "95f2bdde326740bf4e1335e9d68e652a2e2f4c5365b1dba0affff66fbb2a02ef"
+      },
+      {
+        "party": "b",
+        "field": "active_periods",
+        "sha256": "149687542bdd7fd76e0db61ed890ad14a5fd803d429865a8cf7ca60f4a0b38f9"
+      },
+      {
+        "party": "b",
+        "field": "amount",
+        "sha256": "07c4816c94fdc243e887f5fe5330a946eb93fe95b815c1d56d8017105bd87223"
+      },
+      {
+        "party": "b",
+        "field": "currency",
+        "sha256": "020553662fe0777c51ec6b41289d2872973e510a85d5314ee7770994c874660a"
+      },
+      {
+        "party": "b",
+        "field": "exclusivity",
+        "sha256": "98c5caadcfde52f5d3f4e2477290df9ef292890c8a8387de6b12df30c78d21c1"
+      },
+      {
+        "party": "b",
+        "field": "identity_authorization",
+        "sha256": "ab5118b5f3c03ba0f2ee09f96b34b26e75cfbecc208be122f26d9eeb7a068387"
+      },
+      {
+        "party": "b",
+        "field": "invoice_identifier",
+        "sha256": "e9478c5d6b6fac5e4b00cc73a3532c5ecdbc49fc115154bae41cff2c79abb406"
+      },
+      {
+        "party": "b",
+        "field": "obligation_id",
+        "sha256": "2eeb0afcb9f764ab357d5cb802277ab709d73daec0e2a7ff2de5d91009eee6da"
+      }
+    ],
+    "scannedRoots": [
+      "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public"
+    ],
+    "scannedFiles": 18,
+    "leaks": [],
+    "privateCanaryManifestsDeleted": false
+  }
+}

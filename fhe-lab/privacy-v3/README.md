@@ -22,12 +22,30 @@ fresh FHE result V3
 bypass, wrong consumer/vault/policy/version, false results, expiry, result/proof mutation,
 one/duplicate validator signatures, replay nonce, reused decision and reused proof.
 
-## Gate deliberately not claimed
+## Gate status
 
-This directory does **not** yet demonstrate the final independently launched Client A, Client B,
-evaluator and three-node mTLS session in one captured run. Nor can it make the required Monad V3
-transaction without the dedicated testnet deployer and validators. Therefore no product privacy
-claim is authorized by this code alone.
+The gate is met on Monad testnet under controlled laboratory conditions. One fresh six-process
+capture (Client A, Client B, evaluator/coordinator, three mTLS threshold nodes) fed one atomic V3
+recourse transaction:
+
+```text
+transaction  0x038d075412a031591e53d5a8d598563e5a0882b840a665af0b460809347ea023
+block        49715282
+verifier     0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a
+consumer     0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A
+```
+
+Retained evidence is in `fhe-lab/monad-testnet/artifacts/`: the run report, the crash-safe journal
+and the process capture's public text evidence. The transaction moved no token or asset.
+
+### What this does not establish
+
+- no public proof of correct FHE execution; the quorum authenticates who endorsed the result;
+- no source truth for the underlying commercial facts;
+- transaction metadata (addresses, timing, sizes, gas, the Boolean outcome) stays public;
+- no private settlement and no anonymity;
+- controlled laboratory custody, not independently administered operators;
+- no production authorization.
 
 Run the public-output scanner only against a generated evidence directory:
 

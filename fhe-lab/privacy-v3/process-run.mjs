@@ -74,14 +74,39 @@ export async function runProcessSeparatedV3(options = parse(process.argv.slice(2
   const [aExit, bExit, coordinatorExit] = await Promise.all([clientA.record.wait, clientB.record.wait, coordinator.record.wait]);
   if (aExit.code !== 0 || bExit.code !== 0 || coordinatorExit.code !== 0) fail("PROCESS_RUN_CHILD_FAILURE");
   await writeFile(resolve(publicRoot, "lifecycle.json"), `${JSON.stringify({ sourceCommit: process.env.GIT_COMMIT ?? "working-tree", classification: "PROCESS-SEPARATED CONTROLLED LAB", roles: lifecycle.map(({ wait, ...record }) => record), sixApplicationProcesses: ["client-a", "client-b", "evaluator-coordinator", "threshold-node-1", "threshold-node-2", "threshold-node-3"], selectedCoalition: ["threshold-node-1", "threshold-node-2"], unselectedAuthenticatedNode: "threshold-node-3" }, null, 2)}\n`);
+  // The first sweep runs while the private manifests still exist. Deletion is
+  // deferred so the caller can fold its own later public artifacts (Monad
+  // journal, receipt, calldata, readbacks) into one final canary sweep.
   const generic = await scanPublicEvidence(publicRoot);
-  const canaries = await auditCanaries({ publicRoot, privateRoot });
+  const canaries = await auditCanaries({ publicRoot, privateRoot, deleteManifests: false });
   const scan = { ok: generic.violations.length === 0 && canaries.leaks.length === 0, generic, canaries };
   await writeFile(resolve(publicRoot, "leak-scan.json"), `${JSON.stringify(scan, null, 2)}\n`);
-  if (!scan.ok) fail("PROCESS_RUN_LEAK_SCAN");
+  if (!scan.ok) { await sealCanaries({ publicRoot, privateRoot }); fail("PROCESS_RUN_LEAK_SCAN"); }
   const providerResult = JSON.parse(await readFile(resolve(publicRoot, "provider-result.json"), "utf8"));
-  return { root, publicRoot, result: providerResult, lifecycle: lifecycle.map(({ wait, ...record }) => record), leakScan: scan };
+  return {
+    root, publicRoot, privateRoot, result: providerResult,
+    lifecycle: lifecycle.map(({ wait, ...record }) => record), leakScan: scan,
+    sealEvidence: (extraRoots = []) => sealCanaries({ publicRoot, privateRoot, extraRoots }),
+  };
 }
 
-async function main() { try { const report = await runProcessSeparatedV3(); process.stdout.write(`${JSON.stringify({ ok: true, root: report.root, result: report.result })}\n`); } catch (error) { process.stdout.write(`${JSON.stringify({ ok: false, root: activeRoot, code: error.code ?? error.message ?? "PROCESS_RUN_FAILED" })}\n`); process.exitCode = 1; } }
+// Final sweep over every captured public artifact, then removal of the private
+// canary manifests. Safe to call more than once: after deletion there are no
+// manifests left to read and the sweep reports zero canaries.
+export async function sealCanaries({ publicRoot, privateRoot, extraRoots = [] }) {
+  const generic = await scanPublicEvidence(publicRoot);
+  const extraGeneric = [];
+  for (const extra of extraRoots) extraGeneric.push(await scanPublicEvidence(extra));
+  const canaries = await auditCanaries({ publicRoot, privateRoot, extraRoots, deleteManifests: true });
+  const violations = [generic, ...extraGeneric].flatMap((report) => report.violations);
+  const sealed = {
+    ok: violations.length === 0 && canaries.leaks.length === 0,
+    generic: { scannedFiles: generic.scannedFiles + extraGeneric.reduce((total, r) => total + r.scannedFiles, 0), violations },
+    canaries,
+  };
+  await writeFile(resolve(publicRoot, "leak-scan-final.json"), `${JSON.stringify(sealed, null, 2)}\n`);
+  return sealed;
+}
+
+async function main() { try { const report = await runProcessSeparatedV3(); const sealed = await report.sealEvidence(); process.stdout.write(`${JSON.stringify({ ok: sealed.ok, root: report.root, result: report.result })}\n`); if (!sealed.ok) process.exitCode = 1; } catch (error) { process.stdout.write(`${JSON.stringify({ ok: false, root: activeRoot, code: error.code ?? error.message ?? "PROCESS_RUN_FAILED" })}\n`); process.exitCode = 1; } }
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) await main();

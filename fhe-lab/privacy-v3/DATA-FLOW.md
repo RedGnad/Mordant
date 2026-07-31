@@ -26,6 +26,13 @@ made that these metadata are private.
 
 ## Current gate status
 
-The V3 contract and public schema exist. This document is not proof of the required final process
-run. Until independently launched Client A, Client B, evaluator and threshold-node processes have
-been captured and scanned, the privacy product claim remains **not ready**.
+The required capture exists. Separately launched Client A, Client B, evaluator/coordinator and
+three mTLS threshold-node processes were recorded and scanned, and the resulting result was
+consumed by one atomic Monad testnet recourse transaction
+(`0x038d075412a031591e53d5a8d598563e5a0882b840a665af0b460809347ea023`, block 49715282). The
+recursive leak audit swept the six-process capture together with the journal, report, calldata,
+decoded events and readbacks, and found no pledge plaintext and no canary leak.
+
+This authorizes controlled laboratory language only. It does not establish correct FHE execution,
+source truth, transaction-metadata privacy, private settlement, independent operator custody or
+production readiness.

@@ -1,0 +1,506 @@
+{
+  "schemaVersion": "mordant.fhe-monad-v3-recourse/1",
+  "testAssetsOnly": true,
+  "classification": "MONAD V3 ATOMIC RECOURSE: PROVEN",
+  "mode": "run",
+  "network": {
+    "chainId": 10143,
+    "balance": "38864778250000000000",
+    "nonce": "13",
+    "gasPrice": "102000000000",
+    "deployer": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+    "validators": [
+      "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+      "0x5eFD0B652BC49F0a6B568daA3d1e86D635Fd07aa"
+    ],
+    "vault": "0x7531d467F19d1055AcCF6B0D22286184f87adBd8"
+  },
+  "setup": {
+    "classification": "SETUP_REUSABLE",
+    "reason": null,
+    "mismatches": [],
+    "hashes": {
+      "verifier": "0xeab86cb49731deca61b36517e6e3389a3c654b2753face718a2af58a0a4d0b0e",
+      "consumer": "0x5e1efb1b625267a69b0a42f33794e32c56d16b808c435c6ee91af0ab9d65b113",
+      "policy": "0xcf1b8d8fad00d7c96312ff85ee3b0895cb31494848728f7ca0a060ab0c585093"
+    },
+    "verifier": "0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a",
+    "consumer": "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+    "validatorSetId": "0xe0f67ba07afcbe0bcb66bc0bf947160a9f84598f7497a33bbbca283ded7a1e2b",
+    "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+    "policyVersion": 1
+  },
+  "processEvidence": {
+    "root": "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb",
+    "publicRoot": "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public",
+    "lifecycle": [
+      {
+        "role": "evaluator-coordinator",
+        "pid": 27886,
+        "startTime": "2026-07-31T16:09:58.521Z",
+        "command": [
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/bin/privacy-coordinator",
+          "--root",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb",
+          "--threshold-node",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/bin/threshold-node",
+          "[redacted]",
+          "[redacted]",
+          "--out",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/provider-result.json",
+          "--session-id",
+          "0x0efc7e1581ccf5695b052869014b414bf094a2feddd32ad45c4f5d0992fd5d9c",
+          "--chain-id",
+          "10143",
+          "--vault",
+          "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+          "--policy-id",
+          "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+          "--policy-version",
+          "1",
+          "--consumer",
+          "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+          "--input-a",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/envelopes/a.bin",
+          "--input-b",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/envelopes/b.bin",
+          "--nonce",
+          "4281141463025089708",
+          "--valid-until",
+          "1785515992"
+        ],
+        "exitTime": "2026-07-31T16:10:14.460Z",
+        "exit": "0"
+      },
+      {
+        "role": "client-a",
+        "pid": 27890,
+        "startTime": "2026-07-31T16:10:02.583Z",
+        "command": [
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/bin/privacy-client",
+          "--party",
+          "a",
+          "--public-material",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/encryption-material.bin",
+          "[redacted]",
+          "[redacted]",
+          "--chain-id",
+          "10143",
+          "--vault",
+          "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+          "--policy-id",
+          "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+          "--policy-version",
+          "1",
+          "--nonce",
+          "4281141463025089708",
+          "--valid-until",
+          "1785515992",
+          "--session-id",
+          "0x0efc7e1581ccf5695b052869014b414bf094a2feddd32ad45c4f5d0992fd5d9c",
+          "--out",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/envelopes/a.bin",
+          "[redacted]",
+          "[redacted]"
+        ],
+        "exitTime": "2026-07-31T16:10:04.366Z",
+        "exit": "0"
+      },
+      {
+        "role": "client-b",
+        "pid": 27891,
+        "startTime": "2026-07-31T16:10:02.586Z",
+        "command": [
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/bin/privacy-client",
+          "--party",
+          "b",
+          "--public-material",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/encryption-material.bin",
+          "[redacted]",
+          "[redacted]",
+          "--chain-id",
+          "10143",
+          "--vault",
+          "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+          "--policy-id",
+          "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+          "--policy-version",
+          "1",
+          "--nonce",
+          "4281141463025089708",
+          "--valid-until",
+          "1785515992",
+          "--session-id",
+          "0x0efc7e1581ccf5695b052869014b414bf094a2feddd32ad45c4f5d0992fd5d9c",
+          "--out",
+          "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public/envelopes/b.bin",
+          "[redacted]",
+          "[redacted]"
+        ],
+        "exitTime": "2026-07-31T16:10:04.377Z",
+        "exit": "0"
+      }
+    ],
+    "nodes": [
+      {
+        "role": "threshold-node-1",
+        "pid": 27905,
+        "mtls": "authenticated",
+        "selected": true,
+        "ledgerState": "ACKED",
+        "exit": "terminated-cleanly"
+      },
+      {
+        "role": "threshold-node-2",
+        "pid": 27906,
+        "mtls": "authenticated",
+        "selected": true,
+        "ledgerState": "ACKED",
+        "exit": "terminated-cleanly"
+      },
+      {
+        "role": "threshold-node-3",
+        "pid": 27907,
+        "mtls": "authenticated",
+        "selected": false,
+        "ledgerState": "NOT_SELECTED",
+        "exit": "terminated-cleanly"
+      }
+    ],
+    "leakScan": {
+      "ok": true,
+      "scannedFiles": 18,
+      "canaries": [
+        {
+          "party": "a",
+          "field": "active_periods",
+          "sha256": "b1263befe042cc8b6746e61ffe09a2659858ad76f95fcac6c73fecae203f18ce"
+        },
+        {
+          "party": "a",
+          "field": "amount",
+          "sha256": "84081b9a357d57027be5c67724b5f30260abff0a9ca10e61df955393e8c2490e"
+        },
+        {
+          "party": "a",
+          "field": "currency",
+          "sha256": "3cc5b205e71613317785497502edefc80621244cbda9b881cbcb6d6066121109"
+        },
+        {
+          "party": "a",
+          "field": "exclusivity",
+          "sha256": "895c476877a5e9fc00107e3219b3209b41c928c0a346ab428b832f3dac92b0a2"
+        },
+        {
+          "party": "a",
+          "field": "identity_authorization",
+          "sha256": "5767497f8da424f4b6168d5639d5e379ee293d7a51e61994408ed89e71ce3eec"
+        },
+        {
+          "party": "a",
+          "field": "invoice_identifier",
+          "sha256": "8190b7fae857a838807ff15434fccb116061248f8b99da8fed53fd82adc73809"
+        },
+        {
+          "party": "a",
+          "field": "obligation_id",
+          "sha256": "95f2bdde326740bf4e1335e9d68e652a2e2f4c5365b1dba0affff66fbb2a02ef"
+        },
+        {
+          "party": "b",
+          "field": "active_periods",
+          "sha256": "149687542bdd7fd76e0db61ed890ad14a5fd803d429865a8cf7ca60f4a0b38f9"
+        },
+        {
+          "party": "b",
+          "field": "amount",
+          "sha256": "07c4816c94fdc243e887f5fe5330a946eb93fe95b815c1d56d8017105bd87223"
+        },
+        {
+          "party": "b",
+          "field": "currency",
+          "sha256": "020553662fe0777c51ec6b41289d2872973e510a85d5314ee7770994c874660a"
+        },
+        {
+          "party": "b",
+          "field": "exclusivity",
+          "sha256": "98c5caadcfde52f5d3f4e2477290df9ef292890c8a8387de6b12df30c78d21c1"
+        },
+        {
+          "party": "b",
+          "field": "identity_authorization",
+          "sha256": "ab5118b5f3c03ba0f2ee09f96b34b26e75cfbecc208be122f26d9eeb7a068387"
+        },
+        {
+          "party": "b",
+          "field": "invoice_identifier",
+          "sha256": "e9478c5d6b6fac5e4b00cc73a3532c5ecdbc49fc115154bae41cff2c79abb406"
+        },
+        {
+          "party": "b",
+          "field": "obligation_id",
+          "sha256": "2eeb0afcb9f764ab357d5cb802277ab709d73daec0e2a7ff2de5d91009eee6da"
+        }
+      ],
+      "leaks": []
+    },
+    "providerProof": {
+      "resultCiphertextCommitment": "0x6f1a27a7c1b642b9e32430c654f3b9c62d90f53db9a3e3cfd7505553cf164b0e",
+      "thresholdTranscriptCommitment": "0x492c29794f88ddea79ae6ded93f96b955c7b0286ea5cd6f37617b7435063d870",
+      "thresholdSessionId": "0x0efc7e1581ccf5695b052869014b414bf094a2feddd32ad45c4f5d0992fd5d9c",
+      "thresholdKeyCommitment": "0x12dcdf5d851601a116d323d00ffb9ba5b1a9b042e394ae0349196d09ddbba0da",
+      "policyCircuitCommitment": "0x1634d16c88b18ba8eb200692fd6a32be8d3e335b0fd3dcf08d53ca48c2120a96",
+      "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1"
+    }
+  },
+  "transactions": {
+    "setupVerifier": {
+      "hash": "0xeab86cb49731deca61b36517e6e3389a3c654b2753face718a2af58a0a4d0b0e",
+      "status": "success",
+      "block": "49704137",
+      "blockHash": "0xc96002fa3f22d713109fb4dc162859f8128f44ca844da485de772bc0d7d03139",
+      "address": "0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a",
+      "to": null
+    },
+    "setupConsumer": {
+      "hash": "0x5e1efb1b625267a69b0a42f33794e32c56d16b808c435c6ee91af0ab9d65b113",
+      "status": "success",
+      "block": "49704139",
+      "blockHash": "0x8aac3cbbce43f10d445cdfcfe619ac8021b1bc415a849a4829a37c718b5d85d4",
+      "address": "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+      "to": null
+    },
+    "setupPolicy": {
+      "hash": "0xcf1b8d8fad00d7c96312ff85ee3b0895cb31494848728f7ca0a060ab0c585093",
+      "status": "success",
+      "block": "49704140",
+      "blockHash": "0xa8184123832bce82c4f00fd9c1ee87236146f11f945d9e7daded07b096a587ff",
+      "address": null,
+      "to": "0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a"
+    },
+    "openRecourse": {
+      "hash": "0x038d075412a031591e53d5a8d598563e5a0882b840a665af0b460809347ea023",
+      "status": "success",
+      "gasEstimate": "440838",
+      "gasLimit": "551047",
+      "submittedAt": "2026-07-31T16:10:16.017Z",
+      "block": "49715282",
+      "blockHash": "0xcb6a62936b35a53ce42d2cf39de60605733e698206114770020c3602b7a47ae2",
+      "gasUsed": "551047",
+      "calldataBytes": 868
+    }
+  },
+  "result": {
+    "schemaVersion": "mordant.confidential-policy-result/3-lab",
+    "chainId": "10143",
+    "consumer": "0xb23a3c3492b9ba83d80c8abc9a5484d2885f058a",
+    "vault": "0x7531d467f19d1055accf6b0d22286184f87adbd8",
+    "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+    "policyVersion": "1",
+    "inputCommitmentA": "0x9e29fbc7cc0c6d520317cbec7d78a3f2bac41688e9a3a1437beed3f9dc466ade",
+    "inputCommitmentB": "0xa90f6dbbb0a17a09a3c0affa85b60f9cfc698cba3cefdbb9ecdab3c06ad7ed48",
+    "conflictConfirmed": true,
+    "nonce": "4281141463025089708",
+    "validUntil": "1785515992",
+    "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+    "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b"
+  },
+  "readbacks": {
+    "verifier": "0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a",
+    "consumer": "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+    "validatorSetId": "0xe0f67ba07afcbe0bcb66bc0bf947160a9f84598f7497a33bbbca283ded7a1e2b",
+    "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+    "policyVersion": "1",
+    "intendedConsumer": "0xb23a3c3492b9ba83d80c8abc9a5484d2885f058a",
+    "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b",
+    "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+    "inputCommitmentA": "0x9e29fbc7cc0c6d520317cbec7d78a3f2bac41688e9a3a1437beed3f9dc466ade",
+    "inputCommitmentB": "0xa90f6dbbb0a17a09a3c0affa85b60f9cfc698cba3cefdbb9ecdab3c06ad7ed48",
+    "replayKey": "0x201697d8ec326715c5daea9db3f868e13c02ce463a3853c6ce558d318e2a427b",
+    "decisionKey": "0x5e461c862a17d55ede73009d0aa0b63ba709227065d167b69f7d62792535a53a",
+    "nonceConsumed": true,
+    "decisionConsumed": true,
+    "providerProofConsumed": true,
+    "recourseRecord": {
+      "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b",
+      "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+      "inputCommitmentA": "0x9e29fbc7cc0c6d520317cbec7d78a3f2bac41688e9a3a1437beed3f9dc466ade",
+      "inputCommitmentB": "0xa90f6dbbb0a17a09a3c0affa85b60f9cfc698cba3cefdbb9ecdab3c06ad7ed48",
+      "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+      "policyVersion": 1,
+      "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+      "consequenceId": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a",
+      "acceptedAt": "1785514216",
+      "cureDeadline": "1785517816",
+      "status": 1
+    },
+    "checks": {
+      "statusOpen": true,
+      "responsibleRoleMatchesPolicy": true,
+      "consequenceMatchesPolicy": true,
+      "cureDeadlineDerivedOnChain": true,
+      "acceptanceTimestampDerivedOnChain": true,
+      "intendedConsumerEnforced": true,
+      "identitiesConsumed": true
+    }
+  },
+  "events": {
+    "verifierAcceptance": [
+      {
+        "name": "ConfidentialPolicyResultV3Accepted",
+        "args": {
+          "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b",
+          "consumer": "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+          "vault": "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+          "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+          "policyVersion": 1,
+          "nonce": "4281141463025089708",
+          "conflictConfirmed": true,
+          "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1"
+        }
+      }
+    ],
+    "recourseOpened": [
+      {
+        "name": "LaboratoryRecourseOpened",
+        "args": {
+          "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b",
+          "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+          "vault": "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+          "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+          "policyVersion": 1,
+          "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+          "cureDeadline": "1785517816",
+          "consequenceId": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a"
+        }
+      }
+    ]
+  },
+  "replay": {
+    "mode": "eth_call",
+    "rejected": true,
+    "secondTransactionBroadcast": false,
+    "revert": "execution reverted",
+    "customErrorDataExposed": false,
+    "corroboratedByConsumedState": true
+  },
+  "leakScan": {
+    "sealed": true,
+    "ok": true,
+    "scannedRoots": [
+      "/var/folders/hn/l99q24jd5hd75cnj5qh0sgzh0000gn/T/mordant-privacy-v3-jer9tb/public",
+      "/Users/red.g/CascadeProjects/Master/Mordant/fhe-lab/monad-testnet/artifacts"
+    ],
+    "scannedFiles": 22,
+    "violations": [],
+    "leaks": [],
+    "canaries": [
+      {
+        "party": "a",
+        "field": "active_periods",
+        "sha256": "b1263befe042cc8b6746e61ffe09a2659858ad76f95fcac6c73fecae203f18ce"
+      },
+      {
+        "party": "a",
+        "field": "amount",
+        "sha256": "84081b9a357d57027be5c67724b5f30260abff0a9ca10e61df955393e8c2490e"
+      },
+      {
+        "party": "a",
+        "field": "currency",
+        "sha256": "3cc5b205e71613317785497502edefc80621244cbda9b881cbcb6d6066121109"
+      },
+      {
+        "party": "a",
+        "field": "exclusivity",
+        "sha256": "895c476877a5e9fc00107e3219b3209b41c928c0a346ab428b832f3dac92b0a2"
+      },
+      {
+        "party": "a",
+        "field": "identity_authorization",
+        "sha256": "5767497f8da424f4b6168d5639d5e379ee293d7a51e61994408ed89e71ce3eec"
+      },
+      {
+        "party": "a",
+        "field": "invoice_identifier",
+        "sha256": "8190b7fae857a838807ff15434fccb116061248f8b99da8fed53fd82adc73809"
+      },
+      {
+        "party": "a",
+        "field": "obligation_id",
+        "sha256": "95f2bdde326740bf4e1335e9d68e652a2e2f4c5365b1dba0affff66fbb2a02ef"
+      },
+      {
+        "party": "b",
+        "field": "active_periods",
+        "sha256": "149687542bdd7fd76e0db61ed890ad14a5fd803d429865a8cf7ca60f4a0b38f9"
+      },
+      {
+        "party": "b",
+        "field": "amount",
+        "sha256": "07c4816c94fdc243e887f5fe5330a946eb93fe95b815c1d56d8017105bd87223"
+      },
+      {
+        "party": "b",
+        "field": "currency",
+        "sha256": "020553662fe0777c51ec6b41289d2872973e510a85d5314ee7770994c874660a"
+      },
+      {
+        "party": "b",
+        "field": "exclusivity",
+        "sha256": "98c5caadcfde52f5d3f4e2477290df9ef292890c8a8387de6b12df30c78d21c1"
+      },
+      {
+        "party": "b",
+        "field": "identity_authorization",
+        "sha256": "ab5118b5f3c03ba0f2ee09f96b34b26e75cfbecc208be122f26d9eeb7a068387"
+      },
+      {
+        "party": "b",
+        "field": "invoice_identifier",
+        "sha256": "e9478c5d6b6fac5e4b00cc73a3532c5ecdbc49fc115154bae41cff2c79abb406"
+      },
+      {
+        "party": "b",
+        "field": "obligation_id",
+        "sha256": "2eeb0afcb9f764ab357d5cb802277ab709d73daec0e2a7ff2de5d91009eee6da"
+      }
+    ]
+  },
+  "performance": {
+    "fheMilliseconds": 21878.59,
+    "calldataBytes": 868,
+    "gasUsed": "551047",
+    "totalMilliseconds": 24310.66
+  },
+  "session": {
+    "verifier": "0x7F1271D43B0E41e2eeDDD5290f459fDc6196a19a",
+    "consumer": "0xB23A3C3492B9BA83D80C8abc9A5484d2885f058A",
+    "validatorSetId": "0xe0f67ba07afcbe0bcb66bc0bf947160a9f84598f7497a33bbbca283ded7a1e2b",
+    "resultDigest": "0xd879a2580d1ef2992a2e79e7190d66307988eca13c8b94a5049cd3da0e096828",
+    "replayKey": "0x201697d8ec326715c5daea9db3f868e13c02ce463a3853c6ce558d318e2a427b",
+    "decisionKey": "0x5e461c862a17d55ede73009d0aa0b63ba709227065d167b69f7d62792535a53a",
+    "attestingValidators": [
+      "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "0xEe3260bA47D097DE5a8601107e1b83454593617c"
+    ],
+    "result": {
+      "schemaVersion": "mordant.confidential-policy-result/3-lab",
+      "chainId": "10143",
+      "consumer": "0xb23a3c3492b9ba83d80c8abc9a5484d2885f058a",
+      "vault": "0x7531d467f19d1055accf6b0d22286184f87adbd8",
+      "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+      "policyVersion": "1",
+      "inputCommitmentA": "0x9e29fbc7cc0c6d520317cbec7d78a3f2bac41688e9a3a1437beed3f9dc466ade",
+      "inputCommitmentB": "0xa90f6dbbb0a17a09a3c0affa85b60f9cfc698cba3cefdbb9ecdab3c06ad7ed48",
+      "conflictConfirmed": true,
+      "nonce": "4281141463025089708",
+      "validUntil": "1785515992",
+      "providerProofCommitment": "0x4c8f515cde12d64722110813a59a7d5ee0e43f9ff91d740f5206fe0d74d475f1",
+      "resultCommitment": "0xed0331636a42748e4b1889c4bf69788bd641b6243f0f1e2cace8daa3dbf1ca0b"
+    },
+    "calldataBytes": 868,
+    "expirySecondsRemaining": 1777
+  }
+}
