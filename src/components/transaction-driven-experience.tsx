@@ -304,6 +304,18 @@ export function TransactionDrivenExperience({
         </header>
       )}
 
+      {readOnly && timeline === "public" && recordedSelection !== null ? (
+        <RecordedCheckpointRail
+          run={run}
+          selectedId={recordedSelection.checkpoint.id}
+          surface={surface}
+          checkpoints={checkpoints}
+          publicTimeline
+          compact
+          onSelect={selectCheckpoint}
+        />
+      ) : null}
+
       {surface === "workspace" ? (
         <div className={styles.workspaceLayout}>
           <aside className={styles.workspaceQueueRegion} aria-label="Deal review queue">
@@ -312,15 +324,17 @@ export function TransactionDrivenExperience({
               <strong>One receivable selected</strong>
               <span data-status={triageStatus.toLowerCase().replaceAll(" ", "-")}>{triageStatus}</span>
             </section>
-            {readOnly && recordedSelection !== null ? (
-              <RecordedCheckpointRail
-                run={run}
-                selectedId={recordedSelection.checkpoint.id}
-                surface={surface}
-                checkpoints={checkpoints}
-                publicTimeline={timeline === "public"}
-                onSelect={selectCheckpoint}
-              />
+            {readOnly ? (
+              timeline !== "public" && recordedSelection !== null ? (
+                <RecordedCheckpointRail
+                  run={run}
+                  selectedId={recordedSelection.checkpoint.id}
+                  surface={surface}
+                  checkpoints={checkpoints}
+                  publicTimeline={false}
+                  onSelect={selectCheckpoint}
+                />
+              ) : null
             ) : <p className={styles.liveQueueNote}>The controlled run advances this selected receivable.</p>}
           </aside>
 
@@ -390,27 +404,27 @@ export function TransactionDrivenExperience({
             </section>
           </div>
 
-          {readOnly && recordedSelection !== null ? (
+          {readOnly && timeline !== "public" && recordedSelection !== null ? (
             <RecordedCheckpointRail
               run={run}
               selectedId={recordedSelection.checkpoint.id}
               surface={surface}
               checkpoints={checkpoints}
-              publicTimeline={timeline === "public"}
+              publicTimeline={false}
               onSelect={selectCheckpoint}
             />
           ) : null}
         </div>
       ) : (
         <div className={styles.protocolLayout}>
-          {readOnly && recordedSelection !== null ? (
+          {readOnly && timeline !== "public" && recordedSelection !== null ? (
             <aside className={styles.protocolLog}>
               <RecordedCheckpointRail
                 run={run}
                 selectedId={recordedSelection.checkpoint.id}
                 surface={surface}
                 checkpoints={checkpoints}
-                publicTimeline={timeline === "public"}
+                publicTimeline={false}
                 onSelect={selectCheckpoint}
               />
             </aside>

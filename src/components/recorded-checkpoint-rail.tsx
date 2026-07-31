@@ -22,6 +22,7 @@ export function RecordedCheckpointRail({
   surface,
   checkpoints,
   publicTimeline,
+  compact = false,
   onSelect,
 }: {
   readonly run: LivingRunArtifact;
@@ -29,20 +30,27 @@ export function RecordedCheckpointRail({
   readonly surface: LivingSurface;
   readonly checkpoints: ReadonlyArray<CheckpointOption>;
   readonly publicTimeline: boolean;
+  readonly compact?: boolean;
   readonly onSelect: (id: RecordedCheckpointId) => void;
 }) {
   const listRef = useRef<HTMLOListElement>(null);
-  const railClass = surface === "workspace"
+  const railClass = compact
+    ? styles.recordedTimeline
+    : surface === "workspace"
     ? styles.workspaceQueue
     : surface === "participant"
       ? styles.participantHistory
       : styles.protocolTimeline;
-  const railHeading = surface === "workspace"
+  const railHeading = compact
+    ? "Recorded case"
+    : surface === "workspace"
     ? "Recorded case activity"
     : surface === "participant"
       ? "Your deal history"
       : "Confirmed transitions";
-  const railSummary = surface === "participant"
+  const railSummary = compact
+    ? "Choose a moment"
+    : surface === "participant"
     ? "Choose a moment"
     : `${checkpoints.length} ${publicTimeline ? "moments" : "checkpoints"}`;
 
@@ -63,6 +71,7 @@ export function RecordedCheckpointRail({
       data-testid="recorded-checkpoint-rail"
       data-count={checkpoints.length}
       data-surface={surface}
+      data-density={compact ? "compact" : "full"}
     >
       <header>
         <p>{railHeading}</p>
@@ -90,7 +99,7 @@ export function RecordedCheckpointRail({
               >
                 <span className={styles.checkpointMarker} aria-hidden="true" />
                 <strong>{checkpoint.label}</strong>
-                <small>{checkpointMeta}</small>
+                {compact ? null : <small>{checkpointMeta}</small>}
               </button>
             </li>
           );

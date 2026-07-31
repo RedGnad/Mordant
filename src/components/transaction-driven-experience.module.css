@@ -18,6 +18,12 @@
   transition: opacity 120ms ease-out, transform 120ms ease-out;
 }
 
+.experience[data-timeline="public"] [data-checkpoint-copy] {
+  animation: none;
+  transition: opacity 100ms ease-out;
+  transform: none !important;
+}
+
 .experience[data-checkpoint-motion="out-forward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(-12px);
@@ -36,24 +42,6 @@
 .experience[data-checkpoint-motion="in-backward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(-12px);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .experience[data-timeline="public"] [data-checkpoint-copy] {
-    animation: perspective-hierarchy-in 220ms ease-out both;
-  }
-}
-
-@keyframes perspective-hierarchy-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .runContext {
@@ -460,6 +448,100 @@
   cursor: not-allowed;
 }
 
+.recordedTimeline {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 4.2fr);
+  align-items: stretch;
+  border-top: 1px solid var(--nws-rule);
+  border-bottom: 1px solid var(--nws-rule);
+}
+
+.recordedTimeline header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 18px 10px 0;
+}
+
+.recordedTimeline header p,
+.recordedTimeline header strong {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.recordedTimeline header p {
+  color: var(--nws-muted);
+}
+
+.recordedTimeline ol {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--nws-soft-rule);
+  list-style: none;
+}
+
+.recordedTimeline li {
+  min-width: 0;
+}
+
+.recordedTimeline button {
+  display: grid;
+  width: 100%;
+  min-height: 58px;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--nws-ink);
+  text-align: left;
+}
+
+.recordedTimeline li + li button {
+  border-left: 1px solid var(--nws-soft-rule);
+}
+
+.recordedTimeline button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nws-ink) 4%, var(--nws-ground));
+}
+
+.recordedTimeline button[data-selected="true"] {
+  background: color-mix(in srgb, var(--nws-ink) 8%, var(--nws-ground));
+}
+
+.recordedTimeline button strong {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.recordedTimeline .checkpointMarker {
+  width: 6px;
+  height: 6px;
+  transition: background-color 100ms ease-out;
+}
+
+.recordedTimeline button[data-selected="true"] > .checkpointMarker {
+  border-color: var(--nws-action-ink);
+  background: var(--nws-action);
+  transform: none;
+}
+
+.recordedTimeline button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--nws-ink);
+  outline-offset: -2px;
+}
+
 .workspaceQueue button:focus-visible,
 .participantHistory button:focus-visible,
 .protocolTimeline button:focus-visible,
@@ -533,6 +615,36 @@
 
 .experience[data-checkpoint="claims"] .workspaceEconomics .protection {
   transform: translate(0, 0);
+}
+
+.experience[data-timeline="public"] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.experience[data-timeline="public"] :is(.workspaceLayout, .participantLayout, .protocolLayout) {
+  min-height: 0;
+  padding-top: clamp(24px, 3.5vh, 40px);
+}
+
+.experience[data-timeline="public"] .workspaceEconomics .protection {
+  border-color: var(--nws-rule);
+  transition: none;
+  transform: none;
+  will-change: auto;
+}
+
+.experience[data-timeline="public"] .workspaceEconomics .receivable {
+  border-color: var(--nws-rule);
+}
+
+.experience[data-timeline="public"] .workspaceDecision,
+.experience[data-timeline="public"] .protocolTransition {
+  border-color: var(--nws-rule);
+  border-width: 1px;
+}
+
+.experience[data-timeline="public"] .protocolRecovery {
+  border-top: 1px solid var(--nws-soft-rule);
 }
 
 .workspaceDecision {
@@ -628,6 +740,10 @@
   text-wrap: balance;
 }
 
+.experience[data-timeline="public"] .participantTruth h1 {
+  font-size: clamp(48px, 5.2vw, 66px);
+}
+
 .participantTruth > p:not(.participantStatus) {
   max-width: 590px;
   margin: 0;
@@ -662,6 +778,10 @@
   min-width: 0;
   padding-top: 16px;
   border-top: 3px solid var(--nws-receivable);
+}
+
+.experience[data-timeline="public"] .participantObligation {
+  border-color: var(--nws-rule);
 }
 
 .participantAnchor {
@@ -929,6 +1049,11 @@
   margin-top: 28px;
   padding-top: 22px;
   border-top: 1px solid var(--nws-rule);
+}
+
+.experience[data-timeline="public"] .pilotConversion {
+  margin-top: 18px;
+  padding-top: 16px;
 }
 
 .pilotConversion p {
@@ -1376,6 +1501,39 @@
     display: none;
   }
 
+  .recordedTimeline {
+    grid-template-columns: 1fr;
+  }
+
+  .recordedTimeline header {
+    align-items: baseline;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+
+  .recordedTimeline ol {
+    display: flex;
+    overflow-x: auto;
+    border-top: 1px solid var(--nws-soft-rule);
+    border-left: 0;
+    scrollbar-width: none;
+  }
+
+  .recordedTimeline ol::-webkit-scrollbar {
+    display: none;
+  }
+
+  .recordedTimeline li {
+    width: 136px;
+    min-width: 136px;
+  }
+
+  .recordedTimeline button {
+    min-height: 54px;
+    padding-inline: 10px;
+  }
+
   .workspaceLayout,
   .participantLayout,
   .protocolLayout {
@@ -1471,6 +1629,11 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 42px;
     padding: 22px 0 42px;
+  }
+
+  .experience[data-timeline="public"] .participantRoom {
+    gap: 34px;
+    padding-block: 24px 34px;
   }
 
   .participantTruth h1 {

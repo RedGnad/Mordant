@@ -44,6 +44,13 @@ const TRANSFORMATION = [
 
 const TRANSFORMATION_SCROLL_THRESHOLDS = [0, 0.15, 0.4, 0.7] as const;
 
+const JUNCTION_MARK_CLASSES = [
+  styles.claimMarkPrimary,
+  styles.claimMarkSatelliteOne,
+  styles.claimMarkSatelliteTwo,
+  styles.claimMarkSatelliteThree,
+] as const;
+
 const INTEGRATION_STEPS = [
   {
     label: "Context enters",
@@ -238,7 +245,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     const range = Math.max(0, section.offsetHeight - window.innerHeight);
     const threshold = TRANSFORMATION_SCROLL_THRESHOLDS[index] ?? 0;
     const targetProgress = index === 0 ? 0 : Math.min(1, threshold + 0.01);
-    const position = section.offsetTop + (range * targetProgress);
+    const sectionTop = window.scrollY + section.getBoundingClientRect().top;
+    const position = sectionTop + (range * targetProgress);
     window.scrollTo({ top: position, behavior: "instant" });
     setStep(index);
   };
@@ -313,12 +321,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>
-                <svg className={styles.claimMark} viewBox="0 0 100 100" aria-hidden="true">
-                  <rect x="43" width="14" height="100" />
-                  <rect y="43" width="100" height="14" />
-                  <rect x="43" width="14" height="100" transform="rotate(45 50 50)" />
-                  <rect x="43" width="14" height="100" transform="rotate(-45 50 50)" />
-                </svg>
+                {JUNCTION_MARK_CLASSES.map((markClass) => (
+                  <svg className={`${styles.claimMark} ${markClass}`} viewBox="0 0 100 100" aria-hidden="true" key={markClass}>
+                    <rect x="43" width="14" height="100" />
+                    <rect y="43" width="100" height="14" />
+                    <rect x="43" width="14" height="100" transform="rotate(45 50 50)" />
+                    <rect x="43" width="14" height="100" transform="rotate(-45 50 50)" />
+                  </svg>
+                ))}
               </div>
 
               <div className={styles.protectionLane}>
