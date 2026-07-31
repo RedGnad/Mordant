@@ -48,6 +48,7 @@ type clientEncryptionEngine struct {
 	keyID                string
 	keyIDBytes           [32]byte
 	parameterFingerprint [32]byte
+	publicKeyBytes       []byte
 }
 
 func (r *Runtime) clientEncryptionEngine() clientEncryptionEngine {
