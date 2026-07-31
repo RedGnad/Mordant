@@ -11,9 +11,11 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
@@ -22,8 +24,8 @@ import (
 
 type config struct {
 	party, publicMaterial, manifest, evaluationKeys, issuerKey, output, privateManifest string
-	rosterDigest, vault, policyID, sessionID                                            string
-	chainID, policyVersion, nonce, validUntil, keyEpoch                                 uint64
+	rosterDigest, vault, policyID, sessionID, coverage, anchorRoot, currencyCode        string
+	chainID, policyVersion, nonce, validUntil, keyEpoch, windowBase                     uint64
 	threshold                                                                           uint64
 }
 
@@ -72,11 +74,26 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	canaries, err := freshCanaries()
+	anchorRoot, err := decode32(c.anchorRoot)
 	if err != nil {
 		return err
 	}
-	pledge, claim, context, err := makePledge(c, vault, policy, session, canaries)
+	// The dispute session secret is shared by the two facilities and never
+	// reaches the evaluator. It fixes the currency both must agree on and the
+	// salt that binds both pledges to the same deployed receivable.
+	shared := sharedSession{
+		secret:       session,
+		currencyCode: c.currencyCode,
+		windowBase:   c.windowBase,
+		nonce:        c.nonce,
+		validUntil:   c.validUntil,
+		anchorRoot:   anchorRoot,
+	}
+	terms, err := freshTerms(shared, c.party)
+	if err != nil {
+		return err
+	}
+	pledge, claim, context, err := makePledge(c, vault, policy, shared, terms)
 	if err != nil {
 		return err
 	}
@@ -111,7 +128,21 @@ func run(arguments []string) error {
 	if err := writeExclusive(c.output, wire, 0o600); err != nil {
 		return err
 	}
-	return writeCanaryManifest(c.privateManifest, c.party, canaries)
+	// The coverage assertion is public: it names every commercial term, its
+	// confidentiality class and its consuming path, and carries only digests.
+	coverage, err := marshalCoverage(buildCoverage(c.party, terms, anchorRoot))
+	if err != nil {
+		return err
+	}
+	if err := writeExclusive(c.coverage, append(coverage, '\n'), 0o644); err != nil {
+		return err
+	}
+	// Only genuinely confidential canaries go to the offline auditor.
+	manifest, err := json.Marshal(scannableManifest(c.party, terms))
+	if err != nil {
+		return err
+	}
+	return writeExclusive(c.privateManifest, manifest, 0o600)
 }
 
 // verifyManifest is the client-side gate described in the mission: unknown
@@ -181,72 +212,97 @@ func clientParameters() (bgv.Parameters, error) {
 	})
 }
 
-// makePledge builds the synthetic pledge. Every field that the audit treats as
-// a confidential term is a fresh high-entropy canary actually placed into the
-// encrypted pledge, so a canary sweep is meaningful for all of them.
-func makePledge(c config, vault [20]byte, policy, session [32]byte, values map[string]string) (fhe.PlainPledge, fhe.AuthorizationClaim, fhe.InputCommitmentContext, error) {
+// makePledge builds the facility's pledge from the materialised commercial
+// terms. Every confidential term is placed into the pledge or into a commitment
+// whose preimage stays here; nothing is generated and left unused.
+func makePledge(c config, vault [20]byte, policy [32]byte, shared sharedSession, values map[string]canaryValue) (fhe.PlainPledge, fhe.AuthorizationClaim, fhe.InputCommitmentContext, error) {
 	var zero fhe.PlainPledge
-	invoice, err := decode32(values["invoice_identifier"])
+	var zeroClaim fhe.AuthorizationClaim
+	var zeroContext fhe.InputCommitmentContext
+	get := func(field string) ([32]byte, error) { return decode32(values[field].Value) }
+
+	receivable, err := get("receivable_identifier")
 	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
+		return zero, zeroClaim, zeroContext, err
 	}
-	obligation, err := decode32(values["obligation_id"])
+	obligation, err := get("obligation_id")
 	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
+		return zero, zeroClaim, zeroContext, err
 	}
-	authSubject, err := decode32(values["identity_authorization"])
+	metadata, err := get("exclusivity_metadata")
 	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
+		return zero, zeroClaim, zeroContext, err
 	}
-	metadata, err := decode32(values["exclusivity"])
+	currency, err := get("currency")
 	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
+		return zero, zeroClaim, zeroContext, err
 	}
-	// Currency must match across both claims for the frozen policy to find a
-	// conflict, so it is derived from a shared session secret rather than a
-	// per-client canary. It is still not a repository constant.
-	currency := sha256.Sum256(append(session[:], []byte("shared-currency")...))
-	linkSalt := sha256.Sum256(append(session[:], []byte("public-receivable-link")...))
-	link := fhe.ReceivableLinkCommitment(vault, uint32(c.policyVersion), sha256.Sum256(append(session[:], []byte("receivable")...)), linkSalt)
+	// The identity and credential canaries are preimages: the evaluator receives
+	// the enrollment in cleartext, so only their commitments may cross that
+	// boundary.
+	identityPreimage, err := get("submitter_identity")
+	if err != nil {
+		return zero, zeroClaim, zeroContext, err
+	}
+	credentialPreimage, err := get("authorization_credential")
+	if err != nil {
+		return zero, zeroClaim, zeroContext, err
+	}
+	subjectCommitment := sha256.Sum256(identityPreimage[:])
+	roleCommitment := sha256.Sum256(credentialPreimage[:])
+
+	amount, err := numericOf(values, "amount")
+	if err != nil {
+		return zero, zeroClaim, zeroContext, err
+	}
+	activeFrom, err := numericOf(values, "active_from")
+	if err != nil {
+		return zero, zeroClaim, zeroContext, err
+	}
+	activeUntil, err := numericOf(values, "active_until")
+	if err != nil {
+		return zero, zeroClaim, zeroContext, err
+	}
+
+	// The public receivable link binds both facilities' pledges to the same
+	// deployed receivable. Its salt comes from the dispute session secret the
+	// facilities share, so the link cannot be tested against a guessed invoice
+	// root by anyone who lacks that secret, including the evaluator.
+	linkSalt := sha256.Sum256(append(append([]byte{}, shared.secret[:]...), []byte("receivable-link-salt")...))
+	link := fhe.ReceivableLinkCommitment(vault, uint32(c.policyVersion), shared.anchorRoot, linkSalt)
+
 	slot := uint8(0)
 	if c.party == "b" {
 		slot = 1
 	}
-	// Amounts and active periods are drawn from the client's own canary bytes so
-	// that they are genuinely client-private, while still producing the strict
-	// interval overlap the policy needs.
-	amountCanary, err := decode32(values["amount"])
-	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
-	}
-	periodCanary, err := decode32(values["active_periods"])
-	if err != nil {
-		return zero, fhe.AuthorizationClaim{}, fhe.InputCommitmentContext{}, err
-	}
-	amount := 500_000 + (uint64(amountCanary[0])<<8|uint64(amountCanary[1]))%400_000
-	// Strict overlap is preserved for every canary draw: A spans [100, 400+s]
-	// and B spans [200+s, 500] with s < 50, so a.from < b.until and b.from < a.until.
-	spread := uint64(periodCanary[0]) % 50
-	from, until := uint64(200)+spread, uint64(500)
-	if c.party == "a" {
-		from, until = uint64(100), uint64(400)+spread
-	}
 	claim := fhe.AuthorizationClaim{
-		SubjectCommitment: authSubject,
-		Role:              sha256.Sum256([]byte("mordant.role.authorized-submitter.v1")),
+		SubjectCommitment: subjectCommitment,
+		Role:              roleCommitment,
 		Vault:             vault, PolicyID: policy, PolicyVersion: uint32(c.policyVersion),
-		ValidUntil: c.validUntil, Nonce: fhe.Uint256{0, 0, 0, c.nonce*2 + uint64(slot) + 1},
+		ValidUntil: shared.validUntil, Nonce: fhe.Uint256{0, 0, 0, shared.nonce*2 + uint64(slot) + 1},
 	}
 	context := fhe.InputCommitmentContext{
 		ChainID: fhe.Uint256{0, 0, 0, c.chainID}, Vault: vault, PolicyID: policy,
 		PolicyVersion: uint32(c.policyVersion), InputSlot: slot,
-		ClientNonce: fhe.Uint256{0, 0, 0, c.nonce*2 + uint64(slot) + 1},
+		ClientNonce: fhe.Uint256{0, 0, 0, shared.nonce*2 + uint64(slot) + 1},
 	}
 	return fhe.PlainPledge{
-		ActiveFrom: from, ActiveUntil: until,
+		ActiveFrom: activeFrom, ActiveUntil: activeUntil,
 		Amount:       fhe.Uint256{0, 0, 0, amount},
 		Currency:     currency,
-		ObligationID: obligation, ReceivableID: invoice, Exclusive: true,
+		ObligationID: obligation, ReceivableID: receivable, Exclusive: true,
 		ReceivableCommitment: link, PrivateMetadataCommitment: metadata,
 	}, claim, context, nil
+}
+
+func numericOf(values map[string]canaryValue, field string) (uint64, error) {
+	entry, present := values[field]
+	if !present || entry.Numeric == "" {
+		return 0, errors.New("missing numeric term: " + field)
+	}
+	parsed, err := strconv.ParseUint(entry.Numeric, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return parsed, nil
 }

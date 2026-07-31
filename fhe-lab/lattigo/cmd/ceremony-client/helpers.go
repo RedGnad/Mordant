@@ -2,10 +2,8 @@ package main
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -14,45 +12,6 @@ import (
 	"strings"
 	"time"
 )
-
-// canaryFields are the pledge fields this client fills with fresh high-entropy
-// values. Every one of them is genuinely placed into the encrypted pledge, so a
-// canary sweep over public output is meaningful for all of them. `currency` is
-// deliberately absent: the policy requires both parties to agree on it, so it is
-// derived from the shared session secret rather than from a per-client canary.
-var canaryFields = []string{
-	"invoice_identifier",
-	"amount",
-	"active_periods",
-	"obligation_id",
-	"exclusivity",
-	"identity_authorization",
-}
-
-type privateCanaries struct {
-	Party  string            `json:"party"`
-	Fields map[string]string `json:"fields"`
-}
-
-func freshCanaries() (map[string]string, error) {
-	result := make(map[string]string, len(canaryFields))
-	for _, field := range canaryFields {
-		raw := make([]byte, 32)
-		if _, err := rand.Read(raw); err != nil {
-			return nil, err
-		}
-		result[field] = hex.EncodeToString(raw)
-	}
-	return result, nil
-}
-
-func writeCanaryManifest(path, party string, canaries map[string]string) error {
-	encoded, err := json.Marshal(privateCanaries{Party: party, Fields: canaries})
-	if err != nil {
-		return err
-	}
-	return writeExclusive(path, encoded, 0o600)
-}
 
 func parse(arguments []string) (config, error) {
 	var c config
@@ -68,7 +27,11 @@ func parse(arguments []string) (config, error) {
 	f.StringVar(&c.rosterDigest, "roster-digest", "", "expected operator set digest")
 	f.StringVar(&c.vault, "vault", "", "vault address")
 	f.StringVar(&c.policyID, "policy-id", "", "policy id")
-	f.StringVar(&c.sessionID, "session-id", "", "session commitment")
+	f.StringVar(&c.sessionID, "session-id", "", "dispute session secret shared by the two facilities")
+	f.StringVar(&c.coverage, "coverage-out", "", "public commercial-term coverage assertion")
+	f.StringVar(&c.anchorRoot, "anchor-root", "", "invoice root of the deployed receivable anchor")
+	f.StringVar(&c.currencyCode, "currency-code", "USD", "settlement currency code of the anchor")
+	f.Uint64Var(&c.windowBase, "window-base", 0, "base of the pledge activity window")
 	f.Uint64Var(&c.chainID, "chain-id", 0, "chain id")
 	f.Uint64Var(&c.policyVersion, "policy-version", 0, "policy version")
 	f.Uint64Var(&c.nonce, "nonce", 0, "public nonce")
@@ -80,7 +43,8 @@ func parse(arguments []string) (config, error) {
 		c.validUntil <= uint64(time.Now().Unix()) || c.publicMaterial == "" || c.manifest == "" ||
 		c.evaluationKeys == "" || c.issuerKey == "" || c.output == "" || c.privateManifest == "" ||
 		c.rosterDigest == "" || c.vault == "" || c.policyID == "" || c.sessionID == "" ||
-		c.keyEpoch == 0 || c.threshold < 2 {
+		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" ||
+		c.currencyCode == "" || c.windowBase == 0 {
 		return config{}, errors.New("invalid ceremony client configuration")
 	}
 	return c, nil

@@ -442,6 +442,10 @@ func (l *lab) runClientsAndEvaluator() error {
 	if _, err := rand.Read(sessionID[:]); err != nil {
 		return err
 	}
+	// Standalone ceremony runs are not anchored to a deployed receivable; the
+	// product gate supplies the real invoice root. A per-run placeholder keeps
+	// the client's binding path exercised here without implying an anchor.
+	anchorRoot := sha256.Sum256([]byte("ceremony-lab-unanchored-root"))
 	issuerPublic, issuerPrivate, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return err
@@ -465,6 +469,10 @@ func (l *lab) runClientsAndEvaluator() error {
 			"-issuer-key", filepath.Join(issuerDir, "issuer.key"),
 			"-out", filepath.Join(public, "envelopes", party+".bin"),
 			"-private-manifest", filepath.Join(l.root, "clients", "private-"+party, "canaries.json"),
+			"-coverage-out", filepath.Join(public, "coverage-"+party+".json"),
+			"-anchor-root", hex.EncodeToString(anchorRoot[:]),
+			"-currency-code", "USD",
+			"-window-base", "1000000",
 			"-roster-digest", hex.EncodeToString(rosterDigest[:]),
 			"-vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
 			"-policy-id", hex.EncodeToString(policyID[:]),
