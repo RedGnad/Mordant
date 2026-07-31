@@ -17,6 +17,12 @@ interface IIdentityAnchor {
     /// @notice Canonical identity scheme version this commitment was built under.
     function identitySchemeVersion() external view returns (uint16);
 
+    /// @notice Commitment to the terms in force when the anchor was created.
+    function initialTermsCommitment() external view returns (bytes32);
+
+    /// @notice Terms scheme version.
+    function termsSchemeVersion() external view returns (uint16);
+
     /// @notice Identity epoch, for salt and scheme rotation.
     function identityEpoch() external view returns (uint32);
 

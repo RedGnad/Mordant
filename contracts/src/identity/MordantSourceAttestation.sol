@@ -25,7 +25,7 @@ library MordantSourceAttestation {
     string internal constant DOMAIN_VERSION = "1";
 
     bytes32 internal constant ATTESTATION_TYPEHASH = keccak256(
-        "SourceAssetAttestation(uint256 chainId,address factory,bytes32 creationDigest,bytes32 assetCommitment,uint16 identitySchemeVersion,uint32 identityEpoch,bytes32 issuerKeyId,bytes32 invoiceRoot,address controller,uint64 validUntil,uint256 nonce)"
+        "SourceAssetAttestation(uint256 chainId,address factory,bytes32 creationDigest,bytes32 assetCommitment,bytes32 initialTermsCommitment,uint16 identitySchemeVersion,uint16 termsSchemeVersion,uint32 identityEpoch,bytes32 issuerKeyId,bytes32 invoiceRoot,address controller,uint64 validUntil,uint256 nonce)"
     );
 
     bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
@@ -37,8 +37,10 @@ library MordantSourceAttestation {
         uint256 chainId;
         address factory; // the only admission contract that may consume it
         bytes32 creationDigest; // deterministic identity of the anchor to be created
-        bytes32 assetCommitment; // salted commitment to the canonical economic asset
+        bytes32 assetCommitment; // salted commitment to the stable economic asset
+        bytes32 initialTermsCommitment; // commitment to the terms in force at creation
         uint16 identitySchemeVersion;
+        uint16 termsSchemeVersion;
         uint32 identityEpoch;
         bytes32 issuerKeyId;
         bytes32 invoiceRoot; // the PUBLIC root; deliberately not the asset id
@@ -67,7 +69,9 @@ library MordantSourceAttestation {
                 attestation.factory,
                 attestation.creationDigest,
                 attestation.assetCommitment,
+                attestation.initialTermsCommitment,
                 attestation.identitySchemeVersion,
+                attestation.termsSchemeVersion,
                 attestation.identityEpoch,
                 attestation.issuerKeyId,
                 attestation.invoiceRoot,
@@ -99,6 +103,8 @@ library MordantSourceAttestation {
     ) internal view returns (address signer, bytes32 attestationDigest) {
         if (
             attestation.assetCommitment == bytes32(0) || attestation.creationDigest == bytes32(0)
+                || attestation.initialTermsCommitment == bytes32(0)
+                || attestation.assetCommitment == attestation.initialTermsCommitment
                 || attestation.issuerKeyId == bytes32(0) || attestation.invoiceRoot == bytes32(0)
                 || attestation.controller == address(0) || attestation.identityEpoch == 0
                 || attestation.nonce == 0

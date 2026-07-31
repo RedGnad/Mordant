@@ -34,6 +34,7 @@ contract MordantSourceIdentityRegistry {
 
     struct SourceAnchor {
         bytes32 assetCommitment;
+        bytes32 initialTermsCommitment;
         uint16 identitySchemeVersion;
         uint32 identityEpoch;
         bytes32 issuerKeyId;
@@ -61,9 +62,9 @@ contract MordantSourceIdentityRegistry {
         (address signer, bytes32 attestationDigest) =
             MordantSourceAttestation.recover(attestation, signature, address(this));
         issuerRegistry.requireAuthorized(attestation.issuerKeyId, signer, attestation.identityEpoch);
-        if (attestation.identitySchemeVersion != MordantAssetIdentity.SCHEME_VERSION) {
+        if (attestation.identitySchemeVersion != MordantAssetIdentity.IDENTITY_SCHEME_VERSION) {
             revert SchemeMismatch(
-                attestation.identitySchemeVersion, MordantAssetIdentity.SCHEME_VERSION
+                attestation.identitySchemeVersion, MordantAssetIdentity.IDENTITY_SCHEME_VERSION
             );
         }
         if (consumedNonce[attestation.issuerKeyId][attestation.nonce]) {
@@ -78,6 +79,7 @@ contract MordantSourceIdentityRegistry {
         anchorId = attestationDigest;
         _anchors[anchorId] = SourceAnchor({
             assetCommitment: attestation.assetCommitment,
+            initialTermsCommitment: attestation.initialTermsCommitment,
             identitySchemeVersion: attestation.identitySchemeVersion,
             identityEpoch: attestation.identityEpoch,
             issuerKeyId: attestation.issuerKeyId,

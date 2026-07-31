@@ -21,14 +21,18 @@ contract MordantInvoiceVaultV2 is MordantInvoiceVault, IIdentityAnchor {
 
     struct IdentityInit {
         bytes32 assetCommitment;
+        bytes32 initialTermsCommitment;
         uint16 identitySchemeVersion;
+        uint16 termsSchemeVersion;
         uint32 identityEpoch;
         bytes32 issuerKeyId;
         bytes32 sourceAttestationDigest;
     }
 
     bytes32 private immutable _assetCommitment;
+    bytes32 private immutable _initialTermsCommitment;
     uint16 private immutable _identitySchemeVersion;
+    uint16 private immutable _termsSchemeVersion;
     uint32 private immutable _identityEpoch;
     bytes32 private immutable _issuerKeyId;
     bytes32 private immutable _sourceAttestationDigest;
@@ -36,16 +40,22 @@ contract MordantInvoiceVaultV2 is MordantInvoiceVault, IIdentityAnchor {
     constructor(Init memory init, IdentityInit memory identity) MordantInvoiceVault(init) {
         if (
             identity.assetCommitment == bytes32(0) || identity.identitySchemeVersion == 0
+                || identity.initialTermsCommitment == bytes32(0) || identity.termsSchemeVersion == 0
                 || identity.identityEpoch == 0 || identity.issuerKeyId == bytes32(0)
                 || identity.sourceAttestationDigest == bytes32(0)
         ) revert InvalidIdentity();
+        // The asset identity and its terms are separate objects and must never
+        // be the same value: conflating them is the scheme-1 defect.
+        if (identity.assetCommitment == identity.initialTermsCommitment) revert InvalidIdentity();
         // The public root and the private commitment are separate concepts. If
         // they ever coincided the identity would be publicly computable from
         // chain data and private matching would be pointless.
         if (identity.assetCommitment == init.invoiceRoot) revert InvalidIdentity();
 
         _assetCommitment = identity.assetCommitment;
+        _initialTermsCommitment = identity.initialTermsCommitment;
         _identitySchemeVersion = identity.identitySchemeVersion;
+        _termsSchemeVersion = identity.termsSchemeVersion;
         _identityEpoch = identity.identityEpoch;
         _issuerKeyId = identity.issuerKeyId;
         _sourceAttestationDigest = identity.sourceAttestationDigest;
@@ -57,6 +67,16 @@ contract MordantInvoiceVaultV2 is MordantInvoiceVault, IIdentityAnchor {
 
     function identitySchemeVersion() external view returns (uint16) {
         return _identitySchemeVersion;
+    }
+
+    /// @notice Terms as of creation. Amendments are appended in the terms
+    /// registry and never rewrite this value.
+    function initialTermsCommitment() external view returns (bytes32) {
+        return _initialTermsCommitment;
+    }
+
+    function termsSchemeVersion() external view returns (uint16) {
+        return _termsSchemeVersion;
     }
 
     function identityEpoch() external view returns (uint32) {

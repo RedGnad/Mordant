@@ -65,7 +65,9 @@ contract MordantFactoryV2 is IMordantFactory, Ownable, ReentrancyGuard {
         address indexed vault,
         bytes32 indexed issuerKeyId,
         bytes32 assetCommitment,
+        bytes32 initialTermsCommitment,
         uint16 identitySchemeVersion,
+        uint16 termsSchemeVersion,
         uint32 identityEpoch,
         bytes32 sourceAttestationDigest
     );
@@ -185,9 +187,14 @@ contract MordantFactoryV2 is IMordantFactory, Ownable, ReentrancyGuard {
         (address signer, bytes32 attestationDigest) =
             MordantSourceAttestation.recover(attestation, signature, address(this));
         issuerRegistry.requireAuthorized(attestation.issuerKeyId, signer, attestation.identityEpoch);
-        if (attestation.identitySchemeVersion != MordantAssetIdentity.SCHEME_VERSION) {
+        if (attestation.identitySchemeVersion != MordantAssetIdentity.IDENTITY_SCHEME_VERSION) {
             revert SchemeMismatch(
-                attestation.identitySchemeVersion, MordantAssetIdentity.SCHEME_VERSION
+                attestation.identitySchemeVersion, MordantAssetIdentity.IDENTITY_SCHEME_VERSION
+            );
+        }
+        if (attestation.termsSchemeVersion != MordantAssetIdentity.TERMS_SCHEME_VERSION) {
+            revert SchemeMismatch(
+                attestation.termsSchemeVersion, MordantAssetIdentity.TERMS_SCHEME_VERSION
             );
         }
 
@@ -234,7 +241,9 @@ contract MordantFactoryV2 is IMordantFactory, Ownable, ReentrancyGuard {
         });
         MordantInvoiceVaultV2.IdentityInit memory identity = MordantInvoiceVaultV2.IdentityInit({
             assetCommitment: attestation.assetCommitment,
+            initialTermsCommitment: attestation.initialTermsCommitment,
             identitySchemeVersion: attestation.identitySchemeVersion,
+            termsSchemeVersion: attestation.termsSchemeVersion,
             identityEpoch: attestation.identityEpoch,
             issuerKeyId: attestation.issuerKeyId,
             sourceAttestationDigest: attestationDigest
@@ -248,12 +257,23 @@ contract MordantFactoryV2 is IMordantFactory, Ownable, ReentrancyGuard {
         rootForCva[cvaToken] = config.invoiceRoot;
         vaultForAttestation[attestationDigest] = address(vault);
 
+        _emitCreated(address(vault), attestationDigest, attestation);
+    }
+
+    /// @dev Split out purely to keep the creation path within stack limits.
+    function _emitCreated(
+        address vault,
+        bytes32 attestationDigest,
+        MordantSourceAttestation.SourceAssetAttestation calldata attestation
+    ) private {
         emit IdentityAnchoredVaultCreated(
-            config.invoiceRoot,
-            address(vault),
+            attestation.invoiceRoot,
+            vault,
             attestation.issuerKeyId,
             attestation.assetCommitment,
+            attestation.initialTermsCommitment,
             attestation.identitySchemeVersion,
+            attestation.termsSchemeVersion,
             attestation.identityEpoch,
             attestationDigest
         );
