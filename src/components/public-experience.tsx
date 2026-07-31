@@ -66,10 +66,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const pageRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
-  const integrationFlowRef = useRef<HTMLDivElement>(null);
+  const integrationPathRef = useRef<SVGPathElement>(null);
+  const integrationSignalRef = useRef<SVGGElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const scrollFrame = useRef<number | null>(null);
-  const integrationScrollFrame = useRef<number | null>(null);
+  const integrationMotionFrame = useRef<number | null>(null);
+  const integrationMotionProgress = useRef(0);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -121,35 +123,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   }, []);
 
   useEffect(() => {
-    const flow = integrationFlowRef.current;
-    if (flow === null) return;
-
-    const updateFromScroll = () => {
-      integrationScrollFrame.current = null;
-      const bounds = flow.getBoundingClientRect();
-      const start = window.innerHeight * 0.92;
-      const end = window.innerHeight * 0.38;
-      const progress = Math.min(1, Math.max(0, (start - bounds.top) / (start - end)));
-      const nextStep = Math.min(INTEGRATION_STEPS.length - 1, Math.floor(progress * INTEGRATION_STEPS.length));
-      setIntegrationStep((current) => current === nextStep ? current : nextStep);
-    };
-
-    const onScroll = () => {
-      if (integrationScrollFrame.current !== null) return;
-      integrationScrollFrame.current = window.requestAnimationFrame(updateFromScroll);
-    };
-
-    updateFromScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (integrationScrollFrame.current !== null) window.cancelAnimationFrame(integrationScrollFrame.current);
-    };
-  }, []);
-
-  useEffect(() => {
     const section = transformationRef.current;
     if (section === null) return;
 
@@ -176,6 +149,49 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
     };
   }, []);
+
+  useEffect(() => {
+    const path = integrationPathRef.current;
+    const signal = integrationSignalRef.current;
+    if (path === null || signal === null) return;
+
+    const targets = [0, 0.7725, 1];
+    const from = integrationMotionProgress.current;
+    const to = targets[integrationStep] ?? 0;
+    const length = path.getTotalLength();
+    const placeSignal = (progress: number) => {
+      const point = path.getPointAtLength(length * progress);
+      signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      integrationMotionProgress.current = progress;
+    };
+
+    if (integrationMotionFrame.current !== null) {
+      window.cancelAnimationFrame(integrationMotionFrame.current);
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || from === to) {
+      placeSignal(to);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const duration = 280 + Math.abs(to - from) * 360;
+    const animate = (now: number) => {
+      const elapsed = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - elapsed, 3);
+      placeSignal(from + ((to - from) * eased));
+      if (elapsed < 1) integrationMotionFrame.current = window.requestAnimationFrame(animate);
+      else integrationMotionFrame.current = null;
+    };
+    integrationMotionFrame.current = window.requestAnimationFrame(animate);
+
+    return () => {
+      if (integrationMotionFrame.current !== null) {
+        window.cancelAnimationFrame(integrationMotionFrame.current);
+        integrationMotionFrame.current = null;
+      }
+    };
+  }, [integrationStep]);
 
   const selectStep = (index: number) => {
     const section = transformationRef.current;
@@ -254,12 +270,10 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <h2 id="transformation-title" aria-live="polite">
                 <span key={moment.id}>{moment.title}</span>
               </h2>
-              <p>Receivable remains unchanged.</p>
             </div>
 
             <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
               <div className={styles.receivableLane}>
-                <strong>Receivable</strong>
                 <small>Outstanding</small>
               </div>
 
@@ -330,14 +344,16 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <h2 id="integration-title">Your platform records the asset. Mordant establishes what happens next.</h2>
           </header>
           <div className={styles.integrationBody}>
-            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
+            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path">
               <div className={styles.flowCanvas}>
                 <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true" onPointerMove={selectIntegrationFromPointer}>
-                  <path className={styles.flowBase} d="M40 102H960" />
-                  <path className={styles.flowException} d="M350 102H420L500 34H590L670 102" />
-                  <path className={styles.flowRecourse} d="M500 34H600L710 102H920" />
-                  <rect className={styles.integrationSignal} x="40" y="84" width="36" height="36" />
-                  <rect className={styles.integrationCheckpoint} x="920" y="80" width="44" height="44" />
+                  <path className={styles.flowBase} d="M40 102H420" />
+                  <path className={styles.flowException} d="M420 102L500 34H600L710 102" />
+                  <path className={styles.flowRecourse} d="M710 102H920" />
+                  <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H420L500 34H600L710 102H920" />
+                  <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
+                    <rect x="-18" y="-18" width="36" height="36" />
+                  </g>
                 </svg>
                 <p className={styles.integrationStory} aria-live="polite">
                   <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>

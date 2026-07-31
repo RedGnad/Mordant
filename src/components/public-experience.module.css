@@ -302,25 +302,13 @@
   color: var(--protection);
 }
 
-.transformationTitle p {
-  max-width: 260px;
-  margin: 0 3vw 4px 0;
-  justify-self: end;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.transformation[data-state="proof"] .transformationTitle p {
-  color: rgb(244 241 232 / 68%);
-}
-
 .scene {
   --anchor-y: 15%;
   --conditional-y: 51%;
   --anchor-width: 83.3333%;
   --conditional-width: 66.6667%;
   --conditional-shift-x: 25%;
-  --conditional-shift-y: 30px;
+  --conditional-shift-y: 52px;
   --junction-x: 83.3333%;
   --signal-stroke: clamp(3px, 0.31vw, 4px);
   --junction-size: clamp(40px, 3.8vw, 54px);
@@ -348,6 +336,7 @@
   top: var(--anchor-y);
   left: 0;
   width: var(--anchor-width);
+  min-height: 72px;
   border-color: var(--receivable);
 }
 
@@ -766,7 +755,7 @@
 .flowException,
 .flowRecourse {
   fill: none;
-  stroke-linecap: square;
+  stroke-linecap: butt;
   stroke-linejoin: miter;
   transition: opacity 180ms ease-out, stroke-dashoffset 360ms cubic-bezier(0, 0, 0.3, 1);
 }
@@ -779,34 +768,36 @@
 .flowException {
   stroke: var(--protection);
   stroke-width: 14;
-  stroke-dasharray: 430;
-  stroke-dashoffset: 430;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
   opacity: 0;
 }
 
 .flowRecourse {
   stroke: var(--action);
   stroke-width: 14;
-  stroke-dasharray: 500;
-  stroke-dashoffset: 500;
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
   opacity: 0;
+}
+
+.flowMotionPath {
+  fill: none;
+  stroke: none;
 }
 
 .integrationSignal {
-  fill: var(--protection);
-  transform-origin: center;
-  transition: fill 180ms ease-out, transform 340ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  fill: var(--receivable);
+  stroke: transparent;
+  stroke-width: 0;
+  transition:
+    fill 160ms ease-out,
+    stroke 160ms ease-out,
+    stroke-width 160ms ease-out;
 }
 
-.integrationCheckpoint {
-  fill: var(--ground);
-  stroke: var(--action);
-  stroke-width: 10;
-  opacity: 0;
-  transform: scale(0.45);
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: opacity 160ms 160ms ease-out, transform 240ms 160ms cubic-bezier(0, 0, 0.3, 1);
+.flow[data-step="1"] .integrationSignal {
+  fill: var(--protection);
 }
 
 .flow[data-step="1"] .flowException,
@@ -815,23 +806,16 @@
   opacity: 1;
 }
 
-.flow[data-step="1"] .integrationSignal {
-  transform: translate(442px, -68px);
-}
-
 .flow[data-step="2"] .flowRecourse {
   stroke-dashoffset: 0;
   opacity: 1;
 }
 
 .flow[data-step="2"] .integrationSignal {
-  fill: var(--action);
-  transform: translate(880px, 0);
-}
-
-.flow[data-step="2"] .integrationCheckpoint {
-  opacity: 1;
-  transform: scale(1);
+  fill: var(--ground);
+  stroke: var(--action);
+  stroke-width: 10px;
+  transition-delay: 400ms, 400ms, 400ms;
 }
 
 .integrationStages {
@@ -1051,6 +1035,26 @@
     opacity: 1;
     transform: translateY(0);
     transition: opacity 240ms ease-out, transform 240ms ease-out;
+  }
+
+  .page[data-motion-ready="true"] .proof[data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .page[data-motion-ready="true"] .proof[data-reveal] > :is(header, .proofActions) {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  .page[data-motion-ready="true"] .proof[data-visible="true"] > :is(header, .proofActions) {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 220ms ease-out, transform 240ms cubic-bezier(0, 0, 0.3, 1);
+  }
+
+  .page[data-motion-ready="true"] .proof[data-visible="true"] > .proofActions {
+    transition-delay: 180ms;
   }
 
   .page[data-motion-ready="true"] .integration[data-reveal] .flowGraphic,
@@ -1382,15 +1386,10 @@
     line-height: 0.9;
   }
 
-  .transformationTitle p {
-    margin-top: 10px;
-    font-size: 11px;
-  }
-
   .scene {
     --anchor-y: 13%;
     --conditional-y: 43%;
-    --conditional-shift-y: 24px;
+    --conditional-shift-y: 38px;
     --junction-size: 34px;
     --signal-stroke: 3px;
     min-height: 420px;
