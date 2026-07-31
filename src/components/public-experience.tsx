@@ -300,7 +300,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </div>
 
             <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
-              <div className={styles.receivableLane} aria-hidden="true" />
+              <div className={styles.receivableLane}>
+                <strong>Receivable</strong>
+              </div>
 
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>

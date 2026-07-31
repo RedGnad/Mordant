@@ -63,6 +63,18 @@
   border-right: 1px solid var(--nws-soft-rule);
 }
 
+.brandMark {
+  width: 16px;
+  flex: 0 0 auto;
+  margin-right: 8px;
+  fill: currentColor;
+  transform: rotate(7deg);
+}
+
+.shell[data-demo-mode="public"] :global(.brand-caption) {
+  display: none;
+}
+
 .shell :global(.brand-wordmark) {
   flex: 0 0 auto;
   margin-right: 14px;
@@ -386,6 +398,11 @@
   .shell :global(.brand-wordmark) {
     margin: 0;
     font-size: 17px;
+  }
+
+  .brandMark {
+    width: 14px;
+    margin-right: 7px;
   }
 
   .navigation {

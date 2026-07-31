@@ -325,9 +325,9 @@ export function TransactionDrivenExperience({
           </aside>
 
           <section className={styles.workspaceFocus} data-region="truth" data-dominant="true">
-            <p className={styles.eyebrow}>Selected deal · {view.eyebrow}</p>
-            <h1 data-testid="living-conclusion">{view.title}</h1>
-            <p>{view.support}</p>
+            <p className={styles.eyebrow} data-checkpoint-copy>Selected deal · {view.eyebrow}</p>
+            <h1 data-testid="living-conclusion" data-checkpoint-copy>{view.title}</h1>
+            <p data-checkpoint-copy>{view.support}</p>
             <div className={styles.workspaceEconomics} aria-label="Separate economic domains">
               <article className={styles.receivable} data-testid="living-receivable-anchor">
                 <p>Receivable</p>
@@ -342,7 +342,7 @@ export function TransactionDrivenExperience({
             </div>
           </section>
 
-          <aside className={styles.workspaceDecision} data-region="responsibility">
+          <aside className={styles.workspaceDecision} data-region="responsibility" data-checkpoint-copy>
             <p>Next decision</p>
             <strong>{recordedNextStep}</strong>
             <div><p>Responsible now</p><span>{view.responsible}</span></div>
@@ -364,7 +364,7 @@ export function TransactionDrivenExperience({
       ) : surface === "participant" ? (
         <div className={styles.participantLayout}>
           <div className={styles.participantRoom}>
-            <section className={styles.participantTruth} data-region="truth" data-dominant="true">
+            <section className={styles.participantTruth} data-region="truth" data-dominant="true" data-checkpoint-copy>
               <p className={styles.participantStatus}>Your current status · {view.safeAction}</p>
               <h1 data-testid="living-conclusion">{view.title}</h1>
               <p>{view.support}</p>
@@ -381,7 +381,7 @@ export function TransactionDrivenExperience({
                 <strong>{formatDemoAmount(displayedRun.current.holderAUnits)} <small>invoice units</small></strong>
                 <span>{receivableLabel}</span>
               </article>
-              <dl className={styles.participantFacts}>
+              <dl className={styles.participantFacts} data-checkpoint-copy>
                 <div><dt>Responsible</dt><dd>{view.responsible}</dd></div>
                 {view.deadline === null ? null : <div><dt>Deadline</dt><dd><time>{view.deadline}</time></dd></div>}
                 <div><dt>Protection</dt><dd>{formatDemoAmount(run.deal.protectionAmount)} dSETTLE · {protectionLabel}</dd></div>
@@ -418,9 +418,9 @@ export function TransactionDrivenExperience({
 
           <div className={styles.protocolConsole}>
             <section className={styles.protocolTruth} data-region="truth" data-dominant="true">
-              <p className={styles.eyebrow}>{view.abnormal ? "Incident" : "Protocol transition"}</p>
-              <h1 data-testid="living-conclusion">{view.title}</h1>
-              <div className={styles.protocolTransition}>
+              <p className={styles.eyebrow} data-checkpoint-copy>{view.abnormal ? "Incident" : "Protocol transition"}</p>
+              <h1 data-testid="living-conclusion" data-checkpoint-copy>{view.title}</h1>
+              <div className={styles.protocolTransition} data-checkpoint-copy>
                 <p>Last confirmed transition</p>
                 <strong>{proofAction?.title ?? "No confirmed transition"}</strong>
                 <span>{proofAction?.actorLabel ?? view.responsible} · {receipt?.status ?? proofAction?.status ?? "ready"}</span>
@@ -428,7 +428,7 @@ export function TransactionDrivenExperience({
             </section>
 
             <section className={styles.protocolDiagnosis} aria-label="Impact, last safe state, and recovery">
-              <article className={styles.protocolImpact}>
+              <article className={styles.protocolImpact} data-checkpoint-copy>
                 <p>Impact</p>
                 <strong>{view.consequence}</strong>
               </article>
@@ -437,7 +437,7 @@ export function TransactionDrivenExperience({
                 <strong>Receivable · {RECEIVABLE_STATES[proofAction?.before.receivableState ?? displayedRun.lastSafeState.receivableState]}</strong>
                 <span>Protection · {PROTECTION_STATES[proofAction?.before.protectionState ?? displayedRun.lastSafeState.protectionState]}</span>
               </article>
-              <article className={styles.protocolRecovery}>
+              <article className={styles.protocolRecovery} data-checkpoint-copy>
                 <p>Recovery</p>
                 <strong>{recordedNextStep}</strong>
                 {view.deadline === null ? null : <time>{view.deadline}</time>}
@@ -445,7 +445,7 @@ export function TransactionDrivenExperience({
               </article>
             </section>
 
-            <footer className={styles.protocolProofControl}>
+            <footer className={styles.protocolProofControl} data-checkpoint-copy>
               <p><strong>{receipt === undefined ? "Checkpoint proof" : "Receipt proof"}</strong><span>Before → action → after</span></p>
               {readOnly ? (
                 <button type="button" ref={proofTriggerRef} className={styles.proofLink} disabled={proofAction === null} onClick={openProof}>

@@ -14,81 +14,32 @@
   padding: clamp(18px, 2.4vw, 34px) clamp(16px, 3vw, 44px) 22px;
 }
 
-.experience :is(
-  .workspaceFocus,
-  .workspaceDecision,
-  .participantTruth,
-  .participantObligation,
-  .protocolTruth,
-  .protocolDiagnosis,
-  .protocolProofControl
-) {
+.experience [data-checkpoint-copy] {
   transition: opacity 120ms ease-out, transform 120ms ease-out;
 }
 
-.experience[data-checkpoint-motion="out-forward"] :is(
-  .workspaceFocus,
-  .workspaceDecision,
-  .participantTruth,
-  .participantObligation,
-  .protocolTruth,
-  .protocolDiagnosis,
-  .protocolProofControl
-) {
+.experience[data-checkpoint-motion="out-forward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(-12px);
 }
 
-.experience[data-checkpoint-motion="out-backward"] :is(
-  .workspaceFocus,
-  .workspaceDecision,
-  .participantTruth,
-  .participantObligation,
-  .protocolTruth,
-  .protocolDiagnosis,
-  .protocolProofControl
-) {
+.experience[data-checkpoint-motion="out-backward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(12px);
 }
 
-.experience[data-checkpoint-motion="in-forward"] :is(
-  .workspaceFocus,
-  .workspaceDecision,
-  .participantTruth,
-  .participantObligation,
-  .protocolTruth,
-  .protocolDiagnosis,
-  .protocolProofControl
-) {
+.experience[data-checkpoint-motion="in-forward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(12px);
 }
 
-.experience[data-checkpoint-motion="in-backward"] :is(
-  .workspaceFocus,
-  .workspaceDecision,
-  .participantTruth,
-  .participantObligation,
-  .protocolTruth,
-  .protocolDiagnosis,
-  .protocolProofControl
-) {
+.experience[data-checkpoint-motion="in-backward"] [data-checkpoint-copy] {
   opacity: 0;
   transform: translateX(-12px);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .experience[data-timeline="public"] :is(
-    .workspaceFocus > p,
-    .workspaceFocus > h1,
-    .workspaceDecision,
-    .participantTruth,
-    .participantObligation,
-    .protocolTruth,
-    .protocolDiagnosis,
-    .protocolProofControl
-  ) {
+  .experience[data-timeline="public"] [data-checkpoint-copy] {
     animation: perspective-hierarchy-in 220ms ease-out both;
   }
 }
@@ -328,13 +279,54 @@
 }
 
 .workspaceQueue button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--nws-action) 12%, var(--nws-ground));
+  background: color-mix(in srgb, var(--nws-ink) 5%, var(--nws-ground));
 }
 
 .workspaceQueue button[data-selected="true"] {
   padding-left: 8px;
-  border-left: 3px solid var(--nws-action);
-  background: color-mix(in srgb, var(--nws-action) 16%, var(--nws-ground));
+  border-left: 3px solid var(--checkpoint-color, var(--nws-action));
+}
+
+.workspaceQueue button[data-checkpoint-id="funding"],
+.workspaceQueue button[data-checkpoint-id="activation"],
+.workspaceQueue button[data-checkpoint-id="positions"],
+.participantHistory button[data-checkpoint-id="funding"],
+.participantHistory button[data-checkpoint-id="activation"],
+.participantHistory button[data-checkpoint-id="positions"],
+.protocolTimeline button[data-checkpoint-id="funding"],
+.protocolTimeline button[data-checkpoint-id="activation"],
+.protocolTimeline button[data-checkpoint-id="positions"] {
+  --checkpoint-color: var(--nws-receivable);
+}
+
+.workspaceQueue button[data-checkpoint-id="commitment"],
+.workspaceQueue button[data-checkpoint-id="reveal"],
+.participantHistory button[data-checkpoint-id="commitment"],
+.participantHistory button[data-checkpoint-id="reveal"],
+.protocolTimeline button[data-checkpoint-id="commitment"],
+.protocolTimeline button[data-checkpoint-id="reveal"] {
+  --checkpoint-color: var(--nws-protection);
+}
+
+.workspaceQueue button[data-checkpoint-id="deadline"],
+.workspaceQueue button[data-checkpoint-id="entitlement"],
+.participantHistory button[data-checkpoint-id="deadline"],
+.participantHistory button[data-checkpoint-id="entitlement"],
+.protocolTimeline button[data-checkpoint-id="deadline"],
+.protocolTimeline button[data-checkpoint-id="entitlement"] {
+  --checkpoint-color: var(--nws-action);
+}
+
+.workspaceQueue button[data-checkpoint-id="claims"],
+.participantHistory button[data-checkpoint-id="claims"],
+.protocolTimeline button[data-checkpoint-id="claims"] {
+  --checkpoint-color: var(--nws-ink);
+}
+
+.workspaceQueue button[data-checkpoint-id="redemption"],
+.participantHistory button[data-checkpoint-id="redemption"],
+.protocolTimeline button[data-checkpoint-id="redemption"] {
+  --checkpoint-color: var(--nws-receivable);
 }
 
 .checkpointMarker {
@@ -344,6 +336,7 @@
   align-self: center;
   border: 1px solid var(--nws-muted);
   background: var(--nws-ground);
+  transition: border-color 160ms ease-out, background-color 160ms ease-out, transform 180ms ease-out;
 }
 
 .workspaceQueue button > .checkpointMarker,
@@ -355,8 +348,9 @@
 .workspaceQueue button[data-selected="true"] > .checkpointMarker,
 .participantHistory button[data-selected="true"] > .checkpointMarker,
 .protocolTimeline button[data-selected="true"] > .checkpointMarker {
-  border-color: var(--nws-action);
-  background: var(--nws-action);
+  border-color: var(--checkpoint-color, var(--nws-action));
+  background: var(--checkpoint-color, var(--nws-action));
+  transform: rotate(45deg) scale(1.15);
 }
 
 .workspaceQueue button strong {
@@ -435,12 +429,11 @@
 
 .participantHistory button:hover:not(:disabled),
 .protocolTimeline button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--nws-action) 12%, var(--nws-ground));
+  background: color-mix(in srgb, var(--nws-ink) 5%, var(--nws-ground));
 }
 
 .participantHistory button[data-selected="true"] {
-  border-bottom-color: var(--nws-action);
-  background: color-mix(in srgb, var(--nws-action) 16%, var(--nws-ground));
+  border-bottom-color: var(--checkpoint-color, var(--nws-action));
 }
 
 .participantHistory button > .checkpointMarker {
@@ -512,6 +505,34 @@
 .workspaceEconomics .receivable,
 .workspaceEconomics .protection {
   min-height: 150px;
+}
+
+.workspaceEconomics .protection {
+  transition: border-color 180ms ease-out, transform 260ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  will-change: transform;
+}
+
+.experience[data-checkpoint="commitment"] .workspaceEconomics .protection {
+  transform: translate(9px, 6px);
+}
+
+.experience[data-checkpoint="reveal"] .workspaceEconomics .protection,
+.experience[data-checkpoint="deadline"] .workspaceEconomics .protection {
+  transform: translate(16px, 11px);
+}
+
+.experience[data-checkpoint="deadline"] .workspaceEconomics .protection,
+.experience[data-checkpoint="entitlement"] .workspaceEconomics .protection,
+.experience[data-checkpoint="claims"] .workspaceEconomics .protection {
+  border-color: var(--nws-action);
+}
+
+.experience[data-checkpoint="entitlement"] .workspaceEconomics .protection {
+  transform: translate(7px, 4px);
+}
+
+.experience[data-checkpoint="claims"] .workspaceEconomics .protection {
+  transform: translate(0, 0);
 }
 
 .workspaceDecision {
@@ -749,8 +770,7 @@
 
 .protocolTimeline button[data-selected="true"] {
   padding-left: 8px;
-  border-left: 3px solid var(--nws-action);
-  background: color-mix(in srgb, var(--nws-action) 16%, var(--nws-ground));
+  border-left: 3px solid var(--checkpoint-color, var(--nws-action));
 }
 
 .protocolTimeline button strong {
@@ -1534,7 +1554,7 @@
 
   .protocolTimeline button[data-selected="true"] {
     padding-left: 8px;
-    border-bottom-color: var(--nws-action);
+    border-bottom-color: var(--checkpoint-color, var(--nws-action));
     border-left: 0;
   }
 
@@ -1735,18 +1755,17 @@
 
 @media (prefers-reduced-motion: reduce) {
   .experience :is(
-    .workspaceFocus,
-    .workspaceDecision,
-    .participantScene .truth,
-    .participantScene .economics,
-    .participantScene .responsibility,
-    .protocolTruth,
-    .protocolDiagnosis,
-    .protocolProofControl
+    [data-checkpoint-copy],
+    .workspaceEconomics .protection,
+    .checkpointMarker
   ),
   .proof,
   .proof > * {
     animation: none !important;
     transition: none !important;
+  }
+
+  .workspaceEconomics .protection {
+    transform: none !important;
   }
 }

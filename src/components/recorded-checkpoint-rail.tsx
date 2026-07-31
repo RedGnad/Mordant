@@ -50,7 +50,10 @@ export function RecordedCheckpointRail({
     const list = listRef.current;
     const selected = list?.querySelector<HTMLElement>("[data-selected='true']");
     if (list === null || list === undefined || selected === null || selected === undefined) return;
-    list.scrollLeft = Math.max(0, selected.offsetLeft - (list.clientWidth - selected.offsetWidth) / 2);
+    const selectedOffset = window.matchMedia("(max-width: 760px)").matches
+      ? selected.offsetLeft - 16
+      : selected.offsetLeft - (list.clientWidth - selected.offsetWidth) / 2;
+    list.scrollLeft = Math.max(0, selectedOffset);
   }, [selectedId]);
 
   return (
