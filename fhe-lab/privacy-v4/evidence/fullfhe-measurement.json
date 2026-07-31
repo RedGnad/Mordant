@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "mordant.fullfhe-measurement/4",
+  "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0",
+  "custodyModel": "dealerless-ceremony",
+  "parameters": "BGV LogN=15, LogQ 12 primes, LogP 3 primes, t=65537 (unchanged)",
+  "modeA_IdentityPublicCommitment": {
+    "mode": "IdentityPublicCommitment",
+    "clientEncryptMillisPerPledge": 206,
+    "identityEncryptMillisPerPledge": 0,
+    "envelopeBytesPerPledge": 25168031,
+    "identityCiphertextBytesPerPledge": 0,
+    "evaluationMillis": 7639,
+    "identityEqualityMillis": 0,
+    "multiplicativeDepth": 11
+  },
+  "modeB_IdentityFullFHE256": {
+    "mode": "IdentityFullFHE256",
+    "clientEncryptMillisPerPledge": 235,
+    "identityEncryptMillisPerPledge": 46,
+    "envelopeBytesPerPledge": 31459985,
+    "identityCiphertextBytesPerPledge": 6291950,
+    "evaluationMillis": 9512,
+    "identityEqualityMillis": 2202,
+    "multiplicativeDepth": 11
+  },
+  "delta": {
+    "encryptMillisPerPledge": 29,
+    "envelopeBytesPerPledge": 6291954,
+    "evaluationMillis": 1873,
+    "totalTransportBytesForTwoPledges": 12583908
+  },
+  "informationModeBHidesThatModeAReveals": [
+    "Mode A requires both pledges to carry an identical public ReceivableCommitment, so the evaluator and anyone holding both envelopes learns the two submissions concern the same receivable before any policy runs.",
+    "Mode B carries no receivable commitment at all (it must be zero) and decides the 256-bit economic-asset equality homomorphically, so same-asset linkage is never asserted in transport.",
+    "Mode A's V3 enrollment additionally requires a cleartext shared vault address; Mode B's scope commitments name a portfolio, never a receivable."
+  ],
+  "assertions": [
+    "same economic asset under FullFHE256 -\u003e conflict confirmed",
+    "different economic assets under FullFHE256 -\u003e conflict refused, with no public link involved",
+    "both modes evaluated under the same dealerless collective keys and released by a 2-of-3 coalition"
+  ]
+}
