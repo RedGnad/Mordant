@@ -1,0 +1,395 @@
+{
+  "schemaVersion": "mordant.receivable-anchor-journal/1",
+  "chainId": 10143,
+  "testAssetsOnly": true,
+  "steps": {
+    "fund:buyer": {
+      "hash": "0xa4b7e110b4a700b8c7b7ce9b650d0296df106ed9e02265488d0be292e217bd87",
+      "status": "success",
+      "block": "49755282",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "buyer",
+      "to": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3"
+    },
+    "fund:facilityA": {
+      "hash": "0x3ec227919725918d7f402c8b37abf5dc5d51e0a39e024c1115cd49dee3bd50db",
+      "status": "success",
+      "block": "49755283",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "facilityA",
+      "to": "0xe7C134221b505436e3178D75Fa812d1692C49e18"
+    },
+    "fund:holder": {
+      "hash": "0xf95cb66ef615d91700b8775ffc7afdd35b5c4565db2c27930eadc152daa90975",
+      "status": "success",
+      "block": "49755284",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "holder",
+      "to": "0x7a60098b7D64c300e67F904242938F22F9036D79"
+    },
+    "deploy:eligibility": {
+      "hash": "0xe4199bd18e1e430a27e06b879da17de20f6220be5085fec561903121f9d538d3",
+      "status": "success",
+      "block": "49755287",
+      "gasUsed": "363115",
+      "contractAddress": "0xdc4021caa1246e2ac5d613af6d9c2d4c616df342",
+      "contract": "eligibility"
+    },
+    "deploy:settlement": {
+      "hash": "0xae9e984d1192726d5f852580d42f26704e9c9b3dcf0c3501ce4aa732d94fdc57",
+      "status": "success",
+      "block": "49755289",
+      "gasUsed": "708358",
+      "contractAddress": "0x02faebf36fdd92f93097d56947fcd3036070d710",
+      "contract": "settlement"
+    },
+    "deploy:cvaToken": {
+      "hash": "0x1aabcfc9ec4099cfcc130cb3e6f3d8d8c92caf0602ad4cfa34ee6932e3bda9b4",
+      "status": "success",
+      "block": "49755296",
+      "gasUsed": "708418",
+      "contractAddress": "0xc0298e2f0d93929db6bf5cf972fc23854299b20c",
+      "contract": "cvaToken"
+    },
+    "deploy:adapter": {
+      "hash": "0x3ec748cd67601b9ae8fb0ba71de20b1a501e1b7f203ea5da5d8d791fc96515bd",
+      "status": "success",
+      "block": "49755297",
+      "gasUsed": "663394",
+      "contractAddress": "0xabb27b313280fd09d3177bc2619b319b37a72665",
+      "contract": "adapter"
+    },
+    "deploy:factory": {
+      "hash": "0x80fa530a45823b38cd969197e83a5a127a3039da190071b127619b55d92c0713",
+      "status": "success",
+      "block": "49755307",
+      "gasUsed": "8828222",
+      "contractAddress": "0xe7f6ce867d5e47ff9b7e3581e4d5ba96dd5e1577",
+      "contract": "factory"
+    },
+    "eligible:buyer": {
+      "hash": "0xafbda7feff484283aee3958ab3f56511191fadfd281e9289d3387635b10a9549",
+      "status": "success",
+      "block": "49755308",
+      "gasUsed": "50883",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "eligible:originator": {
+      "hash": "0x7fe9613960da1456478d75c7d6c3cd6959001efb93422cd5a0df4248bcc6b3f4",
+      "status": "success",
+      "block": "49755310",
+      "gasUsed": "50883",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "eligible:facilityA": {
+      "hash": "0x2fb9e12b10dd480569c715bbf16baa09b97d562e49a879792d7ca9991faed50c",
+      "status": "success",
+      "block": "49755311",
+      "gasUsed": "50883",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "eligible:facilityB": {
+      "hash": "0x4d5e11bf6ef72f3efb77867edfc5f3d02e4f018834011f4f9c0f9ca1268ac342",
+      "status": "success",
+      "block": "49755313",
+      "gasUsed": "50883",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "eligible:holder": {
+      "hash": "0xe7233d8b5a7adc7e5d91d1121d82fba87c656f000befb49591d110f66faae48b",
+      "status": "success",
+      "block": "49755318",
+      "gasUsed": "50871",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "factory:facility:facilityA": {
+      "hash": "0x6b3972d7e63c2e1e939050df8daaa6f63677a1dcff94ebd69512e88e1f5f3442",
+      "status": "success",
+      "block": "49755323",
+      "gasUsed": "79945",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "factory:facility:facilityB": {
+      "hash": "0xd8832f4329c90e2fcd4a20445b00bedebb2f408a984510159ef75e411d9b32b2",
+      "status": "success",
+      "block": "49755328",
+      "gasUsed": "79945",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "factory:adapter": {
+      "hash": "0xdfb5f191a974cee89d7d9089fc32e0099336ee1260d83a8819f35aaddf68c358",
+      "status": "success",
+      "block": "49755334",
+      "gasUsed": "71565",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "factory:settlement": {
+      "hash": "0x4e8b7bf232dcf1770cb1a92ba8fba3c7e335a8fdde74b10f82b352b884b9098c",
+      "status": "success",
+      "block": "49755341",
+      "gasUsed": "70895",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "fund:buyer@4000000000000000000": {
+      "hash": "0x4ec18237f631c79ef8a5aa0618e64fd6f34b33f60cb40d34eee719990016d8b3",
+      "status": "success",
+      "block": "49755457",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "buyer",
+      "to": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3"
+    },
+    "fund:facilityA@4000000000000000000": {
+      "hash": "0xd735c87711f5d2899f4dd2937396a3c493f179543c469599538774cbc01ad691",
+      "status": "success",
+      "block": "49755458",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "facilityA",
+      "to": "0xe7C134221b505436e3178D75Fa812d1692C49e18"
+    },
+    "fund:holder@4000000000000000000": {
+      "hash": "0xf009be55d56f072c24e10a367c915e6abef43d0de96d47507077d84c7adf66d9",
+      "status": "success",
+      "block": "49755464",
+      "gasUsed": "21165",
+      "contractAddress": null,
+      "role": "holder",
+      "to": "0x7a60098b7D64c300e67F904242938F22F9036D79"
+    },
+    "vault:create": {
+      "hash": "0x25555d7b8dd090ade483cd62474cd6510c6d60f3951ae3e2c9c2dacdac63f17a",
+      "status": "success",
+      "block": "49755917",
+      "gasUsed": "8722077",
+      "contractAddress": null,
+      "from": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3",
+      "vault": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1"
+    },
+    "eligible:vaultIdentity": {
+      "hash": "0x1c16c1f70bafbc33e7d26f854346f8e2c2feb9c500b6ea262bb45cc2b7aa7984",
+      "status": "success",
+      "block": "49755919",
+      "gasUsed": "65752",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "eligible:holderAsset": {
+      "hash": "0x0a5d5349f335305b9e4315671912df4587f74f993041d04b73304490a7ba6933",
+      "status": "success",
+      "block": "49755924",
+      "gasUsed": "42924",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "cva:mint": {
+      "hash": "0x8fc51da9db8f34c93f7784e26c2c58eded93178d75a30bfd1b27fd21e1ff2a2c",
+      "status": "success",
+      "block": "49755929",
+      "gasUsed": "105626",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "cva:approve": {
+      "hash": "0xdf754f245da02fd8489b1a64ad11f6161b8002adff6cc66a82b6de9c3c0cfef4",
+      "status": "success",
+      "block": "49755934",
+      "gasUsed": "68975",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "cva:credit": {
+      "hash": "0x6951565bc9aa7a7340aca459c3211fe8bf00115ba4b2b50c48ad1127c4306c10",
+      "status": "success",
+      "block": "49755939",
+      "gasUsed": "151976",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "settlement:mint": {
+      "hash": "0x8cc55c679863e41c346229ee9805520064d5eff7c2b8c7039459aa143e46757e",
+      "status": "success",
+      "block": "49755944",
+      "gasUsed": "105610",
+      "contractAddress": null,
+      "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    "settlement:approve": {
+      "hash": "0xb7011ec4a1cbc304fb70712e1bf3429b69c0c7c65c7bd45db3441faa9e8704ef",
+      "status": "success",
+      "block": "49755946",
+      "gasUsed": "68975",
+      "contractAddress": null,
+      "from": "0x7a60098b7D64c300e67F904242938F22F9036D79"
+    },
+    "vault:activate": {
+      "hash": "0x1590e78e4c7ec15c76d310a7ef36b18df75bbe5fe74622af00a0984916cab30b",
+      "status": "success",
+      "block": "49756074",
+      "gasUsed": "1090624",
+      "contractAddress": null,
+      "from": "0xe7C134221b505436e3178D75Fa812d1692C49e18"
+    }
+  },
+  "history": [
+    {
+      "name": "fund:buyer",
+      "hash": "0xa4b7e110b4a700b8c7b7ce9b650d0296df106ed9e02265488d0be292e217bd87",
+      "at": "2026-07-31T19:32:06.811Z"
+    },
+    {
+      "name": "fund:facilityA",
+      "hash": "0x3ec227919725918d7f402c8b37abf5dc5d51e0a39e024c1115cd49dee3bd50db",
+      "at": "2026-07-31T19:32:07.150Z"
+    },
+    {
+      "name": "fund:holder",
+      "hash": "0xf95cb66ef615d91700b8775ffc7afdd35b5c4565db2c27930eadc152daa90975",
+      "at": "2026-07-31T19:32:07.475Z"
+    },
+    {
+      "name": "deploy:eligibility",
+      "hash": "0xe4199bd18e1e430a27e06b879da17de20f6220be5085fec561903121f9d538d3",
+      "at": "2026-07-31T19:32:08.481Z"
+    },
+    {
+      "name": "deploy:settlement",
+      "hash": "0xae9e984d1192726d5f852580d42f26704e9c9b3dcf0c3501ce4aa732d94fdc57",
+      "at": "2026-07-31T19:32:08.793Z"
+    },
+    {
+      "name": "deploy:cvaToken",
+      "hash": "0x1aabcfc9ec4099cfcc130cb3e6f3d8d8c92caf0602ad4cfa34ee6932e3bda9b4",
+      "at": "2026-07-31T19:32:11.047Z"
+    },
+    {
+      "name": "deploy:adapter",
+      "hash": "0x3ec748cd67601b9ae8fb0ba71de20b1a501e1b7f203ea5da5d8d791fc96515bd",
+      "at": "2026-07-31T19:32:11.374Z"
+    },
+    {
+      "name": "deploy:factory",
+      "hash": "0x80fa530a45823b38cd969197e83a5a127a3039da190071b127619b55d92c0713",
+      "at": "2026-07-31T19:32:14.394Z"
+    },
+    {
+      "name": "eligible:buyer",
+      "hash": "0xafbda7feff484283aee3958ab3f56511191fadfd281e9289d3387635b10a9549",
+      "at": "2026-07-31T19:32:14.774Z"
+    },
+    {
+      "name": "eligible:originator",
+      "hash": "0x7fe9613960da1456478d75c7d6c3cd6959001efb93422cd5a0df4248bcc6b3f4",
+      "at": "2026-07-31T19:32:15.290Z"
+    },
+    {
+      "name": "eligible:facilityA",
+      "hash": "0x2fb9e12b10dd480569c715bbf16baa09b97d562e49a879792d7ca9991faed50c",
+      "at": "2026-07-31T19:32:15.574Z"
+    },
+    {
+      "name": "eligible:facilityB",
+      "hash": "0x4d5e11bf6ef72f3efb77867edfc5f3d02e4f018834011f4f9c0f9ca1268ac342",
+      "at": "2026-07-31T19:32:16.069Z"
+    },
+    {
+      "name": "eligible:holder",
+      "hash": "0xe7233d8b5a7adc7e5d91d1121d82fba87c656f000befb49591d110f66faae48b",
+      "at": "2026-07-31T19:32:17.549Z"
+    },
+    {
+      "name": "factory:facility:facilityA",
+      "hash": "0x6b3972d7e63c2e1e939050df8daaa6f63677a1dcff94ebd69512e88e1f5f3442",
+      "at": "2026-07-31T19:32:19.087Z"
+    },
+    {
+      "name": "factory:facility:facilityB",
+      "hash": "0xd8832f4329c90e2fcd4a20445b00bedebb2f408a984510159ef75e411d9b32b2",
+      "at": "2026-07-31T19:32:20.557Z"
+    },
+    {
+      "name": "factory:adapter",
+      "hash": "0xdfb5f191a974cee89d7d9089fc32e0099336ee1260d83a8819f35aaddf68c358",
+      "at": "2026-07-31T19:32:22.514Z"
+    },
+    {
+      "name": "factory:settlement",
+      "hash": "0x4e8b7bf232dcf1770cb1a92ba8fba3c7e335a8fdde74b10f82b352b884b9098c",
+      "at": "2026-07-31T19:32:24.471Z"
+    },
+    {
+      "name": "fund:buyer@4000000000000000000",
+      "hash": "0x4ec18237f631c79ef8a5aa0618e64fd6f34b33f60cb40d34eee719990016d8b3",
+      "at": "2026-07-31T19:32:59.751Z"
+    },
+    {
+      "name": "fund:facilityA@4000000000000000000",
+      "hash": "0xd735c87711f5d2899f4dd2937396a3c493f179543c469599538774cbc01ad691",
+      "at": "2026-07-31T19:32:59.904Z"
+    },
+    {
+      "name": "fund:holder@4000000000000000000",
+      "hash": "0xf009be55d56f072c24e10a367c915e6abef43d0de96d47507077d84c7adf66d9",
+      "at": "2026-07-31T19:33:01.763Z"
+    },
+    {
+      "name": "vault:create",
+      "hash": "0x25555d7b8dd090ade483cd62474cd6510c6d60f3951ae3e2c9c2dacdac63f17a",
+      "at": "2026-07-31T19:35:18.546Z"
+    },
+    {
+      "name": "eligible:vaultIdentity",
+      "hash": "0x1c16c1f70bafbc33e7d26f854346f8e2c2feb9c500b6ea262bb45cc2b7aa7984",
+      "at": "2026-07-31T19:35:19.069Z"
+    },
+    {
+      "name": "eligible:holderAsset",
+      "hash": "0x0a5d5349f335305b9e4315671912df4587f74f993041d04b73304490a7ba6933",
+      "at": "2026-07-31T19:35:20.597Z"
+    },
+    {
+      "name": "cva:mint",
+      "hash": "0x8fc51da9db8f34c93f7784e26c2c58eded93178d75a30bfd1b27fd21e1ff2a2c",
+      "at": "2026-07-31T19:35:22.093Z"
+    },
+    {
+      "name": "cva:approve",
+      "hash": "0xdf754f245da02fd8489b1a64ad11f6161b8002adff6cc66a82b6de9c3c0cfef4",
+      "at": "2026-07-31T19:35:23.626Z"
+    },
+    {
+      "name": "cva:credit",
+      "hash": "0x6951565bc9aa7a7340aca459c3211fe8bf00115ba4b2b50c48ad1127c4306c10",
+      "at": "2026-07-31T19:35:25.171Z"
+    },
+    {
+      "name": "settlement:mint",
+      "hash": "0x8cc55c679863e41c346229ee9805520064d5eff7c2b8c7039459aa143e46757e",
+      "at": "2026-07-31T19:35:26.708Z"
+    },
+    {
+      "name": "settlement:approve",
+      "hash": "0xb7011ec4a1cbc304fb70712e1bf3429b69c0c7c65c7bd45db3441faa9e8704ef",
+      "at": "2026-07-31T19:35:27.129Z"
+    },
+    {
+      "name": "vault:activate",
+      "hash": "0x1590e78e4c7ec15c76d310a7ef36b18df75bbe5fe74622af00a0984916cab30b",
+      "at": "2026-07-31T19:36:05.951Z"
+    }
+  ],
+  "invoiceRoot": "0x1e072bc56c3f6c4bd4c46a9e5ef27ec514e49dd939eb4a31e94c9f92bc754341",
+  "protectionEnd": "1788118346"
+}

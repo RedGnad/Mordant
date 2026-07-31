@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "mordant.receivable-anchor/1",
+  "classification": "TOKENIZED RECEIVABLE ANCHOR: ACTIVE (TEST ASSETS ONLY)",
+  "testAssetsOnly": true,
+  "network": {
+    "chainId": 10143,
+    "deployer": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+  },
+  "infrastructure": {
+    "eligibility": "0xDC4021Caa1246e2aC5D613Af6d9C2D4c616Df342",
+    "settlement": "0x02FAebf36fDD92f93097D56947fcd3036070d710",
+    "cvaToken": "0xc0298e2f0D93929db6bf5Cf972Fc23854299B20c",
+    "adapter": "0xaBb27B313280Fd09D3177bc2619B319B37a72665",
+    "factory": "0xe7f6Ce867D5e47ff9b7E3581e4D5Ba96DD5E1577"
+  },
+  "roles": {
+    "buyer": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3",
+    "originator": "0xCce9C373615FCc24AdE987022C26898ADfF1d682",
+    "facilityA": "0xe7C134221b505436e3178D75Fa812d1692C49e18",
+    "facilityB": "0x05827340e06C93A9FEBE09Cf76E1130104aC1068",
+    "holder": "0x7a60098b7D64c300e67F904242938F22F9036D79"
+  },
+  "anchor": {
+    "vault": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+    "invoiceRoot": "0x1e072bc56c3f6c4bd4c46a9e5ef27ec514e49dd939eb4a31e94c9f92bc754341",
+    "currency": "0x5553440000000000000000000000000000000000000000000000000000000000",
+    "buyer": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3",
+    "originatorTreasury": "0xCce9C373615FCc24AdE987022C26898ADfF1d682",
+    "receivableState": 1,
+    "protectionState": 1,
+    "totalSupply": "100000000",
+    "holderUnits": "100000000",
+    "tokenName": "Mordant Invoice Units",
+    "tokenSymbol": "mINV",
+    "tokenDecimals": 6,
+    "faceValue": "110000000",
+    "advanceAmount": "100000000",
+    "protectionEnd": "1788118346",
+    "curePeriod": "3600",
+    "protectedFacility": "0xe7C134221b505436e3178D75Fa812d1692C49e18",
+    "cvaToken": "0xc0298e2f0D93929db6bf5Cf972Fc23854299B20c",
+    "settlementToken": "0x02FAebf36fDD92f93097D56947fcd3036070d710",
+    "code": 62626
+  },
+  "transactions": {
+    "fund:buyer": {
+      "hash": "0xa4b7e110b4a700b8c7b7ce9b650d0296df106ed9e02265488d0be292e217bd87",
+      "block": "49755282"
+    },
+    "fund:facilityA": {
+      "hash": "0x3ec227919725918d7f402c8b37abf5dc5d51e0a39e024c1115cd49dee3bd50db",
+      "block": "49755283"
+    },
+    "fund:holder": {
+      "hash": "0xf95cb66ef615d91700b8775ffc7afdd35b5c4565db2c27930eadc152daa90975",
+      "block": "49755284"
+    },
+    "deploy:eligibility": {
+      "hash": "0xe4199bd18e1e430a27e06b879da17de20f6220be5085fec561903121f9d538d3",
+      "block": "49755287"
+    },
+    "deploy:settlement": {
+      "hash": "0xae9e984d1192726d5f852580d42f26704e9c9b3dcf0c3501ce4aa732d94fdc57",
+      "block": "49755289"
+    },
+    "deploy:cvaToken": {
+      "hash": "0x1aabcfc9ec4099cfcc130cb3e6f3d8d8c92caf0602ad4cfa34ee6932e3bda9b4",
+      "block": "49755296"
+    },
+    "deploy:adapter": {
+      "hash": "0x3ec748cd67601b9ae8fb0ba71de20b1a501e1b7f203ea5da5d8d791fc96515bd",
+      "block": "49755297"
+    },
+    "deploy:factory": {
+      "hash": "0x80fa530a45823b38cd969197e83a5a127a3039da190071b127619b55d92c0713",
+      "block": "49755307"
+    },
+    "eligible:buyer": {
+      "hash": "0xafbda7feff484283aee3958ab3f56511191fadfd281e9289d3387635b10a9549",
+      "block": "49755308"
+    },
+    "eligible:originator": {
+      "hash": "0x7fe9613960da1456478d75c7d6c3cd6959001efb93422cd5a0df4248bcc6b3f4",
+      "block": "49755310"
+    },
+    "eligible:facilityA": {
+      "hash": "0x2fb9e12b10dd480569c715bbf16baa09b97d562e49a879792d7ca9991faed50c",
+      "block": "49755311"
+    },
+    "eligible:facilityB": {
+      "hash": "0x4d5e11bf6ef72f3efb77867edfc5f3d02e4f018834011f4f9c0f9ca1268ac342",
+      "block": "49755313"
+    },
+    "eligible:holder": {
+      "hash": "0xe7233d8b5a7adc7e5d91d1121d82fba87c656f000befb49591d110f66faae48b",
+      "block": "49755318"
+    },
+    "factory:facility:facilityA": {
+      "hash": "0x6b3972d7e63c2e1e939050df8daaa6f63677a1dcff94ebd69512e88e1f5f3442",
+      "block": "49755323"
+    },
+    "factory:facility:facilityB": {
+      "hash": "0xd8832f4329c90e2fcd4a20445b00bedebb2f408a984510159ef75e411d9b32b2",
+      "block": "49755328"
+    },
+    "factory:adapter": {
+      "hash": "0xdfb5f191a974cee89d7d9089fc32e0099336ee1260d83a8819f35aaddf68c358",
+      "block": "49755334"
+    },
+    "factory:settlement": {
+      "hash": "0x4e8b7bf232dcf1770cb1a92ba8fba3c7e335a8fdde74b10f82b352b884b9098c",
+      "block": "49755341"
+    },
+    "fund:buyer@4000000000000000000": {
+      "hash": "0x4ec18237f631c79ef8a5aa0618e64fd6f34b33f60cb40d34eee719990016d8b3",
+      "block": "49755457"
+    },
+    "fund:facilityA@4000000000000000000": {
+      "hash": "0xd735c87711f5d2899f4dd2937396a3c493f179543c469599538774cbc01ad691",
+      "block": "49755458"
+    },
+    "fund:holder@4000000000000000000": {
+      "hash": "0xf009be55d56f072c24e10a367c915e6abef43d0de96d47507077d84c7adf66d9",
+      "block": "49755464"
+    },
+    "vault:create": {
+      "hash": "0x25555d7b8dd090ade483cd62474cd6510c6d60f3951ae3e2c9c2dacdac63f17a",
+      "block": "49755917"
+    },
+    "eligible:vaultIdentity": {
+      "hash": "0x1c16c1f70bafbc33e7d26f854346f8e2c2feb9c500b6ea262bb45cc2b7aa7984",
+      "block": "49755919"
+    },
+    "eligible:holderAsset": {
+      "hash": "0x0a5d5349f335305b9e4315671912df4587f74f993041d04b73304490a7ba6933",
+      "block": "49755924"
+    },
+    "cva:mint": {
+      "hash": "0x8fc51da9db8f34c93f7784e26c2c58eded93178d75a30bfd1b27fd21e1ff2a2c",
+      "block": "49755929"
+    },
+    "cva:approve": {
+      "hash": "0xdf754f245da02fd8489b1a64ad11f6161b8002adff6cc66a82b6de9c3c0cfef4",
+      "block": "49755934"
+    },
+    "cva:credit": {
+      "hash": "0x6951565bc9aa7a7340aca459c3211fe8bf00115ba4b2b50c48ad1127c4306c10",
+      "block": "49755939"
+    },
+    "settlement:mint": {
+      "hash": "0x8cc55c679863e41c346229ee9805520064d5eff7c2b8c7039459aa143e46757e",
+      "block": "49755944"
+    },
+    "settlement:approve": {
+      "hash": "0xb7011ec4a1cbc304fb70712e1bf3429b69c0c7c65c7bd45db3441faa9e8704ef",
+      "block": "49755946"
+    },
+    "vault:activate": {
+      "hash": "0x1590e78e4c7ec15c76d310a7ef36b18df75bbe5fe74622af00a0984916cab30b",
+      "block": "49756074"
+    }
+  },
+  "generatedAt": "2026-07-31T19:36:23.546Z"
+}
