@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "mordant.dealerless-evaluator-output/4",
+  "ok": true,
+  "custodyModel": "dealerless-ceremony",
+  "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
+  "conflictConfirmed": true,
+  "inputCommitmentA": "0x329ced089dce05db9810948dcb828c8fde1a7ff8390570fe1e06bddb1505435e",
+  "inputCommitmentB": "0x8c5262e4fbf2fb318984d7a1e8ca4938b2e70814494e3f793fab5f52e0cdd9cc",
+  "resultCommitment": "0x7196e0355ced30ab117bd4ca8ad4d40a3da9088bc1278b5ca1e7a39d262e5f0e",
+  "providerProofCommitment": "0x02e4054a89f6cc637f353d2ccc8b09288be322702a7f9c5b703c53adfc929081",
+  "thresholdTranscriptCommitment": "0x67e7754c2c6eabf66f5e35b95a231cd866be57a470471c95dc474af46c706b41",
+  "coalition": [
+    1,
+    2
+  ],
+  "evaluatorCapabilities": {
+    "holdsThresholdParties": false,
+    "localDecryptAttempt": "REFUSED: insufficient threshold shares",
+    "provisionOperatorsAttempt": "REFUSED: invalid threshold operator material",
+    "releaseShareAttempt": "REFUSED: invalid threshold operator material",
+    "loadedArtifacts": [
+      "collective-public-material.bin",
+      "collective-evaluation-keys.bin",
+      "key-manifest.json"
+    ]
+  }
+}

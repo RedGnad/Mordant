@@ -1,0 +1,386 @@
+{
+  "schemaVersion": "mordant.dealerless-ceremony-evidence/4",
+  "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0",
+  "custodyModel": "dealerless-ceremony",
+  "ceremonyId": "8a44d26130e3494655467134ffef096a824658e58c387c79fea0bd2babfddd8d",
+  "keyEpoch": 1,
+  "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+  "threshold": 2,
+  "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+  "crsDerivation": "collaborative: sha256(domain, rosterDigest, parameterFingerprint, ceremonyId, keyEpoch, each operator contribution in point order); no fixed kill-test seed",
+  "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
+  "publicKeyBytes": 7865218,
+  "evaluationKeyBytes": 314584742,
+  "galoisElements": [
+    5,
+    25,
+    625,
+    62945,
+    28609,
+    61313,
+    7937,
+    57601,
+    15873
+  ],
+  "roundDurationMillis": {
+    "collective-public-key": 318,
+    "crs-contributions": 17,
+    "crs-seal": 75,
+    "galois-keys": 8438,
+    "private-reshare": 403,
+    "relinearization-key": 2644,
+    "seal-manifest": 284
+  },
+  "operatorStatus": [
+    {
+      "statement": {
+        "point": 1,
+        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "sealed": true,
+        "holdsLocalSecretKey": false,
+        "holdsOwnShareOnly": true,
+        "steps": [
+          {
+            "operation": 1,
+            "name": "crs-contribution",
+            "at": "2026-07-31T18:17:36.873218Z"
+          },
+          {
+            "operation": 2,
+            "name": "crs-sealed",
+            "at": "2026-07-31T18:17:36.930276Z",
+            "detail": "crs=2129c59692cff132"
+          },
+          {
+            "operation": 3,
+            "name": "private-reshare-sent",
+            "at": "2026-07-31T18:17:37.11572Z",
+            "detail": "recipients=3"
+          },
+          {
+            "operation": 4,
+            "name": "threshold-share-sealed",
+            "at": "2026-07-31T18:17:37.360749Z"
+          },
+          {
+            "operation": 5,
+            "name": "collective-public-key-share",
+            "at": "2026-07-31T18:17:37.408536Z",
+            "detail": "bytes=3932296"
+          },
+          {
+            "operation": 6,
+            "name": "relinearization-round-one",
+            "at": "2026-07-31T18:17:37.923034Z",
+            "detail": "bytes=31458448"
+          },
+          {
+            "operation": 7,
+            "name": "relinearization-round-two",
+            "at": "2026-07-31T18:17:39.224442Z",
+            "detail": "bytes=15729264"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:40.519501Z",
+            "detail": "element=5"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:41.323262Z",
+            "detail": "element=25"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:42.319081Z",
+            "detail": "element=625"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:43.542925Z",
+            "detail": "element=62945"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:44.417096Z",
+            "detail": "element=28609"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:45.298561Z",
+            "detail": "element=61313"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:46.14914Z",
+            "detail": "element=7937"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:46.992032Z",
+            "detail": "element=57601"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:48.041348Z",
+            "detail": "element=15873"
+          },
+          {
+            "operation": 9,
+            "name": "manifest-sealed",
+            "at": "2026-07-31T18:17:50.303412Z"
+          }
+        ],
+        "observedAt": "2026-07-31T18:17:55.031023Z"
+      },
+      "point": 1,
+      "signature": "664ef5a286a70f75a5485ed047df273e8e8a50b485e47265deaf0ffb6772af97cb9091f2eacf7be1f5db66b63c2432923a7006148b2cb4b61da19ca16f12160d"
+    },
+    {
+      "statement": {
+        "point": 2,
+        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "sealed": true,
+        "holdsLocalSecretKey": false,
+        "holdsOwnShareOnly": true,
+        "steps": [
+          {
+            "operation": 1,
+            "name": "crs-contribution",
+            "at": "2026-07-31T18:17:36.879046Z"
+          },
+          {
+            "operation": 2,
+            "name": "crs-sealed",
+            "at": "2026-07-31T18:17:36.944536Z",
+            "detail": "crs=2129c59692cff132"
+          },
+          {
+            "operation": 3,
+            "name": "private-reshare-sent",
+            "at": "2026-07-31T18:17:37.244434Z",
+            "detail": "recipients=3"
+          },
+          {
+            "operation": 4,
+            "name": "threshold-share-sealed",
+            "at": "2026-07-31T18:17:37.361237Z"
+          },
+          {
+            "operation": 5,
+            "name": "collective-public-key-share",
+            "at": "2026-07-31T18:17:37.473056Z",
+            "detail": "bytes=3932296"
+          },
+          {
+            "operation": 6,
+            "name": "relinearization-round-one",
+            "at": "2026-07-31T18:17:38.327851Z",
+            "detail": "bytes=31458448"
+          },
+          {
+            "operation": 7,
+            "name": "relinearization-round-two",
+            "at": "2026-07-31T18:17:39.686424Z",
+            "detail": "bytes=15729264"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:40.73853Z",
+            "detail": "element=5"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:41.531965Z",
+            "detail": "element=25"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:42.541587Z",
+            "detail": "element=625"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:43.820716Z",
+            "detail": "element=62945"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:44.666794Z",
+            "detail": "element=28609"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:45.519599Z",
+            "detail": "element=61313"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:46.383348Z",
+            "detail": "element=7937"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:47.262496Z",
+            "detail": "element=57601"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:48.343825Z",
+            "detail": "element=15873"
+          },
+          {
+            "operation": 9,
+            "name": "manifest-sealed",
+            "at": "2026-07-31T18:17:50.384449Z"
+          }
+        ],
+        "observedAt": "2026-07-31T18:17:55.037576Z"
+      },
+      "point": 2,
+      "signature": "d3099bcbf20aeb58da5a227a4d6fe21e500216df9d53f9b46d9826c60aafb2f1003f7b200e6e8e5411260264e12cd05b927ec93770a4ababf69e3f0b34da5f0a"
+    },
+    {
+      "statement": {
+        "point": 3,
+        "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+        "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+        "sealed": true,
+        "holdsLocalSecretKey": false,
+        "holdsOwnShareOnly": true,
+        "steps": [
+          {
+            "operation": 1,
+            "name": "crs-contribution",
+            "at": "2026-07-31T18:17:36.881964Z"
+          },
+          {
+            "operation": 2,
+            "name": "crs-sealed",
+            "at": "2026-07-31T18:17:36.957991Z",
+            "detail": "crs=2129c59692cff132"
+          },
+          {
+            "operation": 3,
+            "name": "private-reshare-sent",
+            "at": "2026-07-31T18:17:37.359847Z",
+            "detail": "recipients=3"
+          },
+          {
+            "operation": 4,
+            "name": "threshold-share-sealed",
+            "at": "2026-07-31T18:17:37.361512Z"
+          },
+          {
+            "operation": 5,
+            "name": "collective-public-key-share",
+            "at": "2026-07-31T18:17:37.531264Z",
+            "detail": "bytes=3932296"
+          },
+          {
+            "operation": 6,
+            "name": "relinearization-round-one",
+            "at": "2026-07-31T18:17:38.656461Z",
+            "detail": "bytes=31458448"
+          },
+          {
+            "operation": 7,
+            "name": "relinearization-round-two",
+            "at": "2026-07-31T18:17:40.151884Z",
+            "detail": "bytes=15729264"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:40.954097Z",
+            "detail": "element=5"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:41.841603Z",
+            "detail": "element=25"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:42.999198Z",
+            "detail": "element=625"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:44.046026Z",
+            "detail": "element=62945"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:44.898004Z",
+            "detail": "element=28609"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:45.739031Z",
+            "detail": "element=61313"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:46.612459Z",
+            "detail": "element=7937"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:47.592076Z",
+            "detail": "element=57601"
+          },
+          {
+            "operation": 8,
+            "name": "galois-share",
+            "at": "2026-07-31T18:17:48.627332Z",
+            "detail": "element=15873"
+          },
+          {
+            "operation": 9,
+            "name": "manifest-sealed",
+            "at": "2026-07-31T18:17:50.490774Z"
+          }
+        ],
+        "observedAt": "2026-07-31T18:17:55.040064Z"
+      },
+      "point": 3,
+      "signature": "3ac9a6badf2dc74e3c59f4811c6fad28cb084fb410ff730607b393b439168d98923d0db268956f33e02c5acfbdb479c74ad5a08f6240052c9e7a1d7274ae690e"
+    }
+  ],
+  "privateShareChannel": "operator-to-operator mTLS with pinned roster keys; coordinator excluded",
+  "coordinatorHoldsOnly": [
+    "public protocol shares",
+    "collective public key",
+    "collective evaluation keys",
+    "public commitments",
+    "operator attestations"
+  ]
+}

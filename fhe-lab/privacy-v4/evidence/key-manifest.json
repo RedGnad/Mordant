@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "mordant.collective-key-manifest/4",
+  "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0",
+  "custodyModel": "dealerless-ceremony",
+  "parameterFingerprint": "d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+  "threshold": 2,
+  "ceremonyId": "8a44d26130e3494655467134ffef096a824658e58c387c79fea0bd2babfddd8d",
+  "keyEpoch": 1,
+  "rosterDigest": "ad82f94a9645452a87c55939282149fe0a5bfd4520003745c736fe0c0f31eb23",
+  "operators": [
+    "68b73cd2a120093fe7f5e213b57a6be92b6da98167c568550d16a421242887ef",
+    "318f758d41ede940d591b932094a137af71bf95f6c9ebd36e63b14bd40e585ee",
+    "506bd53cd7746143ee6a6cd33ea1b7c959ca728290a2e87a47419a06f5183e8e"
+  ],
+  "operatorPoints": [
+    1,
+    2,
+    3
+  ],
+  "chainId": 10143,
+  "policyId": "3d45d248cd669df64618bb3917de938208acd3129b30131d200ffabb177fd5da",
+  "policyVersion": 1,
+  "keyId": "8cd6d69bbc9e7db6d0177c7f4d47644d32ce7bed319ddf46e0ec4b0c16d55be7",
+  "crsCommitment": "2129c59692cff132f82afe9f6c23a08cb07de96ae11a7e6e5c443069adb5fc94",
+  "publicKeyCommitment": "511985b54b8505b04e0eeeac03cda2a9fd0695b2d18c9fa9fb6c69b9ad75d64f",
+  "relinearizationKeyCommitment": "28e0d7363eae3cab45be6eb6e764fd3dc7eb9707913a625b8eaab8f13b7bdcf8",
+  "galoisKeyCommitment": "3c43b630d5c0e6320f1cdafac4806127d0dd391c9dd420c105a6376fef542f21",
+  "policyCircuitCommitment": "e29547a713ce723b104b38f171d0fd9cc96030ee11d8dd6e05975bf3ffe18a6d",
+  "activatesAtUnix": 1785521810,
+  "expiresAtUnix": 1785525470,
+  "revoked": false,
+  "attestations": [
+    "1:1884098e98acc495164e1480f385a905be6a22a9db7ebd9be89374d3f007d85fa0a6a1461f50e4f9dd0cb089ea079b722a3a8aebf3f87836a24b0eb3c84eae0d",
+    "2:d40268e70d9a9dd1379756111706250faf7de9bf2bfc4ea15ecbf397092b1fae72f0f9792296558826409e7f99107f397c7cdcc52aecae8ba79989a6e9cb150a",
+    "3:475a37a68e5aec7290b58244bf9d693c5b6957ef1c594130cf512c9a1846c093b0d8604377df5f0ebaf3428aaa279301c9fcd36ed1953210087b9af6e3301008"
+  ]
+}
