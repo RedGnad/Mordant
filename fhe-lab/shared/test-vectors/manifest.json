@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "mordant.fhe-test-manifest/1",
+  "policy": {
+    "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+    "policyVersion": "1",
+    "expression": [
+      "same receivable",
+      "same currency",
+      "a.activeFrom < b.activeUntil",
+      "b.activeFrom < a.activeUntil",
+      "pledge A is exclusive",
+      "pledge B is exclusive",
+      "submitter A is authorized",
+      "submitter B is authorized"
+    ],
+    "combine": "AND",
+    "responsibleRoleOnConflict": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+    "curePeriodSeconds": "3600"
+  },
+  "publicHarness": {
+    "chainId": "31337",
+    "vault": "0x1111111111111111111111111111111111111111",
+    "verifier": "0x2222222222222222222222222222222222222222",
+    "evaluationTime": "2000000000",
+    "activeKeyId": "0xd0c226bbc24351c20afc43293f47d8d1a87a3777ab9181d251fb5f789f37c1a0",
+    "validatorSetId": "0xb99d0d74f7e0a07bc445e59286e5c03daabcc91946ee6c45277246e7a9c9c173"
+  },
+  "privacy": {
+    "fixtureMaterialization": "client-process-memory-only",
+    "publicOutputAllowlist": [
+      "input commitments",
+      "confidential policy result",
+      "attestation envelope",
+      "stable error code",
+      "aggregate benchmark metrics"
+    ],
+    "forbidDebugInputEcho": true
+  },
+  "canonicalEncodingVector": {
+    "result": {
+      "schemaVersion": "mordant.confidential-policy-result/1",
+      "chainId": "31337",
+      "vault": "0x1111111111111111111111111111111111111111",
+      "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
+      "policyVersion": "1",
+      "inputCommitmentA": "0x82118156ab9ee2b2c4f500e0ef4ce6e1dd35ebad13421fd5f4ccb78b941f6725",
+      "inputCommitmentB": "0x9dc2a7820edf7ac4700c85d114c655081bd799e9104de27e2fff0de7092a07fb",
+      "conflictConfirmed": true,
+      "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+      "cureDeadline": "2000003600",
+      "nonce": "7",
+      "validUntil": "2000000300",
+      "resultCommitment": "0x5bb7f768cc7fd197475701d1d8385bd15cac6b6b7dc1f655956c801798355477"
+    },
+    "resultDigest": "0xcd13f856c4f2ff740f081bf5b53053402ac2062126528b44ddcf85d852607522",
+    "attestationDigest": "0xd747842b8f953d54d4ad4ca50b7d3c812ebfd633db72098f06308425217c840d"
+  },
+  "cases": [
+    {
+      "id": "conflict-true",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/conflict-true/a",
+        "b": "client-runtime://mordant/fhe/v1/conflict-true/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "different-receivable",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/different-receivable/a",
+        "b": "client-runtime://mordant/fhe/v1/different-receivable/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": false,
+        "responsibleRole": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "cureDeadline": "0",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "periods-separated",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/periods-separated/a",
+        "b": "client-runtime://mordant/fhe/v1/periods-separated/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": false,
+        "responsibleRole": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "cureDeadline": "0",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "periods-adjacent-no-overlap",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/periods-adjacent-no-overlap/a",
+        "b": "client-runtime://mordant/fhe/v1/periods-adjacent-no-overlap/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": false,
+        "responsibleRole": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "cureDeadline": "0",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "different-currency",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/different-currency/a",
+        "b": "client-runtime://mordant/fhe/v1/different-currency/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": false,
+        "responsibleRole": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "cureDeadline": "0",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "exclusivity-false",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/exclusivity-false/a",
+        "b": "client-runtime://mordant/fhe/v1/exclusivity-false/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "monad-accepted",
+        "conflictConfirmed": false,
+        "responsibleRole": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "cureDeadline": "0",
+        "errorCode": null
+      }
+    },
+    {
+      "id": "unauthorized-submitter",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/unauthorized-submitter/a",
+        "b": "client-runtime://mordant/fhe/v1/unauthorized-submitter/b"
+      },
+      "mutation": "none",
+      "expected": {
+        "stage": "ingress-rejected",
+        "conflictConfirmed": null,
+        "responsibleRole": null,
+        "cureDeadline": null,
+        "errorCode": "UNAUTHORIZED_SUBMITTER"
+      }
+    },
+    {
+      "id": "malformed-ciphertext",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/malformed-ciphertext/a",
+        "b": "client-runtime://mordant/fhe/v1/malformed-ciphertext/b"
+      },
+      "mutation": "truncate-ciphertext-b",
+      "expected": {
+        "stage": "ingress-rejected",
+        "conflictConfirmed": null,
+        "responsibleRole": null,
+        "cureDeadline": null,
+        "errorCode": "MALFORMED_CIPHERTEXT"
+      }
+    },
+    {
+      "id": "wrong-key-id",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/wrong-key-id/a",
+        "b": "client-runtime://mordant/fhe/v1/wrong-key-id/b"
+      },
+      "mutation": "replace-key-id-b",
+      "expected": {
+        "stage": "ingress-rejected",
+        "conflictConfirmed": null,
+        "responsibleRole": null,
+        "cureDeadline": null,
+        "errorCode": "KEY_ID_NOT_ACTIVE"
+      }
+    },
+    {
+      "id": "wrong-policy-version",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/wrong-policy-version/a",
+        "b": "client-runtime://mordant/fhe/v1/wrong-policy-version/b"
+      },
+      "mutation": "attest-inactive-policy-version",
+      "expected": {
+        "stage": "monad-rejected",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": "POLICY_VERSION_NOT_ACTIVE"
+      }
+    },
+    {
+      "id": "result-replay",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/result-replay/a",
+        "b": "client-runtime://mordant/fhe/v1/result-replay/b"
+      },
+      "mutation": "submit-same-result-twice",
+      "expected": {
+        "stage": "sequence",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": null,
+        "attempts": [
+          { "attempt": 1, "stage": "monad-accepted", "errorCode": null },
+          { "attempt": 2, "stage": "monad-rejected", "errorCode": "RESULT_REPLAY" }
+        ]
+      }
+    },
+    {
+      "id": "result-expired",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/result-expired/a",
+        "b": "client-runtime://mordant/fhe/v1/result-expired/b"
+      },
+      "mutation": "set-valid-until-before-block-time",
+      "expected": {
+        "stage": "monad-rejected",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": "RESULT_EXPIRED"
+      }
+    },
+    {
+      "id": "insufficient-quorum",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/insufficient-quorum/a",
+        "b": "client-runtime://mordant/fhe/v1/insufficient-quorum/b"
+      },
+      "mutation": "drop-validator-signature",
+      "expected": {
+        "stage": "monad-rejected",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": "ATTESTATION_QUORUM"
+      }
+    },
+    {
+      "id": "unordered-validator-signatures",
+      "inputs": {
+        "a": "client-runtime://mordant/fhe/v1/unordered-validator-signatures/a",
+        "b": "client-runtime://mordant/fhe/v1/unordered-validator-signatures/b"
+      },
+      "mutation": "reverse-validator-signatures",
+      "expected": {
+        "stage": "monad-rejected",
+        "conflictConfirmed": true,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "evaluation-time-plus-cure-period",
+        "errorCode": "ATTESTATION_VALIDATOR_ORDER"
+      }
+    }
+  ]
+}

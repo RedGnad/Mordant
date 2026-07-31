@@ -1,0 +1,9 @@
+{
+  "name": "@mordant/fhe-adapter-workflow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node run.mjs",
+    "test": "node --test workflow.test.mjs"
+  }
+}

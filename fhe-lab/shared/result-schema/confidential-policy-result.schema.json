@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mordant.invalid/schemas/confidential-policy-result-v1.json",
+  "title": "Mordant ConfidentialPolicyResult V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "chainId",
+    "vault",
+    "policyId",
+    "policyVersion",
+    "inputCommitmentA",
+    "inputCommitmentB",
+    "conflictConfirmed",
+    "responsibleRole",
+    "cureDeadline",
+    "nonce",
+    "validUntil",
+    "resultCommitment"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "mordant.confidential-policy-result/1" },
+    "chainId": { "$ref": "#/$defs/uint256" },
+    "vault": { "$ref": "#/$defs/address" },
+    "policyId": { "$ref": "#/$defs/bytes32" },
+    "policyVersion": { "$ref": "#/$defs/uint32" },
+    "inputCommitmentA": { "$ref": "#/$defs/bytes32" },
+    "inputCommitmentB": { "$ref": "#/$defs/bytes32" },
+    "conflictConfirmed": { "type": "boolean" },
+    "responsibleRole": { "$ref": "#/$defs/bytes32" },
+    "cureDeadline": { "$ref": "#/$defs/uint64" },
+    "nonce": { "$ref": "#/$defs/uint256" },
+    "validUntil": { "$ref": "#/$defs/uint64" },
+    "resultCommitment": { "$ref": "#/$defs/bytes32" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "conflictConfirmed": { "const": false } }, "required": ["conflictConfirmed"] },
+      "then": {
+        "properties": {
+          "responsibleRole": { "const": "0x0000000000000000000000000000000000000000000000000000000000000000" },
+          "cureDeadline": { "const": "0" }
+        }
+      },
+      "else": {
+        "properties": {
+          "responsibleRole": {
+            "not": { "const": "0x0000000000000000000000000000000000000000000000000000000000000000" }
+          },
+          "cureDeadline": { "pattern": "^[1-9][0-9]*$" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "address": { "type": "string", "pattern": "^0x[0-9a-f]{40}$" },
+    "bytes32": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "uint32": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,9})$" },
+    "uint64": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$" },
+    "uint256": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,77})$" }
+  }
+}

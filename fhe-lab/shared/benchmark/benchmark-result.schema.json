@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mordant.invalid/schemas/fhe-benchmark-result-v1.json",
+  "title": "Mordant provider-neutral FHE benchmark result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "implementation", "environment", "caseId", "metrics"],
+  "properties": {
+    "schemaVersion": { "const": "mordant.fhe-benchmark-result/1" },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["library", "version", "license", "commit"],
+      "properties": {
+        "library": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "license": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "minLength": 7 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "arch", "cpu", "logicalCores", "ramBytes", "gpu"],
+      "properties": {
+        "os": { "type": "string" },
+        "arch": { "type": "string" },
+        "cpu": { "type": "string" },
+        "logicalCores": { "type": "integer", "minimum": 1 },
+        "ramBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "gpu": { "type": ["string", "null"] }
+      }
+    },
+    "caseId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "identityStrategy": { "enum": ["salted-public-link", "full-fhe-equality"] },
+    "trustMode": { "enum": ["local-single-key", "threshold-prototype"] },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keyGenerationMs", "publicKeyBytes", "evaluationKeyBytes", "encryptedPledgeBytes",
+        "clientEncryptionMs", "evaluationTotalMs", "comparisonMs", "finalAndMs",
+        "decryptionMs", "serializationMs", "bandwidthBytes", "peakCpuRssBytes",
+        "peakGpuBytes", "resultToMonadMs"
+      ],
+      "properties": {
+        "keyGenerationMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "publicKeyBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "evaluationKeyBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "encryptedPledgeBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "clientEncryptionMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "evaluationTotalMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "comparisonMs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sameReceivable", "sameCurrency", "aBeforeBEnd", "bBeforeAEnd"],
+          "properties": {
+            "sameReceivable": { "$ref": "#/$defs/nonNegativeNumber" },
+            "sameCurrency": { "$ref": "#/$defs/nonNegativeNumber" },
+            "aBeforeBEnd": { "$ref": "#/$defs/nonNegativeNumber" },
+            "bBeforeAEnd": { "$ref": "#/$defs/nonNegativeNumber" }
+          }
+        },
+        "finalAndMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "decryptionMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "serializationMs": { "$ref": "#/$defs/nonNegativeNumber" },
+        "bandwidthBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "peakCpuRssBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "peakGpuBytes": { "anyOf": [{ "$ref": "#/$defs/nonNegativeInteger" }, { "type": "null" }] },
+        "resultToMonadMs": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    }
+  },
+  "$defs": {
+    "nonNegativeNumber": { "type": "number", "minimum": 0 },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 }
+  }
+}

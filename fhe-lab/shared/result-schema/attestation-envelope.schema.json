@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mordant.invalid/schemas/confidential-policy-attestation-v1.json",
+  "title": "Mordant confidential-policy quorum attestation V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "attestationScheme",
+    "resultDigest",
+    "validatorSetId",
+    "attestationDigest",
+    "quorum",
+    "signatures"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "mordant.confidential-policy-attestation/1" },
+    "attestationScheme": { "const": "eip712-secp256k1-quorum/1" },
+    "resultDigest": { "$ref": "#/$defs/bytes32" },
+    "validatorSetId": { "$ref": "#/$defs/bytes32" },
+    "attestationDigest": { "$ref": "#/$defs/bytes32" },
+    "quorum": { "type": "integer", "minimum": 1, "maximum": 255 },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 255,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["validator", "signature"],
+        "properties": {
+          "validator": { "$ref": "#/$defs/address" },
+          "signature": { "type": "string", "pattern": "^0x[0-9a-f]{130}$" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "address": { "type": "string", "pattern": "^0x[0-9a-f]{40}$" },
+    "bytes32": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" }
+  }
+}

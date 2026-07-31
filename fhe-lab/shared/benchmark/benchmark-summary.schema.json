@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mordant.invalid/schemas/lattigo-benchmark-summary-v1.json",
+  "title": "Mordant Lattigo aggregate benchmark summary V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "provider",
+    "license",
+    "scheme",
+    "environment",
+    "sourceBaseCommit",
+    "method",
+    "setup",
+    "modes",
+    "adapterIntegration",
+    "bandwidthCaveat",
+    "memoryCaveat"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "mordant.lattigo-benchmark-summary/1" },
+    "provider": { "type": "string", "minLength": 1 },
+    "license": { "const": "Apache-2.0" },
+    "scheme": { "type": "string", "minLength": 1 },
+    "environment": { "$ref": "#/$defs/environment" },
+    "sourceBaseCommit": { "type": "string", "pattern": "^[0-9a-f]{7,64}$" },
+    "method": { "$ref": "#/$defs/method" },
+    "setup": { "$ref": "#/$defs/setup" },
+    "modes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/publicCommitmentMode" },
+        { "$ref": "#/$defs/fullFheMode" }
+      ],
+      "items": false
+    },
+    "adapterIntegration": { "$ref": "#/$defs/adapterIntegration" },
+    "bandwidthCaveat": { "type": "string", "minLength": 1 },
+    "memoryCaveat": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "nonNegativeNumber": { "type": "number", "minimum": 0 },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "positiveInteger": { "type": "integer", "minimum": 1 },
+    "latencySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["median", "p95"],
+      "properties": {
+        "median": { "$ref": "#/$defs/nonNegativeNumber" },
+        "p95": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goVersion", "os", "arch", "cpu", "logicalCpu", "ramBytes", "gpuPath", "clientBoundary"],
+      "properties": {
+        "goVersion": { "type": "string", "pattern": "^go[0-9]+\\.[0-9]+(\\.[0-9]+)?$" },
+        "os": { "type": "string", "minLength": 1 },
+        "arch": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 },
+        "logicalCpu": { "$ref": "#/$defs/positiveInteger" },
+        "ramBytes": { "$ref": "#/$defs/positiveInteger" },
+        "gpuPath": { "type": "string", "minLength": 1 },
+        "clientBoundary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warmupRunsPerMode",
+        "measuredRunsPerMode",
+        "p95",
+        "plaintextOrCiphertextMaterialIncluded"
+      ],
+      "properties": {
+        "warmupRunsPerMode": { "type": "integer", "minimum": 1 },
+        "measuredRunsPerMode": { "type": "integer", "minimum": 5 },
+        "p95": { "type": "string", "minLength": 1 },
+        "plaintextOrCiphertextMaterialIncluded": { "const": false }
+      }
+    },
+    "setup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "thresholdSetupMilliseconds",
+        "collectivePublicKeyMilliseconds",
+        "relinearizationKeyMilliseconds",
+        "galoisKeysMilliseconds",
+        "totalMilliseconds",
+        "publicKeyBytes",
+        "evaluationKeyBytes",
+        "thresholdShareBytesPerParty",
+        "thresholdShareBytesAllParties",
+        "fullFheIdentityKeyDeltaBytes",
+        "publicKeyMarshalMilliseconds",
+        "evaluationKeyMarshalMilliseconds"
+      ],
+      "properties": {
+        "thresholdSetupMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "collectivePublicKeyMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "relinearizationKeyMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "galoisKeysMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "totalMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "publicKeyBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "evaluationKeyBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "thresholdShareBytesPerParty": { "$ref": "#/$defs/nonNegativeInteger" },
+        "thresholdShareBytesAllParties": { "$ref": "#/$defs/nonNegativeInteger" },
+        "fullFheIdentityKeyDeltaBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "publicKeyMarshalMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "evaluationKeyMarshalMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    },
+    "sizesPublic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pledgeA", "pledgeB", "identityCiphertext", "decisionCiphertext", "fheEnvelopes"],
+      "properties": {
+        "pledgeA": { "$ref": "#/$defs/nonNegativeInteger" },
+        "pledgeB": { "$ref": "#/$defs/nonNegativeInteger" },
+        "identityCiphertext": { "const": 0 },
+        "decisionCiphertext": { "$ref": "#/$defs/nonNegativeInteger" },
+        "fheEnvelopes": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "sizesFullFhe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pledgeA", "pledgeB", "identityCiphertext", "decisionCiphertext", "fheEnvelopes"],
+      "properties": {
+        "pledgeA": { "$ref": "#/$defs/nonNegativeInteger" },
+        "pledgeB": { "$ref": "#/$defs/nonNegativeInteger" },
+        "identityCiphertext": { "$ref": "#/$defs/positiveInteger" },
+        "decisionCiphertext": { "$ref": "#/$defs/nonNegativeInteger" },
+        "fheEnvelopes": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "goHeapBytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "peak", "totalAllocationDelta", "systemAfter"],
+      "properties": {
+        "before": { "$ref": "#/$defs/nonNegativeInteger" },
+        "after": { "$ref": "#/$defs/nonNegativeInteger" },
+        "peak": { "$ref": "#/$defs/nonNegativeInteger" },
+        "totalAllocationDelta": { "$ref": "#/$defs/nonNegativeInteger" },
+        "systemAfter": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "publicLatency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encryptPledgeAEndToEnd",
+        "encryptPledgeBEndToEnd",
+        "serializePledgeA",
+        "deserializePledgeA",
+        "canonicalInputCommitmentPair",
+        "strictUint64ComparisonsBatchOfTwo",
+        "strictUint64ComparisonAmortized",
+        "currencyBytes32Equality",
+        "receivableEquality",
+        "conditions",
+        "finalAnd",
+        "evaluationEndToEnd",
+        "thresholdKeySwitch",
+        "receiverDecrypt",
+        "thresholdDecryptEndToEnd"
+      ],
+      "properties": {
+        "encryptPledgeAEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "encryptPledgeBEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "serializePledgeA": { "$ref": "#/$defs/latencySummary" },
+        "deserializePledgeA": { "$ref": "#/$defs/latencySummary" },
+        "canonicalInputCommitmentPair": { "$ref": "#/$defs/latencySummary" },
+        "strictUint64ComparisonsBatchOfTwo": { "$ref": "#/$defs/latencySummary" },
+        "strictUint64ComparisonAmortized": { "$ref": "#/$defs/latencySummary" },
+        "currencyBytes32Equality": { "$ref": "#/$defs/latencySummary" },
+        "receivableEquality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "separatelyTimed"],
+          "properties": {
+            "method": { "const": "public commitment equality" },
+            "separatelyTimed": { "const": false }
+          }
+        },
+        "conditions": { "$ref": "#/$defs/latencySummary" },
+        "finalAnd": { "$ref": "#/$defs/latencySummary" },
+        "evaluationEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "thresholdKeySwitch": { "$ref": "#/$defs/latencySummary" },
+        "receiverDecrypt": { "$ref": "#/$defs/latencySummary" },
+        "thresholdDecryptEndToEnd": { "$ref": "#/$defs/latencySummary" }
+      }
+    },
+    "fullFheLatency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encryptPledgeAEndToEnd",
+        "encryptPledgeBEndToEnd",
+        "serializePledgeA",
+        "deserializePledgeA",
+        "canonicalInputCommitmentPair",
+        "strictUint64ComparisonsBatchOfTwo",
+        "strictUint64ComparisonAmortized",
+        "currencyBytes32Equality",
+        "receivableBytes32Equality",
+        "conditions",
+        "finalAnd",
+        "evaluationEndToEnd",
+        "thresholdKeySwitch",
+        "receiverDecrypt",
+        "thresholdDecryptEndToEnd"
+      ],
+      "properties": {
+        "encryptPledgeAEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "encryptPledgeBEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "serializePledgeA": { "$ref": "#/$defs/latencySummary" },
+        "deserializePledgeA": { "$ref": "#/$defs/latencySummary" },
+        "canonicalInputCommitmentPair": { "$ref": "#/$defs/latencySummary" },
+        "strictUint64ComparisonsBatchOfTwo": { "$ref": "#/$defs/latencySummary" },
+        "strictUint64ComparisonAmortized": { "$ref": "#/$defs/latencySummary" },
+        "currencyBytes32Equality": { "$ref": "#/$defs/latencySummary" },
+        "receivableBytes32Equality": { "$ref": "#/$defs/latencySummary" },
+        "conditions": { "$ref": "#/$defs/latencySummary" },
+        "finalAnd": { "$ref": "#/$defs/latencySummary" },
+        "evaluationEndToEnd": { "$ref": "#/$defs/latencySummary" },
+        "thresholdKeySwitch": { "$ref": "#/$defs/latencySummary" },
+        "receiverDecrypt": { "$ref": "#/$defs/latencySummary" },
+        "thresholdDecryptEndToEnd": { "$ref": "#/$defs/latencySummary" }
+      }
+    },
+    "publicCommitmentMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identityMode", "allDecisionsConfirmed", "sizesBytes", "latencyMilliseconds", "goHeapBytes"],
+      "properties": {
+        "identityMode": { "const": "public_salted_commitment" },
+        "allDecisionsConfirmed": { "type": "boolean" },
+        "sizesBytes": { "$ref": "#/$defs/sizesPublic" },
+        "latencyMilliseconds": { "$ref": "#/$defs/publicLatency" },
+        "goHeapBytes": { "$ref": "#/$defs/goHeapBytes" }
+      }
+    },
+    "fullFheMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identityMode", "allDecisionsConfirmed", "sizesBytes", "latencyMilliseconds", "goHeapBytes"],
+      "properties": {
+        "identityMode": { "const": "full_fhe_256" },
+        "allDecisionsConfirmed": { "type": "boolean" },
+        "sizesBytes": { "$ref": "#/$defs/sizesFullFhe" },
+        "latencyMilliseconds": { "$ref": "#/$defs/fullFheLatency" },
+        "goHeapBytes": { "$ref": "#/$defs/goHeapBytes" }
+      }
+    },
+    "adapterIntegration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "resultToAcceptedTransactionMilliseconds",
+        "calldataBytes",
+        "acceptanceGasUsed",
+        "secondAcceptanceRejected",
+        "validationRerun"
+      ],
+      "properties": {
+        "environment": { "const": "controlled-local-anvil" },
+        "resultToAcceptedTransactionMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" },
+        "calldataBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "acceptanceGasUsed": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "secondAcceptanceRejected": { "const": true },
+        "validationRerun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["completeCliToAdapterWallClockSeconds", "resultToAcceptedTransactionMilliseconds"],
+          "properties": {
+            "completeCliToAdapterWallClockSeconds": { "$ref": "#/$defs/nonNegativeNumber" },
+            "resultToAcceptedTransactionMilliseconds": { "$ref": "#/$defs/nonNegativeNumber" }
+          }
+        }
+      }
+    }
+  }
+}
