@@ -449,7 +449,9 @@ func TestManifestVerificationRejectsSubstitutedAndUnauthenticatedKeys(t *testing
 		}, keyID, digests.PublicKeyCommitment},
 		{"wrong threshold", func(m *CollectiveKeyManifest, _ *ClientKeyExpectation) { m.Threshold = 3 }, keyID, digests.PublicKeyCommitment},
 		{"wrong key epoch", func(m *CollectiveKeyManifest, _ *ClientKeyExpectation) { m.KeyEpoch = 9 }, keyID, digests.PublicKeyCommitment},
-		{"expired manifest", func(m *CollectiveKeyManifest, _ *ClientKeyExpectation) { m.ExpiresAtUnix = now.Add(-time.Minute).Unix() }, keyID, digests.PublicKeyCommitment},
+		{"expired manifest", func(m *CollectiveKeyManifest, _ *ClientKeyExpectation) {
+			m.ExpiresAtUnix = now.Add(-time.Minute).Unix()
+		}, keyID, digests.PublicKeyCommitment},
 		{"revoked manifest", func(m *CollectiveKeyManifest, _ *ClientKeyExpectation) { m.Revoked = true }, keyID, digests.PublicKeyCommitment},
 		{"mismatched public key", func(_ *CollectiveKeyManifest, _ *ClientKeyExpectation) {}, keyID, sha256.Sum256([]byte("substituted"))},
 		{"mismatched key id", func(_ *CollectiveKeyManifest, _ *ClientKeyExpectation) {}, sha256.Sum256([]byte("other")), digests.PublicKeyCommitment},
@@ -473,4 +475,55 @@ func TestManifestVerificationRejectsSubstitutedAndUnauthenticatedKeys(t *testing
 		})
 	}
 	_ = operators
+}
+
+// TestCeremonyRestartIsDetectedAndFailsClosed covers the documented restart rule.
+//
+// A ceremony operator keeps its RLWE secret, its Shamir polynomial and its CRS
+// contribution in memory only. If the process dies mid-ceremony and comes back,
+// it necessarily samples fresh material, so it can no longer agree with the
+// cohort. The divergence is caught before any key is published: the restarted
+// operator derives a different CRS commitment, and the coordinator compares
+// every operator's commitment against its own before proceeding. There is no
+// path that resumes a ceremony with reused shares or reused protocol randomness.
+func TestCeremonyRestartIsDetectedAndFailsClosed(t *testing.T) {
+	params := ceremonyParameters(t)
+	roster, keys, operators := newSetupFixture(t)
+	original := make(map[uint64][32]byte, len(operators))
+	for _, operator := range operators {
+		original[operator.Point()] = operator.CRSContribution()
+	}
+	exchangeCRS(t, operators)
+	cohortCommitment := operators[0].CRSCommitment()
+
+	// Operator 2 restarts: a brand new state object with brand new secrets.
+	restarted, err := NewCeremonyOperatorState(params, roster, 2, keys[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.CRSContribution() == original[2] {
+		t.Fatal("a restarted operator reused its previous CRS contribution")
+	}
+	// It is fed the cohort's table, which still carries its pre-crash value for
+	// its own point. Its own contribution is the fresh one, so its seed differs.
+	for _, point := range []uint64{1, 3} {
+		if err := restarted.AcceptCRSContribution(point, original[point]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := restarted.SealCRS(); err != nil {
+		t.Fatal(err)
+	}
+	if restarted.CRSCommitment() == cohortCommitment {
+		t.Fatal("a restarted operator silently rejoined the cohort CRS")
+	}
+
+	// The restarted operator also cannot inherit the pre-crash threshold share:
+	// it has received nothing, so sealing is refused and key generation is shut.
+	if err := restarted.SealThresholdShare(); !errors.Is(err, ErrCeremonyState) {
+		t.Fatalf("restarted operator sealed a threshold share it never received: %v", err)
+	}
+	if _, err := restarted.PublicKeyShare(); !errors.Is(err, ErrCeremonyState) {
+		t.Fatalf("restarted operator contributed to key generation: %v", err)
+	}
 }
