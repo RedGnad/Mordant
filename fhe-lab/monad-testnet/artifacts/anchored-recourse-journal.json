@@ -1,0 +1,247 @@
+{
+  "schemaVersion": "mordant.anchored-recourse-journal/1",
+  "chainId": 10143,
+  "testAssetsOnly": true,
+  "state": "PRODUCT_CLAIM_READY",
+  "history": [
+    {
+      "state": "SIGNERS_READY",
+      "at": "2026-07-31T20:29:53.570Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:29:55.659Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:31:03.648Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:31:40.416Z"
+    },
+    {
+      "state": "CEREMONY_PROVEN",
+      "at": "2026-07-31T20:32:31.013Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:35:13.137Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:35:44.465Z"
+    },
+    {
+      "state": "SETUP_CONFIRMED",
+      "at": "2026-07-31T20:36:25.160Z"
+    },
+    {
+      "state": "ATOMIC_PREPARED",
+      "at": "2026-07-31T20:36:26.986Z"
+    },
+    {
+      "state": "ATOMIC_HASH_PERSISTED",
+      "at": "2026-07-31T20:36:27.221Z"
+    },
+    {
+      "state": "ATOMIC_CONFIRMED",
+      "at": "2026-07-31T20:36:27.776Z"
+    },
+    {
+      "state": "READBACKS_CONFIRMED",
+      "at": "2026-07-31T20:36:30.557Z"
+    },
+    {
+      "state": "REPLAY_REJECTED",
+      "at": "2026-07-31T20:36:31.034Z"
+    },
+    {
+      "state": "PRODUCT_CLAIM_READY",
+      "at": "2026-07-31T20:36:31.037Z"
+    }
+  ],
+  "signers": {
+    "addresses": [
+      "0xf712E6eD446B44D811dFA44a774c97a36745AB5e",
+      "0xD6504AF5683B909159b0C1602e634d861943Af29",
+      "0x321E4F2c2Ebed956197709fEDB49eaf137452680"
+    ],
+    "storageRoot": "/Users/red.g/CascadeProjects/Master/Mordant/fhe-lab/monad-testnet/artifacts/.signers"
+  },
+  "setup": {
+    "verifierHash": "0x80f2b39263de37041673f3920fa7aef798f4b48bb60c791abd6bba624034e92b",
+    "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674",
+    "consumerHash": "0xe99fc2353d250865c5134fd896d9df2a21b0f5aa4515ce25217d97ec34b7b3dc",
+    "consumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+    "policyHash": "0xc734122f4e401fdd58d84a94aa927237a64b8a1558e1c3c3b1e6eb8d679b3791",
+    "validatorSetId": "0x9767e1653a477ff88d4ad7b3b1bf6a72e5f077f9febc43940d60d4a16b72e8e0",
+    "policyVersion": 1
+  },
+  "ceremony": {
+    "out": "/Users/red.g/CascadeProjects/Master/Mordant/fhe-lab/monad-testnet/artifacts/anchored-ceremony-evidence",
+    "inputCommitmentA": "0xe7c8a4ee5dc86751ac5782adcff7d1eebb8d700eb2959e060f5d43f60219a138",
+    "inputCommitmentB": "0xd76ab7e4dbfda9e73c576221a61f8e1f231ef67b2149b5e5962fd084f6db66dd",
+    "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e",
+    "thresholdTranscript": "0x1c58904260a393f1713b7d0733de50ee3e8009284af55fb093b08cfc914655d9",
+    "coalition": [
+      1,
+      2
+    ],
+    "custodyModel": "dealerless-ceremony",
+    "evaluatorCapabilities": {
+      "holdsThresholdParties": false,
+      "localDecryptAttempt": "REFUSED: insufficient threshold shares",
+      "provisionOperatorsAttempt": "REFUSED: invalid threshold operator material",
+      "releaseShareAttempt": "REFUSED: invalid threshold operator material",
+      "loadedArtifacts": [
+        "collective-public-material.bin",
+        "collective-evaluation-keys.bin",
+        "key-manifest.json"
+      ]
+    }
+  },
+  "session": {
+    "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674",
+    "consumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+    "anchor": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+    "validatorSetId": "0x9767e1653a477ff88d4ad7b3b1bf6a72e5f077f9febc43940d60d4a16b72e8e0",
+    "replayKey": "0x23c164b8bd180ad482551d27353b03ae49829f6b388755fca286e52e9899ed7b",
+    "decisionKey": "0x554022120c5748157bc84358d4dc1fe08a4d5959c66e5b83b4bc43b13a49124c",
+    "attestingValidators": [
+      "0xD6504AF5683B909159b0C1602e634d861943Af29",
+      "0xf712E6eD446B44D811dFA44a774c97a36745AB5e"
+    ],
+    "unselectedValidator": "0x321E4F2c2Ebed956197709fEDB49eaf137452680",
+    "signerStatuses": [
+      {
+        "address": "0xf712E6eD446B44D811dFA44a774c97a36745AB5e",
+        "holdsOwnKeyOnly": true,
+        "scope": {
+          "chainId": 10143,
+          "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674"
+        }
+      },
+      {
+        "address": "0xD6504AF5683B909159b0C1602e634d861943Af29",
+        "holdsOwnKeyOnly": true,
+        "scope": {
+          "chainId": 10143,
+          "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674"
+        }
+      },
+      {
+        "address": "0x321E4F2c2Ebed956197709fEDB49eaf137452680",
+        "holdsOwnKeyOnly": true,
+        "scope": {
+          "chainId": 10143,
+          "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674"
+        }
+      }
+    ],
+    "result": {
+      "chainId": "10143",
+      "consumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+      "vault": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+      "policyId": "0xfc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c3",
+      "policyVersion": 1,
+      "inputCommitmentA": "0xe7c8a4ee5dc86751ac5782adcff7d1eebb8d700eb2959e060f5d43f60219a138",
+      "inputCommitmentB": "0xd76ab7e4dbfda9e73c576221a61f8e1f231ef67b2149b5e5962fd084f6db66dd",
+      "conflictConfirmed": true,
+      "nonce": "9636374403467529678",
+      "validUntil": "1785531984",
+      "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e",
+      "resultCommitment": "0x1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd"
+    },
+    "calldata": "0x13d1e89c000000000000000000000000000000000000000000000000000000000000279f0000000000000000000000000f2b4f94854722bd9db9a0fb3d1034be41ad33e0000000000000000000000000317689100acbe3b86b0869d522d0d8579cfed7f1fc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c30000000000000000000000000000000000000000000000000000000000000001e7c8a4ee5dc86751ac5782adcff7d1eebb8d700eb2959e060f5d43f60219a138d76ab7e4dbfda9e73c576221a61f8e1f231ef67b2149b5e5962fd084f6db66dd000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000085bb4776d9594dce000000000000000000000000000000000000000000000000000000006a6d0e50492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd00000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001a09767e1653a477ff88d4ad7b3b1bf6a72e5f077f9febc43940d60d4a16b72e8e000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000414e297444f903f2d213f80f7ee3c90ab4dbd99b8df06e350e7fbbc30969912e7329993e60e561eb8cbd6165cf569a2b7de96fab10c2c08e1266865799556e987d1b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000041ec58f77844d9dd8612932355fe97a99bdc03ad596836f07121ec3a104d4b28c433025d848ebf4380c774cbe99c5712a3d2b279063bd036b57e612e4b2291cc501c00000000000000000000000000000000000000000000000000000000000000",
+    "calldataBytes": 868,
+    "expirySecondsRemaining": 1800
+  },
+  "atomic": {
+    "hash": "0x285de8c3be35cd39d42d1cb5448176b99045cd69ed3c5b49b8c39eebcfd82d7a",
+    "status": "success",
+    "gasEstimate": "490765",
+    "submittedAt": "2026-07-31T20:36:27.041Z",
+    "latencyMs": 735,
+    "block": "49767986",
+    "blockHash": "0x056e85aa852a762c49257a0986da6f5a6c61890a23e9a196547ac69532ce61b0",
+    "gasUsed": "637994",
+    "effectiveGasPrice": "102000000000"
+  },
+  "readbacks": {
+    "receivableAnchor": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+    "anchorInvoiceRoot": "0x1e072bc56c3f6c4bd4c46a9e5ef27ec514e49dd939eb4a31e94c9f92bc754341",
+    "anchorCurrency": "0x5553440000000000000000000000000000000000000000000000000000000000",
+    "anchorLive": true,
+    "anchorReceivableState": 1,
+    "anchorTotalSupply": "100000000",
+    "anchorBuyer": "0xbD598d6f350B2bD1faCb4026f6266AF580c386d3",
+    "anchorOriginator": "0xCce9C373615FCc24AdE987022C26898ADfF1d682",
+    "verifier": "0xA3281E218885b8cf76EC1E2a4Ec88b31E85f2674",
+    "consumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+    "validatorSetId": "0x9767e1653a477ff88d4ad7b3b1bf6a72e5f077f9febc43940d60d4a16b72e8e0",
+    "policyId": "0xfc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c3",
+    "policyVersion": 1,
+    "intendedConsumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+    "resultCommitment": "0x1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd",
+    "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e",
+    "nonceConsumed": true,
+    "decisionConsumed": true,
+    "providerProofConsumed": true,
+    "recourseRecord": {
+      "resultCommitment": "0x1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd",
+      "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e",
+      "inputCommitmentA": "0xe7c8a4ee5dc86751ac5782adcff7d1eebb8d700eb2959e060f5d43f60219a138",
+      "inputCommitmentB": "0xd76ab7e4dbfda9e73c576221a61f8e1f231ef67b2149b5e5962fd084f6db66dd",
+      "policyId": "0xfc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c3",
+      "policyVersion": 1,
+      "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+      "consequenceId": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a",
+      "invoiceRoot": "0x1e072bc56c3f6c4bd4c46a9e5ef27ec514e49dd939eb4a31e94c9f92bc754341",
+      "acceptedAt": "1785530187",
+      "cureDeadline": "1785533787",
+      "status": 1
+    },
+    "events": {
+      "verifier": {
+        "resultCommitment": "0x1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd",
+        "consumer": "0x0f2b4f94854722Bd9db9a0fB3D1034BE41AD33e0",
+        "vault": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+        "policyId": "0xfc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c3",
+        "policyVersion": 1,
+        "nonce": "9636374403467529678",
+        "conflictConfirmed": true,
+        "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e"
+      },
+      "recourse": {
+        "resultCommitment": "0x1383e95586737dbc41cb4e63a7c75ad39d6162cf752d4942e3a40c37be73dafd",
+        "providerProofCommitment": "0x492970330a717e8972611b4692bf09d5647ff88119c8e4eb8e484b06a891dc7e",
+        "receivableAnchor": "0x317689100AcBE3b86B0869D522D0D8579Cfed7F1",
+        "invoiceRoot": "0x1e072bc56c3f6c4bd4c46a9e5ef27ec514e49dd939eb4a31e94c9f92bc754341",
+        "policyId": "0xfc227a52de200e9a7f394f85988796be224a72fe4bbe1bf34473dd3134acd6c3",
+        "policyVersion": 1,
+        "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+        "cureDeadline": "1785533787",
+        "consequenceId": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a"
+      }
+    },
+    "checks": {
+      "anchorIsBoundReceivable": true,
+      "anchorRootMatchesRecord": true,
+      "intendedConsumerBound": true,
+      "responsibilityDerived": true,
+      "consequenceDerived": true,
+      "cureDeadlineDerived": true,
+      "statusOpen": true,
+      "allIdentitiesConsumed": true,
+      "zeroValue": true,
+      "noAssetMovement": true
+    }
+  },
+  "replay": {
+    "refused": true,
+    "viaEthCallOnly": true,
+    "detail": "Execution reverted for an unknown reason."
+  },
+  "failure": null
+}

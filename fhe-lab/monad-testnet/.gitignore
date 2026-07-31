@@ -9,3 +9,7 @@
 !/artifacts/privacy-v3-process-evidence/
 !/artifacts/receivable-anchor.json
 !/artifacts/anchor-journal.json
+!/artifacts/anchored-recourse-latest.json
+!/artifacts/anchored-recourse-journal.json
+!/artifacts/anchored-leak-sweep.json
+!/artifacts/anchored-ceremony-evidence/

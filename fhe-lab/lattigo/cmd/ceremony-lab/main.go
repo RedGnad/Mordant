@@ -100,12 +100,15 @@ func main() {
 }
 
 func run() error {
-	var root, out, repo string
+	var root, out, repo, vault, policyLabel, anchorRootHex string
 	var keepRunning bool
 	flag.StringVar(&root, "root", "", "lab working directory (default: temp dir)")
 	flag.StringVar(&out, "out", "", "evidence output directory")
 	flag.StringVar(&repo, "repo", "", "repository root for commit binding")
 	flag.BoolVar(&keepRunning, "keep", false, "leave the working directory in place")
+	flag.StringVar(&vault, "vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8", "policy-scope vault or receivable anchor address")
+	flag.StringVar(&policyLabel, "policy-label", "mordant.dealerless.policy/v4", "policy identity label")
+	flag.StringVar(&anchorRootHex, "anchor-root", "", "invoice root of a deployed receivable anchor")
 	flag.Parse()
 	if out == "" {
 		return errors.New("--out is required")
@@ -120,12 +123,24 @@ func run() error {
 	if repo == "" {
 		repo = "."
 	}
-	lab := &lab{root: root, out: out, repo: repo}
+	policyID := sha256.Sum256([]byte(policyLabel))
+	anchorRoot := sha256.Sum256([]byte("ceremony-lab-unanchored-root"))
+	if anchorRootHex != "" {
+		raw, err := hex.DecodeString(strings.TrimPrefix(anchorRootHex, "0x"))
+		if err != nil || len(raw) != 32 {
+			return errors.New("invalid --anchor-root")
+		}
+		copy(anchorRoot[:], raw)
+	}
+	lab := &lab{root: root, out: out, repo: repo, vault: vault, policyID: policyID, anchorRoot: anchorRoot}
 	return lab.execute()
 }
 
 type lab struct {
 	root, out, repo string
+	vault           string
+	policyID        [32]byte
+	anchorRoot      [32]byte
 	processes       []processRecord
 	running         []*exec.Cmd
 	binaries        map[string]string
@@ -420,7 +435,7 @@ func (l *lab) operatorEndpoints() string {
 }
 
 func (l *lab) runCoordinator() error {
-	policyID := sha256.Sum256([]byte("mordant.dealerless.policy/v4"))
+	policyID := l.policyID
 	return l.runToCompletion("ceremony-coordinator", l.binaries["ceremony-coordinator"],
 		"-mode", "conduct",
 		"-storage", filepath.Join(l.root, "coordinator"),
@@ -436,16 +451,16 @@ func (l *lab) runCoordinator() error {
 }
 
 func (l *lab) runClientsAndEvaluator() error {
-	policyID := sha256.Sum256([]byte("mordant.dealerless.policy/v4"))
+	policyID := l.policyID
 	rosterDigest := l.roster.Digest()
 	var sessionID [32]byte
 	if _, err := rand.Read(sessionID[:]); err != nil {
 		return err
 	}
-	// Standalone ceremony runs are not anchored to a deployed receivable; the
-	// product gate supplies the real invoice root. A per-run placeholder keeps
-	// the client's binding path exercised here without implying an anchor.
-	anchorRoot := sha256.Sum256([]byte("ceremony-lab-unanchored-root"))
+	// The product gate supplies the real invoice root of a deployed receivable.
+	// A standalone ceremony run falls back to a placeholder, which exercises the
+	// client's binding path without implying an anchor.
+	anchorRoot := l.anchorRoot
 	issuerPublic, issuerPrivate, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return err
@@ -473,7 +488,7 @@ func (l *lab) runClientsAndEvaluator() error {
 			"-anchor-root", hex.EncodeToString(anchorRoot[:]),
 			"-currency-code", "USD",
 			"-roster-digest", hex.EncodeToString(rosterDigest[:]),
-			"-vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+			"-vault", l.vault,
 			"-policy-id", hex.EncodeToString(policyID[:]),
 			"-session-id", hex.EncodeToString(sessionID[:]),
 			"-chain-id", "10143",
@@ -504,7 +519,7 @@ func (l *lab) runClientsAndEvaluator() error {
 		"-operators", l.operatorEndpoints(),
 		"-coalition", "1,2",
 		"-session-id", hex.EncodeToString(releaseSession[:]),
-		"-vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
+		"-vault", l.vault,
 		"-policy-id", hex.EncodeToString(policyID[:]),
 		"-chain-id", "10143",
 		"-policy-version", "1",

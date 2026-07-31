@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "mordant.anchored-leak-sweep/4",
+  "ok": false,
+  "scannedFiles": 40,
+  "representationsSearched": 240,
+  "representationsPerCanary": 13.333333333333334,
+  "scannedRoots": [
+    "fhe-lab/monad-testnet/artifacts/.ceremony/attempt-1785529900425/public",
+    "fhe-lab/monad-testnet/artifacts/anchored-ceremony-evidence",
+    "/tmp/v5c-public"
+  ],
+  "parties": [
+    {
+      "party": "a",
+      "canaries": [
+        {
+          "party": "a",
+          "field": "active_from",
+          "kind": "uint",
+          "sha256": "f163c4d07ac8c29ac81a74392a82916156d6bfaea1e1cdb757df0109b97b34d7",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "active_until",
+          "kind": "uint",
+          "sha256": "4be1e4dd432764ef0e33ca0e7ce002dedca92d27925ef3d35c6827e55c4d394f",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "amount",
+          "kind": "uint",
+          "sha256": "09879ad7e5772491012bfc83f8012f324757e4b8e2d6aa35f0889165dc8ae8bc",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "authorization_credential",
+          "kind": "bytes32",
+          "sha256": "302ad7b1199a788e10cfa9d141ef2c6579ec7c02317975a8d7763797abdf5062",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "currency",
+          "kind": "bytes32",
+          "sha256": "77922db4e8dd41d3b7f663d787aa0709a5410b20bcae0955a8000abb1df29391",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "exclusivity_metadata",
+          "kind": "bytes32",
+          "sha256": "a3ea5425cca6db5da483208cd9453a7b4063c79a51202d6de7d19df8c02397e0",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "obligation_id",
+          "kind": "bytes32",
+          "sha256": "04b9be1dcac2d4d9e8bb7f910cb1fe16701f43a5f109cf5ae212852d9421233c",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "receivable_identifier",
+          "kind": "bytes32",
+          "sha256": "b568db0cff925895f269015dfe4c1c10916ad5145649d9144b72f728ff092ad0",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "submitter_identity",
+          "kind": "bytes32",
+          "sha256": "550fbab4fe524284cb8e1f341b9da9839d7b2966146fe20d73ba17b5ad86db85",
+          "numericPresent": false
+        }
+      ]
+    },
+    {
+      "party": "b",
+      "canaries": [
+        {
+          "party": "b",
+          "field": "active_from",
+          "kind": "uint",
+          "sha256": "6c1603bbf3cc59d70c2b589648ba9cf802c6a2a83db4acf5e55f547b3ad50dbb",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "active_until",
+          "kind": "uint",
+          "sha256": "d9d01d725d67bc102da8d59bbdf61de85f2b7827730c90342a005b1dc76ab534",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "amount",
+          "kind": "uint",
+          "sha256": "a43199cc4acca3f0755999b577d0a1c1665cdf92d6bae4ae7124b57720d770de",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "authorization_credential",
+          "kind": "bytes32",
+          "sha256": "9cca419fdfed219175eb76a22d39bd62d35c4e43645713995e9d8dafd3db89e1",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "currency",
+          "kind": "bytes32",
+          "sha256": "77922db4e8dd41d3b7f663d787aa0709a5410b20bcae0955a8000abb1df29391",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "exclusivity_metadata",
+          "kind": "bytes32",
+          "sha256": "c0ca0823751a16af9a3af9e8b85145a09260180a5f50a580cba846090153a5ae",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "obligation_id",
+          "kind": "bytes32",
+          "sha256": "4f5be898bd75712d52902422f85a1a27e7e7a46dba3438f13062c0ac1c8245d1",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "receivable_identifier",
+          "kind": "bytes32",
+          "sha256": "3413b547f77a222542cd77b84531363329d4e7c4f755ebde3826b210bc66cb06",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "submitter_identity",
+          "kind": "bytes32",
+          "sha256": "9da8716f329c3d35d19e2257052cc8b522a3e88ecee07c739d16c922ff052c04",
+          "numericPresent": false
+        }
+      ]
+    }
+  ],
+  "leaks": [],
+  "fieldNameHeuristicHits": 10,
+  "privateCanaryManifestsDeleted": true
+}

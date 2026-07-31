@@ -1,0 +1,16 @@
+{
+  "ceremonyId": "f14a564c81b4280597cdb5a04add3047052063d9db22cfad3759020b5c35e3dd",
+  "keyEpoch": 1,
+  "parameterFingerprint": "d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+  "points": [
+    1,
+    2,
+    3
+  ],
+  "signingPublicKeys": [
+    "538a5c56d639a412821367b6c9386600d2d416980506c8af812ede1fab6babd8",
+    "66a5448d62a7718933b9a41674a721363dc45cce06769dbd299aafc01f6de7b0",
+    "5cd26e0b5ef7bac93bdf6d20e8b1b7168ca58693a53430f0c71fe43fd69618e8"
+  ],
+  "threshold": 2
+}
