@@ -59,6 +59,28 @@ contract IdentityHarness {
     {
         Match.requireBindable(result, precommitted);
     }
+
+    function comparable(Id.StableAssetIdentity calldata a, Id.StableAssetIdentity calldata b)
+        external
+        pure
+    {
+        Id.requireComparable(a, b);
+    }
+
+    function boundAlias(
+        bytes32 issuerKeyId,
+        uint8 candidateProfile,
+        bytes32 sourceRecordDigest,
+        bytes32 sessionId,
+        bytes32 scopeCommitment,
+        bytes32 enrollmentDigest,
+        bytes32 aliasCommitment
+    ) external pure returns (bytes32) {
+        return Id.boundCandidateAliasCommitment(
+            issuerKeyId, candidateProfile, sourceRecordDigest, sessionId,
+            scopeCommitment, enrollmentDigest, aliasCommitment
+        );
+    }
 }
 
 contract MordantIdentityV2Test is Test {
@@ -735,9 +757,12 @@ contract MordantIdentityV2Test is Test {
         );
 
         // And a result carrying only the candidate signal cannot bind.
-        Match.ConfidentialMatchResultV4 memory candidate = _result(false, true, false);
+        Match.ConfidentialMatchResultV4 memory candidate = _candidateResult();
         assertTrue(Match.opensReconciliation(candidate));
-        vm.expectRevert(Match.CandidateResultNotBindable.selector);
+        assertFalse(Match.isPubliclySubmittable(candidate));
+        vm.expectRevert(
+            abi.encodeWithSelector(Match.CandidateSessionCannotBind.selector, keccak256("session-1"))
+        );
         harness.bindable(candidate, true);
     }
 
@@ -783,53 +808,225 @@ contract MordantIdentityV2Test is Test {
 
     /* ---------------------------------------------------- result semantics */
 
-    function _result(bool exact, bool candidate, bool conflict)
-        private
-        pure
-        returns (Match.ConfidentialMatchResultV4 memory)
-    {
+    function _exactResult() private pure returns (Match.ConfidentialMatchResultV4 memory) {
         return Match.ConfidentialMatchResultV4({
             sessionId: keccak256("session-1"),
             scopeCommitmentA: keccak256("scope-a"),
             scopeCommitmentB: keccak256("scope-b"),
             inputCommitmentA: keccak256("input-a"),
             inputCommitmentB: keccak256("input-b"),
-            exactMatchConfirmed: exact,
-            candidateMatchSuggested: candidate,
-            conflictConfirmed: conflict,
+            outcome: Match.Outcome.ExactMatch,
+            exactMatchConfirmed: true,
+            candidateMatchSuggested: false,
+            candidateFallbackAuthorized: false,
+            conflictConfirmed: true,
             matchCommitment: keccak256("match"),
+            boundCandidateAliasCommitment: bytes32(0),
             anchorCount: 1,
             providerProofCommitment: keccak256("proof")
         });
     }
 
-    function testConflictRequiresExactMatch() public {
-        vm.expectRevert(Match.ConflictWithoutExactMatch.selector);
-        harness.bindable(_result(false, true, true), true);
+    function _candidateResult() private pure returns (Match.ConfidentialMatchResultV4 memory result) {
+        result = _exactResult();
+        result.outcome = Match.Outcome.ReconciliationRequired;
+        result.exactMatchConfirmed = false;
+        result.candidateMatchSuggested = true;
+        result.candidateFallbackAuthorized = true;
+        result.conflictConfirmed = false;
+        result.boundCandidateAliasCommitment = keccak256("bound-alias");
     }
 
-    function testCandidateResultReplayIntoBinderIsRejected() public {
-        // Even a result that also claims an exact match is refused if it carries
-        // the candidate signal: a session that ran the tolerant path is a
-        // reconciliation signal by construction.
-        Match.ConfidentialMatchResultV4 memory upgraded = _result(true, true, true);
+    function testConflictRequiresExactMatch() public {
+        Match.ConfidentialMatchResultV4 memory result = _candidateResult();
+        result.conflictConfirmed = true;
+        vm.expectRevert(Match.ConflictWithoutExactMatch.selector);
+        harness.bindable(result, true);
+    }
+
+    /// A candidate result cannot be upgraded in place: claiming both signals is
+    /// incoherent, and claiming ExactMatch while carrying the candidate flag is
+    /// refused by the outcome invariants.
+    function testCandidateResultCannotBeUpgradedInPlace() public {
+        Match.ConfidentialMatchResultV4 memory upgraded = _candidateResult();
+        upgraded.outcome = Match.Outcome.ExactMatch;
+        upgraded.exactMatchConfirmed = true;
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Match.CandidateSessionCannotBind.selector, keccak256("session-1")
-            )
+            abi.encodeWithSelector(Match.OutcomeInconsistent.selector, Match.Outcome.ExactMatch)
         );
         harness.bindable(upgraded, true);
+    }
+
+    /// The tolerant path may not run just because exact equality failed. Both
+    /// parties must have authorized it when the session was initiated.
+    function testCandidateFallbackWithoutBilateralAuthorizationIsRejected() public {
+        Match.ConfidentialMatchResultV4 memory unauthorized = _candidateResult();
+        unauthorized.candidateFallbackAuthorized = false;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Match.CandidateFallbackNotAuthorized.selector, keccak256("session-1")
+            )
+        );
+        harness.bindable(unauthorized, true);
+    }
+
+    /// An alias that is not bound to its issuer, profile, source record, session,
+    /// scope and enrollment is a free client assertion and is refused.
+    function testUnboundCandidateAliasIsRejected() public {
+        Match.ConfidentialMatchResultV4 memory unbound = _candidateResult();
+        unbound.boundCandidateAliasCommitment = bytes32(0);
+        vm.expectRevert(Match.CandidateAliasNotBound.selector);
+        harness.bindable(unbound, true);
+    }
+
+    /// NO_MATCH says only that the two submitted identifiers were unequal. It is
+    /// not bindable and carries no completeness meaning.
+    function testNoMatchOutcomeIsNotBindable() public {
+        Match.ConfidentialMatchResultV4 memory noMatch = _exactResult();
+        noMatch.outcome = Match.Outcome.NoMatchForSubmittedIdentities;
+        noMatch.exactMatchConfirmed = false;
+        noMatch.conflictConfirmed = false;
+        vm.expectRevert(Match.CandidateResultNotBindable.selector);
+        harness.bindable(noMatch, true);
+    }
+
+    /// NOT_COMPARABLE performs no FHE evaluation, so it must carry no provider
+    /// proof: there was nothing to evaluate and nothing to attest.
+    function testNotComparablePerformsNoEvaluation() public {
+        Match.ConfidentialMatchResultV4 memory notComparable = _exactResult();
+        notComparable.outcome = Match.Outcome.NotComparable;
+        notComparable.exactMatchConfirmed = false;
+        notComparable.conflictConfirmed = false;
+        vm.expectRevert(Match.NotComparableMustNotEvaluate.selector);
+        harness.bindable(notComparable, true);
+
+        notComparable.providerProofCommitment = bytes32(0);
+        vm.expectRevert(Match.CandidateResultNotBindable.selector);
+        harness.bindable(notComparable, true);
     }
 
     function testExactResultWithoutPrecommitmentIsRejected() public {
         vm.expectRevert(
             abi.encodeWithSelector(Match.MissingPrecommitment.selector, keccak256("session-1"))
         );
-        harness.bindable(_result(true, false, true), false);
+        harness.bindable(_exactResult(), false);
     }
 
     function testExactResultWithPrecommitmentIsAccepted() public view {
-        harness.bindable(_result(true, false, true), true);
+        harness.bindable(_exactResult(), true);
+        assertTrue(Match.isPubliclySubmittable(_exactResult()));
+    }
+
+    /* ------------------------------------------- authority tier and binding */
+
+    function testRegistryDocumentVersusStrictSellerIsNotComparable() public {
+        Id.StableAssetIdentity memory sellerIssued = _identity("IT00012026X", 20_500);
+        Id.StableAssetIdentity memory registryDoc = _identity("IT00012026X", 20_500);
+        registryDoc.invoiceNamespace = N.namespace("sdi");
+        registryDoc.tier = Id.IdentityTier.RegistryDocument;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Id.IdentityAuthorityMismatch.selector,
+                Id.IdentityTier.StrictSellerIssued,
+                Id.IdentityTier.RegistryDocument
+            )
+        );
+        harness.comparable(sellerIssued, registryDoc);
+    }
+
+    function testNamespaceOrProfileMismatchIsNotComparable() public {
+        Id.StableAssetIdentity memory a = _identity("INV-1", 20_500);
+        Id.StableAssetIdentity memory b = _identity("INV-1", 20_500);
+        b.debtorNamespace = N.namespace("duns");
+        vm.expectRevert(Id.IdentityProfileMismatch.selector);
+        harness.comparable(a, b);
+
+        Id.StableAssetIdentity memory c = _identity("INV-1", 20_500);
+        c.invoiceProfile = N.PROFILE_ALNUM_UPPER_FIXED;
+        vm.expectRevert(Id.IdentityProfileMismatch.selector);
+        harness.comparable(a, c);
+
+        // Identical authority, namespaces and profiles are comparable.
+        harness.comparable(a, _identity("INV-2", 20_500));
+    }
+
+    /// A tolerant alias can never bridge authority tiers: cross-tier equivalence
+    /// requires an authorized pre-existing attestation and a new exact session.
+    function testCrossTierEquivalenceRequiresPriorAttestation() public {
+        bytes32 crossTierSession = keccak256("cross-tier-session");
+        assertFalse(precommits.isSessionPrecommitted(crossTierSession, _commitmentFor(1)));
+
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory equivalence =
+            _precommit(crossTierSession, bytes32(0), 11);
+        equivalence.equivalenceOf = _commitmentFor(2);
+        precommits.precommitExactSession(equivalence, _signPrecommit(equivalence, ISSUER_KEY));
+        assertTrue(precommits.isSessionPrecommitted(crossTierSession, _commitmentFor(1)));
+    }
+
+    function testClientManipulatedCandidateAliasIsRejected() public {
+        bytes32 aliasCommitment = keccak256("alias");
+        // Hoisted: these are external calls, and one made after expectRevert
+        // would consume the expectation instead of the call under test.
+        bytes32 issuerId = registry.issuerKeyIdFor(issuer);
+        bytes32 otherIssuerId = registry.issuerKeyIdFor(otherIssuer);
+        bytes32 bound = Id.boundCandidateAliasCommitment(
+            issuerId,
+            N.PROFILE_INVOICE_CASE_INSENSITIVE,
+            keccak256("source-record"),
+            keccak256("session-1"),
+            keccak256("scope-a"),
+            keccak256("enrollment"),
+            aliasCommitment
+        );
+        // Changing any bound input yields a different commitment, so an alias
+        // cannot be lifted into another session, scope or issuer.
+        assertTrue(
+            bound
+                != Id.boundCandidateAliasCommitment(
+                    otherIssuerId,
+                    N.PROFILE_INVOICE_CASE_INSENSITIVE,
+                    keccak256("source-record"),
+                    keccak256("session-1"),
+                    keccak256("scope-a"),
+                    keccak256("enrollment"),
+                    aliasCommitment
+                )
+        );
+        assertTrue(
+            bound
+                != Id.boundCandidateAliasCommitment(
+                    issuerId,
+                    N.PROFILE_INVOICE_CASE_INSENSITIVE,
+                    keccak256("source-record"),
+                    keccak256("session-2"),
+                    keccak256("scope-a"),
+                    keccak256("enrollment"),
+                    aliasCommitment
+                )
+        );
+        // A lossless profile may not produce a candidate alias binding at all.
+        vm.expectRevert(Id.IdentityProfileMismatch.selector);
+        harness.boundAlias(
+            issuerId,
+            N.PROFILE_INVOICE_CASE_SENSITIVE,
+            keccak256("source-record"),
+            keccak256("session-1"),
+            keccak256("scope-a"),
+            keccak256("enrollment"),
+            aliasCommitment
+        );
+        // Incomplete binding fails closed.
+        vm.expectRevert(Id.CandidateBindingIncomplete.selector);
+        harness.boundAlias(
+            issuerId,
+            N.PROFILE_INVOICE_CASE_INSENSITIVE,
+            keccak256("source-record"),
+            bytes32(0),
+            keccak256("scope-a"),
+            keccak256("enrollment"),
+            aliasCommitment
+        );
     }
 
     /* ------------------------------------------- reconciliation lifecycle */

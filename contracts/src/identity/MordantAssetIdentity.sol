@@ -27,6 +27,8 @@ library MordantAssetIdentity {
     bytes32 internal constant COMMITMENT_DOMAIN = keccak256("mordant.asset-commitment/3");
     bytes32 internal constant CANDIDATE_COMMITMENT_DOMAIN =
         keccak256("mordant.candidate-alias-commitment/1");
+    bytes32 internal constant CANDIDATE_BINDING_DOMAIN =
+        keccak256("mordant.candidate-alias-binding/1");
     bytes32 internal constant TERMS_DOMAIN = keccak256("mordant.asset-terms/1");
     bytes32 internal constant SALT_DOMAIN = keccak256("mordant.asset-salt/3");
 
@@ -45,6 +47,9 @@ library MordantAssetIdentity {
     error LossyProfileNotPermitted(uint8 profile);
     error LosslessProfileRequiredForTier(IdentityTier tier);
     error CandidateTierCannotBind(IdentityTier tier);
+    error IdentityAuthorityMismatch(IdentityTier left, IdentityTier right);
+    error IdentityProfileMismatch();
+    error CandidateBindingIncomplete();
 
     /// @notice How one terms version relates to what came before.
     /// @dev Relations are explicit because "this invoice was corrected" and
@@ -299,6 +304,60 @@ library MordantAssetIdentity {
         return keccak256(
             abi.encode(CANDIDATE_COMMITMENT_DOMAIN, IDENTITY_SCHEME_VERSION, identityEpoch, aliasId, salt)
         );
+    }
+
+    /// @notice Binds a tolerant alias to everything that produced it.
+    /// @dev Without this an alias is a free per-session client assertion, and a
+    /// client could manufacture RECONCILIATION_REQUIRED or spend a counterparty's
+    /// query budget. Binding the issuer, the registered candidate profile, the
+    /// source record, the session, the scope and the enrollment digest makes an
+    /// alias usable in exactly one session by exactly one authorized source.
+    function boundCandidateAliasCommitment(
+        bytes32 issuerKeyId,
+        uint8 candidateProfile,
+        bytes32 sourceRecordDigest,
+        bytes32 sessionId,
+        bytes32 scopeCommitment,
+        bytes32 enrollmentDigest,
+        bytes32 aliasCommitment
+    ) internal pure returns (bytes32) {
+        if (
+            issuerKeyId == bytes32(0) || sourceRecordDigest == bytes32(0)
+                || sessionId == bytes32(0) || scopeCommitment == bytes32(0)
+                || enrollmentDigest == bytes32(0) || aliasCommitment == bytes32(0)
+        ) revert CandidateBindingIncomplete();
+        // Only a registered tolerant profile may produce a candidate alias.
+        if (MordantNormalization.isLossless(candidateProfile)) {
+            revert IdentityProfileMismatch();
+        }
+        bytes32 source = keccak256(
+            abi.encode(issuerKeyId, candidateProfile, sourceRecordDigest, aliasCommitment)
+        );
+        bytes32 session = keccak256(abi.encode(sessionId, scopeCommitment, enrollmentDigest));
+        return keccak256(abi.encode(CANDIDATE_BINDING_DOMAIN, IDENTITY_SCHEME_VERSION, source, session));
+    }
+
+    /// @notice Pre-FHE compatibility gate.
+    /// @dev RegistryDocument and StrictSellerIssued are different canonical
+    /// authority spaces. Comparing them directly and returning false would
+    /// report "different receivable" when the truth is "these identifiers are
+    /// not comparable", which is the same silent false negative a profile
+    /// mismatch would cause. Cross-tier equivalence needs an authorized
+    /// pre-existing attestation and a new exact session; a tolerant alias can
+    /// never bridge authority tiers.
+    function requireComparable(StableAssetIdentity memory a, StableAssetIdentity memory b)
+        internal
+        pure
+    {
+        if (a.tier != b.tier) revert IdentityAuthorityMismatch(a.tier, b.tier);
+        if (
+            a.sellerNamespace != b.sellerNamespace || a.debtorNamespace != b.debtorNamespace
+                || a.invoiceNamespace != b.invoiceNamespace
+        ) revert IdentityProfileMismatch();
+        if (
+            a.sellerProfile != b.sellerProfile || a.debtorProfile != b.debtorProfile
+                || a.invoiceProfile != b.invoiceProfile
+        ) revert IdentityProfileMismatch();
     }
 
     /// @notice Convenience wrapper over the normalization profiles.
