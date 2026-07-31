@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-/// @notice Provider-neutral policy result. Commitments are opaque to this interface.
-/// @dev Field order is part of the shared wire format and must not be changed in place.
+/// @notice Provider-neutral policy result schema 2. Commitments are opaque to this interface.
+/// @dev Field order is ABI-significant. Schema 2 appends providerProofCommitment before the final
+///      resultCommitment and is intentionally incompatible with the schema-1 tuple selector.
 struct ConfidentialPolicyResult {
     uint256 chainId;
     address vault;
@@ -15,6 +16,9 @@ struct ConfidentialPolicyResult {
     uint64 cureDeadline;
     uint256 nonce;
     uint64 validUntil;
+    /// @notice Domain-separated commitment to the result ciphertext and threshold evidence.
+    /// @dev A validator quorum endorses the commitment's preimage construction offchain.
+    bytes32 providerProofCommitment;
     bytes32 resultCommitment;
 }
 

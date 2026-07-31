@@ -23,12 +23,14 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
     error WrongChain(uint256 supplied, uint256 current);
     error InvalidVault();
     error ResultExpired(uint64 validUntil, uint256 currentTime);
+    error InvalidProviderProofCommitment();
     error InvalidResultCommitment(bytes32 supplied, bytes32 expected);
     error InvalidNegativeResult(bytes32 responsibleRole, uint64 cureDeadline);
     error InvalidPositiveResult(bytes32 responsibleRole, uint64 cureDeadline);
     error ValidatorSetMismatch(bytes32 supplied, bytes32 current);
     error ReplayAlreadyConsumed(bytes32 replayKey);
     error DecisionAlreadyConsumed(bytes32 decisionKey);
+    error ProviderProofAlreadyConsumed(bytes32 providerProofCommitment);
     error InsufficientSignatures(uint256 supplied, uint256 required);
     error MalformedAttestation();
     error MalformedSignature();
@@ -54,17 +56,21 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
         address indexed vault,
         uint32 policyVersion,
         uint256 nonce,
-        bool conflictConfirmed
+        bool conflictConfirmed,
+        bytes32 providerProofCommitment
     );
 
     string public constant DOMAIN_NAME = "Mordant Confidential Policy";
-    string public constant DOMAIN_VERSION = "1";
+    string public constant DOMAIN_VERSION = "2";
 
     bytes32 public constant CONFIDENTIAL_POLICY_RESULT_CORE_TYPEHASH = keccak256(
-        "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil)"
+        "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)"
     );
     bytes32 public constant CONFIDENTIAL_POLICY_RESULT_TYPEHASH = keccak256(
-        "ConfidentialPolicyResult(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 resultCommitment)"
+        "ConfidentialPolicyResult(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment,bytes32 resultCommitment)"
+    );
+    bytes32 public constant PROVIDER_PROOF_COMMITMENT_TYPEHASH = keccak256(
+        "ProviderProofCommitment(bytes32 resultCiphertextCommitment,bytes32 thresholdTranscriptCommitment,bytes32 thresholdSessionId,bytes32 thresholdKeyCommitment,bytes32 policyCircuitCommitment)"
     );
     bytes32 public constant CONFIDENTIAL_POLICY_ATTESTATION_TYPEHASH =
         keccak256("ConfidentialPolicyAttestation(bytes32 validatorSetId,bytes32 resultDigest)");
@@ -90,6 +96,8 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
         latestPolicyVersion;
     mapping(bytes32 replayKey => bool consumed) public consumedReplayKeys;
     mapping(bytes32 decisionKey => bool consumed) public consumedDecisionKeys;
+    mapping(bytes32 providerProofCommitment => bool consumed) public
+        consumedProviderProofCommitments;
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert Unauthorized(msg.sender);
@@ -183,6 +191,27 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
         );
     }
 
+    /// @notice Derive the provider-neutral evidence commitment endorsed by the validator quorum.
+    /// @dev This is a binding hash, not a proof that the committed FHE computation was correct.
+    function deriveProviderProofCommitment(
+        bytes32 resultCiphertextCommitment,
+        bytes32 thresholdTranscriptCommitment,
+        bytes32 thresholdSessionId,
+        bytes32 thresholdKeyCommitment,
+        bytes32 policyCircuitCommitment
+    ) public pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                PROVIDER_PROOF_COMMITMENT_TYPEHASH,
+                resultCiphertextCommitment,
+                thresholdTranscriptCommitment,
+                thresholdSessionId,
+                thresholdKeyCommitment,
+                policyCircuitCommitment
+            )
+        );
+    }
+
     /// @notice Canonical commitment to every result field except `resultCommitment` itself.
     function resultCoreCommitment(ConfidentialPolicyResult calldata result)
         public
@@ -202,7 +231,8 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
                 result.responsibleRole,
                 result.cureDeadline,
                 result.nonce,
-                result.validUntil
+                result.validUntil,
+                result.providerProofCommitment
             )
         );
     }
@@ -226,6 +256,7 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
                 result.cureDeadline,
                 result.nonce,
                 result.validUntil,
+                result.providerProofCommitment,
                 result.resultCommitment
             )
         );
@@ -283,13 +314,15 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
 
         consumedReplayKeys[key] = true;
         consumedDecisionKeys[canonicalDecisionKey] = true;
+        consumedProviderProofCommitments[result.providerProofCommitment] = true;
         emit ConfidentialPolicyResultAccepted(
             result.resultCommitment,
             result.policyId,
             result.vault,
             result.policyVersion,
             result.nonce,
-            result.conflictConfirmed
+            result.conflictConfirmed,
+            result.providerProofCommitment
         );
         return key;
     }
@@ -306,6 +339,9 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
             revert MalformedAttestation();
         }
 
+        if (result.providerProofCommitment == bytes32(0)) {
+            revert InvalidProviderProofCommitment();
+        }
         bytes32 expectedCommitment = resultCoreCommitment(result);
         if (result.resultCommitment != expectedCommitment) {
             revert InvalidResultCommitment(result.resultCommitment, expectedCommitment);
@@ -337,6 +373,9 @@ contract ECDSAQuorumConfidentialPolicyVerifier is IConfidentialPolicyVerifier {
         bytes32 canonicalDecisionKey = decisionKey(result);
         if (consumedDecisionKeys[canonicalDecisionKey]) {
             revert DecisionAlreadyConsumed(canonicalDecisionKey);
+        }
+        if (consumedProviderProofCommitments[result.providerProofCommitment]) {
+            revert ProviderProofAlreadyConsumed(result.providerProofCommitment);
         }
         if (suppliedSetId != validatorSetId) {
             revert ValidatorSetMismatch(suppliedSetId, validatorSetId);

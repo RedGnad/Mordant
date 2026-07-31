@@ -2,7 +2,10 @@ module mordant.dev/fhe-lab/lattigo
 
 go 1.24.0
 
-require github.com/tuneinsight/lattigo/v6 v6.2.0
+require (
+	github.com/tuneinsight/lattigo/v6 v6.2.0
+	go.etcd.io/bbolt v1.4.3
+)
 
 require (
 	github.com/ALTree/bigfloat v0.2.0 // indirect

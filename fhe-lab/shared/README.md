@@ -18,6 +18,7 @@ Only these public objects may cross the client boundary:
 
 - an encrypted-input envelope and its commitment;
 - a `ConfidentialPolicyResult`;
+- a provider-proof commitment to the result ciphertext and threshold evidence;
 - an attestation over that result;
 - aggregate benchmark measurements and stable error codes.
 
@@ -96,9 +97,12 @@ event ConfidentialPolicyResultAccepted(
     address indexed vault,
     uint32 policyVersion,
     uint256 nonce,
-    bool conflictConfirmed
+    bool conflictConfirmed,
+    bytes32 providerProofCommitment
 );
 ```
 
-The result format supports a future 2-of-3 validator quorum. A single key or single signature is
-allowed only in a local cryptographic benchmark and must be labelled as such.
+Schema 2 requires the provider-proof commitment in the result and EIP-712 attestation. The result
+format supports a 2-of-3 validator quorum. A single key or single signature is allowed only in a
+local cryptographic benchmark and must be labelled as such. The binding authenticates endorsed
+evidence; it is not independently a proof of correct computation.

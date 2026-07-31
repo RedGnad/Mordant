@@ -12,7 +12,8 @@ const ConfidentialPolicyInputType = "ConfidentialPolicyInput(uint256 chainId,add
 const (
 	ReceivableLinkType               = "MordantReceivableLink(address vault,uint32 policyVersion,bytes32 invoiceIdentifier,bytes32 salt)"
 	SubmitterAuthorizationType       = "ConfidentialSubmitterAuthorization(bytes32 subjectCommitment,bytes32 role,address vault,bytes32 policyId,uint32 policyVersion,bytes32 keyId,uint64 validUntil,uint256 nonce)"
-	ConfidentialPolicyResultCoreType = "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil)"
+	ConfidentialPolicyResultCoreType = "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)"
+	ProviderProofCommitmentType      = "ProviderProofCommitment(bytes32 resultCiphertextCommitment,bytes32 thresholdTranscriptCommitment,bytes32 thresholdSessionId,bytes32 thresholdKeyCommitment,bytes32 policyCircuitCommitment)"
 )
 
 type AuthorizationClaim struct {
@@ -26,17 +27,30 @@ type AuthorizationClaim struct {
 }
 
 type PublicPolicyResultCore struct {
-	ChainID           Uint256
-	Vault             [20]byte
-	PolicyID          [32]byte
-	PolicyVersion     uint32
-	InputCommitmentA  [32]byte
-	InputCommitmentB  [32]byte
-	ConflictConfirmed bool
-	ResponsibleRole   [32]byte
-	CureDeadline      uint64
-	Nonce             Uint256
-	ValidUntil        uint64
+	ChainID                 Uint256
+	Vault                   [20]byte
+	PolicyID                [32]byte
+	PolicyVersion           uint32
+	InputCommitmentA        [32]byte
+	InputCommitmentB        [32]byte
+	ConflictConfirmed       bool
+	ResponsibleRole         [32]byte
+	CureDeadline            uint64
+	Nonce                   Uint256
+	ValidUntil              uint64
+	ProviderProofCommitment [32]byte
+}
+
+// ProviderProof binds the public result to the evaluated result ciphertext,
+// one threshold session, its participating key epoch, the signed threshold
+// transcript and the frozen policy circuit. It is evidence binding, not a
+// proof that the off-chain computation was correct.
+type ProviderProof struct {
+	ResultCiphertextCommitment    [32]byte
+	ThresholdTranscriptCommitment [32]byte
+	ThresholdSessionID            [32]byte
+	ThresholdKeyCommitment        [32]byte
+	PolicyCircuitCommitment       [32]byte
 }
 
 // CanonicalInputCommitment computes the provider-independent Solidity value:
@@ -136,7 +150,7 @@ func (r *Runtime) SubmitterAuthorizationCommitment(claim AuthorizationClaim) ([3
 // Solidity ABI commitment consumed by the Monad adapter workflow.
 func ResultCommitment(result PublicPolicyResultCore) ([32]byte, error) {
 	var zero [32]byte
-	if result.ChainID == (Uint256{}) || result.Vault == ([20]byte{}) || result.PolicyID == zero || result.PolicyVersion != PolicyVersion || result.InputCommitmentA == zero || result.InputCommitmentB == zero || result.ValidUntil == 0 {
+	if result.ChainID == (Uint256{}) || result.Vault == ([20]byte{}) || result.PolicyID == zero || result.PolicyVersion != PolicyVersion || result.InputCommitmentA == zero || result.InputCommitmentB == zero || result.ValidUntil == 0 || result.ProviderProofCommitment == zero {
 		return zero, ErrInvalidPlaintext
 	}
 	if result.ConflictConfirmed {
@@ -147,7 +161,7 @@ func ResultCommitment(result PublicPolicyResultCore) ([32]byte, error) {
 		return zero, ErrInvalidPlaintext
 	}
 	typeHash := legacyKeccak([]byte(ConfidentialPolicyResultCoreType))
-	encoded := make([]byte, 0, 12*32)
+	encoded := make([]byte, 0, 13*32)
 	encoded = append(encoded, typeHash[:]...)
 	encoded = append(encoded, uint256Word(result.ChainID)...)
 	encoded = append(encoded, addressWord(result.Vault)...)
@@ -160,6 +174,29 @@ func ResultCommitment(result PublicPolicyResultCore) ([32]byte, error) {
 	encoded = append(encoded, uint64Word(result.CureDeadline)...)
 	encoded = append(encoded, uint256Word(result.Nonce)...)
 	encoded = append(encoded, uint64Word(result.ValidUntil)...)
+	encoded = append(encoded, result.ProviderProofCommitment[:]...)
+	return legacyKeccak(encoded), nil
+}
+
+// ProviderProofCommitment implements the provider-neutral schema-v2 evidence
+// commitment consumed by the EVM adapter and the shared JavaScript codec.
+func ProviderProofCommitment(proof ProviderProof) ([32]byte, error) {
+	var zero [32]byte
+	if proof.ResultCiphertextCommitment == zero ||
+		proof.ThresholdTranscriptCommitment == zero ||
+		proof.ThresholdSessionID == zero ||
+		proof.ThresholdKeyCommitment == zero ||
+		proof.PolicyCircuitCommitment == zero {
+		return zero, ErrInvalidPlaintext
+	}
+	typeHash := legacyKeccak([]byte(ProviderProofCommitmentType))
+	encoded := make([]byte, 0, 6*32)
+	encoded = append(encoded, typeHash[:]...)
+	encoded = append(encoded, proof.ResultCiphertextCommitment[:]...)
+	encoded = append(encoded, proof.ThresholdTranscriptCommitment[:]...)
+	encoded = append(encoded, proof.ThresholdSessionID[:]...)
+	encoded = append(encoded, proof.ThresholdKeyCommitment[:]...)
+	encoded = append(encoded, proof.PolicyCircuitCommitment[:]...)
 	return legacyKeccak(encoded), nil
 }
 

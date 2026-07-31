@@ -30,11 +30,11 @@ func Pair(runtime *fhe.Runtime, label string, mode fhe.IdentityMode) (fhe.PlainP
 		link = [32]byte{}
 	}
 
-	authA, err := runtime.SubmitterAuthorizationCommitment(authorizationClaim("a-"+label, 101))
+	authA, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaim("a-"+label, 101))
 	if err != nil {
 		return fhe.PlainPledge{}, fhe.PlainPledge{}, err
 	}
-	authB, err := runtime.SubmitterAuthorizationCommitment(authorizationClaim("b-"+label, 102))
+	authB, err := runtime.SubmitterAuthorizationCommitment(AuthorizationClaim("b-"+label, 102))
 	if err != nil {
 		return fhe.PlainPledge{}, fhe.PlainPledge{}, err
 	}
@@ -84,7 +84,9 @@ func InputContext(slot uint8, clientNonce uint64) fhe.InputCommitmentContext {
 	}
 }
 
-func authorizationClaim(subject string, nonce uint64) fhe.AuthorizationClaim {
+// AuthorizationClaim returns the deterministic test-assets-only ingress claim
+// used by the external-client workflow. It contains no plaintext pledge data.
+func AuthorizationClaim(subject string, nonce uint64) fhe.AuthorizationClaim {
 	return fhe.AuthorizationClaim{
 		SubjectCommitment: sha256.Sum256([]byte("synthetic-subject-" + subject)),
 		Role:              Role,

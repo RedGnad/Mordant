@@ -121,6 +121,21 @@ func TestOneShareFailsAndCiphertextAttemptIsTerminal(t *testing.T) {
 	if _, _, err := runtime.DecryptThresholdWithCoalition(&copyWithNewNonce, 0, 2); !errors.Is(err, ErrReplay) {
 		t.Fatalf("expected ciphertext-bound terminal rejection, got %v", err)
 	}
+
+	// The key-switch protocol consumes c1, not c0. An attacker must not obtain
+	// another release by mutating c0 and recomputing the whole-ciphertext hash.
+	copyWithChangedC0 := *decision
+	copyWithChangedC0.Conflict = decision.Conflict.CopyNew()
+	copyWithChangedC0.Conflict.Value[0].Coeffs[0][0] ^= 1
+	changedCommitment, err := ciphertextCommitment(copyWithChangedC0.Conflict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyWithChangedC0.ResultCiphertextCommitment = changedCommitment
+	copyWithChangedC0.Nonce = sha256.Sum256([]byte("attacker-mutated-c0"))
+	if _, _, err := runtime.DecryptThresholdWithCoalition(&copyWithChangedC0, 0, 2); !errors.Is(err, ErrReplay) {
+		t.Fatalf("c0 mutation bypassed protocol-consumption guard: %v", err)
+	}
 }
 
 func TestResultCiphertextCommitmentIsVerified(t *testing.T) {

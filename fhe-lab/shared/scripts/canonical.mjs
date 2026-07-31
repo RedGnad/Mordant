@@ -5,11 +5,11 @@ import {
   stringToHex,
 } from "viem";
 
-export const RESULT_SCHEMA_VERSION = "mordant.confidential-policy-result/1";
-export const ATTESTATION_SCHEMA_VERSION = "mordant.confidential-policy-attestation/1";
+export const RESULT_SCHEMA_VERSION = "mordant.confidential-policy-result/2";
+export const ATTESTATION_SCHEMA_VERSION = "mordant.confidential-policy-attestation/2";
 export const ATTESTATION_SCHEME = "eip712-secp256k1-quorum/1";
 export const EIP712_NAME = "Mordant Confidential Policy";
-export const EIP712_VERSION = "1";
+export const EIP712_VERSION = "2";
 export const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
 
 export const ROLE = Object.freeze({
@@ -21,7 +21,10 @@ export const ROLE = Object.freeze({
 });
 
 export const RESULT_CORE_TYPE =
-  "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil)";
+  "ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)";
+
+export const PROVIDER_PROOF_TYPE =
+  "ProviderProofCommitment(bytes32 resultCiphertextCommitment,bytes32 thresholdTranscriptCommitment,bytes32 thresholdSessionId,bytes32 thresholdKeyCommitment,bytes32 policyCircuitCommitment)";
 
 export const RESULT_TYPES = Object.freeze({
   ConfidentialPolicyResult: [
@@ -36,6 +39,7 @@ export const RESULT_TYPES = Object.freeze({
     { name: "cureDeadline", type: "uint64" },
     { name: "nonce", type: "uint256" },
     { name: "validUntil", type: "uint64" },
+    { name: "providerProofCommitment", type: "bytes32" },
     { name: "resultCommitment", type: "bytes32" },
   ],
 });
@@ -94,8 +98,42 @@ export function resultMessage(result) {
     cureDeadline: parseUint(result.cureDeadline, UINT64_MAX, "RESULT_CURE_DEADLINE"),
     nonce: parseUint(result.nonce, UINT256_MAX, "RESULT_NONCE"),
     validUntil: parseUint(result.validUntil, UINT64_MAX, "RESULT_VALID_UNTIL"),
+    providerProofCommitment: result.providerProofCommitment,
     resultCommitment: result.resultCommitment,
   };
+}
+
+export function computeProviderProofCommitment(proof) {
+  if (proof === null || typeof proof !== "object" || Array.isArray(proof)) {
+    fail("PROVIDER_PROOF_OBJECT");
+  }
+  const fields = [
+    "resultCiphertextCommitment",
+    "thresholdTranscriptCommitment",
+    "thresholdSessionId",
+    "thresholdKeyCommitment",
+    "policyCircuitCommitment",
+  ];
+  exactKeys(proof, fields, "PROVIDER_PROOF_FIELDS");
+  for (const field of fields) assertBytes32(proof[field], `PROVIDER_PROOF_${field.toUpperCase()}`);
+  return keccak256(encodeAbiParameters(
+    [
+      { type: "bytes32" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+      { type: "bytes32" },
+    ],
+    [
+      keccak256(stringToHex(PROVIDER_PROOF_TYPE)),
+      proof.resultCiphertextCommitment,
+      proof.thresholdTranscriptCommitment,
+      proof.thresholdSessionId,
+      proof.thresholdKeyCommitment,
+      proof.policyCircuitCommitment,
+    ],
+  ));
 }
 
 export function computeResultCommitment(result) {
@@ -114,6 +152,7 @@ export function computeResultCommitment(result) {
       { type: "uint64" },
       { type: "uint256" },
       { type: "uint64" },
+      { type: "bytes32" },
     ],
     [
       keccak256(stringToHex(RESULT_CORE_TYPE)),
@@ -128,6 +167,7 @@ export function computeResultCommitment(result) {
       message.cureDeadline,
       message.nonce,
       message.validUntil,
+      message.providerProofCommitment,
     ],
   ));
 }
@@ -169,13 +209,15 @@ export function validateResult(result, verifyingContract) {
   exactKeys(result, [
     "schemaVersion", "chainId", "vault", "policyId", "policyVersion", "inputCommitmentA",
     "inputCommitmentB", "conflictConfirmed", "responsibleRole", "cureDeadline", "nonce",
-    "validUntil", "resultCommitment",
+    "validUntil", "providerProofCommitment", "resultCommitment",
   ], "RESULT_FIELDS");
   if (result.schemaVersion !== RESULT_SCHEMA_VERSION) fail("RESULT_SCHEMA_VERSION");
   assertAddress(result.vault, "RESULT_VAULT");
   for (const field of [
-    "policyId", "inputCommitmentA", "inputCommitmentB", "responsibleRole", "resultCommitment",
+    "policyId", "inputCommitmentA", "inputCommitmentB", "responsibleRole",
+    "providerProofCommitment", "resultCommitment",
   ]) assertBytes32(result[field], `RESULT_${field.toUpperCase()}`);
+  if (result.providerProofCommitment === ZERO_BYTES32) fail("RESULT_PROVIDER_PROOF_ZERO");
   if (typeof result.conflictConfirmed !== "boolean") fail("RESULT_CONFLICT_BOOL");
   resultMessage(result);
   if (!result.conflictConfirmed && (result.responsibleRole !== ZERO_BYTES32 || result.cureDeadline !== "0")) {

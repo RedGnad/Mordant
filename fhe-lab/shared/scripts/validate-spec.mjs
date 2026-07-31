@@ -6,6 +6,7 @@ import {
   ROLE,
   ZERO_BYTES32,
   computeAttestationDigest,
+  computeProviderProofCommitment,
   computeResultCommitment,
   computeResultDigest,
   validateAttestation,
@@ -26,6 +27,7 @@ async function json(path) {
 
 const resultSchema = await json(join(shared, "result-schema", "confidential-policy-result.schema.json"));
 const attestationSchema = await json(join(shared, "result-schema", "attestation-envelope.schema.json"));
+const providerProofSchema = await json(join(shared, "result-schema", "provider-proof.schema.json"));
 const benchmarkSchema = await json(join(shared, "benchmark", "benchmark-result.schema.json"));
 const benchmarkSummarySchema = await json(join(shared, "benchmark", "benchmark-summary.schema.json"));
 const manifest = await json(join(shared, "test-vectors", "manifest.json"));
@@ -33,6 +35,7 @@ const manifest = await json(join(shared, "test-vectors", "manifest.json"));
 for (const [name, schema] of Object.entries({
   resultSchema,
   attestationSchema,
+  providerProofSchema,
   benchmarkSchema,
   benchmarkSummarySchema,
 })) {
@@ -109,6 +112,21 @@ for (const forbiddenKey of [
 ]) check(!manifestText.includes(forbiddenKey), `manifest:forbidden-input-key:${forbiddenKey}`);
 
 const vector = manifest.canonicalEncodingVector;
+const proofCore = {
+  resultCiphertextCommitment: vector.providerProof.resultCiphertextCommitment,
+  thresholdTranscriptCommitment: vector.providerProof.thresholdTranscriptCommitment,
+  thresholdSessionId: vector.providerProof.thresholdSessionId,
+  thresholdKeyCommitment: vector.providerProof.thresholdKeyCommitment,
+  policyCircuitCommitment: vector.providerProof.policyCircuitCommitment,
+};
+check(
+  computeProviderProofCommitment(proofCore) === vector.providerProof.providerProofCommitment,
+  "encoding-vector:provider-proof-commitment",
+);
+check(
+  vector.providerProof.providerProofCommitment === vector.result.providerProofCommitment,
+  "encoding-vector:provider-proof-result-binding",
+);
 const expectedCommitment = computeResultCommitment(vector.result);
 check(expectedCommitment === vector.result.resultCommitment, "encoding-vector:result-commitment");
 validateResult(vector.result, manifest.publicHarness.verifier);
@@ -123,7 +141,7 @@ const attestationDigest = computeAttestationDigest(
 check(attestationDigest === vector.attestationDigest, "encoding-vector:attestation-digest");
 
 const structuralAttestation = {
-  schemaVersion: "mordant.confidential-policy-attestation/1",
+  schemaVersion: "mordant.confidential-policy-attestation/2",
   attestationScheme: "eip712-secp256k1-quorum/1",
   resultDigest,
   validatorSetId: manifest.publicHarness.validatorSetId,
@@ -157,6 +175,21 @@ try {
   rejectedCommitmentMutation = error instanceof Error && error.message === "RESULT_COMMITMENT";
 }
 check(rejectedCommitmentMutation, "result:commitment-negative");
+
+let rejectedProofMutation = false;
+try {
+  const mutatedProof = {
+    ...proofCore,
+    thresholdSessionId: `0x${"66".repeat(32)}`,
+  };
+  check(
+    computeProviderProofCommitment(mutatedProof) === vector.result.providerProofCommitment,
+    "provider-proof:mutation",
+  );
+} catch (error) {
+  rejectedProofMutation = error instanceof Error && error.message === "provider-proof:mutation";
+}
+check(rejectedProofMutation, "provider-proof:mutation-negative");
 
 const sharedFiles = await readdir(shared);
 check(sharedFiles.includes("README.md"), "shared:readme");

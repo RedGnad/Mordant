@@ -30,15 +30,18 @@ AND both submitters are authorized
 - `lattigo/` contains the exact-integer circuit and threshold benchmark.
 - `shared/` contains provider-neutral schemas, field classification, vectors, and threat model.
 - `monad-adapter/` contains a standalone verifier prototype and negative tests.
-- `workflow/` connects a public provider result to a synthetic 2-of-3 quorum and the standalone
-  verifier on an isolated Anvil chain.
+- `workflow/` connects a proof-bound public provider result to a synthetic 2-of-3 validator quorum
+  and the standalone verifier on an isolated Anvil chain.
+- [`HARDENING.md`](./HARDENING.md) records the external-ingress, durable threshold-service and
+  schema-2 proof boundary added after the initial feasibility gate.
 
 Each child directory owns its own toolchain. Nothing in this lab is imported by the current Mordant
 application or contracts.
 
-The local workflow is an integration harness, not a distributed operator deployment. Its three FHE
-parties and three attestation identities are synthetic and co-located on one machine. It proves wire
-compatibility, threshold mathematics, digest binding, and adapter acceptance; it does not prove
+The repository now includes a TLS-1.3/mTLS threshold-node service with a durable one-shot ledger and
+an executable one-node-per-process entry point. The controlled setup ceremony and validator
+identities remain synthetic and co-located on one machine. The lab proves a process-deployable
+boundary, threshold mathematics, evidence binding, and adapter acceptance; it does not prove
 independent custody, correct off-chain computation, or Monad testnet availability.
 
 ## Gate
@@ -47,10 +50,11 @@ independent custody, correct off-chain computation, or Monad testnet availabilit
 2-of-3 cryptographic path, result authentication, replay protection, negative tests, serialization,
 and measured latency passed. A cryptographically correct single-key demo would not have been enough.
 
-This is simultaneously a **NO-GO for production or a separated external client**: authorization is
-still a gateway hook, all shares are co-located, one-shot state is volatile, and the validator
-attestation is not yet bound to the FHE result ciphertext or threshold transcript. The full evidence
-and next boundary are in [`DECISION.md`](./DECISION.md).
+The follow-up hardening pass adds a public-only external client, signed/revocable ciphertext
+enrollment, process-deployable threshold operators, durable c1-bound one-shot state, and a provider
+proof bound through the result commitment and EIP-712 attestation. This remains a **NO-GO for
+production**: setup custody is not distributed, issuer governance is local, and the proof authenticates
+endorsed evidence rather than proving correct computation. See [`HARDENING.md`](./HARDENING.md).
 
 ## Reproduce the bounded workflow
 

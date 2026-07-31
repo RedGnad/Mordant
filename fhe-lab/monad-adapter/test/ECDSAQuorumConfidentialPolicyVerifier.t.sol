@@ -46,7 +46,8 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
         address indexed vault,
         uint32 policyVersion,
         uint256 nonce,
-        bool conflictConfirmed
+        bool conflictConfirmed,
+        bytes32 providerProofCommitment
     );
 
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
@@ -91,7 +92,7 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
             IConfidentialPolicyVerifier.verifyResult.selector,
             bytes4(
                 keccak256(
-                    "verifyResult((uint256,address,bytes32,uint32,bytes32,bytes32,bool,bytes32,uint64,uint256,uint64,bytes32),bytes)"
+                    "verifyResult((uint256,address,bytes32,uint32,bytes32,bytes32,bool,bytes32,uint64,uint256,uint64,bytes32,bytes32),bytes)"
                 )
             )
         );
@@ -105,6 +106,7 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
         _assertTrue(verifier.verifyResult(result, attestation));
         _assertTrue(verifier.verifyResult(result, attestation));
         _assertFalse(verifier.consumedReplayKeys(key));
+        _assertFalse(verifier.consumedProviderProofCommitments(result.providerProofCommitment));
     }
 
     function testAcceptResultConsumesExactReplayKeyAndEmits() public {
@@ -120,12 +122,14 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
             result.vault,
             result.policyVersion,
             result.nonce,
-            result.conflictConfirmed
+            result.conflictConfirmed,
+            result.providerProofCommitment
         );
         bytes32 acceptedKey = verifier.acceptResult(result, attestation);
 
         _assertEq(acceptedKey, key);
         _assertTrue(verifier.consumedReplayKeys(key));
+        _assertTrue(verifier.consumedProviderProofCommitments(result.providerProofCommitment));
     }
 
     function testReplayKeyRejectsDifferentResultWithSameChainVaultPolicyAndNonce() public {
@@ -255,6 +259,107 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
             ECDSAQuorumConfidentialPolicyVerifier.InvalidResultCommitment.selector
         );
         verifier.verifyResult(result, attestation);
+    }
+
+    function testZeroProviderProofCommitmentIsRejectedEvenWhenCoreIsRecomputed() public {
+        ConfidentialPolicyResult memory result = _result(true);
+        result.providerProofCommitment = bytes32(0);
+        result.resultCommitment = verifier.resultCoreCommitment(result);
+        bytes memory attestation = _attestation(result, 2);
+
+        vm.expectRevert(
+            ECDSAQuorumConfidentialPolicyVerifier.InvalidProviderProofCommitment.selector
+        );
+        verifier.verifyResult(result, attestation);
+    }
+
+    function testProviderProofMutationInvalidatesExistingAttestation() public {
+        ConfidentialPolicyResult memory signedResult = _result(true);
+        bytes32 signedResultCommitment = signedResult.resultCommitment;
+        bytes memory attestation = _attestation(signedResult, 2);
+
+        ConfidentialPolicyResult memory mutated = signedResult;
+        mutated.providerProofCommitment = _providerProof(keccak256("different-session"));
+        mutated.resultCommitment = verifier.resultCoreCommitment(mutated);
+
+        _assertNotEq(mutated.resultCommitment, signedResultCommitment);
+        vm.expectRevert();
+        verifier.verifyResult(mutated, attestation);
+    }
+
+    function testThresholdSessionCannotBeSubstitutedUnderSignedResult() public {
+        ConfidentialPolicyResult memory signedResult = _result(true);
+        bytes memory attestation = _attestation(signedResult, 2);
+        bytes32 secondSessionProof = _providerProof(keccak256("threshold-session-2"));
+
+        _assertNotEq(secondSessionProof, signedResult.providerProofCommitment);
+        signedResult.providerProofCommitment = secondSessionProof;
+        signedResult.resultCommitment = verifier.resultCoreCommitment(signedResult);
+
+        vm.expectRevert();
+        verifier.verifyResult(signedResult, attestation);
+    }
+
+    function testProviderProofCannotBeReplayedAcrossAnotherDecision() public {
+        ConfidentialPolicyResult memory first = _result(true);
+        verifier.acceptResult(first, _attestation(first, 2));
+
+        ConfidentialPolicyResult memory second = _result(true);
+        second.inputCommitmentB = keccak256("independent-second-input");
+        second.nonce = first.nonce + 1;
+        second.providerProofCommitment = first.providerProofCommitment;
+        second.resultCommitment = verifier.resultCoreCommitment(second);
+        bytes memory secondAttestation = _attestation(second, 2);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ECDSAQuorumConfidentialPolicyVerifier.ProviderProofAlreadyConsumed.selector,
+                first.providerProofCommitment
+            )
+        );
+        verifier.acceptResult(second, secondAttestation);
+    }
+
+    function testProviderProofCommitmentBindsEveryEvidenceComponent() public view {
+        bytes32 resultCiphertext = keccak256("result-ciphertext");
+        bytes32 transcript = keccak256("threshold-transcript");
+        bytes32 session = keccak256("threshold-session-1");
+        bytes32 thresholdKey = keccak256("threshold-key");
+        bytes32 circuit = keccak256("policy-circuit-v3");
+        bytes32 baseline = verifier.deriveProviderProofCommitment(
+            resultCiphertext, transcript, session, thresholdKey, circuit
+        );
+
+        _assertNotEq(
+            baseline,
+            verifier.deriveProviderProofCommitment(
+                keccak256("other-ciphertext"), transcript, session, thresholdKey, circuit
+            )
+        );
+        _assertNotEq(
+            baseline,
+            verifier.deriveProviderProofCommitment(
+                resultCiphertext, keccak256("other-transcript"), session, thresholdKey, circuit
+            )
+        );
+        _assertNotEq(
+            baseline,
+            verifier.deriveProviderProofCommitment(
+                resultCiphertext, transcript, keccak256("other-session"), thresholdKey, circuit
+            )
+        );
+        _assertNotEq(
+            baseline,
+            verifier.deriveProviderProofCommitment(
+                resultCiphertext, transcript, session, keccak256("other-key"), circuit
+            )
+        );
+        _assertNotEq(
+            baseline,
+            verifier.deriveProviderProofCommitment(
+                resultCiphertext, transcript, session, thresholdKey, keccak256("other-circuit")
+            )
+        );
     }
 
     function testFalseResultRequiresZeroRoleAndDeadline() public {
@@ -426,9 +531,20 @@ contract ECDSAQuorumConfidentialPolicyVerifierTest {
             cureDeadline: conflict ? uint64(block.timestamp + 1 days) : 0,
             nonce: 41,
             validUntil: uint64(block.timestamp + 10 minutes),
+            providerProofCommitment: _providerProof(keccak256("threshold-session-1")),
             resultCommitment: bytes32(0)
         });
         result.resultCommitment = verifier.resultCoreCommitment(result);
+    }
+
+    function _providerProof(bytes32 sessionId) private view returns (bytes32) {
+        return verifier.deriveProviderProofCommitment(
+            keccak256("result-ciphertext"),
+            keccak256("threshold-transcript"),
+            sessionId,
+            keccak256("threshold-key"),
+            keccak256("policy-circuit-v3")
+        );
     }
 
     function _attestation(ConfidentialPolicyResult memory result, uint256 count)

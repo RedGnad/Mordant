@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mordant.invalid/schemas/confidential-policy-attestation-v1.json",
-  "title": "Mordant confidential-policy quorum attestation V1",
+  "$id": "https://mordant.invalid/schemas/confidential-policy-attestation-v2.json",
+  "title": "Mordant confidential-policy quorum attestation V2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,7 +14,7 @@
     "signatures"
   ],
   "properties": {
-    "schemaVersion": { "const": "mordant.confidential-policy-attestation/1" },
+    "schemaVersion": { "const": "mordant.confidential-policy-attestation/2" },
     "attestationScheme": { "const": "eip712-secp256k1-quorum/1" },
     "resultDigest": { "$ref": "#/$defs/bytes32" },
     "validatorSetId": { "$ref": "#/$defs/bytes32" },

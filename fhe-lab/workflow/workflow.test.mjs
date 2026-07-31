@@ -34,7 +34,10 @@ test("accepts only a complete canonical provider success envelope", async () => 
   assert.equal(normalized.result.inputCommitmentA, supplied.result.inputCommitmentA);
   assert.equal(normalized.result.inputCommitmentB, supplied.result.inputCommitmentB);
   assert.equal(normalized.result.conflictConfirmed, true);
-  assert.equal(normalized.providerProof, undefined);
+  assert.equal(
+    normalized.providerProof.providerProofCommitment,
+    supplied.result.providerProofCommitment,
+  );
 });
 
 test("rejects a provider failure instead of substituting fixture values", () => {
@@ -87,22 +90,33 @@ test("rejects unknown, plaintext, and ciphertext fields without echoing values",
   );
 });
 
-test("validates the optional provisional provider proof strictly", async () => {
+test("requires and validates the proof bound into the result strictly", async () => {
   const supplied = await fixtureOutput();
-  supplied.providerProof = {
-    schemaVersion: PROVIDER_PROOF_SCHEMA_VERSION,
-    transcriptCommitment: `0x${"56".repeat(32)}`,
-  };
   const normalized = normalizeProviderOutput(supplied);
   assert.equal(
-    normalized.providerProof.transcriptCommitment,
-    supplied.providerProof.transcriptCommitment,
+    normalized.providerProof.providerProofCommitment,
+    supplied.providerProof.providerProofCommitment,
   );
+  assert.equal(supplied.providerProof.schemaVersion, PROVIDER_PROOF_SCHEMA_VERSION);
 
   supplied.providerProof.debugTranscript = "must-not-cross-boundary";
   assert.throws(
     () => normalizeProviderOutput(supplied),
     (error) => error.code === "INPUT_PROVIDER_PROOF_FIELDS",
+  );
+
+  const missing = await fixtureOutput();
+  delete missing.providerProof;
+  assert.throws(
+    () => normalizeProviderOutput(missing),
+    (error) => error.code === "INPUT_FIELDS",
+  );
+
+  const mutated = await fixtureOutput();
+  mutated.providerProof.thresholdSessionId = `0x${"66".repeat(32)}`;
+  assert.throws(
+    () => normalizeProviderOutput(mutated),
+    (error) => error.code === "INPUT_PROVIDER_PROOF_MISMATCH",
   );
 });
 
@@ -178,8 +192,11 @@ test("accepts once, rejects replay on the same chain, and emits a public receipt
   assert.equal(output.verification.replayStateConsumed, true);
   assert.equal(output.verification.decisionStateConsumed, true);
   assert.equal(output.verification.secondAcceptanceRejected, true);
-  assert.equal(output.verification.providerProofRequired, false);
-  assert.equal(output.verification.providerProofBoundToAttestation, false);
+  assert.equal(output.verification.providerProofRequired, true);
+  assert.equal(output.verification.providerProofSupplied, true);
+  assert.equal(output.verification.providerProofBoundToAttestation, true);
+  assert.equal(output.verification.providerProofProvesCorrectComputation, false);
+  assert.match(output.result.providerProofCommitment, /^0x[0-9a-fA-F]{64}$/);
   assert.match(output.receipt.verifier, /^0x[0-9a-fA-F]{40}$/);
   assert.match(output.receipt.transactionHash, /^0x[0-9a-fA-F]{64}$/);
   assert.match(output.receipt.replayKey, /^0x[0-9a-fA-F]{64}$/);

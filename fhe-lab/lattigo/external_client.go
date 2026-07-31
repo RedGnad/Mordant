@@ -1,0 +1,210 @@
+package lattigospike
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
+	"io"
+
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
+)
+
+const (
+	publicMaterialMagic       = "MLPK1"
+	maxParameterMaterialBytes = 1 << 20
+	maxPublicKeyMaterialBytes = 64 << 20
+)
+
+// ExternalClient contains only public encryption material. In particular, it
+// has no evaluation keys, threshold shares, result decryption state or access
+// to the evaluator's local issuance registry.
+type ExternalClient struct {
+	engine clientEncryptionEngine
+}
+
+// ExportPublicEncryptionMaterial serializes the exact BGV parameters and
+// collective public key needed by an independent client process. Key metadata
+// is included and recomputed during import, so it cannot be relabeled without
+// detection. Evaluation keys and threshold shares are deliberately excluded.
+func (r *Runtime) ExportPublicEncryptionMaterial() ([]byte, error) {
+	parameterBytes, err := r.Params.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshal public parameters: %w", err)
+	}
+	publicKeyBytes, err := r.publicKey.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshal collective public key: %w", err)
+	}
+	if len(parameterBytes) == 0 || len(parameterBytes) > maxParameterMaterialBytes || len(publicKeyBytes) == 0 || len(publicKeyBytes) > maxPublicKeyMaterialBytes {
+		return nil, fmt.Errorf("%w: invalid public material size", ErrWrongKeyID)
+	}
+	if len(r.keyID) == 0 || len(r.keyID) > 1024 {
+		return nil, ErrWrongKeyID
+	}
+
+	var out bytes.Buffer
+	out.WriteString(publicMaterialMagic)
+	_ = binary.Write(&out, binary.BigEndian, uint16(len(r.keyID)))
+	out.WriteString(r.keyID)
+	out.Write(r.keyIDBytes[:])
+	out.Write(r.parameterFingerprint[:])
+	_ = binary.Write(&out, binary.BigEndian, uint32(len(parameterBytes)))
+	out.Write(parameterBytes)
+	_ = binary.Write(&out, binary.BigEndian, uint32(len(publicKeyBytes)))
+	out.Write(publicKeyBytes)
+	return out.Bytes(), nil
+}
+
+// NewExternalClient imports a public bundle exported by a Runtime. The result
+// can encrypt pledges in another process without receiving evaluator secret
+// state. The imported key and parameter fingerprints are verified from their
+// canonical encodings before any client is returned.
+func NewExternalClient(material []byte) (*ExternalClient, error) {
+	r := bytes.NewReader(material)
+	magic := make([]byte, len(publicMaterialMagic))
+	if _, err := io.ReadFull(r, magic); err != nil || string(magic) != publicMaterialMagic {
+		return nil, fmt.Errorf("%w: invalid public material header", ErrWrongKeyID)
+	}
+	var keyIDLength uint16
+	if err := binary.Read(r, binary.BigEndian, &keyIDLength); err != nil || keyIDLength == 0 || keyIDLength > 1024 || int(keyIDLength) > r.Len() {
+		return nil, fmt.Errorf("%w: invalid public key id", ErrWrongKeyID)
+	}
+	keyIDRaw := make([]byte, keyIDLength)
+	if _, err := io.ReadFull(r, keyIDRaw); err != nil {
+		return nil, fmt.Errorf("%w: truncated public key id", ErrWrongKeyID)
+	}
+	keyID := string(keyIDRaw)
+	var advertisedKeyID, advertisedFingerprint [32]byte
+	if _, err := io.ReadFull(r, advertisedKeyID[:]); err != nil {
+		return nil, fmt.Errorf("%w: truncated public key digest", ErrWrongKeyID)
+	}
+	if _, err := io.ReadFull(r, advertisedFingerprint[:]); err != nil {
+		return nil, fmt.Errorf("%w: truncated parameter fingerprint", ErrWrongKeyID)
+	}
+	parameterBytes, err := readPublicMaterialPart(r, maxParameterMaterialBytes)
+	if err != nil {
+		return nil, err
+	}
+	publicKeyBytes, err := readPublicMaterialPart(r, maxPublicKeyMaterialBytes)
+	if err != nil {
+		return nil, err
+	}
+	if r.Len() != 0 {
+		return nil, fmt.Errorf("%w: trailing public material", ErrWrongKeyID)
+	}
+
+	var params bgv.Parameters
+	if err := params.UnmarshalBinary(parameterBytes); err != nil {
+		return nil, fmt.Errorf("%w: invalid public parameters", ErrWrongKeyID)
+	}
+	canonicalParameters, err := params.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid public parameters", ErrWrongKeyID)
+	}
+	fingerprint := sha256.Sum256(canonicalParameters)
+	if fingerprint != advertisedFingerprint {
+		return nil, fmt.Errorf("%w: parameter fingerprint mismatch", ErrWrongKeyID)
+	}
+	publicKey := rlwe.NewPublicKey(params)
+	if err := publicKey.UnmarshalBinary(publicKeyBytes); err != nil {
+		return nil, fmt.Errorf("%w: invalid collective public key", ErrWrongKeyID)
+	}
+	canonicalPublicKey, err := publicKey.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid collective public key", ErrWrongKeyID)
+	}
+	keyDigest := sha256.Sum256(canonicalPublicKey)
+	if keyDigest != advertisedKeyID || keyID != fmt.Sprintf("internal-sha256:%x", keyDigest[:]) {
+		return nil, fmt.Errorf("%w: collective public key digest mismatch", ErrWrongKeyID)
+	}
+
+	return &ExternalClient{engine: clientEncryptionEngine{
+		params:               params,
+		encoder:              bgv.NewEncoder(params),
+		encryptor:            rlwe.NewEncryptor(params, publicKey),
+		keyID:                keyID,
+		keyIDBytes:           keyDigest,
+		parameterFingerprint: fingerprint,
+	}}, nil
+}
+
+func readPublicMaterialPart(r *bytes.Reader, maximum uint32) ([]byte, error) {
+	var size uint32
+	if err := binary.Read(r, binary.BigEndian, &size); err != nil || size == 0 || size > maximum || uint64(size) > uint64(r.Len()) {
+		return nil, fmt.Errorf("%w: invalid public material length", ErrWrongKeyID)
+	}
+	part := make([]byte, size)
+	if _, err := io.ReadFull(r, part); err != nil {
+		return nil, fmt.Errorf("%w: truncated public material", ErrWrongKeyID)
+	}
+	return part, nil
+}
+
+func (c *ExternalClient) KeyID() string { return c.engine.keyID }
+
+func (c *ExternalClient) KeyIDBytes() [32]byte { return c.engine.keyIDBytes }
+
+func (c *ExternalClient) ParameterFingerprint() [32]byte {
+	return c.engine.parameterFingerprint
+}
+
+func (c *ExternalClient) EncryptPledge(input PlainPledge) (*CipherPledge, EncryptionMetrics, error) {
+	return c.EncryptPledgeForMode(input, IdentityPublicCommitment)
+}
+
+func (c *ExternalClient) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*CipherPledge, EncryptionMetrics, error) {
+	if c == nil || c.engine.encoder == nil || c.engine.encryptor == nil {
+		return nil, EncryptionMetrics{}, ErrWrongKeyID
+	}
+	return c.engine.encryptPledgeForMode(input, mode)
+}
+
+// SubmitterAuthorizationCommitment lets an external client/gateway derive the
+// same key-scoped claim commitment embedded in the encrypted pledge without
+// access to evaluator state.
+func (c *ExternalClient) SubmitterAuthorizationCommitment(claim AuthorizationClaim) ([32]byte, error) {
+	if c == nil {
+		return [32]byte{}, ErrWrongKeyID
+	}
+	return enrollmentAuthorizationCommitment(claim, c.engine.keyIDBytes)
+}
+
+// CanonicalInputCommitment is the external-client equivalent of the runtime
+// helper. It derives the provider-neutral Solidity commitment entirely from
+// public material and the signed input context.
+func (c *ExternalClient) CanonicalInputCommitment(pledge *CipherPledge, context InputCommitmentContext) ([32]byte, error) {
+	var zero [32]byte
+	if c == nil || pledge == nil || context.ChainID == (Uint256{}) || context.Vault == ([20]byte{}) || context.PolicyID == zero || context.PolicyVersion != PolicyVersion || context.InputSlot > 1 {
+		return zero, ErrInvalidPlaintext
+	}
+	if pledge.KeyID != c.KeyID() || pledge.ParameterFingerprint != c.ParameterFingerprint() {
+		return zero, ErrWrongKeyID
+	}
+	if pledge.AuthorizationCommitment == zero {
+		return zero, ErrUnauthorizedIngress
+	}
+	if pledge.ReceivableIDBits == nil && pledge.ReceivableCommitment == zero {
+		return zero, ErrMalformedPledge
+	}
+	if pledge.ReceivableIDBits != nil && pledge.ReceivableCommitment != zero {
+		return zero, ErrMalformedPledge
+	}
+	digest, err := cipherPledgeDigestBytes(pledge)
+	if err != nil {
+		return zero, err
+	}
+	return canonicalInputCommitmentWords(
+		context.ChainID,
+		context.Vault,
+		context.PolicyID,
+		context.PolicyVersion,
+		c.KeyIDBytes(),
+		context.InputSlot,
+		digest,
+		pledge.AuthorizationCommitment,
+		pledge.ReceivableCommitment,
+		context.ClientNonce,
+	), nil
+}

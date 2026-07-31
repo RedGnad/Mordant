@@ -24,6 +24,7 @@ import {
   RESULT_SCHEMA_VERSION,
   ZERO_BYTES32,
   computeAttestationDigest,
+  computeProviderProofCommitment,
   computeResultCommitment,
   computeResultDigest,
 } from "../shared/scripts/canonical.mjs";
@@ -48,8 +49,8 @@ const HEX_32 = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
 export const PROVIDER_OUTPUT_SCHEMA_VERSION = "mordant.fhe-provider-output/1";
-export const PROVIDER_PROOF_SCHEMA_VERSION = "mordant.fhe-provider-proof/0";
-export const WORKFLOW_METRICS_SCHEMA_VERSION = "mordant.fhe-adapter-workflow-metrics/1";
+export const PROVIDER_PROOF_SCHEMA_VERSION = "mordant.fhe-provider-proof/1";
+export const WORKFLOW_METRICS_SCHEMA_VERSION = "mordant.fhe-adapter-workflow-metrics/2";
 
 const RESULT_KEYS = [
   "schemaVersion",
@@ -64,9 +65,18 @@ const RESULT_KEYS = [
   "cureDeadline",
   "nonce",
   "validUntil",
+  "providerProofCommitment",
   "resultCommitment",
 ];
-const PROVIDER_PROOF_KEYS = ["schemaVersion", "transcriptCommitment"];
+const PROVIDER_PROOF_KEYS = [
+  "schemaVersion",
+  "resultCiphertextCommitment",
+  "thresholdTranscriptCommitment",
+  "thresholdSessionId",
+  "thresholdKeyCommitment",
+  "policyCircuitCommitment",
+  "providerProofCommitment",
+];
 
 export class WorkflowError extends Error {
   constructor(code) {
@@ -145,26 +155,28 @@ async function loadJson(path, code) {
 export async function loadFixtureProviderOutput() {
   const manifest = asObject(await loadJson(MANIFEST_PATH, "MANIFEST_INVALID"), "MANIFEST_INVALID");
   const canonical = asObject(
-    asObject(manifest.canonicalEncodingVector, "MANIFEST_INVALID").result,
+    asObject(manifest.canonicalEncodingVector, "MANIFEST_INVALID"),
     "MANIFEST_INVALID",
   );
   return {
     schemaVersion: PROVIDER_OUTPUT_SCHEMA_VERSION,
     ok: true,
-    result: canonical,
+    result: asObject(canonical.result, "MANIFEST_INVALID"),
+    providerProof: asObject(canonical.providerProof, "MANIFEST_INVALID"),
   };
 }
 
 /**
  * Accepts only the provider-neutral public success envelope. This boundary is deliberately
  * fail-closed: provider errors, missing fields, unknown fields, and private payloads are rejected
- * before Anvil starts. `providerProof` is an optional, strictly shaped transcript reference until
- * the Lattigo runner's final proof format is frozen; it is not yet bound into the attestation.
+ * before Anvil starts. `providerProof` is mandatory and its domain-separated commitment is bound
+ * into both the result commitment and the EIP-712 attestation. This binds endorsed evidence; it
+ * does not independently prove that the FHE computation was correct.
  */
 export function normalizeProviderOutput(candidate) {
   const input = asObject(candidate, "INPUT_OBJECT");
   if (input.ok === false) fail("INPUT_PROVIDER_FAILED");
-  exactKeys(input, ["schemaVersion", "ok", "result"], "INPUT_FIELDS", ["providerProof"]);
+  exactKeys(input, ["schemaVersion", "ok", "result", "providerProof"], "INPUT_FIELDS");
   if (input.schemaVersion !== PROVIDER_OUTPUT_SCHEMA_VERSION) fail("INPUT_SCHEMA_VERSION");
   if (input.ok !== true) fail("INPUT_SUCCESS_BOOL");
 
@@ -203,6 +215,10 @@ export function normalizeProviderOutput(candidate) {
     cureDeadline,
     nonce: asUintString(suppliedResult.nonce, UINT256_MAX, "INPUT_NONCE"),
     validUntil: asUintString(suppliedResult.validUntil, UINT64_MAX, "INPUT_VALID_UNTIL"),
+    providerProofCommitment: asBytes32(
+      suppliedResult.providerProofCommitment,
+      "INPUT_PROVIDER_PROOF_COMMITMENT",
+    ),
     resultCommitment: asBytes32(
       suppliedResult.resultCommitment,
       "INPUT_RESULT_COMMITMENT",
@@ -212,20 +228,53 @@ export function normalizeProviderOutput(candidate) {
     fail("INPUT_RESULT_COMMITMENT_MISMATCH");
   }
 
-  let providerProof;
-  if (input.providerProof !== undefined) {
-    const suppliedProof = asObject(input.providerProof, "INPUT_PROVIDER_PROOF_OBJECT");
-    exactKeys(suppliedProof, PROVIDER_PROOF_KEYS, "INPUT_PROVIDER_PROOF_FIELDS");
-    if (suppliedProof.schemaVersion !== PROVIDER_PROOF_SCHEMA_VERSION) {
-      fail("INPUT_PROVIDER_PROOF_SCHEMA_VERSION");
-    }
-    providerProof = {
-      schemaVersion: PROVIDER_PROOF_SCHEMA_VERSION,
-      transcriptCommitment: asBytes32(
-        suppliedProof.transcriptCommitment,
-        "INPUT_PROVIDER_PROOF_COMMITMENT",
-      ),
-    };
+  const suppliedProof = asObject(input.providerProof, "INPUT_PROVIDER_PROOF_OBJECT");
+  exactKeys(suppliedProof, PROVIDER_PROOF_KEYS, "INPUT_PROVIDER_PROOF_FIELDS");
+  if (suppliedProof.schemaVersion !== PROVIDER_PROOF_SCHEMA_VERSION) {
+    fail("INPUT_PROVIDER_PROOF_SCHEMA_VERSION");
+  }
+  const providerProof = {
+    schemaVersion: PROVIDER_PROOF_SCHEMA_VERSION,
+    resultCiphertextCommitment: asBytes32(
+      suppliedProof.resultCiphertextCommitment,
+      "INPUT_RESULT_CIPHERTEXT_COMMITMENT",
+    ),
+    thresholdTranscriptCommitment: asBytes32(
+      suppliedProof.thresholdTranscriptCommitment,
+      "INPUT_THRESHOLD_TRANSCRIPT_COMMITMENT",
+    ),
+    thresholdSessionId: asBytes32(
+      suppliedProof.thresholdSessionId,
+      "INPUT_THRESHOLD_SESSION_ID",
+    ),
+    thresholdKeyCommitment: asBytes32(
+      suppliedProof.thresholdKeyCommitment,
+      "INPUT_THRESHOLD_KEY_COMMITMENT",
+    ),
+    policyCircuitCommitment: asBytes32(
+      suppliedProof.policyCircuitCommitment,
+      "INPUT_POLICY_CIRCUIT_COMMITMENT",
+    ),
+    providerProofCommitment: asBytes32(
+      suppliedProof.providerProofCommitment,
+      "INPUT_PROVIDER_PROOF_COMMITMENT",
+    ),
+  };
+  for (const [field, value] of Object.entries(providerProof)) {
+    if (field !== "schemaVersion" && value === ZERO_BYTES32) fail("INPUT_PROVIDER_PROOF_ZERO");
+  }
+  const computedProof = computeProviderProofCommitment({
+    resultCiphertextCommitment: providerProof.resultCiphertextCommitment,
+    thresholdTranscriptCommitment: providerProof.thresholdTranscriptCommitment,
+    thresholdSessionId: providerProof.thresholdSessionId,
+    thresholdKeyCommitment: providerProof.thresholdKeyCommitment,
+    policyCircuitCommitment: providerProof.policyCircuitCommitment,
+  });
+  if (
+    computedProof !== providerProof.providerProofCommitment ||
+    computedProof !== result.providerProofCommitment
+  ) {
+    fail("INPUT_PROVIDER_PROOF_MISMATCH");
   }
 
   return { result, providerProof };
@@ -366,6 +415,7 @@ function contractResult(result) {
     cureDeadline: BigInt(result.cureDeadline),
     nonce: BigInt(result.nonce),
     validUntil: BigInt(result.validUntil),
+    providerProofCommitment: result.providerProofCommitment,
     resultCommitment: result.resultCommitment,
   };
 }
@@ -428,6 +478,7 @@ function assertAcceptance({ logs, verifier, result, replayConsumed, decisionCons
   const event = accepted[0].args;
   if (
     event.resultCommitment !== result.resultCommitment ||
+    event.providerProofCommitment !== result.providerProofCommitment ||
     event.policyId !== result.policyId ||
     event.vault.toLowerCase() !== result.vault ||
     event.policyVersion !== Number(result.policyVersion) ||
@@ -604,6 +655,7 @@ export async function runWorkflow({
       chainId: String(CHAIN_ID),
       result: {
         conflictConfirmed: result.conflictConfirmed,
+        providerProofCommitment: result.providerProofCommitment,
         resultCommitment: result.resultCommitment,
       },
       receipt: {
@@ -628,9 +680,10 @@ export async function runWorkflow({
         replayStateConsumed: true,
         decisionStateConsumed: true,
         secondAcceptanceRejected: true,
-        providerProofRequired: false,
-        providerProofSupplied: normalizedInput.providerProof !== undefined,
-        providerProofBoundToAttestation: false,
+        providerProofRequired: true,
+        providerProofSupplied: true,
+        providerProofBoundToAttestation: true,
+        providerProofProvesCorrectComputation: false,
       },
       metrics: {
         calldataBytes: calldataBytes(acceptCalldata),

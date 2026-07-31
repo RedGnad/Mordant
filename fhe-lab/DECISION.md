@@ -7,6 +7,17 @@
 > or production authorization. A successful compile or a single-key demo would not have closed
 > this gate.
 
+## HARDENING ADDENDUM — SAME BOUNDED VERDICT
+
+The follow-up pass closes four integration gaps from the evidence snapshot without widening the
+policy: public-only external encryption plus signed enrollment, a TLS-1.3/mTLS one-operator process
+with durable one-shot state, an exact c1 protocol-consumption guard, and schema-2 provider-proof
+binding through the result commitment and EIP-712 attestation. The current implementation and its
+remaining limits are specified in [`HARDENING.md`](./HARDENING.md).
+
+The verdict does not become production approval. Setup custody is still controlled, issuer trust is
+local, correct computation is endorsed rather than proven, and no Monad transaction was performed.
+
 ## PRIMARY CANDIDATE
 
 **OpenFHE 1.5.1** was evaluated first, as required.
@@ -103,6 +114,7 @@ Receivable identity choices:
 Only the following provider-neutral result may reach Monad:
 
 ```text
+chainId
 vault
 policyId
 policyVersion
@@ -113,11 +125,12 @@ responsibleRole
 cureDeadline
 nonce
 validUntil
+providerProofCommitment
 resultCommitment
 ```
 
 The signed EIP-712 message additionally binds `chainId` and the deployed verifier contract through
-the domain `Mordant Confidential Policy`, version `1`. The adapter recomputes the result commitment;
+the domain `Mordant Confidential Policy`, version `2`. The adapter recomputes the result commitment;
 validators never sign a generic `conflict = true` statement. A false result requires a zero role and
 zero cure deadline.
 
@@ -266,12 +279,12 @@ The standalone adapter must prove through tests and measurements:
 - chain, verifier, vault, policy version, expiry, validator-set ID, quorum, sorting, uniqueness, and
   revocation are enforced;
 - result mutation and cross-deployment replay fail;
-- Foundry tests: **21 / 21 passed**;
+- Foundry tests: **26 / 26 passed**;
 - controlled local workflow tests: **10 / 10 passed**, including fail-closed provider errors,
   strict rejection of unknown/private fields, commitment mismatch, and a second acceptance attempt
   reverted on the same Anvil state;
-- two-signature attestation calldata: **868 bytes**;
-- successful `acceptResult` median in the local Foundry gas report: **153,324 gas**;
+- two-signature attestation calldata: **900 bytes**;
+- successful schema-2 `acceptResult` in the local Foundry gas report: **182,796 gas**;
 - local result-to-accept latency: **158.5 ms initially and 63.846 ms on the final validation run**;
 - complete fresh Go worker through local adapter acceptance and replay check: **13.93 seconds wall
   clock**;
@@ -531,7 +544,7 @@ Measured evidence closing this bounded decision:
   sizes, FHE-envelope bytes, and peak Go heap for both identity modes;
 - process RSS, raw per-run samples, complete distributed transport bandwidth, and Monad-testnet
   latency were **not measured** and are not claimed;
-- Foundry verifier evidence: **21 / 21 tests; 153,324 gas successful-call median; 868-byte
+- Foundry verifier evidence: **26 / 26 tests; 182,796 gas schema-2 successful call; 900-byte
   two-signature calldata; replay, equivocation, expiry, monotone policy version, validator-set
   rotation, and revocation covered**;
 - controlled workflow evidence: **10 / 10 tests**, real Go provider output accepted once on local
@@ -545,12 +558,13 @@ Measured evidence closing this bounded decision:
 
 Open integration gaps:
 
-- external clients cannot yet cross the process-local issued-ciphertext registry;
-- issuer signatures and a real revocation source are absent;
-- all three threshold shares remain co-located;
-- one-shot and replay state are volatile;
-- `providerProofBoundToAttestation` is false: the quorum authenticates the result but does not prove
-  the FHE computation or bind a threshold transcript;
+- external clients can cross a signed canonical enrollment boundary, but issuer trust/revocation is
+  not yet a durable organization service and the issuer signature is not a ciphertext
+  well-formedness proof;
+- operator processes and durable c1-bound one-shot state are implemented, but initial share
+  provisioning is still co-located and no distributed DKG/KMS custody ceremony exists;
+- `providerProofBoundToAttestation` is true for schema 2, but the quorum authenticates committed
+  threshold evidence rather than proving the FHE computation correct;
 - `PrivateMetadataCommitment` is opaque but does not yet have a canonical field encoding proving
   coverage of pledge nonce/deadline, identities, and signature;
 - noise/failure bounds, sigma-flooding assumptions, independent cryptographic review, raw samples,

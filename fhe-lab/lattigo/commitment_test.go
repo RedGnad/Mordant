@@ -53,25 +53,44 @@ func TestCanonicalInputCommitmentBindsSlotAndCiphertext(t *testing.T) {
 
 func TestResultCommitmentMatchesSharedViemVector(t *testing.T) {
 	result := PublicPolicyResultCore{
-		ChainID:           Uint256{0, 0, 0, 31_337},
-		Vault:             filled20(0x11),
-		PolicyID:          decode32(t, "bd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540"),
-		PolicyVersion:     1,
-		InputCommitmentA:  decode32(t, "82118156ab9ee2b2c4f500e0ef4ce6e1dd35ebad13421fd5f4ccb78b941f6725"),
-		InputCommitmentB:  decode32(t, "9dc2a7820edf7ac4700c85d114c655081bd799e9104de27e2fff0de7092a07fb"),
-		ConflictConfirmed: true,
-		ResponsibleRole:   decode32(t, "e4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674"),
-		CureDeadline:      2_000_003_600,
-		Nonce:             Uint256{0, 0, 0, 7},
-		ValidUntil:        2_000_000_300,
+		ChainID:                 Uint256{0, 0, 0, 31_337},
+		Vault:                   filled20(0x11),
+		PolicyID:                decode32(t, "bd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540"),
+		PolicyVersion:           1,
+		InputCommitmentA:        decode32(t, "82118156ab9ee2b2c4f500e0ef4ce6e1dd35ebad13421fd5f4ccb78b941f6725"),
+		InputCommitmentB:        decode32(t, "9dc2a7820edf7ac4700c85d114c655081bd799e9104de27e2fff0de7092a07fb"),
+		ConflictConfirmed:       true,
+		ResponsibleRole:         decode32(t, "e4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674"),
+		CureDeadline:            2_000_003_600,
+		Nonce:                   Uint256{0, 0, 0, 7},
+		ValidUntil:              2_000_000_300,
+		ProviderProofCommitment: decode32(t, "af499d1fbecbe6f8582ae6a77073eefc800f5087a53e00d2df9b7dbe5f917e76"),
 	}
 	observed, err := ResultCommitment(result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := decode32(t, "5bb7f768cc7fd197475701d1d8385bd15cac6b6b7dc1f655956c801798355477")
+	expected := decode32(t, "ecfea1abebee6c34d75d1803d63de9295e3eeb0cfa4aff1285e7c731fb221f13")
 	if observed != expected {
 		t.Fatalf("result commitment mismatch: observed=%x expected=%x", observed, expected)
+	}
+}
+
+func TestProviderProofCommitmentMatchesSharedViemVector(t *testing.T) {
+	proof := ProviderProof{
+		ResultCiphertextCommitment:    filled32(0x11),
+		ThresholdTranscriptCommitment: filled32(0x22),
+		ThresholdSessionID:            filled32(0x33),
+		ThresholdKeyCommitment:        filled32(0x44),
+		PolicyCircuitCommitment:       filled32(0x55),
+	}
+	observed, err := ProviderProofCommitment(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := decode32(t, "af499d1fbecbe6f8582ae6a77073eefc800f5087a53e00d2df9b7dbe5f917e76")
+	if observed != expected {
+		t.Fatalf("provider proof commitment mismatch: observed=%x expected=%x", observed, expected)
 	}
 }
 

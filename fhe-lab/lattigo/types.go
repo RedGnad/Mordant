@@ -28,6 +28,11 @@ var (
 	ErrInsufficientShare   = errors.New("insufficient threshold shares")
 	ErrUnauthorizedIngress = errors.New("unauthorized ingress commitment")
 	ErrCiphertextNotIssued = errors.New("ciphertext origin not proven")
+	ErrMalformedEnrollment = errors.New("malformed ciphertext enrollment")
+	ErrUnknownIssuer       = errors.New("unknown enrollment issuer")
+	ErrRevokedIssuer       = errors.New("revoked enrollment issuer")
+	ErrInvalidSignature    = errors.New("invalid enrollment signature")
+	ErrEnrollmentReplay    = errors.New("ciphertext enrollment already used")
 )
 
 type IdentityMode string
@@ -81,6 +86,12 @@ type EvaluationRequest struct {
 	IdentityMode  IdentityMode
 	A             *CipherPledge
 	B             *CipherPledge
+	// EnrollmentA and EnrollmentB form the external-client boundary. They must
+	// either both be present or both be absent. When present, the evaluator
+	// verifies their issuer signatures and exact binding to A and B instead of
+	// trusting the process-local lab issuance registry.
+	EnrollmentA *SignedCiphertextEnrollment
+	EnrollmentB *SignedCiphertextEnrollment
 }
 
 // InputCommitmentContext contains the public, provider-independent fields

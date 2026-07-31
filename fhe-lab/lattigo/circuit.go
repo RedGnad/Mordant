@@ -24,6 +24,44 @@ func (r *Runtime) EncryptPledge(input PlainPledge) (*CipherPledge, EncryptionMet
 }
 
 func (r *Runtime) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*CipherPledge, EncryptionMetrics, error) {
+	pledge, metrics, err := r.clientEncryptionEngine().encryptPledgeForMode(input, mode)
+	if err != nil {
+		return nil, metrics, err
+	}
+	issuedDigest, err := cipherPledgeDigestBytes(pledge)
+	if err != nil {
+		return nil, metrics, err
+	}
+	// This registry remains available only for the co-located lab path. An
+	// external client cannot write it; external evaluation requires an issuer-
+	// signed enrollment that binds the exact ciphertext digest instead.
+	r.issuedMu.Lock()
+	r.issuedCiphertexts[issuedDigest] = struct{}{}
+	r.issuedMu.Unlock()
+	return pledge, metrics, nil
+}
+
+type clientEncryptionEngine struct {
+	params               bgv.Parameters
+	encoder              *bgv.Encoder
+	encryptor            *rlwe.Encryptor
+	keyID                string
+	keyIDBytes           [32]byte
+	parameterFingerprint [32]byte
+}
+
+func (r *Runtime) clientEncryptionEngine() clientEncryptionEngine {
+	return clientEncryptionEngine{
+		params:               r.Params,
+		encoder:              r.Encoder,
+		encryptor:            r.Encryptor,
+		keyID:                r.keyID,
+		keyIDBytes:           r.keyIDBytes,
+		parameterFingerprint: r.parameterFingerprint,
+	}
+}
+
+func (e clientEncryptionEngine) encryptPledgeForMode(input PlainPledge, mode IdentityMode) (*CipherPledge, EncryptionMetrics, error) {
 	metrics := EncryptionMetrics{}
 	if err := validatePlainPledge(input, mode); err != nil {
 		return nil, metrics, err
@@ -32,44 +70,44 @@ func (r *Runtime) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*C
 		return nil, metrics, ErrInvalidPlaintext
 	}
 
-	policy := make([]uint64, r.Params.MaxSlots())
+	policy := make([]uint64, e.params.MaxSlots())
 	writeUint64Bits(policy, fromStart, input.ActiveFrom)
 	writeUint64Bits(policy, untilStart, input.ActiveUntil)
 	policy[exclusiveSlot] = boolToUint64(input.Exclusive)
-	currency := make([]uint64, r.Params.MaxSlots())
+	currency := make([]uint64, e.params.MaxSlots())
 	writeBytesBits(currency, 0, input.Currency[:])
 
-	amount := make([]uint64, r.Params.MaxSlots())
+	amount := make([]uint64, e.params.MaxSlots())
 	writeUint256Bits(amount, 0, input.Amount)
 
-	obligation := make([]uint64, r.Params.MaxSlots())
+	obligation := make([]uint64, e.params.MaxSlots())
 	writeBytesBits(obligation, 0, input.ObligationID[:])
-	receivableID := make([]uint64, r.Params.MaxSlots())
+	receivableID := make([]uint64, e.params.MaxSlots())
 	writeBytesBits(receivableID, 0, input.ReceivableID[:])
 
 	started := time.Now()
 	phase := time.Now()
-	policyCT, err := r.encryptVector(policy)
+	policyCT, err := e.encryptVector(policy)
 	if err != nil {
 		return nil, metrics, err
 	}
 	metrics.PolicyBits = time.Since(phase)
 	phase = time.Now()
-	currencyCT, err := r.encryptVector(currency)
+	currencyCT, err := e.encryptVector(currency)
 	if err != nil {
 		return nil, metrics, err
 	}
 	metrics.CurrencyBits = time.Since(phase)
 
 	phase = time.Now()
-	amountCT, err := r.encryptVector(amount)
+	amountCT, err := e.encryptVector(amount)
 	if err != nil {
 		return nil, metrics, err
 	}
 	metrics.AmountBits = time.Since(phase)
 
 	phase = time.Now()
-	obligationCT, err := r.encryptVector(obligation)
+	obligationCT, err := e.encryptVector(obligation)
 	if err != nil {
 		return nil, metrics, err
 	}
@@ -78,7 +116,7 @@ func (r *Runtime) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*C
 	var receivableIDCT *rlwe.Ciphertext
 	if mode == IdentityFullFHE256 {
 		phase = time.Now()
-		if receivableIDCT, err = r.encryptVector(receivableID); err != nil {
+		if receivableIDCT, err = e.encryptVector(receivableID); err != nil {
 			return nil, metrics, err
 		}
 		metrics.ReceivableIdentityBits = time.Since(phase)
@@ -87,8 +125,8 @@ func (r *Runtime) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*C
 	metrics.Total = time.Since(started)
 
 	pledge := &CipherPledge{
-		KeyID:                     r.keyID,
-		ParameterFingerprint:      r.parameterFingerprint,
+		KeyID:                     e.keyID,
+		ParameterFingerprint:      e.parameterFingerprint,
 		ReceivableCommitment:      input.ReceivableCommitment,
 		AuthorizationCommitment:   input.AuthorizationCommitment,
 		PrivateMetadataCommitment: input.PrivateMetadataCommitment,
@@ -117,13 +155,6 @@ func (r *Runtime) EncryptPledgeForMode(input PlainPledge, mode IdentityMode) (*C
 		return nil, metrics, err
 	}
 	metrics.Digest = digest
-	issuedDigest, err := cipherPledgeDigestBytes(roundTripped)
-	if err != nil {
-		return nil, metrics, err
-	}
-	r.issuedMu.Lock()
-	r.issuedCiphertexts[issuedDigest] = struct{}{}
-	r.issuedMu.Unlock()
 	return roundTripped, metrics, nil
 }
 
@@ -141,12 +172,12 @@ func validatePlainPledge(p PlainPledge, mode IdentityMode) error {
 	return nil
 }
 
-func (r *Runtime) encryptVector(values []uint64) (*rlwe.Ciphertext, error) {
-	plaintext := bgv.NewPlaintext(r.Params, r.Params.MaxLevel())
-	if err := r.Encoder.Encode(values, plaintext); err != nil {
+func (e clientEncryptionEngine) encryptVector(values []uint64) (*rlwe.Ciphertext, error) {
+	plaintext := bgv.NewPlaintext(e.params, e.params.MaxLevel())
+	if err := e.encoder.Encode(values, plaintext); err != nil {
 		return nil, fmt.Errorf("encode encrypted input: %w", err)
 	}
-	ciphertext, err := r.Encryptor.EncryptNew(plaintext)
+	ciphertext, err := e.encryptor.EncryptNew(plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt input: %w", err)
 	}
@@ -178,10 +209,11 @@ func (r *Runtime) Evaluate(request EvaluationRequest, now time.Time) (*Encrypted
 		MultiplicativeDepth:      policyDepth,
 		StrictComparisonsInBatch: 2,
 	}
-	if err := r.validateRequest(request, now); err != nil {
+	enrollmentIDs, err := r.validateRequest(request, now)
+	if err != nil {
 		return nil, metrics, err
 	}
-	if err := r.reserveNonce(request.Nonce); err != nil {
+	if err := r.reserveRequest(request.Nonce, enrollmentIDs); err != nil {
 		return nil, metrics, err
 	}
 	started := time.Now()
@@ -302,61 +334,71 @@ func ciphertextCommitment(ciphertext *rlwe.Ciphertext) ([32]byte, error) {
 	return commitment, nil
 }
 
-func (r *Runtime) validateRequest(request EvaluationRequest, now time.Time) error {
+func (r *Runtime) validateRequest(request EvaluationRequest, now time.Time) ([][32]byte, error) {
 	if request.KeyID != r.keyID {
-		return ErrWrongKeyID
+		return nil, ErrWrongKeyID
 	}
 	if request.PolicyVersion != PolicyVersion {
-		return ErrWrongPolicy
+		return nil, ErrWrongPolicy
 	}
 	if now.After(request.ValidUntil) {
-		return ErrExpired
+		return nil, ErrExpired
 	}
 	if request.Nonce == ([32]byte{}) {
-		return ErrReplay
+		return nil, ErrReplay
 	}
 	if err := validateCipherPledge(request.A); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateCipherPledge(request.B); err != nil {
-		return err
+		return nil, err
 	}
 	if request.A.KeyID != r.keyID || request.B.KeyID != r.keyID || request.A.ParameterFingerprint != r.parameterFingerprint || request.B.ParameterFingerprint != r.parameterFingerprint {
-		return ErrWrongKeyID
+		return nil, ErrWrongKeyID
 	}
 	if request.IdentityMode != IdentityPublicCommitment && request.IdentityMode != IdentityFullFHE256 {
-		return ErrWrongPolicy
+		return nil, ErrWrongPolicy
 	}
 	if request.IdentityMode == IdentityFullFHE256 && (request.A.ReceivableIDBits == nil || request.B.ReceivableIDBits == nil) {
-		return fmt.Errorf("%w: missing encrypted receivable identity", ErrMalformedPledge)
+		return nil, fmt.Errorf("%w: missing encrypted receivable identity", ErrMalformedPledge)
 	}
 	zero := [32]byte{}
 	if request.IdentityMode == IdentityPublicCommitment && (request.A.ReceivableCommitment == zero || request.B.ReceivableCommitment == zero) {
-		return fmt.Errorf("%w: missing public receivable commitment", ErrMalformedPledge)
+		return nil, fmt.Errorf("%w: missing public receivable commitment", ErrMalformedPledge)
 	}
 	if request.IdentityMode == IdentityFullFHE256 && (request.A.ReceivableCommitment != zero || request.B.ReceivableCommitment != zero) {
-		return fmt.Errorf("%w: full-FHE identity leaks public linkage", ErrMalformedPledge)
+		return nil, fmt.Errorf("%w: full-FHE identity leaks public linkage", ErrMalformedPledge)
 	}
-	r.authorizationMu.RLock()
-	grantA, authorizedA := r.authorizedIngress[request.A.AuthorizationCommitment]
-	grantB, authorizedB := r.authorizedIngress[request.B.AuthorizationCommitment]
-	r.authorizationMu.RUnlock()
-	if !authorizedA || !authorizedB ||
-		grantA.keyID != r.keyID || grantB.keyID != r.keyID ||
-		grantA.policyVersion != request.PolicyVersion || grantB.policyVersion != request.PolicyVersion ||
-		now.After(grantA.validUntil) || now.After(grantB.validUntil) {
-		return ErrUnauthorizedIngress
+
+	enrollmentIDs, err := r.externalEnrollmentIDs(request, now)
+	if err != nil {
+		return nil, err
 	}
-	for _, pledge := range []*CipherPledge{request.A, request.B} {
-		digest, err := cipherPledgeDigestBytes(pledge)
-		if err != nil {
-			return ErrMalformedPledge
+	if len(enrollmentIDs) == 0 {
+		// Explicit compatibility path for the co-located benchmark/workflow. It
+		// remains fail-closed: both a local grant and local ciphertext issuance
+		// are required. External callers cannot populate either registry.
+		r.authorizationMu.RLock()
+		grantA, authorizedA := r.authorizedIngress[request.A.AuthorizationCommitment]
+		grantB, authorizedB := r.authorizedIngress[request.B.AuthorizationCommitment]
+		r.authorizationMu.RUnlock()
+		if !authorizedA || !authorizedB ||
+			grantA.keyID != r.keyID || grantB.keyID != r.keyID ||
+			grantA.policyVersion != request.PolicyVersion || grantB.policyVersion != request.PolicyVersion ||
+			now.After(grantA.validUntil) || now.After(grantB.validUntil) {
+			return nil, ErrUnauthorizedIngress
 		}
-		r.issuedMu.RLock()
-		_, issued := r.issuedCiphertexts[digest]
-		r.issuedMu.RUnlock()
-		if !issued {
-			return ErrCiphertextNotIssued
+		for _, pledge := range []*CipherPledge{request.A, request.B} {
+			digest, err := cipherPledgeDigestBytes(pledge)
+			if err != nil {
+				return nil, ErrMalformedPledge
+			}
+			r.issuedMu.RLock()
+			_, issued := r.issuedCiphertexts[digest]
+			r.issuedMu.RUnlock()
+			if !issued {
+				return nil, ErrCiphertextNotIssued
+			}
 		}
 	}
 	cts := []*rlwe.Ciphertext{
@@ -370,20 +412,10 @@ func (r *Runtime) validateRequest(request EvaluationRequest, now time.Time) erro
 	}
 	for _, ct := range cts {
 		if ct.Level() < policyDepth || ct.Level() > r.Params.MaxLevel() || len(ct.Value) != 2 || ct.Value[0].N() != r.Params.N() || ct.Value[1].N() != r.Params.N() {
-			return fmt.Errorf("%w: insufficient ciphertext level", ErrMalformedPledge)
+			return nil, fmt.Errorf("%w: insufficient ciphertext level", ErrMalformedPledge)
 		}
 	}
-	return nil
-}
-
-func (r *Runtime) reserveNonce(nonce [32]byte) error {
-	r.nonceMu.Lock()
-	defer r.nonceMu.Unlock()
-	if _, exists := r.usedNonce[nonce]; exists {
-		return ErrReplay
-	}
-	r.usedNonce[nonce] = struct{}{}
-	return nil
+	return enrollmentIDs, nil
 }
 
 func (r *Runtime) comparisonLayout(a, b *rlwe.Ciphertext) (*rlwe.Ciphertext, *rlwe.Ciphertext, error) {

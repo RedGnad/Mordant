@@ -37,8 +37,17 @@
     "forbidDebugInputEcho": true
   },
   "canonicalEncodingVector": {
+    "providerProof": {
+      "schemaVersion": "mordant.fhe-provider-proof/1",
+      "resultCiphertextCommitment": "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "thresholdTranscriptCommitment": "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "thresholdSessionId": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "thresholdKeyCommitment": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "policyCircuitCommitment": "0x5555555555555555555555555555555555555555555555555555555555555555",
+      "providerProofCommitment": "0xaf499d1fbecbe6f8582ae6a77073eefc800f5087a53e00d2df9b7dbe5f917e76"
+    },
     "result": {
-      "schemaVersion": "mordant.confidential-policy-result/1",
+      "schemaVersion": "mordant.confidential-policy-result/2",
       "chainId": "31337",
       "vault": "0x1111111111111111111111111111111111111111",
       "policyId": "0xbd26a38240747b4fb4363d5edc5d5f8d6729d1024aa343bc6115ca20013a8540",
@@ -50,10 +59,11 @@
       "cureDeadline": "2000003600",
       "nonce": "7",
       "validUntil": "2000000300",
-      "resultCommitment": "0x5bb7f768cc7fd197475701d1d8385bd15cac6b6b7dc1f655956c801798355477"
+      "providerProofCommitment": "0xaf499d1fbecbe6f8582ae6a77073eefc800f5087a53e00d2df9b7dbe5f917e76",
+      "resultCommitment": "0xecfea1abebee6c34d75d1803d63de9295e3eeb0cfa4aff1285e7c731fb221f13"
     },
-    "resultDigest": "0xcd13f856c4f2ff740f081bf5b53053402ac2062126528b44ddcf85d852607522",
-    "attestationDigest": "0xd747842b8f953d54d4ad4ca50b7d3c812ebfd633db72098f06308425217c840d"
+    "resultDigest": "0x6ecf6a38524d13ffded3029b702c0ef3155908f96139ff3ba363f887923b6230",
+    "attestationDigest": "0x52e12c56e35a7b994dca1ede3e680ec34cbcf6aad95e41026a44a11a689d9972"
   },
   "cases": [
     {

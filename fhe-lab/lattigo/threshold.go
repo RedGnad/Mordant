@@ -49,6 +49,7 @@ type Runtime struct {
 	keyIDBytes           [32]byte
 	parameterFingerprint [32]byte
 	usedNonce            map[[32]byte]struct{}
+	usedEnrollments      map[[32]byte]struct{}
 	nonceMu              sync.Mutex
 	usedDecrypt          map[[32]byte]struct{}
 	decryptMu            sync.Mutex
@@ -56,6 +57,8 @@ type Runtime struct {
 	authorizationMu      sync.RWMutex
 	issuedCiphertexts    map[[32]byte]struct{}
 	issuedMu             sync.RWMutex
+	trustedIssuers       map[[32]byte]issuerRecord
+	issuerMu             sync.RWMutex
 }
 
 func NewRuntime() (*Runtime, SetupMetrics, error) {
@@ -168,9 +171,11 @@ func NewRuntime() (*Runtime, SetupMetrics, error) {
 		keyIDBytes:           keyDigest,
 		parameterFingerprint: parameterFingerprint,
 		usedNonce:            make(map[[32]byte]struct{}),
+		usedEnrollments:      make(map[[32]byte]struct{}),
 		usedDecrypt:          make(map[[32]byte]struct{}),
 		authorizedIngress:    make(map[[32]byte]ingressGrant),
 		issuedCiphertexts:    make(map[[32]byte]struct{}),
+		trustedIssuers:       make(map[[32]byte]issuerRecord),
 	}
 	metrics.Total = time.Since(started)
 	return runtime, metrics, nil
@@ -348,10 +353,11 @@ func (r *Runtime) DecryptThreshold(decision *EncryptedDecision, helperIndex int)
 // model the production trust boundary or transport between organizations.
 //
 // A result ciphertext is terminal after the first decryption attempt. The
-// guard is keyed by the serialized ciphertext commitment rather than the
-// caller-controlled request nonce, so copying a decision under a new nonce
-// cannot create another attempt. The guard is deliberately process-local and
-// must become durable state in an integrated service.
+// guard is keyed by the exact c1 polynomial consumed by Lattigo's collective
+// key-switch protocol, together with the key epoch and a closed protocol kind.
+// Binding the whole ciphertext would be unsafe: c0 is not consumed while a
+// caller could mutate it to obtain another commitment for the same c1. This
+// legacy path remains process-local; network operators use the durable ledger.
 func (r *Runtime) DecryptThresholdWithCoalition(decision *EncryptedDecision, receiverIndex, helperIndex int) (bool, DecryptionMetrics, error) {
 	metrics := DecryptionMetrics{
 		Participants:  2,
@@ -367,17 +373,21 @@ func (r *Runtime) DecryptThresholdWithCoalition(decision *EncryptedDecision, rec
 	if err != nil || commitment != decision.ResultCiphertextCommitment {
 		return false, metrics, ErrMalformedPledge
 	}
+	protocolBinding, err := ProtocolBindingDigest(r.keyIDBytes, ProtocolCollectiveKeySwitchToZero, decision.Conflict)
+	if err != nil {
+		return false, metrics, ErrInvalidProtocolBinding
+	}
 	// Pure preflight failures do not consume the result. Once a valid coalition
 	// begins the protocol, success or failure is terminal for this ciphertext.
 	if receiverIndex < 0 || receiverIndex >= len(r.parties) || helperIndex < 0 || helperIndex >= len(r.parties) || receiverIndex == helperIndex {
 		return false, metrics, ErrInsufficientShare
 	}
 	r.decryptMu.Lock()
-	if _, exists := r.usedDecrypt[commitment]; exists {
+	if _, exists := r.usedDecrypt[protocolBinding]; exists {
 		r.decryptMu.Unlock()
 		return false, metrics, ErrReplay
 	}
-	r.usedDecrypt[commitment] = struct{}{}
+	r.usedDecrypt[protocolBinding] = struct{}{}
 	r.decryptMu.Unlock()
 	receiver := r.parties[receiverIndex]
 	helper := r.parties[helperIndex]

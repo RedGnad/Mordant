@@ -19,6 +19,7 @@ struct ConfidentialPolicyResult {
     uint64 cureDeadline;
     uint256 nonce;
     uint64 validUntil;
+    bytes32 providerProofCommitment;
     bytes32 resultCommitment;
 }
 ```
@@ -109,10 +110,32 @@ The invoice identifier and salt never leave the clients. For full-FHE equality,
 
 ## Result commitment
 
+The mandatory provider-proof commitment is:
+
+```text
+ProviderProofCommitment(bytes32 resultCiphertextCommitment,bytes32 thresholdTranscriptCommitment,bytes32 thresholdSessionId,bytes32 thresholdKeyCommitment,bytes32 policyCircuitCommitment)
+```
+
+```text
+providerProofCommitment = keccak256(
+  abi.encode(
+    PROVIDER_PROOF_COMMITMENT_TYPEHASH,
+    resultCiphertextCommitment,
+    thresholdTranscriptCommitment,
+    thresholdSessionId,
+    thresholdKeyCommitment,
+    policyCircuitCommitment
+  )
+)
+```
+
+Every component and the final commitment must be non-zero. This binds evidence endorsed by the
+validator quorum; it is not by itself a proof of correct FHE computation.
+
 Exact type string:
 
 ```text
-ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil)
+ConfidentialPolicyResultCore(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)
 ```
 
 ```text
@@ -129,7 +152,8 @@ resultCommitment = keccak256(
     responsibleRole,
     cureDeadline,
     nonce,
-    validUntil
+    validUntil,
+    providerProofCommitment
   )
 )
 ```
@@ -140,7 +164,7 @@ Domain:
 
 ```text
 name              = "Mordant Confidential Policy"
-version           = "1"
+version           = "2"
 chainId           = result.chainId
 verifyingContract = deployed IConfidentialPolicyVerifier adapter
 ```
@@ -148,7 +172,7 @@ verifyingContract = deployed IConfidentialPolicyVerifier adapter
 Exact result type string:
 
 ```text
-ConfidentialPolicyResult(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 resultCommitment)
+ConfidentialPolicyResult(uint256 chainId,address vault,bytes32 policyId,uint32 policyVersion,bytes32 inputCommitmentA,bytes32 inputCommitmentB,bool conflictConfirmed,bytes32 responsibleRole,uint64 cureDeadline,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment,bytes32 resultCommitment)
 ```
 
 The verifier recomputes `resultCommitment`, then computes the EIP-712 digest. The explicit chain ID

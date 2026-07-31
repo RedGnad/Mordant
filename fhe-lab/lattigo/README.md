@@ -65,11 +65,12 @@ periods therefore do not overlap. Equality for currency and, in full-FHE mode, r
 is exact over all 256 bits. The final circuit has multiplicative depth 10 for the public-link mode
 and 11 for full-FHE identity equality.
 
-Authorization is deliberately **not** a client-supplied encrypted Boolean. `GrantIngress` models a
-trusted gateway that has accepted an authorization claim and scopes the grant to the active key,
-policy version and expiry. Evaluation rejects a missing, revoked, expired or out-of-scope grant
-before FHE work. The issuer signature verification, revocation feed and organization identity
-system are not implemented here and remain a blocker for an integrated client.
+Authorization is deliberately **not** a client-supplied encrypted Boolean. The original
+`GrantIngress` path remains for circuit fixtures. The integrated path uses an Ed25519 issuer whose
+signed enrollment binds the exact external ciphertext, active key, policy, input context,
+authorization claim, expiry and nonce. Unknown/revoked/expired issuers and enrollment replay fail
+closed. The trust registry is runtime-local; a hosted organization identity and revocation source
+remain future work.
 
 ## Encrypted layout
 
@@ -131,31 +132,32 @@ nonce and expiry before the 2-of-3 ECDSA quorum attests it for the Monad adapter
 ## Threshold behavior
 
 Setup uses Lattigo's Shamir thresholdizer and collective public, relinearization and Galois key
-protocols. Encryption uses the collective public key. Decryption uses a threshold key-switch share
-from one helper into a receiver share. Tests independently decrypt fresh decisions with every
-2-of-3 coalition: `{0,1}`, `{0,2}` and `{1,2}`. A one-party selection is rejected.
+protocols. Encryption uses the collective public key. The hardened release has two selected
+operators independently derive smudged collective key-switch shares toward the zero key; the
+coordinator verifies both signatures, aggregates them, and releases only the Boolean. Tests cover
+every 2-of-3 coalition and reject one party.
 
-All three party shares are currently co-located in one process. This proves the multiparty
-cryptographic math, not organizational separation. There is no network protocol, independent KMS,
-key ceremony, recovery process or availability model in this directory.
+`cmd/threshold-node` imports exactly one operator bundle and serves bounded binary requests behind
+TLS 1.3 mutual authentication. Its bbolt ledger fsyncs `COMMITTED` before crypto, `RELEASED` before
+bytes leave the node, and requires coordinator persistence before `ACKED`. There is no fallback
+coalition after commit. The replay authority is a domain-separated digest of the active key epoch,
+closed protocol kind and canonical `c1` bytes actually consumed by Lattigo; changing `c0`, session
+or coalition cannot reopen a release.
 
-Decryption is one-shot per serialized result-ciphertext commitment, not per caller-controlled
-nonce. Invalid coalition indexes fail in preflight without consuming the result; once a valid
-coalition begins, success or failure is terminal. This replay set is process-local and volatile and
-must become durable, coordinated state in an integrated service.
+The provisioning ceremony is still controlled and co-located. Process separation is implemented;
+independent organizational custody, distributed DKG, KMS sealing, rotation/recovery and an
+availability model are not.
 
 ## Ciphertext-origin boundary
 
-The harness keeps a process-local registry of ciphertext envelope digests created by its encryptor.
-This makes the co-located spike fail closed when a ciphertext from a second runtime is relabeled
-with the active key metadata. It is **not** a proof of correct encryption or a usable separate-client
-architecture.
+`ExternalClient` imports only public parameters and the collective public key and can encrypt in a
+separate process. A strict fixed-width signed enrollment replaces the local issuance registry for
+that path and binds the serialized ciphertext digest, active key, canonical input context and
+authorization claim. Public input commitments are derived from those signed contexts.
 
-An external client cannot currently submit directly. The integrated prototype needs a signed
-gateway envelope or proof of well-formedness that binds the serialized ciphertext digest, active
-key, canonical input context and authorization claim. Until that exists, client/evaluator
-separation and ciphertext correctness remain **NO-GO**. The runtime registry must not be described
-as solving this boundary.
+This establishes an authenticated gateway boundary, not a proof of correct encryption. A dishonest
+authorized issuer can enroll malformed Boolean slots or false source data. A well-formedness proof,
+reviewed issuer policy and durable trust/revocation service remain production gates.
 
 ## Native arm64 benchmark
 
@@ -237,12 +239,13 @@ operational cost.
 
 The exact Mordant policy, exact uint64 overlap comparisons, 2-of-3 threshold decryption, canonical
 provider-neutral output, quorum authentication and Monad adapter are technically compatible within
-the target latency. Lattigo is therefore a credible independent FHE candidate for the vertical
-slice; the circuit itself is not a kill condition.
+the target latency. The hardening pass additionally proves authenticated external enrollment,
+process-deployable share services, durable one-shot state and a threshold-evidence commitment
+carried into the EVM attestation. Lattigo is therefore a credible independent FHE candidate for the
+controlled vertical slice; the circuit itself is not a kill condition.
 
-Production is still **not authorized**. Before calling this a separated-client prototype, Mordant
-needs issuer-backed authorization/revocation, signed ciphertext enrollment or a well-formedness
-proof, independent party processes and keys, durable replay state, transport measurements,
-equivocation handling, key rotation/recovery, audit, and an explicit correctness-attestation
+Production is still **not authorized**. Mordant still needs independent setup custody, a durable
+issuer/revocation system, ciphertext well-formedness assurance, transport/RSS measurements,
+equivocation operations, key rotation/recovery, audit and an explicit correct-computation assurance
 strategy. FHE protects computation over supplied inputs; it does not establish that the underlying
 receivable facts are true.
