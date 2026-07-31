@@ -219,9 +219,11 @@ export class BilateralSession {
     if (!Number.isInteger(Number(governance.committedAt)) || Number(governance.committedAt) <= 0) {
       throw new Error(ProtocolError.COMMITMENT_NOT_PUBLISHED);
     }
-    // One controller alone cannot bring a bilateral comparison into existence.
-    if (!governance.initiationSignatureA || !governance.initiationSignatureB) {
-      throw new Error(ProtocolError.INITIATION_NOT_BILATERAL);
+    // One controller alone cannot bring a bilateral comparison into existence,
+    // and the issuer must have authorized the anchor. All three signatures are
+    // inside the commitment preimage, so they existed before it was published.
+    for (const field of ["initiationSignatureA", "initiationSignatureB", "issuerSignature"]) {
+      if (!governance[field]) throw new Error(`${ProtocolError.INITIATION_NOT_BILATERAL}:${field}`);
     }
     if (governance.initiationSignatureA === governance.initiationSignatureB) {
       throw new Error(`${ProtocolError.INITIATION_NOT_BILATERAL}:identical`);

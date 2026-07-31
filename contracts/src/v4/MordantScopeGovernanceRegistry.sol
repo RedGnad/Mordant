@@ -24,11 +24,28 @@ pragma solidity 0.8.28;
 /// the commitment existed. Authority is therefore frozen in advance and proven
 /// afterwards, without ever being announced in between.
 ///
-/// A session that is committed and never bound leaves one hash and a timestamp.
-/// That is a deliberate, irreducible residue: it shows that some two parties ran
-/// some comparison, and nothing more. It does not identify them, does not link
-/// to any anchor, and does not distinguish a negative result from a declined
-/// disclosure.
+/// The commitment binds the three authorization signatures as well as the intent
+/// fields. Binding the intent alone would prove only that the FIELDS existed
+/// beforehand, leaving room to commit a session and assemble bilateral consent
+/// and issuer authorization for it afterwards. With the signature bundle inside
+/// the preimage, the commitment proves that both controllers and the issuer had
+/// already authorized this exact session when it was published.
+///
+/// PUBLIC METADATA, before binding, is exactly and only:
+///
+///   - the opaque session commitment;
+///   - its timestamp and block number;
+///   - the policy-authorized non-controller relayer address that submitted it.
+///
+/// Not public before binding: participants, scopes, governance records,
+/// controllers, organizations, anchors, asset commitments, input commitments,
+/// permissions, budgets or outcome.
+///
+/// A session that is committed and never bound leaves that metadata and nothing
+/// else. It is a deliberate, irreducible residue: it shows that some two parties
+/// ran some comparison, and nothing more. It does not identify them, does not
+/// link to any anchor, and does not distinguish a negative result from a
+/// declined disclosure.
 contract MordantScopeGovernanceRegistry {
     error Unauthorized(address account);
     error InvalidAuthorization();
@@ -40,7 +57,8 @@ contract MordantScopeGovernanceRegistry {
     error AlreadyHardRevoked(bytes32 recordDigest);
     error ControllerEmergencyRevoked(bytes32 recordDigest, uint64 hardRevokedAt);
     error RecordNotLiveAtCommitment(bytes32 recordDigest, uint64 committedAt);
-    error SubmitterNotNeutral(address submitter);
+    error RelayerNotAuthorized(address submitter);
+    error RelayerIsController(address submitter);
     error CommitmentExists(bytes32 sessionCommitment);
     error UnknownCommitment(bytes32 sessionCommitment);
     error CommitmentConsumed(bytes32 sessionCommitment);
@@ -67,7 +85,7 @@ contract MordantScopeGovernanceRegistry {
     );
     event ScopeRetired(bytes32 indexed recordDigest, uint64 retiredAt);
     event ScopeEmergencyRevoked(bytes32 indexed recordDigest, uint64 hardRevokedAt);
-    event NeutralSubmitterSet(address indexed submitter, bool allowed);
+    event RelayerSet(address indexed relayer, bool allowed);
     event BinderSet(address indexed binder, bool allowed);
 
     /// @dev The only pre-binding artifact. One hash, one timestamp, one block.
@@ -83,7 +101,8 @@ contract MordantScopeGovernanceRegistry {
     );
 
     bytes32 private constant RECORD_DOMAIN = keccak256("mordant.scope-authorization/2");
-    bytes32 private constant COMMITMENT_DOMAIN = keccak256("mordant.bilateral-session-commitment/1");
+    bytes32 private constant COMMITMENT_DOMAIN = keccak256("mordant.bilateral-session-commitment/2");
+    bytes32 private constant SIGNATURE_DOMAIN = keccak256("mordant.session-initiation-signatures/1");
     string internal constant DOMAIN_NAME = "Mordant Bilateral Session Intent";
     string internal constant DOMAIN_VERSION = "1";
 
@@ -199,7 +218,7 @@ contract MordantScopeGovernanceRegistry {
         versionRecord;
     mapping(bytes32 scopeCommitment => mapping(uint256 nonce => bool used)) public consumedNonce;
     mapping(bytes32 sessionCommitment => SessionCommitment) private _commitments;
-    mapping(address submitter => bool allowed) public neutralSubmitter;
+    mapping(address relayer => bool allowed) public authorizedRelayer;
     mapping(address binder => bool allowed) public authorizedBinder;
 
     modifier onlyGovernor() {
@@ -294,10 +313,16 @@ contract MordantScopeGovernanceRegistry {
         emit ScopeEmergencyRevoked(recordDigest, stored.hardRevokedAt);
     }
 
-    function setNeutralSubmitter(address submitter, bool allowed) external onlyGovernor {
-        if (submitter == address(0)) revert InvalidAuthorization();
-        neutralSubmitter[submitter] = allowed;
-        emit NeutralSubmitterSet(submitter, allowed);
+    /// @notice Registers a policy-authorized non-controller relayer.
+    /// @dev "Policy-authorized non-controller", not "neutral": this is an
+    /// allowlist decision by the governor, not a cryptographic or organizational
+    /// guarantee. All it establishes is that the sender of a commitment
+    /// transaction is not, by policy and by the reveal-time check, one of the two
+    /// controllers of that session.
+    function setAuthorizedRelayer(address relayer, bool allowed) external onlyGovernor {
+        if (relayer == address(0)) revert InvalidAuthorization();
+        authorizedRelayer[relayer] = allowed;
+        emit RelayerSet(relayer, allowed);
     }
 
     function setAuthorizedBinder(address binder, bool allowed) external onlyGovernor {
@@ -309,11 +334,16 @@ contract MordantScopeGovernanceRegistry {
     /* ---------------------------------------------------------- commitment */
 
     /// @notice Publishes one opaque bilateral session commitment.
-    /// @dev The submitter must be a neutral relayer. If a participant posted its
-    /// own commitments, the sender address would re-identify one side of every
-    /// session, which is the leak the commitment exists to prevent.
+    /// @dev The relayer receives only this 32-byte value. It never needs the
+    /// intent, the salt or the signatures, and cannot derive them from the
+    /// commitment, so relaying carries no knowledge of the session.
+    ///
+    /// The sender must be a policy-authorized non-controller relayer. If a
+    /// participant posted its own commitments, the sender address would
+    /// re-identify one side of every session, which is the leak the commitment
+    /// exists to prevent.
     function commitSession(bytes32 sessionCommitment) external {
-        if (!neutralSubmitter[msg.sender]) revert SubmitterNotNeutral(msg.sender);
+        if (!authorizedRelayer[msg.sender]) revert RelayerNotAuthorized(msg.sender);
         if (sessionCommitment == bytes32(0)) revert InvalidIntent();
         if (_commitments[sessionCommitment].exists) revert CommitmentExists(sessionCommitment);
         _commitments[sessionCommitment] = SessionCommitment({
@@ -400,14 +430,42 @@ contract MordantScopeGovernanceRegistry {
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), intentHash(intent)));
     }
 
-    /// @notice Recomputed from the preimage. Never asserted by a caller.
-    function sessionCommitmentOf(BilateralSessionIntent calldata intent, bytes32 salt)
+    /// @notice Canonical digest of the three authorization signatures.
+    /// @dev Order is fixed (controller A, controller B, issuer), so swapping two
+    /// signatures produces a different bundle and therefore a different session.
+    function signatureBundleDigest(InitiationSignatures calldata signatures)
         public
-        view
+        pure
         returns (bytes32)
     {
         return keccak256(
-            abi.encode(COMMITMENT_DOMAIN, block.chainid, address(this), intentHash(intent), salt)
+            abi.encode(
+                SIGNATURE_DOMAIN,
+                keccak256(signatures.controllerA),
+                keccak256(signatures.controllerB),
+                keccak256(signatures.issuer)
+            )
+        );
+    }
+
+    /// @notice Recomputed from the preimage. Never asserted by a caller.
+    /// @dev The signature bundle is inside the preimage, so the commitment proves
+    /// that bilateral initiation and issuer authorization already existed when it
+    /// was published, not merely that the intent fields did.
+    function sessionCommitmentOf(
+        BilateralSessionIntent calldata intent,
+        InitiationSignatures calldata signatures,
+        bytes32 salt
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                COMMITMENT_DOMAIN,
+                block.chainid,
+                address(this),
+                intentHash(intent),
+                signatureBundleDigest(signatures),
+                salt
+            )
         );
     }
 
@@ -428,17 +486,17 @@ contract MordantScopeGovernanceRegistry {
         }
         if (block.timestamp > intent.expiry) revert IntentExpired(intent.expiry, block.timestamp);
 
-        bytes32 key = sessionCommitmentOf(intent, salt);
+        bytes32 key = sessionCommitmentOf(intent, signatures, salt);
         SessionCommitment storage stored = _commitments[key];
         if (!stored.exists) revert UnknownCommitment(key);
         if (stored.consumed) revert CommitmentConsumed(key);
 
         (address controllerA, address controllerB) =
             _checkedControllers(intent, stored.committedAt);
-        // A relayer that turns out to be one of the participants is not neutral,
-        // whatever the allowlist says.
+        // The allowlist is a policy statement, not proof. If the relayer turns
+        // out to be one of the two controllers, the session cannot be opened.
         if (stored.submitter == controllerA || stored.submitter == controllerB) {
-            revert SubmitterNotNeutral(stored.submitter);
+            revert RelayerIsController(stored.submitter);
         }
 
         stored.consumed = true;

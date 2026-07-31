@@ -32,7 +32,9 @@ import {MordantScopeGovernanceRegistry as Governance} from "./MordantScopeGovern
 ///
 ///   1. both scope authorizations existed and were live when the session was
 ///      committed, and neither has been emergency-revoked since
-///   2. both controllers signed the identical session intent, before commitment
+///   2. both controllers signed the identical session intent, and their
+///      signatures are inside the commitment preimage, so bilateral initiation
+///      demonstrably predates the commitment rather than merely accompanying it
 ///   3. an authorized issuer signed the same intent, naming this anchor's
 ///      commitment, so the anchor was pre-authorized rather than chosen after
 ///   4. both anchors were registered before the commitment was published
@@ -267,8 +269,9 @@ contract PrivateMatchBinder {
         if (recourses[sessionCommitment].open) revert SessionAlreadyBound(sessionCommitment);
 
         // Opening the commitment is the moment the pairing becomes public. It
-        // verifies both initiation signatures, both governance records, the
-        // neutrality of the submitter and the one-time use of the commitment.
+        // verifies all three initiation signatures against the commitment
+        // preimage, both governance records, that the relayer was not one of the
+        // controllers, and the one-time use of the commitment.
         Governance.ResolvedSession memory session =
             governance.resolveSession(reveal.intent, reveal.salt, reveal.signatures);
         if (session.sessionCommitment != sessionCommitment) {

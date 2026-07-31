@@ -170,7 +170,7 @@ contract PrivateMatchBinderV4Test is Test {
         protectionEnd = uint64(block.timestamp + 30 days);
 
         governance = new Governance(address(this));
-        governance.setNeutralSubmitter(relayer, true);
+        governance.setAuthorizedRelayer(relayer, true);
         recordA = _authorize(SCOPE_A, controllerA, KEY_A, ORG_A, 1, versionA);
         recordB = _authorize(SCOPE_B, controllerB, KEY_B, ORG_B, 1, versionB);
 
@@ -237,7 +237,7 @@ contract PrivateMatchBinderV4Test is Test {
     /// opaque hash and nothing that identifies either side.
     function testCommittingASessionPublishesNothingIdentifying() public {
         _prepareIntent(1);
-        bytes32 key = governance.sessionCommitmentOf(intent, salt);
+        bytes32 key = governance.sessionCommitmentOf(intent, _signatures(), salt);
 
         vm.recordLogs();
         vm.prank(relayer);
@@ -289,10 +289,10 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAParticipantCannotPostTheCommitment() public {
         _prepareIntent(1);
-        bytes32 key = governance.sessionCommitmentOf(intent, salt);
+        bytes32 key = governance.sessionCommitmentOf(intent, _signatures(), salt);
         vm.prank(controllerA);
         vm.expectRevert(
-            abi.encodeWithSelector(Governance.SubmitterNotNeutral.selector, controllerA)
+            abi.encodeWithSelector(Governance.RelayerNotAuthorized.selector, controllerA)
         );
         governance.commitSession(key);
     }
@@ -300,56 +300,204 @@ contract PrivateMatchBinderV4Test is Test {
     function testAnAllowlistedSubmitterThatIsAParticipantIsCaughtAtReveal() public {
         // The allowlist is not proof of neutrality. If the relayer turns out to
         // be one of the two controllers, the session cannot be opened.
-        governance.setNeutralSubmitter(controllerB, true);
+        governance.setAuthorizedRelayer(controllerB, true);
         _prepareIntent(1);
-        bytes32 key = governance.sessionCommitmentOf(intent, salt);
+        bytes32 key = governance.sessionCommitmentOf(intent, _signatures(), salt);
         vm.prank(controllerB);
         governance.commitSession(key);
         commitmentKey = key;
 
         _expectRevert(
             _exactEnvelope(key, 1),
-            abi.encodeWithSelector(Governance.SubmitterNotNeutral.selector, controllerB)
+            abi.encodeWithSelector(Governance.RelayerIsController.selector, controllerB)
         );
     }
 
     /* ---------------------------------------------------- mutual initiation */
 
     function testAUnilateralIntentCannotBeOpened() public {
+        // Side A signs twice and commits that bundle. B never agreed to the
+        // comparison at all, so the session cannot be opened even though the
+        // commitment is internally consistent.
         _prepareIntent(1);
-        bytes32 key = _commit();
-        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(key, 1);
-
-        // Side A signs twice. B never agreed to the comparison at all.
-        PrivateMatchBinder.SessionReveal memory reveal = _reveal();
-        reveal.signatures.controllerB = reveal.signatures.controllerA;
+        Governance.InitiationSignatures memory unilateral =
+            _signaturesWith(CONTROLLER_A_KEY, CONTROLLER_A_KEY, ISSUER_KEY);
+        bytes32 key = _commitWith(unilateral);
         _expectRevertWithReveal(
-            envelope,
-            reveal,
-            abi.encodeWithSelector(
-                Governance.IntentNotBilateral.selector, controllerB, controllerA
-            )
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(unilateral),
+            abi.encodeWithSelector(Governance.IntentNotBilateral.selector, controllerB, controllerA)
         );
     }
 
     function testAnOutsiderSignatureIsNotInitiation() public {
         _prepareIntent(1);
-        bytes32 key = _commit();
-        PrivateMatchBinder.SessionReveal memory reveal = _reveal();
-        reveal.signatures.controllerB = _sign(OUTSIDER_KEY, governance.intentDigest(intent));
+        Governance.InitiationSignatures memory forged =
+            _signaturesWith(CONTROLLER_A_KEY, OUTSIDER_KEY, ISSUER_KEY);
+        bytes32 key = _commitWith(forged);
         _expectRevertWithReveal(
             _exactEnvelope(key, 1),
-            reveal,
+            _revealWithSignatures(forged),
             abi.encodeWithSelector(
                 Governance.IntentNotBilateral.selector, controllerB, vm.addr(OUTSIDER_KEY)
             )
         );
     }
 
+    /* ---------------------------------------------- signature bundle binding */
+
+    /// @dev The commitment must prove that authorization existed when it was
+    /// published, not merely that the intent fields did.
+    function testACommitmentMadeWithoutSignaturesCannotBeOpenedLater() public {
+        _prepareIntent(1);
+        Governance.InitiationSignatures memory none =
+            Governance.InitiationSignatures({controllerA: "", controllerB: "", issuer: ""});
+        bytes32 key = _commitWith(none);
+        // Collecting the three signatures afterwards does not open it: they are
+        // part of the preimage, so a different bundle is a different session.
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _reveal(),
+            abi.encodeWithSelector(
+                Governance.UnknownCommitment.selector,
+                governance.sessionCommitmentOf(intent, _signatures(), salt)
+            )
+        );
+    }
+
+    function testAlternateSignatureBytesCannotOpenTheCommitment() public {
+        _prepareIntent(1);
+        bytes32 key = _commit();
+        // Same intent, same signer, different bytes.
+        Governance.InitiationSignatures memory altered = _signatures();
+        altered.controllerA = _flipV(altered.controllerA);
+        assertTrue(key != governance.sessionCommitmentOf(intent, altered, salt));
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(altered),
+            abi.encodeWithSelector(
+                Governance.UnknownCommitment.selector,
+                governance.sessionCommitmentOf(intent, altered, salt)
+            )
+        );
+    }
+
+    function testSwappedControllerSignaturesAreRejected() public {
+        _prepareIntent(1);
+        bytes32 key = _commit();
+        Governance.InitiationSignatures memory swapped = _signatures();
+        (swapped.controllerA, swapped.controllerB) = (swapped.controllerB, swapped.controllerA);
+        // Swapping changes the bundle, so it is not this session at all.
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(swapped),
+            abi.encodeWithSelector(
+                Governance.UnknownCommitment.selector,
+                governance.sessionCommitmentOf(intent, swapped, salt)
+            )
+        );
+
+        // And committing the swapped bundle does not help: each slot must be
+        // signed by the controller that occupies it.
+        _prepareIntent(2);
+        Governance.InitiationSignatures memory committedSwapped = _signatures();
+        (committedSwapped.controllerA, committedSwapped.controllerB) =
+            (committedSwapped.controllerB, committedSwapped.controllerA);
+        bytes32 second = _commitWith(committedSwapped);
+        _expectRevertWithReveal(
+            _exactEnvelope(second, 2),
+            _revealWithSignatures(committedSwapped),
+            abi.encodeWithSelector(
+                Governance.IntentNotBilateral.selector, controllerA, controllerB
+            )
+        );
+    }
+
+    function testASuccessorControllerSignatureCannotOpenASession() public {
+        // The intent names the historical record, but the bundle carries the
+        // successor's signature. Authority does not transfer to a key the frozen
+        // record never named.
+        vm.warp(block.timestamp + 1 hours);
+        _prepareIntent(1);
+        Governance.InitiationSignatures memory successor =
+            _signaturesWith(NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY, ISSUER_KEY);
+        bytes32 key = _commitWith(successor);
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(successor),
+            abi.encodeWithSelector(
+                Governance.IntentNotBilateral.selector, controllerA, newControllerA
+            )
+        );
+    }
+
+    function testAnIssuerSignatureForAnotherIntentIsRejected() public {
+        _prepareIntent(2);
+        bytes32 foreignDigest = governance.intentDigest(intent);
+        _prepareIntent(1);
+        Governance.InitiationSignatures memory mismatched = _signatures();
+        mismatched.issuer = _sign(ISSUER_KEY, foreignDigest);
+        bytes32 key = _commitWith(mismatched);
+        // The bundle is committed, both controllers are genuine, but the issuer
+        // authorized a different session, so it recovers to an unknown key.
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(mismatched),
+            abi.encodeWithSelector(MordantIssuerRegistry.InvalidIssuer.selector)
+        );
+    }
+
+    function testANonCanonicalSignatureIsRejected() public {
+        _prepareIntent(1);
+        Governance.InitiationSignatures memory malleable = _signatures();
+        malleable.controllerA = _malleate(malleable.controllerA);
+        bytes32 key = _commitWith(malleable);
+        // The malleated signature recovers the same address, so only the
+        // canonical-encoding rule stops it.
+        _expectRevertWithReveal(
+            _exactEnvelope(key, 1),
+            _revealWithSignatures(malleable),
+            abi.encodeWithSelector(Governance.MalformedSignature.selector)
+        );
+    }
+
+    function testEachSignatureIsBoundIntoTheCommitment() public {
+        _prepareIntent(1);
+        bytes32 base = governance.sessionCommitmentOf(intent, _signatures(), salt);
+        Governance.InitiationSignatures memory changedA = _signatures();
+        changedA.controllerA = _sign(NEW_CONTROLLER_A_KEY, governance.intentDigest(intent));
+        Governance.InitiationSignatures memory changedB = _signatures();
+        changedB.controllerB = _sign(OUTSIDER_KEY, governance.intentDigest(intent));
+        Governance.InitiationSignatures memory changedIssuer = _signatures();
+        changedIssuer.issuer = _sign(OTHER_ISSUER_KEY, governance.intentDigest(intent));
+
+        assertTrue(governance.sessionCommitmentOf(intent, changedA, salt) != base);
+        assertTrue(governance.sessionCommitmentOf(intent, changedB, salt) != base);
+        assertTrue(governance.sessionCommitmentOf(intent, changedIssuer, salt) != base);
+        // And the salt still separates two sessions with identical authorization.
+        salt = keccak256("another-salt");
+        assertTrue(governance.sessionCommitmentOf(intent, _signatures(), salt) != base);
+    }
+
+    function testAllThreeHistoricalSignaturesRevealSuccessfully() public {
+        _prepareIntent(1);
+        bytes32 key = _commit();
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(key, 1);
+        bytes32 frozen = recordA;
+        // The controllers are replaced after commitment. The bundle that opened
+        // this session is the historical one, and it still opens it.
+        vm.warp(block.timestamp + 1 hours);
+        _rotateScopeA(newControllerA);
+
+        _bindWith(envelope, frozen, recordB, CONTROLLER_A_KEY, CONTROLLER_B_KEY);
+        assertTrue(binder.recourseOf(key).open);
+        assertTrue(governance.commitment(key).consumed);
+    }
+
     function testAnUncommittedIntentIsUnusable() public {
         // A perfectly signed intent that was never committed is not a session.
         _prepareIntent(1);
-        bytes32 key = governance.sessionCommitmentOf(intent, salt);
+        bytes32 key = governance.sessionCommitmentOf(intent, _signatures(), salt);
         _expectRevert(
             _exactEnvelope(key, 1),
             abi.encodeWithSelector(Governance.UnknownCommitment.selector, key)
@@ -465,7 +613,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testTheVerifierRefusesAResultWithNoCommitment() public {
         _prepareIntent(1);
-        bytes32 key = governance.sessionCommitmentOf(intent, salt);
+        bytes32 key = governance.sessionCommitmentOf(intent, _signatures(), salt);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(key, 1);
         envelope.binder = address(this);
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
@@ -589,7 +737,7 @@ contract PrivateMatchBinderV4Test is Test {
         versionA += 1;
         recordA = _authorize(SCOPE_A, newControllerA, KEY_A, ORG_A, versionA, versionA);
         _prepareIntent(2);
-        bytes32 fresh = _commit();
+        bytes32 fresh = _commitWith(_signaturesWith(NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY, ISSUER_KEY));
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(fresh, 2);
         _bindWith(envelope, recordA, recordB, NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY);
         assertTrue(binder.recourseOf(fresh).open);
@@ -635,7 +783,7 @@ contract PrivateMatchBinderV4Test is Test {
         versionA += 1;
         recordA = _authorize(SCOPE_A, controllerA, KEY_A, ORG_A, versionA, versionA);
         _prepareIntent(1);
-        bytes32 later = governance.sessionCommitmentOf(intent, salt);
+        bytes32 later = governance.sessionCommitmentOf(intent, _signatures(), salt);
         assertTrue(later != key);
         // It is simply a different, uncommitted session.
         _expectRevert(
@@ -1202,24 +1350,53 @@ contract PrivateMatchBinderV4Test is Test {
         });
     }
 
+    /// @dev Signatures exist before the commitment does, because they are part
+    /// of its preimage. The relayer is handed only the resulting 32 bytes.
     function _commit() private returns (bytes32 key) {
-        key = governance.sessionCommitmentOf(intent, salt);
+        key = governance.sessionCommitmentOf(intent, _signatures(), salt);
         vm.prank(relayer);
         governance.commitSession(key);
         commitmentKey = key;
     }
 
-    function _reveal() private view returns (PrivateMatchBinder.SessionReveal memory) {
+    function _commitWith(Governance.InitiationSignatures memory signatures)
+        private
+        returns (bytes32 key)
+    {
+        key = governance.sessionCommitmentOf(intent, signatures, salt);
+        vm.prank(relayer);
+        governance.commitSession(key);
+        commitmentKey = key;
+    }
+
+    function _signatures() private view returns (Governance.InitiationSignatures memory) {
+        return _signaturesWith(CONTROLLER_A_KEY, CONTROLLER_B_KEY, ISSUER_KEY);
+    }
+
+    function _signaturesWith(uint256 keyA, uint256 keyB, uint256 keyIssuer)
+        private
+        view
+        returns (Governance.InitiationSignatures memory)
+    {
         bytes32 digest = governance.intentDigest(intent);
-        return PrivateMatchBinder.SessionReveal({
-            intent: intent,
-            salt: salt,
-            signatures: Governance.InitiationSignatures({
-                controllerA: _sign(CONTROLLER_A_KEY, digest),
-                controllerB: _sign(CONTROLLER_B_KEY, digest),
-                issuer: _sign(ISSUER_KEY, digest)
-            })
+        return Governance.InitiationSignatures({
+            controllerA: _sign(keyA, digest),
+            controllerB: _sign(keyB, digest),
+            issuer: _sign(keyIssuer, digest)
         });
+    }
+
+    function _reveal() private view returns (PrivateMatchBinder.SessionReveal memory) {
+        return _revealWithSignatures(_signatures());
+    }
+
+    function _revealWithSignatures(Governance.InitiationSignatures memory signatures)
+        private
+        view
+        returns (PrivateMatchBinder.SessionReveal memory)
+    {
+        return
+            PrivateMatchBinder.SessionReveal({intent: intent, salt: salt, signatures: signatures});
     }
 
     function _revealWith(uint256 keyA, uint256 keyB)
@@ -1227,16 +1404,7 @@ contract PrivateMatchBinderV4Test is Test {
         view
         returns (PrivateMatchBinder.SessionReveal memory)
     {
-        bytes32 digest = governance.intentDigest(intent);
-        return PrivateMatchBinder.SessionReveal({
-            intent: intent,
-            salt: salt,
-            signatures: Governance.InitiationSignatures({
-                controllerA: _sign(keyA, digest),
-                controllerB: _sign(keyB, digest),
-                issuer: _sign(ISSUER_KEY, digest)
-            })
-        });
+        return _revealWithSignatures(_signaturesWith(keyA, keyB, ISSUER_KEY));
     }
 
     function _bind(uint256 sessionNonce) private returns (bytes32 key) {
@@ -1263,7 +1431,7 @@ contract PrivateMatchBinderV4Test is Test {
     }
 
     function _expectMutatedIntentRejected(bytes32 committed) private {
-        bytes32 recomputed = governance.sessionCommitmentOf(intent, salt);
+        bytes32 recomputed = governance.sessionCommitmentOf(intent, _signatures(), salt);
         assertTrue(recomputed != committed, "mutation must change the commitment");
         _expectRevert(
             _exactEnvelope(committed, 1),
@@ -1536,6 +1704,29 @@ contract PrivateMatchBinderV4Test is Test {
             consent
         );
         consent.signature = _sign(key, digest);
+    }
+
+    /// @dev secp256k1 group order, for constructing the malleable counterpart of
+    /// a canonical signature.
+    uint256 private constant SECP256K1_N =
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+
+    function _malleate(bytes memory signature) private pure returns (bytes memory) {
+        (bytes32 r, bytes32 s_, uint8 v) = _split(signature);
+        return abi.encodePacked(r, bytes32(SECP256K1_N - uint256(s_)), v == 27 ? uint8(28) : uint8(27));
+    }
+
+    function _flipV(bytes memory signature) private pure returns (bytes memory) {
+        (bytes32 r, bytes32 s_, uint8 v) = _split(signature);
+        return abi.encodePacked(r, s_, v == 27 ? uint8(28) : uint8(27));
+    }
+
+    function _split(bytes memory signature) private pure returns (bytes32 r, bytes32 s_, uint8 v) {
+        assembly {
+            r := mload(add(signature, 0x20))
+            s_ := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
+        }
     }
 
     function _sign(uint256 key, bytes32 digest) private pure returns (bytes memory) {

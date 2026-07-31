@@ -45,6 +45,7 @@ function governance(overrides = {}) {
     committedAt: COMMITTED_AT,
     initiationSignatureA: "0xaa",
     initiationSignatureB: "0xbb",
+    issuerSignature: "0xcc",
     candidateAuthorized: true,
     recordA: record(SCOPE_A),
     recordB: record(SCOPE_B),
@@ -253,6 +254,11 @@ test("one controller alone cannot initiate a session", () => {
   assert.throws(
     () => session({ governance: governance({ initiationSignatureB: undefined }) }),
     new RegExp(ProtocolError.INITIATION_NOT_BILATERAL),
+  );
+  // The issuer authorization is part of the same bundle.
+  assert.throws(
+    () => session({ governance: governance({ issuerSignature: undefined }) }),
+    /SESSION_INITIATION_NOT_BILATERAL:issuerSignature/,
   );
   // The same signature twice is one party signing, not two agreeing.
   assert.throws(
