@@ -17,11 +17,14 @@ import (
 // claim can be checked field by field instead of being asserted in prose.
 //
 // The classification is deliberately not uniform, because the system is not
-// uniform. Seven fields are encrypted and only ever cross the evaluator
-// boundary as ciphertext. Two are protected as commitments whose preimages stay
-// client-side: the enrollment carries the authorization claim to the evaluator
-// in cleartext, so the commitment is visible even though the underlying
-// identity and credential are not. Two are public policy scope by design.
+// uniform, and it is written against what the code actually transmits rather
+// than against intent. In IdentityPublicCommitment mode the CipherPledge
+// carries four ciphertexts (PolicyBits, CurrencyBits, AmountBits,
+// ObligationIDBits) and three cleartext 32-byte commitments
+// (ReceivableCommitment, AuthorizationCommitment, PrivateMetadataCommitment);
+// ReceivableIDBits is nil and is not transmitted at all. So five terms are
+// genuinely encrypted, four are protected as commitments whose preimages never
+// leave the client, and two are public policy scope by design.
 //
 // Only CONFIDENTIAL canaries are swept as leaks. A PUBLIC-BY-DESIGN value is
 // expected to appear in public artifacts and is recorded, never scanned.
@@ -62,10 +65,11 @@ type termSpec struct {
 // commercialTerms is the frozen coverage table for one facility pledge.
 var commercialTerms = []termSpec{
 	{
-		Field: "receivable_identifier", Class: classEncrypted, Kind: kindBytes32, EntropyBits: 256,
-		Encoded:    "PlainPledge.ReceivableID (32 bytes)",
-		Protection: "encrypted into the CipherPledge under the collective ceremony key",
-		ConsumedBy: "ciphertext digest inside the canonical input commitment",
+		Field: "receivable_identifier", Class: classCommittedPreimage, Kind: kindBytes32, EntropyBits: 256,
+		Encoded: "sha256(canary) -> receivable id inside ReceivableLinkCommitment; " +
+			"PlainPledge.ReceivableID is set but ReceivableIDBits is nil in IdentityPublicCommitment mode",
+		Protection: "salted hiding commitment (the public receivable link); the preimage never leaves the client",
+		ConsumedBy: "public receivable link equality gate between the two pledges",
 		Scanned:    true, Materialized: true,
 	},
 	{
@@ -104,10 +108,11 @@ var commercialTerms = []termSpec{
 		Scanned:    true, Materialized: true,
 	},
 	{
-		Field: "exclusivity_metadata", Class: classEncrypted, Kind: kindBytes32, EntropyBits: 256,
-		Encoded:    "PlainPledge.PrivateMetadataCommitment (32 bytes), with PlainPledge.Exclusive = true",
-		Protection: "encrypted into the CipherPledge",
-		ConsumedBy: "exclusivity AND term of the policy; metadata carried in the ciphertext digest",
+		Field: "exclusivity_metadata", Class: classCommittedPreimage, Kind: kindBytes32, EntropyBits: 256,
+		Encoded: "sha256(canary) -> PlainPledge.PrivateMetadataCommitment, which the CipherPledge " +
+			"carries in cleartext; PlainPledge.Exclusive = true is encrypted in PolicyBits",
+		Protection: "hiding commitment; the evaluator sees the commitment, never the preimage",
+		ConsumedBy: "canonical input commitment; the exclusivity flag itself is an encrypted policy AND term",
 		Scanned:    true, Materialized: true,
 	},
 	{
@@ -221,18 +226,32 @@ func freshTerms(shared sharedSession, party string) (map[string]canaryValue, err
 	put("amount", kindUint, word(amount), fmt.Sprintf("%d", amount))
 
 	// Active window: the two facilities must strictly overlap for the policy to
-	// confirm a conflict, so the window is bounded. Entropy is therefore limited
-	// by the field's domain and the coverage table records that honestly.
+	// confirm a conflict, so the window is bounded. The base is drawn from the
+	// shared session secret and the per-party spread carries 30 bits, which
+	// keeps the resulting values large and uncommon. A small round base would
+	// collide with incidental integers in evidence files and produce false
+	// positives in the canary sweep.
 	spreadBytes := make([]byte, 4)
 	if _, err := rand.Read(spreadBytes); err != nil {
 		return nil, err
 	}
-	spread := uint64(binary.BigEndian.Uint32(spreadBytes)) % (1 << 20)
+	const windowWidth = uint64(1) << 30
+	spread := uint64(binary.BigEndian.Uint32(spreadBytes)) % windowWidth
+	var tailBytes [4]byte
+	if _, err := rand.Read(tailBytes[:]); err != nil {
+		return nil, err
+	}
+	tail := uint64(binary.BigEndian.Uint32(tailBytes[:])) % windowWidth
+	// Neither endpoint may equal a value that appears anywhere outside the
+	// client. Both parties offset from the derived base by their own random
+	// spread, so no boundary of either window is a shared or recorded constant.
+	// Overlap still holds for every draw: a.from < b.until and b.from < a.until.
+	base := shared.windowBase
 	var from, until uint64
 	if party == "a" {
-		from, until = shared.windowBase, shared.windowBase+(3<<20)+spread
+		from, until = base+spread, base+3*windowWidth+tail
 	} else {
-		from, until = shared.windowBase+(1<<20)+spread, shared.windowBase+(4<<20)
+		from, until = base+windowWidth+spread, base+4*windowWidth+tail
 	}
 	put("active_from", kindUint, word(from), fmt.Sprintf("%d", from))
 	put("active_until", kindUint, word(until), fmt.Sprintf("%d", until))
@@ -241,6 +260,15 @@ func freshTerms(shared sharedSession, party string) (map[string]canaryValue, err
 	put("pledge_nonce", kindUint, word(shared.nonce), fmt.Sprintf("%d", shared.nonce))
 	put("pledge_expiry", kindUint, word(shared.validUntil), fmt.Sprintf("%d", shared.validUntil))
 	return values, nil
+}
+
+// deriveWindowBase fixes the activity window from the shared dispute secret.
+// It is derived rather than passed as an argument: a value handed to the client
+// on the command line is recorded in the orchestrator's process evidence, which
+// would publish a confidential term.
+func deriveWindowBase(secret [32]byte) uint64 {
+	digest := sha256.Sum256(append(append([]byte{}, secret[:]...), []byte("activity-window-base")...))
+	return (uint64(1) << 40) + (binary.BigEndian.Uint64(digest[:8]) % (uint64(1) << 40))
 }
 
 // sharedSession is what the two facilities agree out of band because they are

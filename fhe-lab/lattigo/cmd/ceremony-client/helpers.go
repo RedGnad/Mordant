@@ -31,7 +31,6 @@ func parse(arguments []string) (config, error) {
 	f.StringVar(&c.coverage, "coverage-out", "", "public commercial-term coverage assertion")
 	f.StringVar(&c.anchorRoot, "anchor-root", "", "invoice root of the deployed receivable anchor")
 	f.StringVar(&c.currencyCode, "currency-code", "USD", "settlement currency code of the anchor")
-	f.Uint64Var(&c.windowBase, "window-base", 0, "base of the pledge activity window")
 	f.Uint64Var(&c.chainID, "chain-id", 0, "chain id")
 	f.Uint64Var(&c.policyVersion, "policy-version", 0, "policy version")
 	f.Uint64Var(&c.nonce, "nonce", 0, "public nonce")
@@ -43,8 +42,7 @@ func parse(arguments []string) (config, error) {
 		c.validUntil <= uint64(time.Now().Unix()) || c.publicMaterial == "" || c.manifest == "" ||
 		c.evaluationKeys == "" || c.issuerKey == "" || c.output == "" || c.privateManifest == "" ||
 		c.rosterDigest == "" || c.vault == "" || c.policyID == "" || c.sessionID == "" ||
-		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" ||
-		c.currencyCode == "" || c.windowBase == 0 {
+		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" || c.currencyCode == "" {
 		return config{}, errors.New("invalid ceremony client configuration")
 	}
 	return c, nil

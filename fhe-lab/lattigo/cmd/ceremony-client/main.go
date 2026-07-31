@@ -84,7 +84,7 @@ func run(arguments []string) error {
 	shared := sharedSession{
 		secret:       session,
 		currencyCode: c.currencyCode,
-		windowBase:   c.windowBase,
+		windowBase:   deriveWindowBase(session),
 		nonce:        c.nonce,
 		validUntil:   c.validUntil,
 		anchorRoot:   anchorRoot,
@@ -221,18 +221,25 @@ func makePledge(c config, vault [20]byte, policy [32]byte, shared sharedSession,
 	var zeroContext fhe.InputCommitmentContext
 	get := func(field string) ([32]byte, error) { return decode32(values[field].Value) }
 
-	receivable, err := get("receivable_identifier")
+	receivablePreimage, err := get("receivable_identifier")
 	if err != nil {
 		return zero, zeroClaim, zeroContext, err
 	}
+	// ReceivableIDBits is nil in IdentityPublicCommitment mode, so the receivable
+	// identifier is protected by the public link commitment rather than by
+	// encryption. The canary is the preimage of that commitment.
+	receivable := sha256.Sum256(receivablePreimage[:])
 	obligation, err := get("obligation_id")
 	if err != nil {
 		return zero, zeroClaim, zeroContext, err
 	}
-	metadata, err := get("exclusivity_metadata")
+	metadataPreimage, err := get("exclusivity_metadata")
 	if err != nil {
 		return zero, zeroClaim, zeroContext, err
 	}
+	// PrivateMetadataCommitment is carried in cleartext by the CipherPledge, so
+	// only its commitment may cross the evaluator boundary.
+	metadata := sha256.Sum256(metadataPreimage[:])
 	currency, err := get("currency")
 	if err != nil {
 		return zero, zeroClaim, zeroContext, err
@@ -269,7 +276,10 @@ func makePledge(c config, vault [20]byte, policy [32]byte, shared sharedSession,
 	// facilities share, so the link cannot be tested against a guessed invoice
 	// root by anyone who lacks that secret, including the evaluator.
 	linkSalt := sha256.Sum256(append(append([]byte{}, shared.secret[:]...), []byte("receivable-link-salt")...))
-	link := fhe.ReceivableLinkCommitment(vault, uint32(c.policyVersion), shared.anchorRoot, linkSalt)
+	// Both facilities derive the same link because they share the dispute session
+	// secret and reference the same deployed receivable.
+	linkReceivable := sha256.Sum256(append(append([]byte{}, shared.secret[:]...), shared.anchorRoot[:]...))
+	link := fhe.ReceivableLinkCommitment(vault, uint32(c.policyVersion), linkReceivable, linkSalt)
 
 	slot := uint8(0)
 	if c.party == "b" {

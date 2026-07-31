@@ -472,7 +472,6 @@ func (l *lab) runClientsAndEvaluator() error {
 			"-coverage-out", filepath.Join(public, "coverage-"+party+".json"),
 			"-anchor-root", hex.EncodeToString(anchorRoot[:]),
 			"-currency-code", "USD",
-			"-window-base", "1000000",
 			"-roster-digest", hex.EncodeToString(rosterDigest[:]),
 			"-vault", "0x7531d467F19d1055AcCF6B0D22286184f87adBd8",
 			"-policy-id", hex.EncodeToString(policyID[:]),
