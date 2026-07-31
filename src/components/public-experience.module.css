@@ -253,7 +253,7 @@
 
 .transformation {
   position: relative;
-  min-height: 400svh;
+  min-height: 340svh;
 }
 
 .transformationSticky {
@@ -328,7 +328,7 @@
   gap: 20px;
   padding: 14px 16px 18px;
   border-top: var(--signal-stroke) solid;
-  background: var(--ground);
+  background: transparent;
 }
 
 .receivableLane {
@@ -337,6 +337,7 @@
   left: 0;
   width: var(--anchor-width);
   border-color: var(--receivable);
+  transition: color 120ms ease-out;
 }
 
 .protectionLane {
@@ -347,7 +348,7 @@
   border-top: 0;
   transform: translate3d(0, 0, 0);
   transition:
-    background-color 180ms ease-out,
+    color 100ms ease-out,
     opacity 180ms ease-out,
     transform 300ms linear;
   will-change: transform;
@@ -372,8 +373,7 @@
   stroke-width: var(--signal-stroke);
   transition:
     d 300ms linear,
-    stroke 180ms ease-out,
-    stroke-width 180ms ease-out;
+    stroke 180ms ease-out;
 }
 
 .receivableLane small,
@@ -479,7 +479,6 @@
 
 .transformation[data-state="conflict"] .protectionRailPath {
   d: path("M 0 0 L 100 16");
-  stroke-width: calc(var(--signal-stroke) * 1.55);
 }
 
 .transformation[data-state="recourse"] .protectionRailPath {
@@ -549,7 +548,7 @@
   color: var(--ink);
   opacity: 0;
   transform: translateX(16.6667%);
-  transition: opacity 180ms 80ms ease-out, transform 260ms 80ms cubic-bezier(0, 0, 0.3, 1);
+  transition: opacity 100ms ease-out, transform 180ms linear;
 }
 
 .receiptNode span,
@@ -570,8 +569,23 @@
   letter-spacing: -0.035em;
 }
 
-.transformation[data-state="proof"] :is(.protectionLane, .claim, .recourseLock) {
+.transformation[data-state="proof"] .protectionLane {
+  color: var(--ground);
   opacity: 0;
+  transform: translate3d(calc(var(--conditional-shift-x) + 8.3333%), var(--conditional-shift-y), 0);
+  transition:
+    color 100ms ease-out,
+    opacity 160ms 80ms ease-out,
+    transform 240ms linear;
+}
+
+.transformation[data-state="proof"] .claim {
+  opacity: 0;
+}
+
+.transformation[data-state="proof"] .recourseLock {
+  opacity: 0;
+  transition: opacity 100ms ease-out, transform 140ms linear;
 }
 
 .transformation[data-state="proof"] .receivableLane {
@@ -587,6 +601,9 @@
 .transformation[data-state="proof"] .receiptNode {
   opacity: 1;
   transform: translateX(0);
+  transition:
+    opacity 160ms 200ms ease-out,
+    transform 220ms 180ms cubic-bezier(0, 0, 0.3, 1);
 }
 
 .stateControls {
@@ -1344,7 +1361,7 @@
   }
 
   .transformation {
-    min-height: 380svh;
+    min-height: 350svh;
   }
 
   .transformationSticky {

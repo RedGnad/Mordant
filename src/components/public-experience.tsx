@@ -42,6 +42,8 @@ const TRANSFORMATION = [
   },
 ] as const;
 
+const TRANSFORMATION_SCROLL_THRESHOLDS = [0, 0.15, 0.4, 0.7] as const;
+
 const INTEGRATION_STEPS = [
   {
     label: "Context enters",
@@ -133,7 +135,10 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       const bounds = section.getBoundingClientRect();
       const range = Math.max(1, section.offsetHeight - window.innerHeight);
       const progress = Math.min(1, Math.max(0, -bounds.top / range));
-      const nextStep = Math.min(TRANSFORMATION.length - 1, Math.floor(progress * TRANSFORMATION.length));
+      let nextStep = 0;
+      TRANSFORMATION_SCROLL_THRESHOLDS.forEach((threshold, index) => {
+        if (progress >= threshold) nextStep = index;
+      });
       setStep((current) => current === nextStep ? current : nextStep);
     };
 
@@ -231,7 +236,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     const section = transformationRef.current;
     if (section === null) return;
     const range = Math.max(0, section.offsetHeight - window.innerHeight);
-    const position = section.offsetTop + (range * index / (TRANSFORMATION.length - 1));
+    const threshold = TRANSFORMATION_SCROLL_THRESHOLDS[index] ?? 0;
+    const targetProgress = index === 0 ? 0 : Math.min(1, threshold + 0.01);
+    const position = section.offsetTop + (range * targetProgress);
     window.scrollTo({ top: position, behavior: "instant" });
     setStep(index);
   };
