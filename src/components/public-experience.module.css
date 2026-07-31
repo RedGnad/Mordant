@@ -470,17 +470,17 @@
 
 .claimMarkSatelliteOne {
   --mark-delay: 125ms;
-  --mark-offset-x: -32px;
-  --mark-offset-y: -15px;
+  --mark-offset-x: 8px;
+  --mark-offset-y: clamp(-150px, -13vh, -72px);
   --mark-resolved-rotation: 6deg;
   --mark-rotation: -8deg;
-  --mark-size: clamp(15px, 1.4vw, 21px);
+  --mark-size: clamp(12px, 1.1vw, 16px);
 }
 
 .claimMarkSatelliteTwo {
   --mark-delay: 150ms;
-  --mark-offset-x: 34px;
-  --mark-offset-y: 16px;
+  --mark-offset-x: clamp(-430px, -29vw, -130px);
+  --mark-offset-y: -26px;
   --mark-resolved-rotation: 28deg;
   --mark-rotation: 14deg;
   --mark-size: clamp(18px, 1.8vw, 26px);
@@ -488,8 +488,8 @@
 
 .claimMarkSatelliteThree {
   --mark-delay: 175ms;
-  --mark-offset-x: 44px;
-  --mark-offset-y: -22px;
+  --mark-offset-x: clamp(-720px, -51vw, -250px);
+  --mark-offset-y: -44px;
   --mark-resolved-rotation: 2deg;
   --mark-rotation: -12deg;
   --mark-size: clamp(11px, 1vw, 15px);
@@ -839,15 +839,52 @@
   touch-action: pan-y;
 }
 
-.flowRoute {
+.flowMotionPath {
+  fill: none;
+  stroke: none;
+}
+
+.flowRouteSegment {
   fill: none;
   stroke-linecap: butt;
   stroke-linejoin: miter;
-  stroke: url("#integration-route-gradient");
-  stroke-dasharray: 925;
-  stroke-dashoffset: 545;
-  stroke-width: 12;
+  stroke-width: 10;
   transition: stroke-dashoffset 480ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  vector-effect: non-scaling-stroke;
+}
+
+.flowRouteInput {
+  stroke: var(--receivable);
+}
+
+.flowRoutePolicy {
+  stroke: var(--protection);
+  stroke-dasharray: 205;
+  stroke-dashoffset: 205;
+}
+
+.flowRouteAction {
+  stroke: var(--action);
+  stroke-dasharray: 339;
+  stroke-dashoffset: 339;
+}
+
+.flowJunction {
+  fill: var(--ground);
+  opacity: 0;
+  stroke-width: 5;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(45deg) scale(0.55);
+  transition: opacity 120ms ease-out, transform 180ms cubic-bezier(0, 0, 0.3, 1);
+}
+
+.flowJunctionPolicy {
+  stroke: var(--protection);
+}
+
+.flowJunctionAction {
+  stroke: var(--action);
 }
 
 .integrationSignal {
@@ -864,12 +901,15 @@
   fill: var(--protection);
 }
 
-.flow[data-step="1"] .flowRoute {
-  stroke-dashoffset: 340;
+.flow[data-step="1"] .flowRoutePolicy,
+.flow[data-step="2"] :is(.flowRoutePolicy, .flowRouteAction) {
+  stroke-dashoffset: 0;
 }
 
-.flow[data-step="2"] .flowRoute {
-  stroke-dashoffset: 0;
+.flow[data-step="1"] .flowJunctionPolicy,
+.flow[data-step="2"] :is(.flowJunctionPolicy, .flowJunctionAction) {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
 }
 
 .flow[data-step="2"] .integrationSignal {

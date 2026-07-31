@@ -83,6 +83,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const integrationScrollFrame = useRef<number | null>(null);
   const integrationMotionFrame = useRef<number | null>(null);
   const integrationMotionProgress = useRef(0);
+  const integrationInteractionLockUntil = useRef(0);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -170,14 +171,15 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
     const updateFromScroll = () => {
       integrationScrollFrame.current = null;
+      if (performance.now() < integrationInteractionLockUntil.current) return;
       const bounds = flow.getBoundingClientRect();
-      const activeTop = window.innerHeight * 0.78;
-      const activeBottom = window.innerHeight * 0.22;
+      const activeTop = window.innerHeight * 0.88;
+      const activeBottom = window.innerHeight * 0.18;
       if (bounds.top > activeTop || bounds.bottom < activeBottom) return;
 
       const range = activeTop - activeBottom + bounds.height;
       const progress = Math.min(1, Math.max(0, (activeTop - bounds.top) / Math.max(1, range)));
-      const nextStep = progress < 0.34 ? 0 : progress < 0.68 ? 1 : 2;
+      const nextStep = progress < 0.24 ? 0 : progress < 0.56 ? 1 : 2;
       setIntegrationStep((current) => current === nextStep ? current : nextStep);
     };
 
@@ -249,6 +251,11 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     const position = sectionTop + (range * targetProgress);
     window.scrollTo({ top: position, behavior: "instant" });
     setStep(index);
+  };
+
+  const selectIntegrationStep = (index: number) => {
+    integrationInteractionLockUntil.current = performance.now() + 500;
+    setIntegrationStep(index);
   };
 
   const moveHeroSymbol = (event: PointerEvent<HTMLElement>) => {
@@ -391,17 +398,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
               <div className={styles.flowCanvas}>
                 <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="integration-route-gradient" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="920" y2="0">
-                      <stop offset="0" stopColor="var(--receivable)" />
-                      <stop offset="43.18%" stopColor="var(--receivable)" />
-                      <stop offset="43.18%" stopColor="var(--protection)" />
-                      <stop offset="63.64%" stopColor="var(--protection)" />
-                      <stop offset="63.64%" stopColor="var(--action)" />
-                      <stop offset="100%" stopColor="var(--action)" />
-                    </linearGradient>
-                  </defs>
-                  <path ref={integrationPathRef} className={styles.flowRoute} d="M40 102H420L500 34H600L710 102H920" />
+                  <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H420L500 34H600L710 102H920" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="380" d="M40 102H420" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="205" d="M420 102L500 34H600" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="339" d="M600 34L710 102H920" />
+                  <rect className={`${styles.flowJunction} ${styles.flowJunctionPolicy}`} x="411" y="93" width="18" height="18" />
+                  <rect className={`${styles.flowJunction} ${styles.flowJunctionAction}`} x="591" y="25" width="18" height="18" />
                   <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
                     <rect x="-18" y="-18" width="36" height="36" />
                   </g>
@@ -416,9 +418,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                     type="button"
                     key={stage.label}
                     aria-pressed={integrationStep === index}
-                    onClick={() => setIntegrationStep(index)}
-                    onFocus={() => setIntegrationStep(index)}
-                    onPointerEnter={() => setIntegrationStep(index)}
+                    onClick={() => selectIntegrationStep(index)}
+                    onFocus={() => selectIntegrationStep(index)}
+                    onPointerEnter={() => selectIntegrationStep(index)}
                   >
                     <strong>{stage.label}</strong>
                     <small>{stage.detail}</small>
