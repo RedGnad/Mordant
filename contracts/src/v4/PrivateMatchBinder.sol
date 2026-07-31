@@ -7,6 +7,7 @@ import {MordantSessionPrecommitRegistry} from "../identity/MordantSessionPrecomm
 import {MordantSourceIdentityRegistry} from "../identity/MordantSourceIdentityRegistry.sol";
 import {ECDSAQuorumMatchVerifierV4} from "./ECDSAQuorumMatchVerifierV4.sol";
 import {IAnchoredReceivable} from "./IAnchoredReceivable.sol";
+import {MordantScopeGovernanceRegistry as Governance} from "./MordantScopeGovernanceRegistry.sol";
 
 /// @notice Binds a confidential exact match to a real tokenized receivable and
 /// opens one non-economic recourse record.
@@ -23,17 +24,27 @@ import {IAnchoredReceivable} from "./IAnchoredReceivable.sol";
 /// produces a record and nothing else. Whether that record has consequences is a
 /// question for the anchor's own protection machinery, not for this contract.
 ///
-/// The binding sequence is fixed and each step is an independent authority:
+/// Five independently verified authorization conditions, every one of them
+/// resolved from state that existed before the private result did:
 ///
 ///   1. the anchor published its identity commitment when it was created
-///   2. an authorized issuer pre-committed THIS session against THAT commitment
-///   3. the session ran and returned a coherent EXACT_MATCH
-///   4. both scope controllers consented to disclose it
-///   5. a 2-of-3 validator quorum endorsed the result
+///   2. an authorized issuer pre-committed THIS session against THAT commitment,
+///      and did so before the session was opened
+///   3. both sources were registered before the session was opened
+///   4. both scope controllers, as frozen at session initiation, consented to
+///      disclose this specific result
+///   5. a validator quorum endorsed the result under that same frozen context
 ///
-/// No single party holds two of these, and dropping any one of them fails closed.
+/// Organizational independence between those conditions is a production
+/// deployment property. It holds only once the administrative domains are
+/// actually separated, and this contract does not and cannot establish it.
+///
+/// Temporal integrity is the design rule throughout: no authority may be created
+/// or replaced after a result is known and then be applied to that result.
+/// Controllers are read from the governance record frozen at session initiation,
+/// never from a mutable current mapping, so controller rotation is append-only
+/// and non-retroactive by construction.
 contract PrivateMatchBinder {
-    error Unauthorized(address account);
     error ZeroAddress();
     error InvalidConfiguration();
     error EnvelopeNotForThisBinder(address supplied);
@@ -44,76 +55,84 @@ contract PrivateMatchBinder {
     error SelfMatch(bytes32 inputCommitment);
     error SessionNotPrecommittedForAnchor(bytes32 sessionId, bytes32 anchorCommitment);
     error PrecommitmentIssuerMismatch(bytes32 recorded, bytes32 anchorIssuer);
+    error PrecommitmentAfterSessionOpened(uint64 recordedAt, uint64 openedAt);
+    error PrecommittedGovernanceMismatch(bytes32 precommitted, bytes32 frozen);
     error CounterpartyCommitmentMismatch(bytes32 observed, bytes32 expected);
-    error CounterpartyNotAnchored();
+    error CounterpartyRegisteredAfterSessionOpened(uint64 registeredAt, uint64 openedAt);
+    error CounterpartyVaultMismatch(bytes32 observed, bytes32 expected);
     error AnchorCountMismatch(uint8 supplied);
     error AnchorNotOutstanding(uint8 receivableState);
     error AnchorProtectionInactive(uint8 protectionState);
     error AnchorHasNoUnits();
     error SessionAlreadyBound(bytes32 sessionId);
-    error ScopeControllerUnknown(bytes32 scopeCommitment);
+    error GovernanceContextMismatch(bytes32 supplied, bytes32 frozen);
+    error ConsentRecordNotFrozenForSession(bytes32 scopeCommitment, bytes32 governanceRecord);
+    error ConsentScopeMismatch(bytes32 supplied, bytes32 expected);
     error DisclosureConsentMissing(bytes32 scopeCommitment);
     error DisclosureConsentExpired(bytes32 scopeCommitment, uint64 validUntil);
+    error DisclosureVersionMismatch(uint32 supplied, uint32 expected);
+    error ConsentNonceConsumed(bytes32 scopeCommitment, uint256 nonce);
     error MalformedSignature();
 
-    event ScopeControllerSet(bytes32 indexed scopeCommitment, address indexed controller);
     event PrivateMatchBound(
         bytes32 indexed sessionId,
         address indexed anchor,
         bytes32 indexed matchCommitment,
         bytes32 anchorCommitment,
         bytes32 counterpartyCommitment,
-        bytes32 policyId,
-        uint32 policyVersion,
+        bytes32 governanceContextDigest,
         bool conflictConfirmed,
         uint64 cureDeadline
     );
 
-    /// @dev Mirrored from MordantInvoiceVault. Only these two states make a
-    /// recourse record meaningful.
+    /// @dev Mirrored from MordantInvoiceVault. Only these states make a recourse
+    /// record meaningful.
     uint8 public constant RECEIVABLE_OUTSTANDING = 1;
     uint8 public constant PROTECTION_ACTIVE = 1;
     /// @dev An exact match is between exactly two anchored submissions.
     uint8 public constant EXPECTED_ANCHOR_COUNT = 2;
+    /// @dev The disclosure semantics a consent signs under.
+    uint32 public constant DISCLOSURE_VERSION = 1;
 
     string public constant DOMAIN_NAME = "Mordant Private Match Binder";
     string public constant DOMAIN_VERSION = "1";
 
     bytes32 public constant DISCLOSURE_CONSENT_TYPEHASH = keccak256(
-        "DisclosureConsent(uint256 chainId,address binder,bytes32 sessionId,bytes32 resultCommitment,bytes32 scopeCommitment,address anchor,uint64 validUntil)"
+        "DisclosureConsent(uint256 chainId,address binder,bytes32 policyId,uint32 policyVersion,bytes32 sessionId,bytes32 resultCommitment,bytes32 matchCommitment,bytes32 governanceContextDigest,bytes32 scopeCommitment,bytes32 governanceRecord,bytes32 controllerKeyId,uint32 controllerEpoch,uint32 scopeAuthorizationVersion,address anchor,uint32 disclosureVersion,uint64 validUntil,uint256 nonce)"
     );
-    bytes32 private constant EIP712_DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
     uint256 private constant SECP256K1_HALF_ORDER =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
-    /// @notice How the counterparty side of the session is anchored.
-    /// @dev Both sides must have committed to their identity before the session,
-    /// so the counterparty is either a registered non-vault source or another
-    /// vault carrying an identity anchor. There is no third option, and there is
-    /// no path that accepts an unanchored counterparty.
-    enum CounterpartyKind {
-        None,
-        RegisteredSource,
-        VaultAnchor
-    }
-
+    /// @notice The counterparty side of the session.
+    /// @dev Always a source-identity registration, because that record carries a
+    /// registration timestamp and a vault does not. Requiring it for both kinds
+    /// is what lets the binder prove the counterparty was anticipated before the
+    /// session opened rather than produced afterwards. `vault` is optional and,
+    /// when supplied, must be a live anchor carrying the same commitment.
     struct Counterparty {
-        CounterpartyKind kind;
-        /// @dev Source attestation digest, for a registered non-vault source.
         bytes32 anchorId;
-        /// @dev Vault address, for an on-chain counterparty anchor.
         address vault;
     }
 
     /// @notice One side's consent to disclose that this session matched.
-    /// @dev A confirmed conflict is publishable only if both scope controllers
+    /// @dev A confirmed conflict is publishable only if both frozen controllers
     /// sign for it. Without this a single platform could publish that a
     /// counterparty is double-financing, which is exactly the disclosure the
     /// private mode exists to prevent.
+    ///
+    /// `governanceRecord` names the historical authorization the consent is made
+    /// under. It must be one of the two records frozen when the session was
+    /// opened, so a controller appointed later cannot consent for an earlier
+    /// session, and a controller since replaced still can.
     struct DisclosureConsent {
         bytes32 scopeCommitment;
+        bytes32 governanceRecord;
+        uint32 disclosureVersion;
         uint64 validUntil;
+        uint256 nonce;
         bytes signature;
     }
 
@@ -124,6 +143,7 @@ contract PrivateMatchBinder {
         bytes32 anchorCommitment;
         bytes32 counterpartyCommitment;
         bytes32 providerProofCommitment;
+        bytes32 governanceContextDigest;
         address anchor;
         bytes32 policyId;
         uint32 policyVersion;
@@ -133,8 +153,8 @@ contract PrivateMatchBinder {
         bool open;
     }
 
-    address public immutable owner;
     ECDSAQuorumMatchVerifierV4 public immutable verifier;
+    Governance public immutable governance;
     MordantSessionPrecommitRegistry public immutable precommitRegistry;
     MordantSourceIdentityRegistry public immutable sourceRegistry;
     bytes32 public immutable policyId;
@@ -143,17 +163,15 @@ contract PrivateMatchBinder {
     uint64 public immutable curePeriod;
     bytes32 public immutable consequenceId;
 
-    mapping(bytes32 scopeCommitment => address controller) public scopeController;
     mapping(bytes32 sessionId => RecourseRecord record) public recourses;
+    mapping(bytes32 scopeCommitment => mapping(uint256 nonce => bool used)) public consumedConsentNonce;
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized(msg.sender);
-        _;
-    }
-
+    /// @dev There is deliberately no owner and no setter on this contract. Every
+    /// authority it consults is versioned and timestamped somewhere else, so
+    /// there is nothing here an administrator could retroactively change.
     constructor(
-        address initialOwner,
         ECDSAQuorumMatchVerifierV4 verifier_,
+        Governance governance_,
         MordantSessionPrecommitRegistry precommitRegistry_,
         MordantSourceIdentityRegistry sourceRegistry_,
         bytes32 policyId_,
@@ -163,15 +181,15 @@ contract PrivateMatchBinder {
         bytes32 consequenceId_
     ) {
         if (
-            initialOwner == address(0) || address(verifier_) == address(0)
+            address(verifier_) == address(0) || address(governance_) == address(0)
                 || address(precommitRegistry_) == address(0) || address(sourceRegistry_) == address(0)
         ) revert ZeroAddress();
         if (
             policyId_ == bytes32(0) || policyVersion_ == 0 || responsibleRole_ == bytes32(0)
                 || curePeriod_ == 0 || consequenceId_ == bytes32(0)
         ) revert InvalidConfiguration();
-        owner = initialOwner;
         verifier = verifier_;
+        governance = governance_;
         precommitRegistry = precommitRegistry_;
         sourceRegistry = sourceRegistry_;
         policyId = policyId_;
@@ -179,12 +197,6 @@ contract PrivateMatchBinder {
         responsibleRole = responsibleRole_;
         curePeriod = curePeriod_;
         consequenceId = consequenceId_;
-    }
-
-    function setScopeController(bytes32 scopeCommitment, address controller) external onlyOwner {
-        if (scopeCommitment == bytes32(0)) revert ZeroAddress();
-        scopeController[scopeCommitment] = controller;
-        emit ScopeControllerSet(scopeCommitment, controller);
     }
 
     function domainSeparator() public view returns (bytes32) {
@@ -199,23 +211,41 @@ contract PrivateMatchBinder {
         );
     }
 
+    /// @notice The digest a scope controller signs to authorize disclosure.
+    /// @dev The controller identity, epoch and authorization version are read
+    /// from the named governance record, not supplied by the caller, so a consent
+    /// cannot be presented under a governance record it was not signed for.
     function consentDigest(
         bytes32 sessionId,
         bytes32 resultCommitment,
-        bytes32 scopeCommitment,
+        bytes32 matchCommitment,
+        bytes32 governanceContextDigest,
         address anchor,
-        uint64 validUntil
+        DisclosureConsent memory consent
     ) public view returns (bytes32) {
+        Governance.ScopeAuthorization memory authorization =
+            governance.record(consent.governanceRecord);
         bytes32 structHash = keccak256(
-            abi.encode(
-                DISCLOSURE_CONSENT_TYPEHASH,
-                block.chainid,
-                address(this),
-                sessionId,
-                resultCommitment,
-                scopeCommitment,
-                anchor,
-                validUntil
+            abi.encodePacked(
+                abi.encode(
+                    DISCLOSURE_CONSENT_TYPEHASH,
+                    block.chainid,
+                    address(this),
+                    policyId,
+                    policyVersion,
+                    sessionId,
+                    resultCommitment
+                ),
+                abi.encode(
+                    matchCommitment,
+                    governanceContextDigest,
+                    consent.scopeCommitment,
+                    consent.governanceRecord,
+                    authorization.controllerKeyId,
+                    authorization.controllerEpoch,
+                    authorization.authorizationVersion
+                ),
+                abi.encode(anchor, consent.disclosureVersion, consent.validUntil, consent.nonce)
             )
         );
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
@@ -225,9 +255,9 @@ contract PrivateMatchBinder {
     /// @param envelope The quorum-signed result. Its `binder` must be this contract.
     /// @param attestation The validator attestation, passed through unread.
     /// @param anchor The local tokenized receivable this side of the match owns.
-    /// @param counterparty How the other side of the session is anchored.
-    /// @param consentA Disclosure consent from the controller of scope A.
-    /// @param consentB Disclosure consent from the controller of scope B.
+    /// @param counterparty The other side's pre-session source registration.
+    /// @param consentA Disclosure consent for scope A, under its frozen record.
+    /// @param consentB Disclosure consent for scope B, under its frozen record.
     function bindRecourse(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
         bytes calldata attestation,
@@ -243,28 +273,44 @@ contract PrivateMatchBinder {
         }
         if (recourses[sessionId].open) revert SessionAlreadyBound(sessionId);
 
+        // The governance context is read from the registry, not from the caller,
+        // and the envelope must name the one that was frozen at initiation.
+        Governance.SessionGovernance memory session = governance.sessionGovernance(sessionId);
+        if (session.contextDigest != envelope.governanceContextDigest) {
+            revert GovernanceContextMismatch(
+                envelope.governanceContextDigest, session.contextDigest
+            );
+        }
+
         bytes32 anchorCommitment = _assertAnchorLive(anchor);
         bytes32 counterpartyCommitment =
-            _resolveSides(envelope.result, anchorCommitment, counterparty);
-
-        // The pre-commitment is the registry's answer, never the caller's claim,
-        // and it is the reason `requireBindable` can be trusted at all: the
-        // issuer named this session against this anchor's commitment BEFORE the
-        // session ran, so a match cannot be shopped to a convenient anchor after
-        // the fact.
-        bool precommitted = precommitRegistry.isSessionPrecommitted(sessionId, anchorCommitment);
-        if (!precommitted) revert SessionNotPrecommittedForAnchor(sessionId, anchorCommitment);
-        Match.requireBindable(envelope.result, precommitted);
-        _assertPrecommitmentIssuer(sessionId, anchor.issuerKeyId());
-
-        _requireBilateralConsent(envelope, address(anchor), consentA, consentB);
+            _resolveSides(envelope.result, anchorCommitment, counterparty, session.openedAt);
+        _assertPrecommitment(session, sessionId, anchorCommitment, anchor.issuerKeyId());
+        _requireBilateralConsent(envelope, session, address(anchor), consentA, consentB);
 
         // The quorum is checked last, and it is the step that consumes the
         // result's one-time identities. Everything above is free to revert
         // without burning a valid result.
         verifier.acceptMatch(envelope, attestation);
 
+        _consumeConsent(consentA);
+        _consumeConsent(consentB);
         _open(envelope, address(anchor), anchorCommitment, counterpartyCommitment);
+    }
+
+    function recourseOf(bytes32 sessionId) external view returns (RecourseRecord memory) {
+        return recourses[sessionId];
+    }
+
+    /// @notice Whether the receivable behind a record is still in the state that
+    /// makes the record meaningful.
+    function anchorLive(bytes32 sessionId) external view returns (bool) {
+        RecourseRecord memory record = recourses[sessionId];
+        if (!record.open || record.anchor.code.length == 0) return false;
+        IAnchoredReceivable anchor = IAnchoredReceivable(record.anchor);
+        return anchor.assetCommitment() == record.anchorCommitment
+            && anchor.receivableState() == RECEIVABLE_OUTSTANDING
+            && anchor.protectionState() == PROTECTION_ACTIVE;
     }
 
     /// @dev Split out of `bindRecourse` only to keep the stack shallow. The
@@ -285,6 +331,7 @@ contract PrivateMatchBinder {
             anchorCommitment: anchorCommitment,
             counterpartyCommitment: counterpartyCommitment,
             providerProofCommitment: envelope.result.providerProofCommitment,
+            governanceContextDigest: envelope.governanceContextDigest,
             anchor: anchor,
             policyId: policyId,
             policyVersion: policyVersion,
@@ -300,26 +347,10 @@ contract PrivateMatchBinder {
             envelope.result.matchCommitment,
             anchorCommitment,
             counterpartyCommitment,
-            policyId,
-            policyVersion,
+            envelope.governanceContextDigest,
             envelope.result.conflictConfirmed,
             cureDeadline
         );
-    }
-
-    function recourseOf(bytes32 sessionId) external view returns (RecourseRecord memory) {
-        return recourses[sessionId];
-    }
-
-    /// @notice Whether the receivable behind a record is still in the state that
-    /// makes the record meaningful.
-    function anchorLive(bytes32 sessionId) external view returns (bool) {
-        RecourseRecord memory record = recourses[sessionId];
-        if (!record.open || record.anchor.code.length == 0) return false;
-        IAnchoredReceivable anchor = IAnchoredReceivable(record.anchor);
-        return anchor.assetCommitment() == record.anchorCommitment
-            && anchor.receivableState() == RECEIVABLE_OUTSTANDING
-            && anchor.protectionState() == PROTECTION_ACTIVE;
     }
 
     /// @dev Reads the anchor's own commitment. It is never supplied by a caller.
@@ -340,13 +371,15 @@ contract PrivateMatchBinder {
     }
 
     /// @dev Places the anchor on one side of the session and proves the other
-    /// side was anchored too. The two commitments are salted independently, so
-    /// they are never equal and this contract cannot and does not compare them
-    /// for identity: that equality is what the FHE evaluation established.
+    /// side was registered before the session opened. The two commitments are
+    /// salted independently, so they are never equal and this contract cannot and
+    /// does not compare them for identity: that equality is what the FHE
+    /// evaluation established.
     function _resolveSides(
         Match.ConfidentialMatchResultV4 calldata result,
         bytes32 anchorCommitment,
-        Counterparty calldata counterparty
+        Counterparty calldata counterparty,
+        uint64 openedAt
     ) private view returns (bytes32 counterpartyCommitment) {
         if (result.anchorCount != EXPECTED_ANCHOR_COUNT) {
             revert AnchorCountMismatch(result.anchorCount);
@@ -363,66 +396,124 @@ contract PrivateMatchBinder {
             revert AnchorCommitmentNotInSession(anchorCommitment);
         }
 
-        bytes32 observed;
-        if (counterparty.kind == CounterpartyKind.RegisteredSource) {
-            observed = sourceRegistry.assetCommitmentOf(counterparty.anchorId);
-        } else if (counterparty.kind == CounterpartyKind.VaultAnchor) {
-            if (counterparty.vault.code.length == 0) revert AnchorNotDeployed(counterparty.vault);
-            observed = IAnchoredReceivable(counterparty.vault).assetCommitment();
-        } else {
-            revert CounterpartyNotAnchored();
+        MordantSourceIdentityRegistry.SourceAnchor memory source =
+            sourceRegistry.anchor(counterparty.anchorId);
+        if (source.assetCommitment != counterpartyCommitment) {
+            revert CounterpartyCommitmentMismatch(source.assetCommitment, counterpartyCommitment);
         }
-        if (observed != counterpartyCommitment) {
-            revert CounterpartyCommitmentMismatch(observed, counterpartyCommitment);
+        // A source produced after the session opened was not anticipated by it,
+        // so a result cannot be attached to a counterparty invented afterwards.
+        if (source.registeredAt > openedAt) {
+            revert CounterpartyRegisteredAfterSessionOpened(source.registeredAt, openedAt);
+        }
+        if (counterparty.vault != address(0)) {
+            if (counterparty.vault.code.length == 0) revert AnchorNotDeployed(counterparty.vault);
+            bytes32 observed = IAnchoredReceivable(counterparty.vault).assetCommitment();
+            if (observed != counterpartyCommitment) {
+                revert CounterpartyVaultMismatch(observed, counterpartyCommitment);
+            }
         }
     }
 
-    /// @dev The issuer that pre-committed the session must be the issuer that
-    /// attested the anchor. Otherwise any authorized issuer could pre-commit a
-    /// session against someone else's published commitment.
-    function _assertPrecommitmentIssuer(bytes32 sessionId, bytes32 anchorIssuer) private view {
-        (, bytes32 recordedIssuer,,,) = precommitRegistry.precommitments(sessionId);
-        if (recordedIssuer != anchorIssuer) {
-            revert PrecommitmentIssuerMismatch(recordedIssuer, anchorIssuer);
+    /// @dev The pre-commitment is the registry's answer, never the caller's
+    /// claim, and it is the reason `requireBindable` can be trusted at all: the
+    /// issuer named this session against this anchor's commitment before the
+    /// session was opened, so a match cannot be shopped to a convenient anchor
+    /// after the fact.
+    function _assertPrecommitment(
+        Governance.SessionGovernance memory session,
+        bytes32 sessionId,
+        bytes32 anchorCommitment,
+        bytes32 anchorIssuer
+    ) private view {
+        bool precommitted = precommitRegistry.isSessionPrecommitted(sessionId, anchorCommitment);
+        if (!precommitted) revert SessionNotPrecommittedForAnchor(sessionId, anchorCommitment);
+        MordantSessionPrecommitRegistry.Precommitment memory record =
+            precommitRegistry.precommitmentOf(sessionId);
+        // The issuer that pre-committed must be the issuer that attested the
+        // anchor. Otherwise any authorized issuer could pre-commit a session
+        // against someone else's published commitment.
+        if (record.issuerKeyId != anchorIssuer) {
+            revert PrecommitmentIssuerMismatch(record.issuerKeyId, anchorIssuer);
+        }
+        if (record.recordedAt > session.openedAt) {
+            revert PrecommitmentAfterSessionOpened(record.recordedAt, session.openedAt);
+        }
+        // The issuer named the governance records it expected before the session
+        // was opened, so the controllers cannot have been chosen afterwards.
+        if (record.governanceRecordA != session.recordA) {
+            revert PrecommittedGovernanceMismatch(record.governanceRecordA, session.recordA);
+        }
+        if (record.governanceRecordB != session.recordB) {
+            revert PrecommittedGovernanceMismatch(record.governanceRecordB, session.recordB);
         }
     }
 
     function _requireBilateralConsent(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
+        Governance.SessionGovernance memory session,
         address anchor,
         DisclosureConsent calldata consentA,
         DisclosureConsent calldata consentB
     ) private view {
-        // Consents are matched to scopes by content, not by argument order, so a
+        // Consents are matched to sides by content, not by argument order, so a
         // caller cannot satisfy both sides with two signatures from one party.
-        if (
-            consentA.scopeCommitment != envelope.result.scopeCommitmentA
-                || consentB.scopeCommitment != envelope.result.scopeCommitmentB
-        ) revert DisclosureConsentMissing(consentA.scopeCommitment);
-        _requireConsent(envelope, anchor, consentA);
-        _requireConsent(envelope, anchor, consentB);
+        if (consentA.scopeCommitment != envelope.result.scopeCommitmentA) {
+            revert ConsentScopeMismatch(
+                consentA.scopeCommitment, envelope.result.scopeCommitmentA
+            );
+        }
+        if (consentB.scopeCommitment != envelope.result.scopeCommitmentB) {
+            revert ConsentScopeMismatch(
+                consentB.scopeCommitment, envelope.result.scopeCommitmentB
+            );
+        }
+        _requireConsent(envelope, session.recordA, anchor, consentA);
+        _requireConsent(envelope, session.recordB, anchor, consentB);
     }
 
+    /// @dev `frozenRecord` comes from the session's governance context. A consent
+    /// made under any other record, whether a later rotation or an earlier one,
+    /// is refused before its signature is even recovered.
     function _requireConsent(
         ECDSAQuorumMatchVerifierV4.MatchEnvelope calldata envelope,
+        bytes32 frozenRecord,
         address anchor,
         DisclosureConsent calldata consent
     ) private view {
-        address controller = scopeController[consent.scopeCommitment];
-        if (controller == address(0)) revert ScopeControllerUnknown(consent.scopeCommitment);
+        if (consent.governanceRecord != frozenRecord) {
+            revert ConsentRecordNotFrozenForSession(
+                consent.scopeCommitment, consent.governanceRecord
+            );
+        }
+        if (consent.disclosureVersion != DISCLOSURE_VERSION) {
+            revert DisclosureVersionMismatch(consent.disclosureVersion, DISCLOSURE_VERSION);
+        }
         if (block.timestamp > consent.validUntil) {
             revert DisclosureConsentExpired(consent.scopeCommitment, consent.validUntil);
+        }
+        if (consent.nonce == 0 || consumedConsentNonce[consent.scopeCommitment][consent.nonce]) {
+            revert ConsentNonceConsumed(consent.scopeCommitment, consent.nonce);
+        }
+        Governance.ScopeAuthorization memory authorization = governance.record(frozenRecord);
+        if (authorization.scopeCommitment != consent.scopeCommitment) {
+            revert ConsentScopeMismatch(consent.scopeCommitment, authorization.scopeCommitment);
         }
         bytes32 digest = consentDigest(
             envelope.result.sessionId,
             envelope.resultCommitment,
-            consent.scopeCommitment,
+            envelope.result.matchCommitment,
+            envelope.governanceContextDigest,
             anchor,
-            consent.validUntil
+            consent
         );
-        if (_recover(digest, consent.signature) != controller) {
+        if (_recover(digest, consent.signature) != authorization.controller) {
             revert DisclosureConsentMissing(consent.scopeCommitment);
         }
+    }
+
+    function _consumeConsent(DisclosureConsent calldata consent) private {
+        consumedConsentNonce[consent.scopeCommitment][consent.nonce] = true;
     }
 
     function _recover(bytes32 digest, bytes memory signature) private pure returns (address signer) {

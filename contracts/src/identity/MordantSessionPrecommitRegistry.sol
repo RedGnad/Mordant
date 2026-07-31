@@ -38,7 +38,7 @@ contract MordantSessionPrecommitRegistry {
     string internal constant DOMAIN_VERSION = "1";
 
     bytes32 public constant PRECOMMIT_TYPEHASH = keccak256(
-        "ExactSessionPrecommitment(uint256 chainId,address registry,bytes32 sessionId,bytes32 strictAssetCommitment,bytes32 equivalenceOf,bytes32 supersedesCandidateSession,bytes32 issuerKeyId,uint32 identityEpoch,uint64 validUntil,uint256 nonce)"
+        "ExactSessionPrecommitment(uint256 chainId,address registry,bytes32 sessionId,bytes32 strictAssetCommitment,bytes32 equivalenceOf,bytes32 supersedesCandidateSession,bytes32 governanceRecordA,bytes32 governanceRecordB,bytes32 issuerKeyId,uint32 identityEpoch,uint64 validUntil,uint256 nonce)"
     );
     bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
@@ -57,6 +57,12 @@ contract MordantSessionPrecommitRegistry {
         /// @dev The candidate session that prompted reconciliation, recorded for
         /// audit. It is never a source of authority.
         bytes32 supersedesCandidateSession;
+        /// @dev The two scope-governance authorization records the issuer expects
+        /// this session to run under. They exist before the session is opened, so
+        /// the issuer can name them, and the binder can refuse a session whose
+        /// controllers were chosen after the fact.
+        bytes32 governanceRecordA;
+        bytes32 governanceRecordB;
         bytes32 issuerKeyId;
         uint32 identityEpoch;
         uint64 validUntil;
@@ -67,6 +73,8 @@ contract MordantSessionPrecommitRegistry {
         bytes32 strictAssetCommitment;
         bytes32 issuerKeyId;
         bytes32 supersedesCandidateSession;
+        bytes32 governanceRecordA;
+        bytes32 governanceRecordB;
         uint64 recordedAt;
         bool recorded;
     }
@@ -100,7 +108,9 @@ contract MordantSessionPrecommitRegistry {
                 || precommitment.sessionId == bytes32(0)
                 || precommitment.strictAssetCommitment == bytes32(0)
                 || precommitment.issuerKeyId == bytes32(0) || precommitment.identityEpoch == 0
-                || precommitment.nonce == 0
+                || precommitment.nonce == 0 || precommitment.governanceRecordA == bytes32(0)
+                || precommitment.governanceRecordB == bytes32(0)
+                || precommitment.governanceRecordA == precommitment.governanceRecordB
         ) revert InvalidPrecommitment();
         if (block.timestamp > precommitment.validUntil) revert InvalidPrecommitment();
         // The session that produced the tolerant signal is not the session that
@@ -129,6 +139,8 @@ contract MordantSessionPrecommitRegistry {
             strictAssetCommitment: precommitment.strictAssetCommitment,
             issuerKeyId: precommitment.issuerKeyId,
             supersedesCandidateSession: precommitment.supersedesCandidateSession,
+            governanceRecordA: precommitment.governanceRecordA,
+            governanceRecordB: precommitment.governanceRecordB,
             recordedAt: uint64(block.timestamp),
             recorded: true
         });
@@ -140,6 +152,10 @@ contract MordantSessionPrecommitRegistry {
             precommitment.equivalenceOf,
             precommitment.supersedesCandidateSession
         );
+    }
+
+    function precommitmentOf(bytes32 sessionId) external view returns (Precommitment memory) {
+        return precommitments[sessionId];
     }
 
     /// @notice The answer a binder must consult. It is never a caller assertion.
@@ -190,11 +206,12 @@ contract MordantSessionPrecommitRegistry {
                 ),
                 abi.encode(
                     precommitment.supersedesCandidateSession,
+                    precommitment.governanceRecordA,
+                    precommitment.governanceRecordB,
                     precommitment.issuerKeyId,
-                    precommitment.identityEpoch,
-                    precommitment.validUntil,
-                    precommitment.nonce
-                )
+                    precommitment.identityEpoch
+                ),
+                abi.encode(precommitment.validUntil, precommitment.nonce)
             )
         );
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));

@@ -18,6 +18,8 @@ import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation
 import {MordantSourceIdentityRegistry} from "../src/identity/MordantSourceIdentityRegistry.sol";
 import {ECDSAQuorumMatchVerifierV4} from "../src/v4/ECDSAQuorumMatchVerifierV4.sol";
 import {IAnchoredReceivable} from "../src/v4/IAnchoredReceivable.sol";
+import {MordantScopeGovernanceRegistry as Governance} from
+    "../src/v4/MordantScopeGovernanceRegistry.sol";
 import {PrivateMatchBinder} from "../src/v4/PrivateMatchBinder.sol";
 
 /// @notice Settable identity anchor, for the anchor-state negatives a real vault
@@ -75,12 +77,19 @@ contract PrivateMatchBinderV4Test is Test {
     uint256 private constant HOLDER_KEY = 0xAA01;
     uint256 private constant CONTROLLER_A_KEY = 0xC0A;
     uint256 private constant CONTROLLER_B_KEY = 0xC0B;
+    uint256 private constant NEW_CONTROLLER_A_KEY = 0xC0A2;
     uint256 private constant OUTSIDER_KEY = 0x0175;
 
     bytes32 private constant POLICY_ID = keccak256("mordant.double-financing/1");
     uint32 private constant POLICY_VERSION = 1;
     bytes32 private constant SCOPE_A = keccak256("scope-platform-a");
     bytes32 private constant SCOPE_B = keccak256("scope-platform-b");
+    bytes32 private constant SCOPE_C = keccak256("scope-platform-c");
+    bytes32 private constant ORG_A = keccak256("org-platform-a");
+    bytes32 private constant ORG_B = keccak256("org-platform-b");
+    bytes32 private constant ORG_C = keccak256("org-platform-c");
+    bytes32 private constant KEY_A = keccak256("controller-key-a");
+    bytes32 private constant KEY_B = keccak256("controller-key-b");
     bytes32 private constant SESSION = keccak256("session-exact-1");
     uint64 private constant CURE_PERIOD = 7 days;
 
@@ -92,6 +101,7 @@ contract PrivateMatchBinderV4Test is Test {
     address private holder;
     address private controllerA;
     address private controllerB;
+    address private newControllerA;
 
     uint256[3] private validatorKeys;
     address[] private validatorSet;
@@ -102,6 +112,7 @@ contract PrivateMatchBinderV4Test is Test {
     MordantFactoryV2 private factory;
     MordantSourceIdentityRegistry private sources;
     MordantSessionPrecommitRegistry private precommits;
+    Governance private governance;
     ECDSAQuorumMatchVerifierV4 private verifier;
     PrivateMatchBinder private binder;
 
@@ -110,9 +121,18 @@ contract PrivateMatchBinderV4Test is Test {
     bytes32 private counterpartyCommitment;
     bytes32 private counterpartyAnchorId;
 
+    /// @dev The live governance records for each scope. Rotation appends, so a
+    /// test that rotates keeps the old digest to prove it still resolves.
+    bytes32 private recordA;
+    bytes32 private recordB;
+    uint32 private versionA = 1;
+    uint32 private versionB = 1;
+    uint256 private governanceNonce = 1;
+
     /// @dev One CVA token per vault: the factory binds a token to a single root.
     mapping(address anchor => MockCvaAdapter) private adapterOf;
     mapping(address anchor => MockERC20) private cvaOf;
+    mapping(bytes32 sessionId => bytes32 contextDigest) private contextOf;
 
     bytes32 private stableId;
     uint64 private protectionEnd;
@@ -128,6 +148,7 @@ contract PrivateMatchBinderV4Test is Test {
         holder = vm.addr(HOLDER_KEY);
         controllerA = vm.addr(CONTROLLER_A_KEY);
         controllerB = vm.addr(CONTROLLER_B_KEY);
+        newControllerA = vm.addr(NEW_CONTROLLER_A_KEY);
 
         eligibility = new MockEligibility();
         eligibility.setEligible(buyer, 1, true);
@@ -150,17 +171,19 @@ contract PrivateMatchBinderV4Test is Test {
         stableId = _stableId("INV-2026-0042", 20_500);
         protectionEnd = uint64(block.timestamp + 30 days);
 
+        governance = new Governance(address(this));
+        recordA = _authorize(SCOPE_A, controllerA, KEY_A, ORG_A, 1, versionA);
+        recordB = _authorize(SCOPE_B, controllerB, KEY_B, ORG_B, 1, versionB);
+
         // 2-of-3, the quorum shape the dealerless ceremony releases under.
         validatorKeys = [uint256(0xA11), uint256(0xB22), uint256(0xC33)];
         _sortValidators();
-        verifier = new ECDSAQuorumMatchVerifierV4(address(this), validatorSet, 2);
+        verifier = new ECDSAQuorumMatchVerifierV4(address(this), governance, validatorSet, 2);
         verifier.setPolicyVersion(POLICY_ID, POLICY_VERSION);
-        verifier.setScopeAuthorized(SCOPE_A, true);
-        verifier.setScopeAuthorized(SCOPE_B, true);
 
         binder = new PrivateMatchBinder(
-            address(this),
             verifier,
+            governance,
             precommits,
             sources,
             POLICY_ID,
@@ -169,8 +192,6 @@ contract PrivateMatchBinderV4Test is Test {
             CURE_PERIOD,
             keccak256("recourse.notice/1")
         );
-        binder.setScopeController(SCOPE_A, controllerA);
-        binder.setScopeController(SCOPE_B, controllerB);
 
         // Local side: a real V2 vault, activated so the receivable is Outstanding
         // with funded protection.
@@ -197,6 +218,7 @@ contract PrivateMatchBinderV4Test is Test {
         assertEq(record.anchor, address(vault));
         assertEq(record.policyId, POLICY_ID);
         assertEq(record.policyVersion, POLICY_VERSION);
+        assertEq(record.governanceContextDigest, contextOf[SESSION]);
         assertTrue(record.conflictConfirmed);
         assertEq(record.cureDeadline, uint64(block.timestamp) + CURE_PERIOD);
         assertTrue(record.open);
@@ -231,12 +253,437 @@ contract PrivateMatchBinderV4Test is Test {
         assertTrue(record.anchorCommitment != record.counterpartyCommitment);
     }
 
+    /* ------------------------------------------------- governance temporality */
+
+    function testAuthorizationCannotBeBackDated() public {
+        uint64 before = uint64(block.timestamp);
+        vm.warp(before + 1 days);
+        bytes32 fresh = _authorize(SCOPE_C, controllerA, KEY_A, ORG_C, 1, 1);
+        Governance.ScopeAuthorization memory record = governance.record(fresh);
+        // `validFrom` is the authorizing block, not a caller-supplied value, so
+        // there is no argument through which a record could reach backwards.
+        assertEq(record.validFrom, uint64(block.timestamp));
+        assertTrue(record.validFrom > before);
+        assertFalse(governance.isLiveAt(fresh, before));
+    }
+
+    function testControllerChangedAfterSessionInitiationDoesNotApply() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 frozen = recordA;
+        _openSession(SESSION);
+
+        // Rotation happens after the session was opened.
+        _rotateScopeA(newControllerA);
+        assertTrue(recordA != frozen);
+
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        // The newly appointed controller consents under the record it was
+        // appointed by. That record is not the one this session froze.
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, recordA, NEW_CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentRecordNotFrozenForSession.selector, SCOPE_A, recordA
+            )
+        );
+    }
+
+    function testControllerChangedAfterResultGenerationDoesNotApply() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 frozen = _openSessionRecord(SESSION);
+        // The result exists before anyone rotates anything.
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        _rotateScopeA(newControllerA);
+
+        // The new controller cannot consent for a result that predates it.
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, recordA, NEW_CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentRecordNotFrozenForSession.selector, SCOPE_A, recordA
+            )
+        );
+
+        // The controller that held the authority when the session was opened
+        // still does, for this session, forever.
+        binder.bindRecourse(
+            envelope,
+            _attest(envelope),
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, frozen, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY)
+        );
+        assertTrue(binder.recourseOf(SESSION).open);
+    }
+
+    function testHistoricalControllerCannotSignForANewSession() public {
+        bytes32 historical = recordA;
+        _rotateScopeA(newControllerA);
+
+        bytes32 fresh = keccak256("session-after-rotation");
+        _precommit(fresh, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(fresh);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(fresh, 1);
+
+        // The retired controller's authority did not follow it forward.
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, historical, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentRecordNotFrozenForSession.selector, SCOPE_A, historical
+            )
+        );
+    }
+
+    function testControllerEpochSubstitutionIsRefused() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 frozen = _openSessionRecord(SESSION);
+        // Same controller address, new epoch. The record digest differs, so the
+        // epoch cannot be swapped underneath a session.
+        _rotateScopeA(controllerA);
+        assertEq(governance.record(recordA).controller, controllerA);
+        assertTrue(governance.record(recordA).controllerEpoch != governance.record(frozen).controllerEpoch);
+
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentRecordNotFrozenForSession.selector, SCOPE_A, recordA
+            )
+        );
+    }
+
+    function testConsentSignedUnderTheWrongGovernanceRecordIsRefused() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 frozen = _openSessionRecord(SESSION);
+        _rotateScopeA(controllerA);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+
+        // Signed over the digest of the CURRENT record, then submitted naming the
+        // frozen one. The controller identity, epoch and version are read from
+        // the named record, so the digests differ and the signature fails.
+        PrivateMatchBinder.DisclosureConsent memory forged =
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY);
+        forged.governanceRecord = frozen;
+
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            forged,
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_A)
+        );
+    }
+
+    function testAConsentCannotBeMadeUnderTheOtherSidesRecord() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, recordB, CONTROLLER_B_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentRecordNotFrozenForSession.selector, SCOPE_A, recordB
+            )
+        );
+    }
+
+    function testAConsentNonceIsOneShot() public {
+        _bind(SESSION, 1);
+        // The nonce used for scope A in that session is spent for good.
+        uint256 spent = _consentNonce(SESSION, SCOPE_A);
+        assertTrue(binder.consumedConsentNonce(SCOPE_A, spent));
+
+        bytes32 second = keccak256("session-exact-nonce");
+        _precommit(second, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(second);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(second, 2);
+        PrivateMatchBinder.DisclosureConsent memory replayed =
+            _consentWithNonce(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY, spent);
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            replayed,
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(PrivateMatchBinder.ConsentNonceConsumed.selector, SCOPE_A, spent)
+        );
+    }
+
+    function testAScopeAuthorizedAfterResultGenerationCannotValidateIt() public {
+        // Scope C has no authorization record at all, so no session naming it can
+        // be opened and no result naming it has a context to be signed under.
+        bytes32 late = keccak256("session-late-scope");
+        _precommit(late, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 recordC = governance.versionRecord(SCOPE_C, 1);
+        assertEq(recordC, bytes32(0));
+
+        vm.prank(controllerA);
+        vm.expectRevert(abi.encodeWithSelector(Governance.UnknownRecord.selector, bytes32(0)));
+        governance.openSession(late, recordA, bytes32(0));
+
+        // The parties produce a result anyway, naming a context that does not
+        // exist.
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(late, 1);
+        envelope.result.scopeCommitmentB = SCOPE_C;
+        envelope.governanceContextDigest = keccak256("fabricated-context");
+        envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
+        _expectRevert(
+            envelope, abi.encodeWithSelector(Governance.SessionNotOpened.selector, late)
+        );
+
+        // The governor now authorizes scope C. The earlier result is still dead:
+        // its context digest was never frozen for this session.
+        bytes32 authorizedLate = _authorize(SCOPE_C, controllerB, KEY_B, ORG_C, 1, 1);
+        vm.prank(controllerA);
+        bytes32 opened = governance.openSession(late, recordA, authorizedLate);
+        assertTrue(opened != envelope.governanceContextDigest);
+        _expectRevert(
+            envelope,
+            abi.encodeWithSelector(
+                PrivateMatchBinder.GovernanceContextMismatch.selector,
+                keccak256("fabricated-context"),
+                opened
+            )
+        );
+    }
+
+    function testScopeAuthorizationEpochSubstitutionIsRefused() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 frozenContext = _openSession(SESSION);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+
+        // Rotate both scopes and open a second session, producing a genuine but
+        // different context. Substituting it into the first session's envelope
+        // is exactly the epoch swap this is meant to block.
+        _rotateScopeA(controllerA);
+        bytes32 second = keccak256("session-substitution");
+        _precommit(second, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 otherContext = _openSession(second);
+        assertTrue(otherContext != frozenContext);
+
+        envelope.governanceContextDigest = otherContext;
+        envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
+        _expectRevert(
+            envelope,
+            abi.encodeWithSelector(
+                PrivateMatchBinder.GovernanceContextMismatch.selector, otherContext, frozenContext
+            )
+        );
+    }
+
+    function testTheGovernorCannotRetroactivelyAuthorizeACompletedResult() public {
+        _bind(SESSION, 1);
+        PrivateMatchBinder.RecourseRecord memory before = binder.recourseOf(SESSION);
+        bytes32 frozen = recordA;
+
+        // Every lever the governor holds, applied after the fact.
+        _rotateScopeA(newControllerA);
+        _authorize(SCOPE_C, newControllerA, KEY_A, ORG_C, 1, 1);
+
+        // The completed record is untouched, the frozen authorization still
+        // resolves to the original controller, and the session cannot be rebound.
+        PrivateMatchBinder.RecourseRecord memory current = binder.recourseOf(SESSION);
+        assertEq(current.governanceContextDigest, before.governanceContextDigest);
+        assertEq(current.anchorCommitment, before.anchorCommitment);
+        assertEq(governance.record(frozen).controller, controllerA);
+        assertEq(governance.sessionGovernance(SESSION).recordA, frozen);
+
+        _expectRevert(
+            _exactEnvelope(SESSION, 2),
+            abi.encodeWithSelector(PrivateMatchBinder.SessionAlreadyBound.selector, SESSION)
+        );
+    }
+
+    function testRotationIsAppendOnlyAndNonRetroactive() public {
+        bytes32 first = recordA;
+        uint64 openedAt = uint64(block.timestamp);
+        vm.warp(block.timestamp + 1 days);
+        _rotateScopeA(newControllerA);
+
+        // The historical record still exists, still names its controller, and is
+        // still live at the moment it was used.
+        Governance.ScopeAuthorization memory historical = governance.record(first);
+        assertEq(historical.controller, controllerA);
+        assertEq(historical.authorizationVersion, 1);
+        assertTrue(governance.isLiveAt(first, openedAt));
+        // The new record is a different version of the same scope.
+        assertEq(governance.record(recordA).authorizationVersion, 2);
+        assertEq(governance.record(recordA).scopeCommitment, SCOPE_A);
+        assertEq(governance.latestVersion(SCOPE_A), 2);
+        assertEq(governance.versionRecord(SCOPE_A, 1), first);
+    }
+
+    function testAuthorizationVersionsMustBeSequential() public {
+        Governance.AuthorizationRequest memory request = Governance.AuthorizationRequest({
+            scopeCommitment: SCOPE_A,
+            controller: newControllerA,
+            controllerKeyId: KEY_A,
+            organizationId: ORG_A,
+            controllerEpoch: 9,
+            authorizationVersion: 7,
+            nonce: governanceNonce++
+        });
+        vm.expectRevert(abi.encodeWithSelector(Governance.VersionNotSequential.selector, 7, 2));
+        governance.authorize(request);
+    }
+
+    function testOnlyAControllerMayOpenASession() public {
+        vm.prank(address(0xBAD));
+        vm.expectRevert(abi.encodeWithSelector(Governance.NotAController.selector, address(0xBAD)));
+        governance.openSession(keccak256("session-unauthorized"), recordA, recordB);
+    }
+
+    function testASessionFreezesItsAuthorityOnlyOnce() public {
+        _openSession(SESSION);
+        vm.prank(controllerA);
+        vm.expectRevert(abi.encodeWithSelector(Governance.SessionAlreadyOpened.selector, SESSION));
+        governance.openSession(SESSION, recordA, recordB);
+    }
+
+    function testTwoScopesOfOneOrganizationCannotOpenASession() public {
+        bytes32 sibling = _authorize(SCOPE_C, controllerA, KEY_A, ORG_A, 1, 1);
+        vm.prank(controllerA);
+        vm.expectRevert(abi.encodeWithSelector(Governance.SameOrganization.selector, ORG_A));
+        governance.openSession(keccak256("session-sibling"), recordA, sibling);
+    }
+
+    function testOnlyTheGovernorAuthorizes() public {
+        Governance.AuthorizationRequest memory request = Governance.AuthorizationRequest({
+            scopeCommitment: SCOPE_C,
+            controller: controllerA,
+            controllerKeyId: KEY_A,
+            organizationId: ORG_C,
+            controllerEpoch: 1,
+            authorizationVersion: 1,
+            nonce: governanceNonce++
+        });
+        vm.prank(address(0xBAD));
+        vm.expectRevert(abi.encodeWithSelector(Governance.Unauthorized.selector, address(0xBAD)));
+        governance.authorize(request);
+    }
+
+    /* -------------------------------------------------- pre-session anchoring */
+
+    function testACounterpartyRegisteredAfterTheSessionIsRefused() public {
+        // Produce the session first, then invent the counterparty.
+        bytes32 late = keccak256("session-late-source");
+        _precommit(late, anchorCommitment, ISSUER_KEY, issuer);
+        uint64 openedAt = uint64(block.timestamp);
+        _openSession(late);
+
+        vm.warp(block.timestamp + 1 hours);
+        bytes32 lateCommitment = keccak256("late-counterparty-commitment");
+        bytes32 lateAnchorId = _registerSource(lateCommitment, 950);
+        uint64 registeredAt = sources.anchor(lateAnchorId).registeredAt;
+        assertTrue(registeredAt > openedAt);
+
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope =
+            _exactEnvelope(late, 1, anchorCommitment);
+        envelope.result.inputCommitmentB = lateCommitment;
+        envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
+
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            PrivateMatchBinder.Counterparty({anchorId: lateAnchorId, vault: address(0)}),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.CounterpartyRegisteredAfterSessionOpened.selector,
+                registeredAt,
+                openedAt
+            )
+        );
+    }
+
+    function testASessionOpenedUnderUnexpectedGovernanceIsRefused() public {
+        // The issuer pre-commits naming the records it expects, before anyone can
+        // know the result.
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        bytes32 expected = precommits.precommitmentOf(SESSION).governanceRecordA;
+
+        // A controller is then swapped in and the session is opened under the new
+        // record. The issuer never agreed to that authority.
+        _rotateScopeA(newControllerA);
+        _openSession(SESSION);
+
+        _expectRevert(
+            _exactEnvelope(SESSION, 1),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.PrecommittedGovernanceMismatch.selector, expected, recordA
+            )
+        );
+    }
+
+    function testAPrecommitmentMadeAfterTheSessionIsRefused() public {
+        bytes32 late = keccak256("session-late-precommit");
+        uint64 openedAt = uint64(block.timestamp);
+        _openSession(late);
+        vm.warp(block.timestamp + 1 hours);
+        _precommit(late, anchorCommitment, ISSUER_KEY, issuer);
+        uint64 recordedAt = precommits.precommitmentOf(late).recordedAt;
+
+        _expectRevert(
+            _exactEnvelope(late, 1),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.PrecommitmentAfterSessionOpened.selector, recordedAt, openedAt
+            )
+        );
+    }
+
+    function testAnUnregisteredCounterpartyIsRefused() public {
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
+        _expectRevert(
+            _exactEnvelope(SESSION, 1),
+            IAnchoredReceivable(address(vault)),
+            PrivateMatchBinder.Counterparty({anchorId: keccak256("nothing"), vault: address(0)}),
+            abi.encodeWithSelector(
+                MordantSourceIdentityRegistry.UnknownAnchor.selector, keccak256("nothing")
+            )
+        );
+    }
+
+    function testCounterpartyAnchorMustCarryTheCommitmentInTheSession() public {
+        bytes32 unrelated = _registerSource(keccak256("unrelated-commitment"), 901);
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
+        _expectRevert(
+            _exactEnvelope(SESSION, 1),
+            IAnchoredReceivable(address(vault)),
+            PrivateMatchBinder.Counterparty({anchorId: unrelated, vault: address(0)}),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.CounterpartyCommitmentMismatch.selector,
+                keccak256("unrelated-commitment"),
+                counterpartyCommitment
+            )
+        );
+    }
+
     /* --------------------------------------------------------- substitution */
 
     function testAResultCannotBeMovedToAnotherAnchor() public {
         MordantInvoiceVaultV2 other = _createVault(keccak256("root-other"), 2);
         _activate(other);
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
 
         _expectRevert(
             _exactEnvelope(SESSION, 1),
@@ -250,6 +697,7 @@ contract PrivateMatchBinderV4Test is Test {
     function testASessionNotPrecommittedForTheAnchorCannotBind() public {
         // The anchor is genuinely a side of the session, but no issuer named this
         // session against it before the session ran.
+        _openSession(SESSION);
         _expectRevert(
             _exactEnvelope(SESSION, 1),
             abi.encodeWithSelector(
@@ -263,6 +711,7 @@ contract PrivateMatchBinderV4Test is Test {
         // into a pre-commitment. The binder requires the pre-committing issuer to
         // be the issuer that attested the anchor.
         _precommit(SESSION, anchorCommitment, OTHER_ISSUER_KEY, otherIssuer);
+        _openSession(SESSION);
         _expectRevert(
             _exactEnvelope(SESSION, 1),
             abi.encodeWithSelector(
@@ -275,6 +724,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAnAnchorCannotBeMatchedAgainstItself() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         envelope.result.inputCommitmentB = envelope.result.inputCommitmentA;
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
@@ -284,43 +734,10 @@ contract PrivateMatchBinderV4Test is Test {
         );
     }
 
-    function testCounterpartyMustBeAnchoredBeforeTheSession() public {
-        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
-        PrivateMatchBinder.Counterparty memory unanchored;
-        _expectRevert(
-            _exactEnvelope(SESSION, 1),
-            IAnchoredReceivable(address(vault)),
-            unanchored,
-            abi.encodeWithSelector(PrivateMatchBinder.CounterpartyNotAnchored.selector)
-        );
-    }
-
-    function testCounterpartyAnchorMustCarryTheCommitmentInTheSession() public {
-        bytes32 unrelated = _registerSource(keccak256("unrelated-commitment"), 901);
-        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
-        PrivateMatchBinder.Counterparty memory wrong = PrivateMatchBinder.Counterparty({
-            kind: PrivateMatchBinder.CounterpartyKind.RegisteredSource,
-            anchorId: unrelated,
-            vault: address(0)
-        });
-        _expectRevert(
-            _exactEnvelope(SESSION, 1),
-            IAnchoredReceivable(address(vault)),
-            wrong,
-            abi.encodeWithSelector(
-                PrivateMatchBinder.CounterpartyCommitmentMismatch.selector,
-                keccak256("unrelated-commitment"),
-                counterpartyCommitment
-            )
-        );
-    }
-
     /* --------------------------------------------------------------- replay */
 
     function testTheSameSessionCannotBindTwice() public {
         _bind(SESSION, 1);
-        // The session is already pre-committed and already bound. A second
-        // envelope for it, however well formed, has nothing left to bind.
         _expectRevert(
             _exactEnvelope(SESSION, 2),
             abi.encodeWithSelector(PrivateMatchBinder.SessionAlreadyBound.selector, SESSION)
@@ -331,6 +748,7 @@ contract PrivateMatchBinderV4Test is Test {
         _bind(SESSION, 1);
         bytes32 second = keccak256("session-exact-2");
         _precommit(second, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(second);
         // A new session, but the same envelope nonce.
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(second, 1);
         _expectRevert(
@@ -353,6 +771,7 @@ contract PrivateMatchBinderV4Test is Test {
 
         bytes32 second = keccak256("session-exact-3");
         _precommit(second, other.assetCommitment(), ISSUER_KEY, issuer);
+        _openSession(second);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope =
             _exactEnvelope(second, 2, other.assetCommitment());
         envelope.result.inputCommitmentB = otherCounterparty;
@@ -362,11 +781,7 @@ contract PrivateMatchBinderV4Test is Test {
         _expectRevert(
             envelope,
             IAnchoredReceivable(address(other)),
-            PrivateMatchBinder.Counterparty({
-                kind: PrivateMatchBinder.CounterpartyKind.RegisteredSource,
-                anchorId: otherAnchorId,
-                vault: address(0)
-            }),
+            PrivateMatchBinder.Counterparty({anchorId: otherAnchorId, vault: address(0)}),
             abi.encodeWithSelector(
                 ECDSAQuorumMatchVerifierV4.MatchAlreadyConsumed.selector,
                 keccak256(abi.encode("match", SESSION))
@@ -378,6 +793,7 @@ contract PrivateMatchBinderV4Test is Test {
         _bind(SESSION, 1);
         bytes32 second = keccak256("session-exact-4");
         _precommit(second, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(second);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(second, 3);
         // Same two anchors, reversed: still the same decision.
         envelope.result.inputCommitmentA = counterpartyCommitment;
@@ -396,6 +812,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testACandidateResultCannotBind() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         _expectRevert(
             _candidateEnvelope(SESSION, 1),
             abi.encodeWithSelector(Match.CandidateSessionCannotBind.selector, SESSION)
@@ -404,6 +821,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testANoMatchResultCannotBind() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         envelope.result.outcome = Match.Outcome.NoMatchForSubmittedIdentities;
         envelope.result.exactMatchConfirmed = false;
@@ -415,6 +833,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testANotComparableResultCannotBind() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         envelope.result.outcome = Match.Outcome.NotComparable;
         envelope.result.exactMatchConfirmed = false;
@@ -429,6 +848,7 @@ contract PrivateMatchBinderV4Test is Test {
     function testTheVerifierRefusesACandidateResultEvenWithAValidQuorum() public {
         // The result invariants run before any signature check, so a tolerant
         // result cannot reach the chain by way of a well-formed quorum.
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _candidateEnvelope(SESSION, 1);
         envelope.binder = address(this);
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
@@ -443,6 +863,7 @@ contract PrivateMatchBinderV4Test is Test {
     function testAnUnactivatedReceivableCannotCarryRecourse() public {
         MordantInvoiceVaultV2 idle = _createVault(keccak256("root-idle"), 3);
         _precommit(SESSION, idle.assetCommitment(), ISSUER_KEY, issuer);
+        _openSession(SESSION);
         _expectRevert(
             _exactEnvelope(SESSION, 1, idle.assetCommitment()),
             IAnchoredReceivable(address(idle)),
@@ -482,6 +903,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testACodelessAddressCannotBeAnAnchor() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         _expectRevert(
             _exactEnvelope(SESSION, 1),
             IAnchoredReceivable(address(0xDEAD)),
@@ -493,6 +915,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testOneSidedConsentCannotPublishAConflict() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         // Platform A signs for both scopes. The counterparty never agreed to
         // disclosure, which is the whole point of the private mode.
@@ -500,29 +923,33 @@ contract PrivateMatchBinderV4Test is Test {
             envelope,
             IAnchoredReceivable(address(vault)),
             _source(),
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY),
-            _consent(envelope, SCOPE_B, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_A_KEY),
             abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_B)
         );
     }
 
     function testConsentsCannotBeSuppliedForTheWrongScopes() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         // Both consents are individually valid, but swapped: each is matched to
-        // its scope by content, not by argument position.
+        // its side by content, not by argument position.
         _expectRevert(
             envelope,
             IAnchoredReceivable(address(vault)),
             _source(),
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY),
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY),
-            abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_B)
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentScopeMismatch.selector, SCOPE_B, SCOPE_A
+            )
         );
     }
 
     function testConsentIsBoundToTheResultItAuthorizes() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         // A consent signed over a different result does not carry to this one.
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory decoy = _exactEnvelope(SESSION, 2);
@@ -530,20 +957,38 @@ contract PrivateMatchBinderV4Test is Test {
             envelope,
             IAnchoredReceivable(address(vault)),
             _source(),
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY),
-            _consent(decoy, SCOPE_B, CONTROLLER_B_KEY),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(decoy, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_B)
+        );
+    }
+
+    function testConsentIsBoundToTheIntendedAnchor() public {
+        MordantInvoiceVaultV2 other = _createVault(keccak256("root-consent"), 5);
+        _activate(other);
+        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        // Consent for a different anchor is not consent for this one.
+        _expectRevert(
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(other), SCOPE_B, recordB, CONTROLLER_B_KEY),
             abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_B)
         );
     }
 
     function testExpiredConsentIsRefused() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         PrivateMatchBinder.DisclosureConsent memory consentA =
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY);
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY);
         PrivateMatchBinder.DisclosureConsent memory consentB =
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY);
-        uint64 expiry = consentB.validUntil;
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY);
+        uint64 expiry = consentA.validUntil;
         vm.warp(expiry + 1);
         _expectRevert(
             envelope,
@@ -557,27 +1002,28 @@ contract PrivateMatchBinderV4Test is Test {
         );
     }
 
-    function testAnUnknownScopeControllerCannotConsent() public {
-        binder.setScopeController(SCOPE_B, address(0));
+    function testAnotherDisclosureVersionIsRefused() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
+        PrivateMatchBinder.DisclosureConsent memory consentA =
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY);
+        consentA.disclosureVersion = 2;
         _expectRevert(
-            _exactEnvelope(SESSION, 1),
-            abi.encodeWithSelector(PrivateMatchBinder.ScopeControllerUnknown.selector, SCOPE_B)
+            envelope,
+            IAnchoredReceivable(address(vault)),
+            _source(),
+            consentA,
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
+            abi.encodeWithSelector(PrivateMatchBinder.DisclosureVersionMismatch.selector, 2, 1)
         );
-    }
-
-    function testOnlyTheOwnerSetsScopeControllers() public {
-        vm.prank(address(0xBAD));
-        vm.expectRevert(
-            abi.encodeWithSelector(PrivateMatchBinder.Unauthorized.selector, address(0xBAD))
-        );
-        binder.setScopeController(SCOPE_A, address(0xBAD));
     }
 
     /* --------------------------------------------------------------- quorum */
 
     function testOneValidatorIsNotAQuorum() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         _expectRevertWithAttestation(
             envelope,
@@ -588,6 +1034,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAnOutsiderSignatureIsNotAValidator() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         bytes32 digest =
             verifier.attestationDigest(verifier.validatorSetId(), verifier.resultDigest(envelope));
@@ -609,6 +1056,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testOneValidatorCannotSignTwice() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         bytes32 digest =
             verifier.attestationDigest(verifier.validatorSetId(), verifier.resultDigest(envelope));
@@ -626,35 +1074,8 @@ contract PrivateMatchBinderV4Test is Test {
         );
     }
 
-    function testATamperedResultCommitmentIsRejected() public {
-        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
-        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
-        bytes32 expected = envelope.resultCommitment;
-        bytes memory attestation = _attest(envelope);
-        PrivateMatchBinder.DisclosureConsent memory consentA =
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY);
-        PrivateMatchBinder.DisclosureConsent memory consentB =
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY);
-        PrivateMatchBinder.Counterparty memory counterparty = _source();
-        envelope.resultCommitment = keccak256("something-else");
-
-        // Consent is signed over the result commitment, so tampering breaks the
-        // consent before it ever reaches the verifier.
-        vm.expectRevert(
-            abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_A)
-        );
-        binder.bindRecourse(
-            envelope,
-            attestation,
-            IAnchoredReceivable(address(vault)),
-            counterparty,
-            consentA,
-            consentB
-        );
-        assertTrue(expected != envelope.resultCommitment);
-    }
-
     function testTheVerifierRecomputesTheResultCommitment() public {
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         bytes32 expected = envelope.resultCommitment;
         envelope.binder = address(this);
@@ -674,12 +1095,13 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAnExpiredResultIsRejected() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         bytes memory attestation = _attest(envelope);
         PrivateMatchBinder.DisclosureConsent memory consentA =
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY);
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY);
         PrivateMatchBinder.DisclosureConsent memory consentB =
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY);
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY);
         PrivateMatchBinder.Counterparty memory counterparty = _source();
         // Past the result's validity but inside the consents' validity.
         uint256 later = uint256(envelope.validUntil) + 1;
@@ -700,16 +1122,8 @@ contract PrivateMatchBinderV4Test is Test {
         );
     }
 
-    function testAnUnauthorizedScopeIsRejected() public {
-        verifier.setScopeAuthorized(SCOPE_B, false);
-        _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
-        _expectRevert(
-            _exactEnvelope(SESSION, 1),
-            abi.encodeWithSelector(ECDSAQuorumMatchVerifierV4.ScopeNotAuthorized.selector, SCOPE_B)
-        );
-    }
-
     function testOnlyTheNamedBinderCanConsumeAResult() public {
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         bytes memory attestation = _attest(envelope);
         vm.expectRevert(
@@ -722,6 +1136,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAnEnvelopeForAnotherBinderIsRefused() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         envelope.binder = address(0xB1);
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
@@ -735,6 +1150,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function testAnotherPolicyIsRefused() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         envelope.policyId = keccak256("other-policy");
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
@@ -753,17 +1169,19 @@ contract PrivateMatchBinderV4Test is Test {
     /// consent.
     function testAFailedBindingDoesNotBurnTheResult() public {
         _precommit(SESSION, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(SESSION, 1);
         _expectRevert(
             envelope,
             IAnchoredReceivable(address(vault)),
             _source(),
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY),
-            _consent(envelope, SCOPE_B, OUTSIDER_KEY),
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, OUTSIDER_KEY),
             abi.encodeWithSelector(PrivateMatchBinder.DisclosureConsentMissing.selector, SCOPE_B)
         );
         assertFalse(verifier.consumedReplayKeys(verifier.replayKey(envelope)));
         assertFalse(verifier.consumedMatchCommitments(envelope.result.matchCommitment));
+        assertFalse(binder.consumedConsentNonce(SCOPE_A, _consentNonce(SESSION, SCOPE_A)));
 
         // The same result then binds normally.
         _bindWith(envelope);
@@ -774,6 +1192,7 @@ contract PrivateMatchBinderV4Test is Test {
 
     function _bind(bytes32 sessionId, uint256 nonce) private {
         _precommit(sessionId, anchorCommitment, ISSUER_KEY, issuer);
+        _openSession(sessionId);
         _bindWith(_exactEnvelope(sessionId, nonce));
     }
 
@@ -783,8 +1202,8 @@ contract PrivateMatchBinderV4Test is Test {
             _attest(envelope),
             IAnchoredReceivable(address(vault)),
             _source(),
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY),
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY)
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY)
         );
     }
 
@@ -813,8 +1232,8 @@ contract PrivateMatchBinderV4Test is Test {
             envelope,
             anchor,
             counterparty,
-            _consent(envelope, address(anchor), SCOPE_A, CONTROLLER_A_KEY),
-            _consent(envelope, address(anchor), SCOPE_B, CONTROLLER_B_KEY),
+            _consent(envelope, address(anchor), SCOPE_A, recordA, CONTROLLER_A_KEY),
+            _consent(envelope, address(anchor), SCOPE_B, recordB, CONTROLLER_B_KEY),
             expected
         );
     }
@@ -838,9 +1257,9 @@ contract PrivateMatchBinderV4Test is Test {
         bytes memory expected
     ) private {
         PrivateMatchBinder.DisclosureConsent memory consentA =
-            _consent(envelope, SCOPE_A, CONTROLLER_A_KEY);
+            _consent(envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY);
         PrivateMatchBinder.DisclosureConsent memory consentB =
-            _consent(envelope, SCOPE_B, CONTROLLER_B_KEY);
+            _consent(envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY);
         PrivateMatchBinder.Counterparty memory counterparty = _source();
         vm.expectRevert(expected);
         binder.bindRecourse(
@@ -856,17 +1275,62 @@ contract PrivateMatchBinderV4Test is Test {
     function _expectMockRevert(MockAnchor mock, bytes memory expected) private {
         bytes32 commitment = mock.assetCommitment();
         _precommit(SESSION, commitment, ISSUER_KEY, issuer);
+        _openSession(SESSION);
         _expectRevert(
             _exactEnvelope(SESSION, 1, commitment), IAnchoredReceivable(address(mock)), expected
         );
     }
 
     function _source() private view returns (PrivateMatchBinder.Counterparty memory) {
-        return PrivateMatchBinder.Counterparty({
-            kind: PrivateMatchBinder.CounterpartyKind.RegisteredSource,
-            anchorId: counterpartyAnchorId,
-            vault: address(0)
-        });
+        return PrivateMatchBinder.Counterparty({anchorId: counterpartyAnchorId, vault: address(0)});
+    }
+
+    /* ----------------------------------------------------------- governance */
+
+    function _authorize(
+        bytes32 scope,
+        address controller,
+        bytes32 controllerKeyId,
+        bytes32 organizationId,
+        uint32 controllerEpoch,
+        uint32 version
+    ) private returns (bytes32) {
+        return governance.authorize(
+            Governance.AuthorizationRequest({
+                scopeCommitment: scope,
+                controller: controller,
+                controllerKeyId: controllerKeyId,
+                organizationId: organizationId,
+                controllerEpoch: controllerEpoch,
+                authorizationVersion: version,
+                nonce: governanceNonce++
+            })
+        );
+    }
+
+    /// @dev Rotation is an append: a new version for the same scope, plus the
+    /// retirement of the old one. Nothing about the old record is edited.
+    function _rotateScopeA(address controller) private {
+        bytes32 previous = recordA;
+        versionA += 1;
+        recordA = _authorize(SCOPE_A, controller, KEY_A, ORG_A, versionA, versionA);
+        governance.retire(previous);
+    }
+
+    function _openSession(bytes32 sessionId) private returns (bytes32 contextDigest) {
+        // Hoisted: reading the current controller is an external call, and a
+        // prank set before it would be consumed by that call.
+        address opener = governance.record(recordA).controller;
+        vm.prank(opener);
+        contextDigest = governance.openSession(sessionId, recordA, recordB);
+        contextOf[sessionId] = contextDigest;
+    }
+
+    /// @dev Opens a session and returns the record frozen for scope A, for tests
+    /// that then rotate it.
+    function _openSessionRecord(bytes32 sessionId) private returns (bytes32 frozen) {
+        frozen = recordA;
+        _openSession(sessionId);
     }
 
     function _exactEnvelope(bytes32 sessionId, uint256 nonce)
@@ -887,6 +1351,7 @@ contract PrivateMatchBinderV4Test is Test {
             binder: address(binder),
             policyId: POLICY_ID,
             policyVersion: POLICY_VERSION,
+            governanceContextDigest: contextOf[sessionId],
             nonce: nonce,
             validUntil: uint64(block.timestamp + 1 days),
             resultCommitment: bytes32(0),
@@ -947,12 +1412,8 @@ contract PrivateMatchBinderV4Test is Test {
         return abi.encode(setId, signatures);
     }
 
-    function _consent(
-        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope,
-        bytes32 scopeCommitment,
-        uint256 key
-    ) private view returns (PrivateMatchBinder.DisclosureConsent memory) {
-        return _consent(envelope, address(vault), scopeCommitment, key);
+    function _consentNonce(bytes32 sessionId, bytes32 scope) private pure returns (uint256) {
+        return uint256(keccak256(abi.encode("consent-nonce", sessionId, scope)));
     }
 
     /// @dev Consents outlive the result envelope on purpose, so a test about an
@@ -961,21 +1422,44 @@ contract PrivateMatchBinderV4Test is Test {
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope,
         address anchor,
         bytes32 scopeCommitment,
+        bytes32 governanceRecord,
         uint256 key
     ) private view returns (PrivateMatchBinder.DisclosureConsent memory) {
-        uint64 validUntil = uint64(block.timestamp + 5 days);
+        return _consentWithNonce(
+            envelope,
+            anchor,
+            scopeCommitment,
+            governanceRecord,
+            key,
+            _consentNonce(envelope.result.sessionId, scopeCommitment)
+        );
+    }
+
+    function _consentWithNonce(
+        ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope,
+        address anchor,
+        bytes32 scopeCommitment,
+        bytes32 governanceRecord,
+        uint256 key,
+        uint256 nonce
+    ) private view returns (PrivateMatchBinder.DisclosureConsent memory consent) {
+        consent = PrivateMatchBinder.DisclosureConsent({
+            scopeCommitment: scopeCommitment,
+            governanceRecord: governanceRecord,
+            disclosureVersion: binder.DISCLOSURE_VERSION(),
+            validUntil: uint64(block.timestamp + 5 days),
+            nonce: nonce,
+            signature: ""
+        });
         bytes32 digest = binder.consentDigest(
             envelope.result.sessionId,
             envelope.resultCommitment,
-            scopeCommitment,
+            envelope.result.matchCommitment,
+            envelope.governanceContextDigest,
             anchor,
-            validUntil
+            consent
         );
-        return PrivateMatchBinder.DisclosureConsent({
-            scopeCommitment: scopeCommitment,
-            validUntil: validUntil,
-            signature: _sign(key, digest)
-        });
+        consent.signature = _sign(key, digest);
     }
 
     function _sign(uint256 key, bytes32 digest) private pure returns (bytes memory) {
@@ -1007,6 +1491,8 @@ contract PrivateMatchBinderV4Test is Test {
             strictAssetCommitment: commitment,
             equivalenceOf: bytes32(0),
             supersedesCandidateSession: bytes32(0),
+            governanceRecordA: recordA,
+            governanceRecordB: recordB,
             issuerKeyId: registry.issuerKeyIdFor(signer),
             identityEpoch: EPOCH,
             validUntil: uint64(block.timestamp + 1 days),

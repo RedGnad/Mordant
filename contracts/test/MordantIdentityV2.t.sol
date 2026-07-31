@@ -1043,6 +1043,10 @@ contract MordantIdentityV2Test is Test {
             strictAssetCommitment: _commitmentFor(1),
             equivalenceOf: bytes32(0),
             supersedesCandidateSession: candidateSession,
+            // Placeholders: this suite exercises the precommit registry itself,
+            // not the governance binding the binder enforces on top of it.
+            governanceRecordA: keccak256("governance-record-a"),
+            governanceRecordB: keccak256("governance-record-b"),
             issuerKeyId: registry.issuerKeyIdFor(issuer),
             identityEpoch: EPOCH,
             validUntil: uint64(block.timestamp + 1 days),

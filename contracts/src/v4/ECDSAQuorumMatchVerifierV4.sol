@@ -2,14 +2,24 @@
 pragma solidity 0.8.28;
 
 import {MordantMatchResult as Match} from "../identity/MordantMatchResult.sol";
+import {MordantScopeGovernanceRegistry as Governance} from "./MordantScopeGovernanceRegistry.sol";
 
 /// @notice V4 quorum verifier for confidential match results.
 /// @dev Parallel to the deployed V3 verifier, which is untouched. The V3 verifier
 /// keys policy configuration by vault; V4 cannot, because a pre-binding result
-/// names no vault. It keys on policy and on an allowlist of authorized scopes.
+/// names no vault. It keys on policy and on the governance context frozen when
+/// the session was opened.
 ///
-/// The verifier authenticates who endorsed a result. It does not prove the FHE
-/// computation was correct, and nothing here should be read as doing so.
+/// There is no owner-set scope allowlist here. A mutable allowlist would let a
+/// scope authorized today make a result generated yesterday valid, which is the
+/// same temporal defect as post-match anchor mapping. Instead the signed
+/// envelope carries the session's governance context digest, and the verifier
+/// requires that both scope authorizations already existed and were live when
+/// the session was opened.
+///
+/// The verifier authenticates who endorsed a result and under whose authority.
+/// It does not prove the FHE computation was correct, and nothing here should be
+/// read as doing so.
 contract ECDSAQuorumMatchVerifierV4 {
     error Unauthorized(address account);
     error ZeroAddress();
@@ -18,7 +28,9 @@ contract ECDSAQuorumMatchVerifierV4 {
     error WrongChain(uint256 supplied, uint256 current);
     error PolicyNotConfigured(bytes32 policyId);
     error PolicyVersionMismatch(uint32 supplied, uint32 current);
+    error GovernanceContextMismatch(bytes32 supplied, bytes32 frozen);
     error ScopeNotAuthorized(bytes32 scopeCommitment);
+    error ScopeAuthorizationNotPreSession(bytes32 recordDigest, uint64 openedAt);
     error ResultExpired(uint64 validUntil, uint256 currentTime);
     error InvalidResultCommitment(bytes32 supplied, bytes32 expected);
     error ValidatorSetMismatch(bytes32 supplied, bytes32 current);
@@ -33,7 +45,6 @@ contract ECDSAQuorumMatchVerifierV4 {
     error ProviderProofAlreadyConsumed(bytes32 providerProofCommitment);
 
     event PolicyVersionUpdated(bytes32 indexed policyId, uint32 version);
-    event ScopeAuthorized(bytes32 indexed scopeCommitment, bool authorized);
     event ConfidentialMatchAccepted(
         bytes32 indexed resultCommitment,
         address indexed binder,
@@ -48,7 +59,7 @@ contract ECDSAQuorumMatchVerifierV4 {
     string public constant DOMAIN_VERSION = "4";
 
     bytes32 public constant RESULT_CORE_TYPEHASH = keccak256(
-        "ConfidentialMatchResultV4Core(uint256 chainId,address binder,bytes32 policyId,uint32 policyVersion,bytes32 sessionId,bytes32 scopeCommitmentA,bytes32 scopeCommitmentB,bytes32 inputCommitmentA,bytes32 inputCommitmentB,uint8 outcome,bool conflictConfirmed,bytes32 matchCommitment,uint8 anchorCount,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)"
+        "ConfidentialMatchResultV4Core(uint256 chainId,address binder,bytes32 policyId,uint32 policyVersion,bytes32 governanceContextDigest,bytes32 sessionId,bytes32 scopeCommitmentA,bytes32 scopeCommitmentB,bytes32 inputCommitmentA,bytes32 inputCommitmentB,uint8 outcome,bool conflictConfirmed,bytes32 matchCommitment,uint8 anchorCount,uint256 nonce,uint64 validUntil,bytes32 providerProofCommitment)"
     );
     bytes32 public constant ATTESTATION_TYPEHASH =
         keccak256("ConfidentialMatchAttestation(bytes32 validatorSetId,bytes32 resultDigest)");
@@ -65,6 +76,9 @@ contract ECDSAQuorumMatchVerifierV4 {
         address binder;
         bytes32 policyId;
         uint32 policyVersion;
+        /// @dev The governance context frozen when this session was opened. It
+        /// is what ties the result to authorities that existed beforehand.
+        bytes32 governanceContextDigest;
         uint256 nonce;
         uint64 validUntil;
         bytes32 resultCommitment;
@@ -72,12 +86,12 @@ contract ECDSAQuorumMatchVerifierV4 {
     }
 
     address public immutable owner;
+    Governance public immutable governance;
     uint256 public immutable quorum;
     bytes32 public immutable validatorSetId;
 
     mapping(address validator => bool active) public validators;
     mapping(bytes32 policyId => uint32 version) public currentPolicyVersion;
-    mapping(bytes32 scopeCommitment => bool authorized) public authorizedScope;
     mapping(bytes32 replayKey => bool consumed) public consumedReplayKeys;
     mapping(bytes32 decisionKey => bool consumed) public consumedDecisionKeys;
     mapping(bytes32 matchCommitment => bool consumed) public consumedMatchCommitments;
@@ -88,10 +102,16 @@ contract ECDSAQuorumMatchVerifierV4 {
         _;
     }
 
-    constructor(address initialOwner, address[] memory initialValidators, uint256 initialQuorum) {
-        if (initialOwner == address(0)) revert ZeroAddress();
+    constructor(
+        address initialOwner,
+        Governance governance_,
+        address[] memory initialValidators,
+        uint256 initialQuorum
+    ) {
+        if (initialOwner == address(0) || address(governance_) == address(0)) revert ZeroAddress();
         if (initialQuorum == 0 || initialQuorum > initialValidators.length) revert InvalidQuorum();
         owner = initialOwner;
+        governance = governance_;
         quorum = initialQuorum;
         for (uint256 i; i < initialValidators.length; ++i) {
             address validator = initialValidators[i];
@@ -106,12 +126,6 @@ contract ECDSAQuorumMatchVerifierV4 {
         if (policyId == bytes32(0) || version == 0) revert ZeroAddress();
         currentPolicyVersion[policyId] = version;
         emit PolicyVersionUpdated(policyId, version);
-    }
-
-    function setScopeAuthorized(bytes32 scopeCommitment, bool authorized) external onlyOwner {
-        if (scopeCommitment == bytes32(0)) revert ZeroAddress();
-        authorizedScope[scopeCommitment] = authorized;
-        emit ScopeAuthorized(scopeCommitment, authorized);
     }
 
     function domainSeparator() public view returns (bytes32) {
@@ -147,16 +161,16 @@ contract ECDSAQuorumMatchVerifierV4 {
             )
         );
         return keccak256(
-            abi.encode(
-                RESULT_CORE_TYPEHASH,
-                envelope.chainId,
-                envelope.binder,
-                envelope.policyId,
-                envelope.policyVersion,
-                envelope.nonce,
-                envelope.validUntil,
-                scope,
-                verdict
+            abi.encodePacked(
+                abi.encode(
+                    RESULT_CORE_TYPEHASH,
+                    envelope.chainId,
+                    envelope.binder,
+                    envelope.policyId,
+                    envelope.policyVersion,
+                    envelope.governanceContextDigest
+                ),
+                abi.encode(envelope.nonce, envelope.validUntil, scope, verdict)
             )
         );
     }
@@ -190,7 +204,12 @@ contract ECDSAQuorumMatchVerifierV4 {
             : (envelope.result.inputCommitmentB, envelope.result.inputCommitmentA);
         return keccak256(
             abi.encode(
-                envelope.chainId, envelope.binder, envelope.policyId, envelope.policyVersion, first, second
+                envelope.chainId,
+                envelope.binder,
+                envelope.policyId,
+                envelope.policyVersion,
+                first,
+                second
             )
         );
     }
@@ -220,12 +239,7 @@ contract ECDSAQuorumMatchVerifierV4 {
         if (configured != envelope.policyVersion) {
             revert PolicyVersionMismatch(envelope.policyVersion, configured);
         }
-        if (!authorizedScope[envelope.result.scopeCommitmentA]) {
-            revert ScopeNotAuthorized(envelope.result.scopeCommitmentA);
-        }
-        if (!authorizedScope[envelope.result.scopeCommitmentB]) {
-            revert ScopeNotAuthorized(envelope.result.scopeCommitmentB);
-        }
+        _assertGovernance(envelope);
         if (block.timestamp > envelope.validUntil) {
             revert ResultExpired(envelope.validUntil, block.timestamp);
         }
@@ -261,6 +275,34 @@ contract ECDSAQuorumMatchVerifierV4 {
             envelope.result.conflictConfirmed,
             envelope.result.providerProofCommitment
         );
+    }
+
+    /// @dev Both scopes must have been authorized BEFORE the session was opened,
+    /// and the signed envelope must name the context that was frozen then. A
+    /// scope authorized after the fact resolves to a different context digest,
+    /// which the quorum did not sign.
+    function _assertGovernance(MatchEnvelope calldata envelope) private view {
+        Governance.SessionGovernance memory session =
+            governance.sessionGovernance(envelope.result.sessionId);
+        if (session.contextDigest != envelope.governanceContextDigest) {
+            revert GovernanceContextMismatch(envelope.governanceContextDigest, session.contextDigest);
+        }
+        Governance.ScopeAuthorization memory a = governance.record(session.recordA);
+        Governance.ScopeAuthorization memory b = governance.record(session.recordB);
+        if (a.scopeCommitment != envelope.result.scopeCommitmentA) {
+            revert ScopeNotAuthorized(envelope.result.scopeCommitmentA);
+        }
+        if (b.scopeCommitment != envelope.result.scopeCommitmentB) {
+            revert ScopeNotAuthorized(envelope.result.scopeCommitmentB);
+        }
+        // Re-checked rather than assumed from `openSession`, so the rule holds
+        // here even if the registry is ever extended.
+        if (a.validFrom > session.openedAt) {
+            revert ScopeAuthorizationNotPreSession(session.recordA, session.openedAt);
+        }
+        if (b.validFrom > session.openedAt) {
+            revert ScopeAuthorizationNotPreSession(session.recordB, session.openedAt);
+        }
     }
 
     function _verifyAttestation(MatchEnvelope calldata envelope, bytes calldata attestation)

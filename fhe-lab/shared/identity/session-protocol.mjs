@@ -29,10 +29,78 @@ export const ProtocolError = Object.freeze({
   CANDIDATE_NOT_AUTHORIZED: "CANDIDATE_FALLBACK_NOT_AUTHORIZED",
   BUDGET_EXHAUSTED: "SCOPE_BUDGET_EXHAUSTED",
   ALIAS_NOT_BOUND: "CANDIDATE_ALIAS_NOT_BOUND",
+  GOVERNANCE_NOT_FROZEN: "SESSION_GOVERNANCE_NOT_FROZEN",
+  GOVERNANCE_INCOMPLETE: "SESSION_GOVERNANCE_INCOMPLETE",
+  GOVERNANCE_SCOPE_MISMATCH: "SESSION_GOVERNANCE_SCOPE_MISMATCH",
+  AUTHORIZATION_NOT_PRE_SESSION: "SCOPE_AUTHORIZATION_NOT_PRE_SESSION",
 });
 
 const CANDIDATE_BINDING_DOMAIN = keccak256(stringToBytes("mordant.candidate-alias-binding/1"));
+const ENROLLMENT_BINDING_DOMAIN = keccak256(stringToBytes("mordant.session-enrollment-binding/1"));
 const IDENTITY_SCHEME_VERSION = 3;
+const ZERO32 = `0x${"00".repeat(32)}`;
+
+/**
+ * Checks one side's frozen scope-governance record.
+ *
+ * The controller for a session is whoever was authorized when the session was
+ * opened. A controller appointed later must not become valid for an earlier
+ * session, so the authorization has to predate initiation, and the record is
+ * carried by digest rather than by looking up a current controller.
+ */
+function requireFrozenRecord(side, record, scopeCommitment, openedAt) {
+  if (!record) throw new Error(`${ProtocolError.GOVERNANCE_NOT_FROZEN}:${side}`);
+  for (const field of ["recordDigest", "controller", "controllerKeyId", "scopeCommitment"]) {
+    if (!record[field] || record[field] === ZERO32) {
+      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:${side}.${field}`);
+    }
+  }
+  for (const field of ["controllerEpoch", "authorizationVersion", "validFrom"]) {
+    if (!Number.isInteger(Number(record[field])) || Number(record[field]) <= 0) {
+      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:${side}.${field}`);
+    }
+  }
+  if (record.scopeCommitment !== scopeCommitment) {
+    throw new Error(`${ProtocolError.GOVERNANCE_SCOPE_MISMATCH}:${side}`);
+  }
+  if (Number(record.validFrom) > Number(openedAt)) {
+    throw new Error(`${ProtocolError.AUTHORIZATION_NOT_PRE_SESSION}:${side}`);
+  }
+  return record;
+}
+
+/**
+ * The value bound into an FHE enrollment for one side.
+ *
+ * Binding the frozen governance record into enrollment is what stops a
+ * ciphertext enrolled under one authority being reused under another: rotate the
+ * controller and every enrollment binding for the new record differs, so an old
+ * enrollment cannot be presented as belonging to the new session.
+ */
+export function enrollmentBinding({ sessionId, scopeCommitment, governanceContextDigest, record }) {
+  requireFrozenRecord("enrollment", record, scopeCommitment, record?.validFrom ?? 0);
+  if (!governanceContextDigest || governanceContextDigest === ZERO32) {
+    throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:governanceContextDigest`);
+  }
+  const authority = keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "address" }, { type: "bytes32" }, { type: "uint32" }, { type: "uint32" }],
+      [
+        record.recordDigest,
+        record.controller,
+        record.controllerKeyId,
+        Number(record.controllerEpoch),
+        Number(record.authorizationVersion),
+      ],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }],
+      [ENROLLMENT_BINDING_DOMAIN, sessionId, scopeCommitment, governanceContextDigest, authority],
+    ),
+  );
+}
 
 /**
  * Pre-FHE comparability gate.
@@ -103,14 +171,44 @@ export function boundCandidateAliasCommitment({
  * other query.
  */
 export class BilateralSession {
-  constructor({ sessionId, scopeA, scopeB, budget, candidateAuthorizedByA = false, candidateAuthorizedByB = false }) {
+  constructor({
+    sessionId, scopeA, scopeB, budget, governance,
+    candidateAuthorizedByA = false, candidateAuthorizedByB = false,
+  }) {
     if (!sessionId || !scopeA || !scopeB) throw new Error("SESSION_SCOPE_REQUIRED");
     if (!Number.isInteger(budget) || budget <= 0) throw new Error("SESSION_BUDGET_REQUIRED");
+    // Governance is frozen at initiation, before any enrollment or evaluation.
+    // A session with no frozen authority cannot run at all, which is what makes
+    // "who was authorized" a question with one answer rather than a lookup that
+    // changes underneath the result.
+    if (!governance) throw new Error(ProtocolError.GOVERNANCE_NOT_FROZEN);
+    if (!governance.contextDigest || governance.contextDigest === ZERO32) {
+      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:contextDigest`);
+    }
+    if (!Number.isInteger(Number(governance.openedAt)) || Number(governance.openedAt) <= 0) {
+      throw new Error(`${ProtocolError.GOVERNANCE_INCOMPLETE}:openedAt`);
+    }
+    const recordA = requireFrozenRecord("A", governance.recordA, scopeA, governance.openedAt);
+    const recordB = requireFrozenRecord("B", governance.recordB, scopeB, governance.openedAt);
+    if (recordA.recordDigest === recordB.recordDigest) {
+      throw new Error(`${ProtocolError.GOVERNANCE_SCOPE_MISMATCH}:identical`);
+    }
+
     this.sessionId = sessionId;
     this.scopeA = scopeA;
     this.scopeB = scopeB;
     this.budget = budget;
     this.spent = 0;
+    this.governance = { ...governance, recordA, recordB };
+    // Each side's enrollment carries the authority it was made under.
+    this.enrollmentBindingA = enrollmentBinding({
+      sessionId, scopeCommitment: scopeA,
+      governanceContextDigest: governance.contextDigest, record: recordA,
+    });
+    this.enrollmentBindingB = enrollmentBinding({
+      sessionId, scopeCommitment: scopeB,
+      governanceContextDigest: governance.contextDigest, record: recordB,
+    });
     // Authorization is bilateral and fixed at initiation. It cannot be granted
     // later, which is what stops a tolerant query being slipped in after an
     // exact query returned false.
@@ -147,6 +245,7 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
       protocolError: error.message,
       evaluated: false,
       bindable: false,
+      governanceContextDigest: session.governance.contextDigest,
     };
     return session.outcome;
   }
@@ -155,7 +254,12 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
   session.spend(1);
   const exact = evaluateExact();
   if (exact) {
-    session.outcome = { outcome: Outcome.EXACT_MATCH, evaluated: true, bindable: true };
+    session.outcome = {
+      outcome: Outcome.EXACT_MATCH,
+      evaluated: true,
+      bindable: true,
+      governanceContextDigest: session.governance.contextDigest,
+    };
     return session.outcome;
   }
 
@@ -166,6 +270,7 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
       outcome: Outcome.NO_MATCH_FOR_SUBMITTED_IDENTITIES,
       evaluated: true,
       bindable: false,
+      governanceContextDigest: session.governance.contextDigest,
       // Scoped deliberately: this says the two submitted identifiers were not
       // equal. It is not evidence about any other pledge or platform.
       meaning: "the two identifiers submitted in this session were not equal",
@@ -176,12 +281,19 @@ export function runSession({ session, identityA, identityB, evaluateExact, evalu
   session.spend(1);
 
   const candidate = evaluateCandidate();
+  const context = session.governance.contextDigest;
   session.outcome = candidate
-    ? { outcome: Outcome.RECONCILIATION_REQUIRED, evaluated: true, bindable: false }
+    ? {
+      outcome: Outcome.RECONCILIATION_REQUIRED,
+      evaluated: true,
+      bindable: false,
+      governanceContextDigest: context,
+    }
     : {
       outcome: Outcome.NO_MATCH_FOR_SUBMITTED_IDENTITIES,
       evaluated: true,
       bindable: false,
+      governanceContextDigest: context,
       meaning: "the two identifiers submitted in this session were not equal",
     };
   return session.outcome;
