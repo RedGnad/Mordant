@@ -37,6 +37,8 @@ type workflowConfig struct {
 	CureDeadline uint64
 	SessionID    [32]byte
 	Label        string
+	Consumer     [20]byte
+	Schema       string
 }
 
 type providerOutput struct {
@@ -61,6 +63,31 @@ type publicResult struct {
 	ValidUntil              string `json:"validUntil"`
 	ProviderProofCommitment string `json:"providerProofCommitment"`
 	ResultCommitment        string `json:"resultCommitment"`
+}
+
+// publicResultV3 deliberately excludes role, deadline and economic consequence. The evaluator
+// reports only the FHE Boolean; the consumer derives its consequences on-chain.
+type publicResultV3 struct {
+	SchemaVersion           string `json:"schemaVersion"`
+	ChainID                 string `json:"chainId"`
+	Consumer                string `json:"consumer"`
+	Vault                   string `json:"vault"`
+	PolicyID                string `json:"policyId"`
+	PolicyVersion           string `json:"policyVersion"`
+	InputCommitmentA        string `json:"inputCommitmentA"`
+	InputCommitmentB        string `json:"inputCommitmentB"`
+	ConflictConfirmed       bool   `json:"conflictConfirmed"`
+	Nonce                   string `json:"nonce"`
+	ValidUntil              string `json:"validUntil"`
+	ProviderProofCommitment string `json:"providerProofCommitment"`
+	ResultCommitment        string `json:"resultCommitment"`
+}
+
+type providerOutputV3 struct {
+	SchemaVersion string              `json:"schemaVersion"`
+	OK            bool                `json:"ok"`
+	Result        publicResultV3      `json:"result"`
+	ProviderProof publicProviderProof `json:"providerProof"`
 }
 
 type publicProviderProof struct {
@@ -247,12 +274,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	role := [32]byte{}
-	cureDeadline := uint64(0)
-	if confirmed {
-		role = synthetic.Role
-		cureDeadline = config.CureDeadline
-	}
 	thresholdKeyCommitment, err := fhe.ThresholdKeyCommitment(manifest)
 	if err != nil {
 		return err
@@ -274,7 +295,62 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	core := fhe.PublicPolicyResultCore{
+	proofOutput := publicProviderProof{
+		SchemaVersion:                 providerProofSchema,
+		ResultCiphertextCommitment:    hex32(proof.ResultCiphertextCommitment),
+		ThresholdTranscriptCommitment: hex32(proof.ThresholdTranscriptCommitment),
+		ThresholdSessionID:            hex32(proof.ThresholdSessionID),
+		ThresholdKeyCommitment:        hex32(proof.ThresholdKeyCommitment),
+		PolicyCircuitCommitment:       hex32(proof.PolicyCircuitCommitment),
+		ProviderProofCommitment:       hex32(providerProofCommitment),
+	}
+	if config.Schema == "v3" {
+		v3Commitment, err := fhe.ResultCommitmentV3(fhe.PublicPolicyResultV3Core{
+			ChainID:                 fhe.Uint256{0, 0, 0, config.Target.ChainID},
+			Consumer:                config.Consumer,
+			Vault:                   config.Target.Vault,
+			PolicyID:                config.Target.PolicyID,
+			PolicyVersion:           config.Target.PolicyVersion,
+			InputCommitmentA:        inputA,
+			InputCommitmentB:        inputB,
+			ConflictConfirmed:       confirmed,
+			Nonce:                   fhe.Uint256{0, 0, 0, config.Nonce},
+			ValidUntil:              config.ValidUntil,
+			ProviderProofCommitment: providerProofCommitment,
+		})
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(providerOutputV3{
+			SchemaVersion: "mordant.fhe-provider-output/3-lab",
+			OK:            true,
+			Result: publicResultV3{
+				SchemaVersion:           "mordant.confidential-policy-result/3-lab",
+				ChainID:                 fmt.Sprint(config.Target.ChainID),
+				Consumer:                hex20(config.Consumer),
+				Vault:                   hex20(config.Target.Vault),
+				PolicyID:                hex32(config.Target.PolicyID),
+				PolicyVersion:           fmt.Sprint(config.Target.PolicyVersion),
+				InputCommitmentA:        hex32(inputA),
+				InputCommitmentB:        hex32(inputB),
+				ConflictConfirmed:       confirmed,
+				Nonce:                   fmt.Sprint(config.Nonce),
+				ValidUntil:              fmt.Sprint(config.ValidUntil),
+				ProviderProofCommitment: hex32(providerProofCommitment),
+				ResultCommitment:        hex32(v3Commitment),
+			},
+			ProviderProof: proofOutput,
+		})
+	}
+	// V2 historical evidence retains its old evaluator-selected public consequences. V3 returned
+	// above never materializes these values in the evaluator result.
+	role := [32]byte{}
+	cureDeadline := uint64(0)
+	if confirmed {
+		role = synthetic.Role
+		cureDeadline = config.CureDeadline
+	}
+	resultCommitment, err := fhe.ResultCommitment(fhe.PublicPolicyResultCore{
 		ChainID:                 fhe.Uint256{0, 0, 0, config.Target.ChainID},
 		Vault:                   config.Target.Vault,
 		PolicyID:                config.Target.PolicyID,
@@ -287,8 +363,7 @@ func run() error {
 		Nonce:                   fhe.Uint256{0, 0, 0, config.Nonce},
 		ValidUntil:              config.ValidUntil,
 		ProviderProofCommitment: providerProofCommitment,
-	}
-	resultCommitment, err := fhe.ResultCommitment(core)
+	})
 	if err != nil {
 		return err
 	}
@@ -311,15 +386,7 @@ func run() error {
 			ProviderProofCommitment: hex32(providerProofCommitment),
 			ResultCommitment:        hex32(resultCommitment),
 		},
-		ProviderProof: publicProviderProof{
-			SchemaVersion:                 providerProofSchema,
-			ResultCiphertextCommitment:    hex32(proof.ResultCiphertextCommitment),
-			ThresholdTranscriptCommitment: hex32(proof.ThresholdTranscriptCommitment),
-			ThresholdSessionID:            hex32(proof.ThresholdSessionID),
-			ThresholdKeyCommitment:        hex32(proof.ThresholdKeyCommitment),
-			PolicyCircuitCommitment:       hex32(proof.PolicyCircuitCommitment),
-			ProviderProofCommitment:       hex32(providerProofCommitment),
-		},
+		ProviderProof: proofOutput,
 	}
 	return json.NewEncoder(os.Stdout).Encode(output)
 }
@@ -333,10 +400,16 @@ func parseConfig() (workflowConfig, error) {
 	now := flag.Uint64("now", 2_000_000_000, "evaluation time as Unix seconds")
 	cureDeadline := flag.Uint64("cure-deadline", publicCureDeadline, "public cure deadline as Unix seconds")
 	fresh := flag.Bool("fresh", false, "generate a fresh threshold session identifier")
+	schema := flag.String("schema", "v2", "public result schema: v2 or v3")
+	consumer := flag.String("consumer", "", "intended V3 consumer address")
 	flag.Parse()
 
 	parsedVault, err := parseHex20(*vault)
-	if err != nil || *chainID == 0 || *nonce == 0 || *now == 0 || *validUntil <= *now || *cureDeadline == 0 {
+	parsedConsumer := [20]byte{}
+	if *schema == "v3" {
+		parsedConsumer, err = parseHex20(*consumer)
+	}
+	if err != nil || (*schema != "v2" && *schema != "v3") || *chainID == 0 || *nonce == 0 || *now == 0 || *validUntil <= *now || *cureDeadline == 0 {
 		return workflowConfig{}, errInvalidWorkflowTarget
 	}
 	if *validUntil > uint64(^uint64(0)>>1) || *now > uint64(^uint64(0)>>1) {
@@ -357,6 +430,8 @@ func parseConfig() (workflowConfig, error) {
 		CureDeadline: *cureDeadline,
 		SessionID:    sha256.Sum256([]byte("mordant-controlled-threshold-session-v1")),
 		Label:        "workflow",
+		Consumer:     parsedConsumer,
+		Schema:       *schema,
 	}
 	if *fresh {
 		if _, err := rand.Read(config.SessionID[:]); err != nil {

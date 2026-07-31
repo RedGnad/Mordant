@@ -76,6 +76,27 @@ func TestResultCommitmentMatchesSharedViemVector(t *testing.T) {
 	}
 }
 
+func TestResultCommitmentV3BindsConsumerWithoutConsequences(t *testing.T) {
+	base := PublicPolicyResultV3Core{
+		ChainID: Uint256{0, 0, 0, 10_143}, Consumer: filled20(0x22), Vault: filled20(0x11),
+		PolicyID: filled32(0x33), PolicyVersion: PolicyVersion, InputCommitmentA: filled32(0x44),
+		InputCommitmentB: filled32(0x55), ConflictConfirmed: true, Nonce: Uint256{0, 0, 0, 9},
+		ValidUntil: 2_000_000_000, ProviderProofCommitment: filled32(0x66),
+	}
+	first, err := ResultCommitmentV3(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Consumer = filled20(0x77)
+	second, err := ResultCommitmentV3(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("consumer was not bound into V3 result commitment")
+	}
+}
+
 func TestProviderProofCommitmentMatchesSharedViemVector(t *testing.T) {
 	proof := ProviderProof{
 		ResultCiphertextCommitment:    filled32(0x11),
