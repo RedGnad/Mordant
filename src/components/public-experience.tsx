@@ -48,7 +48,6 @@ const JUNCTION_MARK_CLASSES = [
   styles.claimMarkPrimary,
   styles.claimMarkSatelliteOne,
   styles.claimMarkSatelliteTwo,
-  styles.claimMarkSatelliteThree,
 ] as const;
 
 const INTEGRATION_STEPS = [
@@ -398,12 +397,10 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
               <div className={styles.flowCanvas}>
                 <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
-                  <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H420L500 34H600L710 102H920" />
+                  <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H432L500 34H612L710 102H920" />
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="380" d="M40 102H420" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="205" d="M420 102L500 34H600" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="339" d="M600 34L710 102H920" />
-                  <rect className={`${styles.flowJunction} ${styles.flowJunctionPolicy}`} x="411" y="93" width="18" height="18" />
-                  <rect className={`${styles.flowJunction} ${styles.flowJunctionAction}`} x="591" y="25" width="18" height="18" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="208" d="M420 102H432L500 34H600" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="341" d="M600 34H612L710 102H920" />
                   <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
                     <rect x="-18" y="-18" width="36" height="36" />
                   </g>

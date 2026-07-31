@@ -470,29 +470,20 @@
 
 .claimMarkSatelliteOne {
   --mark-delay: 125ms;
-  --mark-offset-x: 8px;
-  --mark-offset-y: clamp(-150px, -13vh, -72px);
+  --mark-offset-x: clamp(-400px, -24vw, -115px);
+  --mark-offset-y: -52px;
   --mark-resolved-rotation: 6deg;
   --mark-rotation: -8deg;
-  --mark-size: clamp(12px, 1.1vw, 16px);
+  --mark-size: clamp(19px, 1.55vw, 24px);
 }
 
 .claimMarkSatelliteTwo {
   --mark-delay: 150ms;
-  --mark-offset-x: clamp(-430px, -29vw, -130px);
-  --mark-offset-y: -26px;
+  --mark-offset-x: clamp(-880px, -60vw, -270px);
+  --mark-offset-y: 142px;
   --mark-resolved-rotation: 28deg;
   --mark-rotation: 14deg;
-  --mark-size: clamp(18px, 1.8vw, 26px);
-}
-
-.claimMarkSatelliteThree {
-  --mark-delay: 175ms;
-  --mark-offset-x: clamp(-720px, -51vw, -250px);
-  --mark-offset-y: -44px;
-  --mark-resolved-rotation: 2deg;
-  --mark-rotation: -12deg;
-  --mark-size: clamp(11px, 1vw, 15px);
+  --mark-size: clamp(18px, 1.6vw, 24px);
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .claim::before {
@@ -859,32 +850,14 @@
 
 .flowRoutePolicy {
   stroke: var(--protection);
-  stroke-dasharray: 205;
-  stroke-dashoffset: 205;
+  stroke-dasharray: 208;
+  stroke-dashoffset: 208;
 }
 
 .flowRouteAction {
   stroke: var(--action);
-  stroke-dasharray: 339;
-  stroke-dashoffset: 339;
-}
-
-.flowJunction {
-  fill: var(--ground);
-  opacity: 0;
-  stroke-width: 5;
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: rotate(45deg) scale(0.55);
-  transition: opacity 120ms ease-out, transform 180ms cubic-bezier(0, 0, 0.3, 1);
-}
-
-.flowJunctionPolicy {
-  stroke: var(--protection);
-}
-
-.flowJunctionAction {
-  stroke: var(--action);
+  stroke-dasharray: 341;
+  stroke-dashoffset: 341;
 }
 
 .integrationSignal {
@@ -904,12 +877,6 @@
 .flow[data-step="1"] .flowRoutePolicy,
 .flow[data-step="2"] :is(.flowRoutePolicy, .flowRouteAction) {
   stroke-dashoffset: 0;
-}
-
-.flow[data-step="1"] .flowJunctionPolicy,
-.flow[data-step="2"] :is(.flowJunctionPolicy, .flowJunctionAction) {
-  opacity: 1;
-  transform: rotate(45deg) scale(1);
 }
 
 .flow[data-step="2"] .integrationSignal {
