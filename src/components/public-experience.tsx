@@ -66,10 +66,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const pageRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
+  const integrationFlowRef = useRef<HTMLDivElement>(null);
   const integrationPathRef = useRef<SVGPathElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const scrollFrame = useRef<number | null>(null);
+  const integrationScrollFrame = useRef<number | null>(null);
   const integrationMotionFrame = useRef<number | null>(null);
   const integrationMotionProgress = useRef(0);
   const moment = TRANSFORMATION[step];
@@ -151,11 +153,43 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   }, []);
 
   useEffect(() => {
+    const flow = integrationFlowRef.current;
+    if (flow === null) return;
+
+    const updateFromScroll = () => {
+      integrationScrollFrame.current = null;
+      const bounds = flow.getBoundingClientRect();
+      const activeTop = window.innerHeight * 0.78;
+      const activeBottom = window.innerHeight * 0.22;
+      if (bounds.top > activeTop || bounds.bottom < activeBottom) return;
+
+      const range = activeTop - activeBottom + bounds.height;
+      const progress = Math.min(1, Math.max(0, (activeTop - bounds.top) / Math.max(1, range)));
+      const nextStep = progress < 0.34 ? 0 : progress < 0.68 ? 1 : 2;
+      setIntegrationStep((current) => current === nextStep ? current : nextStep);
+    };
+
+    const onScroll = () => {
+      if (integrationScrollFrame.current !== null) return;
+      integrationScrollFrame.current = window.requestAnimationFrame(updateFromScroll);
+    };
+
+    updateFromScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (integrationScrollFrame.current !== null) window.cancelAnimationFrame(integrationScrollFrame.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const path = integrationPathRef.current;
     const signal = integrationSignalRef.current;
     if (path === null || signal === null) return;
 
-    const targets = [0, 0.7725, 1];
+    const targets = [0, 0.633, 1];
     const from = integrationMotionProgress.current;
     const to = targets[integrationStep] ?? 0;
     const length = path.getTotalLength();
@@ -200,13 +234,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     const position = section.offsetTop + (range * index / (TRANSFORMATION.length - 1));
     window.scrollTo({ top: position, behavior: "instant" });
     setStep(index);
-  };
-
-  const selectIntegrationFromPointer = (event: PointerEvent<SVGSVGElement>) => {
-    if (event.pointerType !== "mouse") return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const progress = Math.min(0.999, Math.max(0, (event.clientX - bounds.left) / bounds.width));
-    setIntegrationStep(Math.floor(progress * INTEGRATION_STEPS.length));
   };
 
   const moveHeroSymbol = (event: PointerEvent<HTMLElement>) => {
@@ -273,9 +300,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </div>
 
             <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
-              <div className={styles.receivableLane}>
-                <small>Outstanding</small>
-              </div>
+              <div className={styles.receivableLane} aria-hidden="true" />
 
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>
@@ -344,13 +369,20 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <h2 id="integration-title">Your platform records the asset. Mordant establishes what happens next.</h2>
           </header>
           <div className={styles.integrationBody}>
-            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path">
+            <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
               <div className={styles.flowCanvas}>
-                <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true" onPointerMove={selectIntegrationFromPointer}>
-                  <path className={styles.flowBase} d="M40 102H420" />
-                  <path className={styles.flowException} d="M420 102L500 34H600L710 102" />
-                  <path className={styles.flowRecourse} d="M710 102H920" />
-                  <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H420L500 34H600L710 102H920" />
+                <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="integration-route-gradient" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="920" y2="0">
+                      <stop offset="0" stopColor="var(--receivable)" />
+                      <stop offset="43.18%" stopColor="var(--receivable)" />
+                      <stop offset="43.18%" stopColor="var(--protection)" />
+                      <stop offset="63.64%" stopColor="var(--protection)" />
+                      <stop offset="63.64%" stopColor="var(--action)" />
+                      <stop offset="100%" stopColor="var(--action)" />
+                    </linearGradient>
+                  </defs>
+                  <path ref={integrationPathRef} className={styles.flowRoute} d="M40 102H420L500 34H600L710 102H920" />
                   <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
                     <rect x="-18" y="-18" width="36" height="36" />
                   </g>
