@@ -67,15 +67,19 @@ export async function POST(request: Request) {
     application: parsed.data,
   };
   const token = process.env.PILOT_APPLICATION_WEBHOOK_TOKEN?.trim();
+  const requestHeaders = new Headers({
+    "content-type": "application/json",
+    "x-mordant-event": "pilot.application.created",
+  });
+
+  if (token) {
+    requestHeaders.set("authorization", `Bearer ${token}`);
+  }
 
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-mordant-event": "pilot.application.created",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
+      headers: requestHeaders,
       body: JSON.stringify(envelope),
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),

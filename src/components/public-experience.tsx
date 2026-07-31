@@ -252,8 +252,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     setStep(index);
   };
 
-  const selectIntegrationStep = (index: number) => {
-    integrationInteractionLockUntil.current = performance.now() + 500;
+  const selectIntegrationStep = (index: number, interactionTimestamp: number) => {
+    integrationInteractionLockUntil.current = interactionTimestamp + 500;
     setIntegrationStep(index);
   };
 
@@ -415,9 +415,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                     type="button"
                     key={stage.label}
                     aria-pressed={integrationStep === index}
-                    onClick={() => selectIntegrationStep(index)}
-                    onFocus={() => selectIntegrationStep(index)}
-                    onPointerEnter={() => selectIntegrationStep(index)}
+                    onClick={(event) => selectIntegrationStep(index, event.timeStamp)}
+                    onFocus={(event) => selectIntegrationStep(index, event.timeStamp)}
+                    onPointerEnter={(event) => selectIntegrationStep(index, event.timeStamp)}
                   >
                     <strong>{stage.label}</strong>
                     <small>{stage.detail}</small>
