@@ -15,19 +15,36 @@ import {MordantNormalization} from "./MordantNormalization.sol";
 /// The FHE equality runs over the stable identity. The confidential policy runs
 /// over the terms. Neither is ever compared in the clear.
 library MordantAssetIdentity {
-    uint16 internal constant IDENTITY_SCHEME_VERSION = 2;
+    uint16 internal constant IDENTITY_SCHEME_VERSION = 3;
     uint16 internal constant TERMS_SCHEME_VERSION = 1;
 
-    bytes32 internal constant IDENTITY_DOMAIN =
-        keccak256("mordant.stable-asset-identity/2");
-    bytes32 internal constant COMMITMENT_DOMAIN = keccak256("mordant.asset-commitment/2");
+    /// @dev Strict and candidate identities live under separate domains, so a
+    /// value produced on one path can never be presented as the other.
+    bytes32 internal constant STRICT_IDENTITY_DOMAIN =
+        keccak256("mordant.strict-stable-asset-identity/3");
+    bytes32 internal constant CANDIDATE_ALIAS_DOMAIN =
+        keccak256("mordant.candidate-alias-identity/1");
+    bytes32 internal constant COMMITMENT_DOMAIN = keccak256("mordant.asset-commitment/3");
+    bytes32 internal constant CANDIDATE_COMMITMENT_DOMAIN =
+        keccak256("mordant.candidate-alias-commitment/1");
     bytes32 internal constant TERMS_DOMAIN = keccak256("mordant.asset-terms/1");
-    bytes32 internal constant SALT_DOMAIN = keccak256("mordant.asset-salt/2");
+    bytes32 internal constant SALT_DOMAIN = keccak256("mordant.asset-salt/3");
+
+    /// @notice Authority ranking of an identifier. Binding requires tier 1 or 2.
+    enum IdentityTier {
+        None,
+        RegistryDocument, // an authoritative registry assigned this document id
+        StrictSellerIssued, // the seller's own number under a lossless profile
+        TolerantCandidate // a lossy alias: reconciliation only, never binding
+    }
 
     error InvalidIdentityField();
     error InvalidTermsField();
     error UnsupportedSchemeVersion(uint16 supplied);
     error InvalidRelation();
+    error LossyProfileNotPermitted(uint8 profile);
+    error LosslessProfileRequiredForTier(IdentityTier tier);
+    error CandidateTierCannotBind(IdentityTier tier);
 
     /// @notice How one terms version relates to what came before.
     /// @dev Relations are explicit because "this invoice was corrected" and
@@ -43,13 +60,19 @@ library MordantAssetIdentity {
 
     /// @notice The enduring receivable. Every field here is identity-defining:
     /// changing it means a different receivable, not an amended one.
+    /// @dev Profiles are carried alongside the hashed fields so the library can
+    /// enforce losslessness rather than trust the caller to have chosen well.
     struct StableAssetIdentity {
         bytes32 sellerNamespace;
         bytes32 sellerId;
+        uint8 sellerProfile;
         bytes32 debtorNamespace;
         bytes32 debtorId;
+        uint8 debtorProfile;
         bytes32 invoiceNamespace; // registry namespace when one exists, else the seller's
         bytes32 invoiceId;
+        uint8 invoiceProfile;
+        IdentityTier tier;
         uint32 issueDateDays; // the date stated on the document, UTC days
     }
 
@@ -68,33 +91,81 @@ library MordantAssetIdentity {
         uint64 effectiveFrom; // unix seconds the terms take effect
     }
 
-    /// @notice Canonical 256-bit stable identity.
-    /// @dev Dynamic fields arrive pre-normalized and pre-hashed with their
-    /// profile id, and the tuple is abi.encoded, so no field boundary is
-    /// ambiguous. Jurisdiction is deliberately absent: every supported namespace
-    /// is either globally unique (LEI, DUNS, GLN, PEPPOL) or self-scoping (a VAT
-    /// identifier carries its country prefix). A separate jurisdiction field
-    /// would give two ways to express one fact, which is a divergence source.
-    function stableAssetId(StableAssetIdentity memory identity) internal pure returns (bytes32) {
+    /// @notice The binding identity. Non-lossy by construction.
+    /// @dev Reverts if any field used a lossy profile or if the tier is
+    /// TolerantCandidate. This is the structural reason a profile-6 equality can
+    /// never reach a binder: it cannot produce a strict identity at all.
+    ///
+    /// Jurisdiction is deliberately absent: every supported namespace is either
+    /// globally unique (LEI, DUNS, GLN, PEPPOL) or self-scoping (a VAT
+    /// identifier carries its country prefix), so a separate field would give
+    /// two ways to express one fact and become a divergence source.
+    function strictStableAssetId(StableAssetIdentity memory identity)
+        internal
+        pure
+        returns (bytes32)
+    {
+        if (identity.tier != IdentityTier.RegistryDocument && identity.tier != IdentityTier.StrictSellerIssued)
+        {
+            revert CandidateTierCannotBind(identity.tier);
+        }
+        _requireLossless(identity.sellerProfile);
+        _requireLossless(identity.debtorProfile);
+        _requireLossless(identity.invoiceProfile);
+        return _encode(STRICT_IDENTITY_DOMAIN, identity);
+    }
+
+    /// @notice The tolerant alias. May be lossy, and is separately domain
+    /// separated so it can never be mistaken for a strict identity.
+    /// @dev A candidate equality only ever signals that private reconciliation
+    /// may be appropriate. It is never released publicly and never consumed by a
+    /// binder.
+    function candidateAliasId(StableAssetIdentity memory identity)
+        internal
+        pure
+        returns (bytes32)
+    {
+        if (identity.tier != IdentityTier.TolerantCandidate) {
+            revert LosslessProfileRequiredForTier(identity.tier);
+        }
+        return _encode(CANDIDATE_ALIAS_DOMAIN, identity);
+    }
+
+    function _requireLossless(uint8 profile) private pure {
+        if (!MordantNormalization.isLossless(profile)) revert LossyProfileNotPermitted(profile);
+    }
+
+    function _encode(bytes32 domain, StableAssetIdentity memory identity)
+        private
+        pure
+        returns (bytes32)
+    {
         if (
             identity.sellerNamespace == bytes32(0) || identity.sellerId == bytes32(0)
                 || identity.debtorNamespace == bytes32(0) || identity.debtorId == bytes32(0)
                 || identity.invoiceNamespace == bytes32(0) || identity.invoiceId == bytes32(0)
                 || identity.issueDateDays == 0
         ) revert InvalidIdentityField();
-        return keccak256(
+        bytes32 parties = keccak256(
             abi.encode(
-                IDENTITY_DOMAIN,
-                IDENTITY_SCHEME_VERSION,
                 identity.sellerNamespace,
                 identity.sellerId,
+                identity.sellerProfile,
                 identity.debtorNamespace,
                 identity.debtorId,
+                identity.debtorProfile
+            )
+        );
+        bytes32 document = keccak256(
+            abi.encode(
                 identity.invoiceNamespace,
                 identity.invoiceId,
+                identity.invoiceProfile,
+                uint8(identity.tier),
                 identity.issueDateDays
             )
         );
+        return keccak256(abi.encode(domain, IDENTITY_SCHEME_VERSION, parties, document));
     }
 
     /// @notice Commits the stable identity under a high-entropy per-anchor salt.
@@ -212,6 +283,21 @@ library MordantAssetIdentity {
                 identityEpoch,
                 anchorNonce
             )
+        );
+    }
+
+    /// @notice Commits a tolerant alias. Separate domain from the binding
+    /// commitment, so a candidate commitment presented to a binder cannot match.
+    function candidateAliasCommitment(
+        bytes32 aliasId,
+        uint32 identityEpoch,
+        bytes32 salt
+    ) internal pure returns (bytes32) {
+        if (aliasId == bytes32(0) || salt == bytes32(0) || identityEpoch == 0) {
+            revert InvalidIdentityField();
+        }
+        return keccak256(
+            abi.encode(CANDIDATE_COMMITMENT_DOMAIN, IDENTITY_SCHEME_VERSION, identityEpoch, aliasId, salt)
         );
     }
 

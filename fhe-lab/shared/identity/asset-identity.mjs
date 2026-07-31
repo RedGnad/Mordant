@@ -17,13 +17,27 @@
 
 import { encodeAbiParameters, keccak256, stringToBytes, toHex } from "viem";
 
-export const IDENTITY_SCHEME_VERSION = 2;
+export const IDENTITY_SCHEME_VERSION = 3;
 export const TERMS_SCHEME_VERSION = 1;
 
-export const IDENTITY_DOMAIN = keccak256(stringToBytes("mordant.stable-asset-identity/2"));
-export const COMMITMENT_DOMAIN = keccak256(stringToBytes("mordant.asset-commitment/2"));
+export const STRICT_IDENTITY_DOMAIN = keccak256(stringToBytes("mordant.strict-stable-asset-identity/3"));
+export const CANDIDATE_ALIAS_DOMAIN = keccak256(stringToBytes("mordant.candidate-alias-identity/1"));
+export const COMMITMENT_DOMAIN = keccak256(stringToBytes("mordant.asset-commitment/3"));
+export const CANDIDATE_COMMITMENT_DOMAIN = keccak256(stringToBytes("mordant.candidate-alias-commitment/1"));
 export const TERMS_DOMAIN = keccak256(stringToBytes("mordant.asset-terms/1"));
-export const SALT_DOMAIN = keccak256(stringToBytes("mordant.asset-salt/2"));
+export const SALT_DOMAIN = keccak256(stringToBytes("mordant.asset-salt/3"));
+
+/** Authority ranking. Binding requires RegistryDocument or StrictSellerIssued. */
+export const IdentityTier = Object.freeze({
+  None: 0,
+  RegistryDocument: 1,
+  StrictSellerIssued: 2,
+  TolerantCandidate: 3,
+});
+
+/** Only these profiles are injective, and only they may produce a binding identity. */
+export const LOSSLESS_PROFILES = Object.freeze([1, 2, 3, 4, 5]);
+export const isLossless = (profile) => LOSSLESS_PROFILES.includes(Number(profile));
 const FIELD_DOMAIN = keccak256(stringToBytes("mordant.normalized-field/2"));
 const NAMESPACE_DOMAIN = keccak256(stringToBytes("mordant.namespace/2"));
 
@@ -122,36 +136,102 @@ export function namespace(value) {
 /* ------------------------------------------------------------ stable identity */
 
 /**
- * The enduring receivable. Every field is identity-defining: changing it means a
- * different receivable, not an amended one.
+ * The enduring receivable. Every field is identity-defining.
  *
- * Jurisdiction is deliberately absent. Every supported namespace is either
+ * Jurisdiction is deliberately absent: every supported namespace is either
  * globally unique (LEI, DUNS, GLN, PEPPOL) or self-scoping (a VAT identifier
- * carries its country prefix), so a separate jurisdiction field would give two
- * ways to express one fact, which is a divergence source.
+ * carries its country prefix), so a separate field would give two ways to
+ * express one fact and become a divergence source.
  */
-export function stableAssetId(identity) {
+function encodeIdentity(domain, identity) {
   const {
-    sellerNamespace, sellerId, debtorNamespace, debtorId,
-    invoiceNamespace, invoiceId, issueDateDays,
+    sellerNamespace, sellerId, sellerProfile,
+    debtorNamespace, debtorId, debtorProfile,
+    invoiceNamespace, invoiceId, invoiceProfile,
+    tier, issueDateDays,
   } = identity;
   if (!issueDateDays) throw new Error("ISSUE_DATE_REQUIRED");
-  return keccak256(
+  const parties = keccak256(
     encodeAbiParameters(
-      [
-        { type: "bytes32" }, { type: "uint16" },
-        { type: "bytes32" }, { type: "bytes32" },
-        { type: "bytes32" }, { type: "bytes32" },
-        { type: "bytes32" }, { type: "bytes32" },
-        { type: "uint32" },
-      ],
-      [
-        IDENTITY_DOMAIN, IDENTITY_SCHEME_VERSION,
-        sellerNamespace, sellerId, debtorNamespace, debtorId,
-        invoiceNamespace, invoiceId, Number(issueDateDays),
-      ],
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "uint8" }, { type: "bytes32" }, { type: "bytes32" }, { type: "uint8" }],
+      [sellerNamespace, sellerId, Number(sellerProfile), debtorNamespace, debtorId, Number(debtorProfile)],
     ),
   );
+  const document = keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "uint8" }, { type: "uint8" }, { type: "uint32" }],
+      [invoiceNamespace, invoiceId, Number(invoiceProfile), Number(tier), Number(issueDateDays)],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "uint16" }, { type: "bytes32" }, { type: "bytes32" }],
+      [domain, IDENTITY_SCHEME_VERSION, parties, document],
+    ),
+  );
+}
+
+/**
+ * The binding identity. Non-lossy by construction: a lossy profile or a tolerant
+ * tier cannot produce one at all, which is the structural reason a profile-6
+ * equality can never reach a binder.
+ */
+export function strictStableAssetId(identity) {
+  if (identity.tier !== IdentityTier.RegistryDocument && identity.tier !== IdentityTier.StrictSellerIssued) {
+    throw new Error("CANDIDATE_TIER_CANNOT_BIND");
+  }
+  for (const profile of [identity.sellerProfile, identity.debtorProfile, identity.invoiceProfile]) {
+    if (!isLossless(profile)) throw new Error(`LOSSY_PROFILE_NOT_PERMITTED:${profile}`);
+  }
+  return encodeIdentity(STRICT_IDENTITY_DOMAIN, identity);
+}
+
+/**
+ * The tolerant alias. Separately domain-separated, may be lossy, and only ever
+ * signals that private reconciliation may be appropriate.
+ */
+export function candidateAliasId(identity) {
+  if (identity.tier !== IdentityTier.TolerantCandidate) {
+    throw new Error("LOSSLESS_PROFILE_REQUIRED_FOR_TIER");
+  }
+  return encodeIdentity(CANDIDATE_ALIAS_DOMAIN, identity);
+}
+
+export function candidateAliasCommitment({ aliasId, identityEpoch, salt }) {
+  if (!identityEpoch) throw new Error("IDENTITY_EPOCH_REQUIRED");
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "uint16" }, { type: "uint32" }, { type: "bytes32" }, { type: "bytes32" }],
+      [CANDIDATE_COMMITMENT_DOMAIN, IDENTITY_SCHEME_VERSION, Number(identityEpoch), aliasId, salt],
+    ),
+  );
+}
+
+/**
+ * Pre-evaluation compatibility gate.
+ *
+ * Two parties must agree on namespace and profile before any FHE work starts.
+ * A mismatch is an explicit protocol error, never an asset-mismatch Boolean:
+ * returning `false` would tell both sides "different receivable" when the truth
+ * is "we disagree about how to name receivables", which is a silent false
+ * negative and exactly the failure this product cannot afford.
+ */
+export function checkProfileCompatibility(a, b) {
+  const fields = [
+    ["sellerNamespace", "sellerProfile"],
+    ["debtorNamespace", "debtorProfile"],
+    ["invoiceNamespace", "invoiceProfile"],
+  ];
+  for (const [namespaceField, profileField] of fields) {
+    if (a[namespaceField] !== b[namespaceField]) {
+      throw new Error(`IDENTITY_PROFILE_MISMATCH:${namespaceField}`);
+    }
+    if (Number(a[profileField]) !== Number(b[profileField])) {
+      throw new Error(`IDENTITY_PROFILE_MISMATCH:${profileField}`);
+    }
+  }
+  if (Number(a.tier) !== Number(b.tier)) throw new Error("IDENTITY_PROFILE_MISMATCH:tier");
+  return true;
 }
 
 export function assetCommitment({ stableId, schemeVersion = IDENTITY_SCHEME_VERSION, identityEpoch, salt }) {

@@ -38,6 +38,16 @@ library MordantNormalization {
     /// see the collision analysis in the specification before selecting it.
     uint8 internal constant PROFILE_INVOICE_CASE_INSENSITIVE = 6;
 
+    /// @notice Whether a profile is injective on its input domain.
+    /// @dev Only lossless profiles may produce a binding identity. Profile 6
+    /// drops characters, so two distinct invoice numbers can share a value; it
+    /// is confined to the tolerant candidate path and can never reach a binder.
+    function isLossless(uint8 profile) internal pure returns (bool) {
+        return profile == PROFILE_ALNUM_UPPER_FIXED || profile == PROFILE_DIGITS_FIXED
+            || profile == PROFILE_VAT || profile == PROFILE_HEX_ADDRESS
+            || profile == PROFILE_INVOICE_CASE_SENSITIVE;
+    }
+
     /// @notice Normalizes `value` under `profile` and returns a domain-separated
     /// digest that carries the profile id.
     /// @dev The profile is inside the digest, so the same characters under two

@@ -1,9 +1,56 @@
-# Canonical economic-asset identity, scheme version 2
+# Canonical economic-asset identity, scheme version 3
 
-> **Scheme 1 is retired.** It placed currency, amount and due date inside the identity, so an
-> amended invoice became a *different asset*. That hid exactly the case Mode B exists to find:
-> "same receivable, conflicting terms". Scheme 2 splits identity from terms. The factory refuses
-> scheme 1 attestations.
+> **Schemes 1 and 2 are retired.** Scheme 1 placed currency, amount and due date inside the
+> identity, so an amended invoice became a *different asset*, hiding the case Mode B exists to find.
+> Scheme 2 split identity from terms but still allowed a lossy profile to produce a binding
+> identity, which meant one identifier carried both the risk of a silent false negative and the risk
+> of a wrongful false positive. Scheme 3 separates the two paths entirely.
+
+## Two identity paths, two domains, two result meanings
+
+```text
+StrictStableAssetId          CandidateAliasId
+non-lossy profiles only      may be lossy
+tier 1 or 2                  tier 3 only
+domain .../strict-.../3      domain .../candidate-alias-identity/1
+FullFHE256 exact equality    tolerant equality
+-> exactMatchConfirmed       -> candidateMatchSuggested
+-> may bind and recourse     -> may ONLY open private reconciliation
+```
+
+`strictStableAssetId` **reverts** when any field used a lossy profile or when the tier is
+`TolerantCandidate`. A profile-6 equality therefore cannot reach a binder by construction, not by
+convention. `conflictConfirmed` is refused unless `exactMatchConfirmed` is true, so a terms conflict
+can never be asserted against an unproven identity.
+
+### Authority hierarchy
+
+1. **RegistryDocument** — an authoritative registry assigned the document id (PEPPOL, SDI, IRN).
+2. **StrictSellerIssued** — the seller's own number under a lossless profile.
+3. **TolerantCandidate** — a lossy alias. Reconciliation only, never binding, never public.
+
+### Reconciliation lifecycle
+
+```text
+tolerant candidate signal (private, non-binding)
+  -> human reconciliation off-chain
+  -> authorized issuer PRE-COMMITS the corrected strict identity or an equivalence
+  -> a NEW exact session runs and may bind
+```
+
+`MordantSessionPrecommitRegistry` enforces it: a session marked as a candidate session can never be
+pre-committed as exact, a session id may be pre-committed once, and a binder must consult the
+registry rather than trust a caller assertion. **The original tolerant result is never rebound or
+upgraded; it is superseded by a different session.**
+
+### Profile governance
+
+Invoice-profile selection is registry- or onboarding-governed. A client may not select a more
+tolerant profile per request: the profile is bound into the identity and into the tier, so a
+request that changes it produces a different object rather than a laxer comparison. Namespace and
+profile compatibility is checked **before** FHE evaluation, and a mismatch returns
+`IDENTITY_PROFILE_MISMATCH` rather than a false asset-mismatch Boolean, because reporting "different
+receivable" when the truth is "we disagree about naming" is a silent false negative.
 
 
 Normative specification. The Solidity library `MordantAssetIdentity.sol` and the JavaScript

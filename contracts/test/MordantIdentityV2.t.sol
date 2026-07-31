@@ -13,6 +13,8 @@ import {MordantNormalization as N} from "../src/identity/MordantNormalization.so
 import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation.sol";
 import {MordantSourceIdentityRegistry} from "../src/identity/MordantSourceIdentityRegistry.sol";
 import {MordantTermsRegistry} from "../src/identity/MordantTermsRegistry.sol";
+import {MordantMatchResult as Match} from "../src/identity/MordantMatchResult.sol";
+import {MordantSessionPrecommitRegistry} from "../src/identity/MordantSessionPrecommitRegistry.sol";
 import {MockCvaAdapter} from "../src/mocks/MockCvaAdapter.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockEligibility} from "../src/mocks/MockEligibility.sol";
@@ -42,6 +44,21 @@ contract IdentityHarness {
     {
         return N.normalize(profile, value, fixedLength);
     }
+
+    function strictId(Id.StableAssetIdentity calldata identity) external pure returns (bytes32) {
+        return Id.strictStableAssetId(identity);
+    }
+
+    function aliasId(Id.StableAssetIdentity calldata identity) external pure returns (bytes32) {
+        return Id.candidateAliasId(identity);
+    }
+
+    function bindable(Match.ConfidentialMatchResultV4 calldata result, bool precommitted)
+        external
+        pure
+    {
+        Match.requireBindable(result, precommitted);
+    }
 }
 
 contract MordantIdentityV2Test is Test {
@@ -67,6 +84,7 @@ contract MordantIdentityV2Test is Test {
     MordantFactoryV2 private factory;
     MordantSourceIdentityRegistry private sources;
     MordantTermsRegistry private termsRegistry;
+    MordantSessionPrecommitRegistry private precommits;
     IdentityHarness private harness;
 
     bytes32 private stableId;
@@ -95,6 +113,7 @@ contract MordantIdentityV2Test is Test {
         factory.setSettlementToken(address(settlement), true);
         sources = new MordantSourceIdentityRegistry(registry);
         termsRegistry = new MordantTermsRegistry(registry);
+        precommits = new MordantSessionPrecommitRegistry(registry);
         harness = new IdentityHarness();
 
         stableId = _stableId("INV-2026-0042", 20_500);
@@ -111,10 +130,14 @@ contract MordantIdentityV2Test is Test {
         return Id.StableAssetIdentity({
             sellerNamespace: N.namespace("lei"),
             sellerId: N.normalize(N.PROFILE_ALNUM_UPPER_FIXED, "213800WAVVOPS85N2205", 20),
+            sellerProfile: N.PROFILE_ALNUM_UPPER_FIXED,
             debtorNamespace: N.namespace("lei"),
             debtorId: N.normalize(N.PROFILE_ALNUM_UPPER_FIXED, "529900T8BM49AURSDO55", 20),
+            debtorProfile: N.PROFILE_ALNUM_UPPER_FIXED,
             invoiceNamespace: N.namespace("seller"),
-            invoiceId: N.normalize(N.PROFILE_INVOICE_CASE_INSENSITIVE, invoiceNumber, 0),
+            invoiceId: N.normalize(N.PROFILE_INVOICE_CASE_SENSITIVE, invoiceNumber, 0),
+            invoiceProfile: N.PROFILE_INVOICE_CASE_SENSITIVE,
+            tier: Id.IdentityTier.StrictSellerIssued,
             issueDateDays: issueDateDays
         });
     }
@@ -124,7 +147,7 @@ contract MordantIdentityV2Test is Test {
         pure
         returns (bytes32)
     {
-        return Id.stableAssetId(_identity(invoiceNumber, issueDateDays));
+        return Id.strictStableAssetId(_identity(invoiceNumber, issueDateDays));
     }
 
     function _original(uint256 faceValueMinor, uint32 dueDateDays)
@@ -226,7 +249,7 @@ contract MordantIdentityV2Test is Test {
         // Novation changes a party, so the stable identity necessarily differs.
         Id.StableAssetIdentity memory novated = _identity("INV-2026-0042", 20_500);
         novated.debtorId = N.normalize(N.PROFILE_ALNUM_UPPER_FIXED, "353800A3D5UNTV6H2Y19", 20);
-        assertTrue(Id.stableAssetId(novated) != stableId, "a party change is a different asset");
+        assertTrue(Id.strictStableAssetId(novated) != stableId, "a party change is a different asset");
     }
 
     function testRelationRulesFailClosed() public {
@@ -336,8 +359,8 @@ contract MordantIdentityV2Test is Test {
         viaSeller.debtorNamespace = N.namespace("duns");
         viaSeller.debtorId = N.normalize(N.PROFILE_DIGITS_FIXED, "150483782", 9);
 
-        assertTrue(Id.stableAssetId(viaVat) != Id.stableAssetId(viaSeller));
-        assertTrue(Id.stableAssetId(viaVat) != stableId);
+        assertTrue(Id.strictStableAssetId(viaVat) != Id.strictStableAssetId(viaSeller));
+        assertTrue(Id.strictStableAssetId(viaVat) != stableId);
     }
 
     /* --------------------------------------------------------- admission */
@@ -363,7 +386,7 @@ contract MordantIdentityV2Test is Test {
 
     function _commitmentFor(uint256 anchorNonce) private view returns (bytes32) {
         return Id.assetCommitment(
-            stableId, 2, EPOCH, Id.deriveSalt(keccak256("issuer-master"), stableId, EPOCH, anchorNonce)
+            stableId, 3, EPOCH, Id.deriveSalt(keccak256("issuer-master"), stableId, EPOCH, anchorNonce)
         );
     }
 
@@ -379,7 +402,7 @@ contract MordantIdentityV2Test is Test {
             creationDigest: factory.creationDigest(config),
             assetCommitment: commitment,
             initialTermsCommitment: Id.termsCommitment(stableId, 1, _original(FACE, 20_590)),
-            identitySchemeVersion: 2,
+            identitySchemeVersion: 3,
             termsSchemeVersion: 1,
             identityEpoch: EPOCH,
             issuerKeyId: registry.issuerKeyIdFor(issuer),
@@ -418,7 +441,7 @@ contract MordantIdentityV2Test is Test {
         (MordantInvoiceVaultV2 vault, bytes32 commitment) = _create(keccak256("root-1"), 1);
         assertEq(vault.assetCommitment(), commitment);
         assertEq(vault.initialTermsCommitment(), Id.termsCommitment(stableId, 1, _original(FACE, 20_590)));
-        assertEq(vault.identitySchemeVersion(), 2);
+        assertEq(vault.identitySchemeVersion(), 3);
         assertEq(vault.termsSchemeVersion(), 1);
         // Identity and terms are different objects on the anchor.
         assertTrue(vault.assetCommitment() != vault.initialTermsCommitment());
@@ -583,7 +606,7 @@ contract MordantIdentityV2Test is Test {
         attestation.identitySchemeVersion = 1; // the retired scheme
         vm.startPrank(buyer);
         vm.expectRevert(
-            abi.encodeWithSelector(MordantFactoryV2.SchemeMismatch.selector, uint16(1), uint16(2))
+            abi.encodeWithSelector(MordantFactoryV2.SchemeMismatch.selector, uint16(1), uint16(3))
         );
         factory.createIdentityAnchoredVault(config, attestation, _sign(attestation, ISSUER_KEY, address(factory)));
         vm.stopPrank();
@@ -665,9 +688,9 @@ contract MordantIdentityV2Test is Test {
             chainId: block.chainid,
             factory: address(sources),
             creationDigest: keccak256("off-chain-facility-record-1"),
-            assetCommitment: Id.assetCommitment(stableId, 2, EPOCH, salt),
+            assetCommitment: Id.assetCommitment(stableId, 3, EPOCH, salt),
             initialTermsCommitment: Id.termsCommitment(stableId, 1, _original(FACE, 20_590)),
-            identitySchemeVersion: 2,
+            identitySchemeVersion: 3,
             termsSchemeVersion: 1,
             identityEpoch: EPOCH,
             issuerKeyId: registry.issuerKeyIdFor(otherIssuer),
@@ -680,8 +703,216 @@ contract MordantIdentityV2Test is Test {
             sources.register(attestation, _sign(attestation, OTHER_ISSUER_KEY, address(sources)));
         // The same stable asset, anchored by a non-vault source, under its own
         // salt, therefore unlinkable from the vault anchor.
-        assertEq(sources.assetCommitmentOf(anchorId), Id.assetCommitment(stableId, 2, EPOCH, salt));
+        assertEq(sources.assetCommitmentOf(anchorId), Id.assetCommitment(stableId, 3, EPOCH, salt));
         assertTrue(sources.assetCommitmentOf(anchorId) != _commitmentFor(1));
+    }
+
+    /* ------------------------------ strict versus tolerant candidate paths */
+
+    function _candidateIdentity(string memory invoiceNumber)
+        private
+        pure
+        returns (Id.StableAssetIdentity memory identity)
+    {
+        identity = _identity(invoiceNumber, 20_500);
+        identity.invoiceId = N.normalize(N.PROFILE_INVOICE_CASE_INSENSITIVE, invoiceNumber, 0);
+        identity.invoiceProfile = N.PROFILE_INVOICE_CASE_INSENSITIVE;
+        identity.tier = Id.IdentityTier.TolerantCandidate;
+    }
+
+    /// The decision case. `INV-001` and `IN-V001` are different invoices that
+    /// the tolerant profile merges. A candidate match may fire; an exact match
+    /// must not; and recourse must be impossible.
+    function testInvOneVersusInVOneCandidateYesExactNo() public {
+        assertEq(
+            Id.candidateAliasId(_candidateIdentity("INV-001")),
+            Id.candidateAliasId(_candidateIdentity("IN-V001")),
+            "tolerant path may suggest these are the same"
+        );
+        assertTrue(
+            _stableId("INV-001", 20_500) != _stableId("IN-V001", 20_500),
+            "strict path must keep them distinct"
+        );
+
+        // And a result carrying only the candidate signal cannot bind.
+        Match.ConfidentialMatchResultV4 memory candidate = _result(false, true, false);
+        assertTrue(Match.opensReconciliation(candidate));
+        vm.expectRevert(Match.CandidateResultNotBindable.selector);
+        harness.bindable(candidate, true);
+    }
+
+    /// A lossy profile cannot produce a binding identity at all: the failure is
+    /// structural, not a policy check that could be forgotten.
+    function testLossyProfileCannotProduceStrictIdentity() public {
+        Id.StableAssetIdentity memory tolerant = _candidateIdentity("INV-001");
+        tolerant.tier = Id.IdentityTier.StrictSellerIssued; // claim a binding tier
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Id.LossyProfileNotPermitted.selector, N.PROFILE_INVOICE_CASE_INSENSITIVE
+            )
+        );
+        harness.strictId(tolerant);
+    }
+
+    function testCandidateTierCannotProduceStrictIdentity() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Id.CandidateTierCannotBind.selector, Id.IdentityTier.TolerantCandidate
+            )
+        );
+        harness.strictId(_candidateIdentity("INV-001"));
+    }
+
+    function testStrictTierCannotProduceCandidateAlias() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Id.LosslessProfileRequiredForTier.selector, Id.IdentityTier.StrictSellerIssued
+            )
+        );
+        harness.aliasId(_identity("INV-001", 20_500));
+    }
+
+    /// A registry document identifier outranks a seller-issued one, and the two
+    /// are different identities even for the same invoice.
+    function testRegistryDocumentTierIsDistinctFromSellerIssued() public view {
+        Id.StableAssetIdentity memory registryDoc = _identity("IT00012026X", 20_500);
+        registryDoc.invoiceNamespace = N.namespace("sdi");
+        registryDoc.tier = Id.IdentityTier.RegistryDocument;
+        assertTrue(Id.strictStableAssetId(registryDoc) != _stableId("IT00012026X", 20_500));
+    }
+
+    /* ---------------------------------------------------- result semantics */
+
+    function _result(bool exact, bool candidate, bool conflict)
+        private
+        pure
+        returns (Match.ConfidentialMatchResultV4 memory)
+    {
+        return Match.ConfidentialMatchResultV4({
+            sessionId: keccak256("session-1"),
+            scopeCommitmentA: keccak256("scope-a"),
+            scopeCommitmentB: keccak256("scope-b"),
+            inputCommitmentA: keccak256("input-a"),
+            inputCommitmentB: keccak256("input-b"),
+            exactMatchConfirmed: exact,
+            candidateMatchSuggested: candidate,
+            conflictConfirmed: conflict,
+            matchCommitment: keccak256("match"),
+            anchorCount: 1,
+            providerProofCommitment: keccak256("proof")
+        });
+    }
+
+    function testConflictRequiresExactMatch() public {
+        vm.expectRevert(Match.ConflictWithoutExactMatch.selector);
+        harness.bindable(_result(false, true, true), true);
+    }
+
+    function testCandidateResultReplayIntoBinderIsRejected() public {
+        // Even a result that also claims an exact match is refused if it carries
+        // the candidate signal: a session that ran the tolerant path is a
+        // reconciliation signal by construction.
+        Match.ConfidentialMatchResultV4 memory upgraded = _result(true, true, true);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Match.CandidateSessionCannotBind.selector, keccak256("session-1")
+            )
+        );
+        harness.bindable(upgraded, true);
+    }
+
+    function testExactResultWithoutPrecommitmentIsRejected() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(Match.MissingPrecommitment.selector, keccak256("session-1"))
+        );
+        harness.bindable(_result(true, false, true), false);
+    }
+
+    function testExactResultWithPrecommitmentIsAccepted() public view {
+        harness.bindable(_result(true, false, true), true);
+    }
+
+    /* ------------------------------------------- reconciliation lifecycle */
+
+    function _precommit(bytes32 sessionId, bytes32 candidateSession, uint256 nonce)
+        private
+        view
+        returns (MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory)
+    {
+        return MordantSessionPrecommitRegistry.ExactSessionPrecommitment({
+            chainId: block.chainid,
+            registry: address(precommits),
+            sessionId: sessionId,
+            strictAssetCommitment: _commitmentFor(1),
+            equivalenceOf: bytes32(0),
+            supersedesCandidateSession: candidateSession,
+            issuerKeyId: registry.issuerKeyIdFor(issuer),
+            identityEpoch: EPOCH,
+            validUntil: uint64(block.timestamp + 1 days),
+            nonce: nonce
+        });
+    }
+
+    function _signPrecommit(
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory precommitment,
+        uint256 key
+    ) private view returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, precommits.digestOf(precommitment));
+        return abi.encodePacked(r, s, v);
+    }
+
+    function testReconciliationRequiresANewSessionAndPrecommitment() public {
+        bytes32 candidateSession = keccak256("candidate-session");
+        bytes32 exactSession = keccak256("exact-session");
+        precommits.markCandidateSession(candidateSession);
+
+        // The tolerant session can never be pre-committed as exact.
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory upgrade =
+            _precommit(candidateSession, bytes32(0), 1);
+        bytes memory upgradeSignature = _signPrecommit(upgrade, ISSUER_KEY);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MordantSessionPrecommitRegistry.CandidateSessionCannotBePrecommitted.selector,
+                candidateSession
+            )
+        );
+        precommits.precommitExactSession(upgrade, upgradeSignature);
+
+        // Before reconciliation, the new session is not authorized.
+        assertFalse(precommits.isSessionPrecommitted(exactSession, _commitmentFor(1)));
+
+        // After an authorized pre-commitment, it is.
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory fresh =
+            _precommit(exactSession, candidateSession, 2);
+        precommits.precommitExactSession(fresh, _signPrecommit(fresh, ISSUER_KEY));
+        assertTrue(precommits.isSessionPrecommitted(exactSession, _commitmentFor(1)));
+        // And only for the committed asset.
+        assertFalse(precommits.isSessionPrecommitted(exactSession, _commitmentFor(2)));
+    }
+
+    function testPrecommitmentIsOneShotAndIssuerAuthorized() public {
+        bytes32 sessionId = keccak256("exact-session-2");
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory precommitment =
+            _precommit(sessionId, bytes32(0), 3);
+        precommits.precommitExactSession(precommitment, _signPrecommit(precommitment, ISSUER_KEY));
+
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory repeat =
+            _precommit(sessionId, bytes32(0), 4);
+        bytes memory repeatSignature = _signPrecommit(repeat, ISSUER_KEY);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MordantSessionPrecommitRegistry.SessionAlreadyPrecommitted.selector, sessionId
+            )
+        );
+        precommits.precommitExactSession(repeat, repeatSignature);
+
+        // A revoked issuer cannot authorize a session.
+        registry.revokeIssuer(registry.issuerKeyIdFor(issuer));
+        MordantSessionPrecommitRegistry.ExactSessionPrecommitment memory afterRevocation =
+            _precommit(keccak256("exact-session-3"), bytes32(0), 5);
+        bytes memory revokedSignature = _signPrecommit(afterRevocation, ISSUER_KEY);
+        vm.expectRevert();
+        precommits.precommitExactSession(afterRevocation, revokedSignature);
     }
 
     /* --------------------------------------------------------- V1 untouched */
