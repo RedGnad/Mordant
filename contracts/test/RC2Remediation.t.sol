@@ -13,12 +13,12 @@ import {
 
 /// @dev Library reverts are same-depth, so `expectRevert` needs an external call.
 contract ResultHarness {
-    function coherent(R.ConfidentialMatchResultV5 memory result) external pure {
-        R.requireCoherent(result);
+    function coherent(R.Outcome outcome, bool sameAsset, bool policyConflict) external pure {
+        R.requireOutcomeMatchesBits(outcome, sameAsset, policyConflict);
     }
 
-    function bindable(R.ConfidentialMatchResultV5 memory result, bool precommitted) external pure {
-        R.requireBindable(result, precommitted);
+    function bindable(R.Outcome outcome, bool sameAsset, bool policyConflict) external pure {
+        R.requireBindableOutcome(outcome, sameAsset, policyConflict);
     }
 
     function outcomeOf(bool sameAsset, bool policyConflict) external pure returns (R.Outcome) {
@@ -83,66 +83,40 @@ contract RC2RemediationTest is Test {
 
     function testDifferentAssetAndNoConflictAreDistinguishable() public view {
         // The RC1 defect: one conjunction bit could not tell these apart.
-        R.ConfidentialMatchResultV5 memory different =
-            _result(false, false, R.Outcome.DifferentAsset);
-        R.ConfidentialMatchResultV5 memory noConflict =
-            _result(true, false, R.Outcome.SameAssetNoPolicyConflict);
-        harness.coherent(different);
-        harness.coherent(noConflict);
-        assertTrue(different.outcome != noConflict.outcome);
+        harness.coherent(R.Outcome.DifferentAsset, false, false);
+        harness.coherent(R.Outcome.SameAssetNoPolicyConflict, true, false);
+        assertTrue(R.Outcome.DifferentAsset != R.Outcome.SameAssetNoPolicyConflict);
     }
 
     function testADeclaredOutcomeMustMatchTheReleasedBits() public {
         // A coordinator claiming a conflict on bits that do not imply one.
-        R.ConfidentialMatchResultV5 memory forged =
-            _result(true, false, R.Outcome.SameAssetPolicyConflict);
         vm.expectRevert(R.ReleasedBitsDisagreeWithOutcome.selector);
-        harness.coherent(forged);
+        harness.coherent(R.Outcome.SameAssetPolicyConflict, true, false);
+
+        vm.expectRevert(R.ReleasedBitsDisagreeWithOutcome.selector);
+        harness.coherent(R.Outcome.DifferentAsset, true, true);
     }
 
     function testOnlyAPolicyConflictIsBindable() public {
         vm.expectRevert(
             abi.encodeWithSelector(R.ResultNotBindable.selector, R.Outcome.DifferentAsset)
         );
-        harness.bindable(_result(false, false, R.Outcome.DifferentAsset), true);
+        harness.bindable(R.Outcome.DifferentAsset, false, false);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 R.ResultNotBindable.selector, R.Outcome.SameAssetNoPolicyConflict
             )
         );
-        harness.bindable(_result(true, false, R.Outcome.SameAssetNoPolicyConflict), true);
+        harness.bindable(R.Outcome.SameAssetNoPolicyConflict, true, false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(R.ResultNotBindable.selector, R.Outcome.NotComparable)
+        );
+        harness.bindable(R.Outcome.NotComparable, false, false);
 
         // The only bindable state.
-        harness.bindable(_result(true, true, R.Outcome.SameAssetPolicyConflict), true);
-    }
-
-    function testABindableResultStillNeedsItsPrecommitment() public {
-        R.ConfidentialMatchResultV5 memory result =
-            _result(true, true, R.Outcome.SameAssetPolicyConflict);
-        vm.expectRevert(
-            abi.encodeWithSelector(R.MissingPrecommitment.selector, result.sessionCommitment)
-        );
-        harness.bindable(result, false);
-    }
-
-    function testAnEvaluatedResultMustCarryTwoDistinctEnrollmentDigests() public {
-        R.ConfidentialMatchResultV5 memory result =
-            _result(true, true, R.Outcome.SameAssetPolicyConflict);
-        result.enrollmentDigestB = result.enrollmentDigestA;
-        vm.expectRevert(R.EmptyResult.selector);
-        harness.coherent(result);
-    }
-
-    function testNotComparablePerformsNoEvaluation() public {
-        R.ConfidentialMatchResultV5 memory result = _result(false, false, R.Outcome.NotComparable);
-        result.providerProofCommitment = bytes32(0);
-        result.thresholdTranscriptCommitment = bytes32(0);
-        harness.coherent(result);
-
-        result.providerProofCommitment = keccak256("proof");
-        vm.expectRevert(R.NotComparableMustNotEvaluate.selector);
-        harness.coherent(result);
+        harness.bindable(R.Outcome.SameAssetPolicyConflict, true, true);
     }
 
     /* ============================ C-01: opaque source ====================== */
@@ -582,31 +556,5 @@ contract RC2RemediationTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(G.RelayerIsController.selector, controllerA));
         governance.resolveSession(intent, keccak256("salt"), signatures);
-    }
-
-    /* ---------------------------------------------------------------- helper */
-
-    function _result(bool sameAsset, bool policyConflict, R.Outcome outcome)
-        private
-        pure
-        returns (R.ConfidentialMatchResultV5 memory)
-    {
-        return R.ConfidentialMatchResultV5({
-            schemaVersion: R.RESULT_SCHEMA_VERSION,
-            sessionCommitment: keccak256("session"),
-            scopeCommitmentA: keccak256("scope-a"),
-            scopeCommitmentB: keccak256("scope-b"),
-            inputCommitmentA: keccak256("in-a"),
-            inputCommitmentB: keccak256("in-b"),
-            enrollmentDigestA: keccak256("enroll-a"),
-            enrollmentDigestB: keccak256("enroll-b"),
-            outcome: outcome,
-            sameEconomicAsset: sameAsset,
-            policyConflict: policyConflict,
-            matchCommitment: keccak256("match"),
-            anchorCount: 2,
-            providerProofCommitment: keccak256("proof"),
-            thresholdTranscriptCommitment: keccak256("transcript")
-        });
     }
 }

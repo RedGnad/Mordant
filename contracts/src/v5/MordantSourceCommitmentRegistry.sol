@@ -73,6 +73,11 @@ contract MordantSourceCommitmentRegistry {
     /// @notice What the binder learns at reveal. None of it was public before.
     struct RevealedSource {
         bytes32 sourceRecordCommitment;
+        /// @dev The EIP-712 digest of the attestation itself. An anchored side
+        /// exposes the same value as `sourceAttestationDigest()`, so a binder
+        /// can prove the revealed source IS the anchor's source rather than
+        /// merely a source with matching fields.
+        bytes32 attestationDigest;
         bytes32 assetCommitment;
         bytes32 initialTermsCommitment;
         bytes32 issuerKeyId;
@@ -212,7 +217,7 @@ contract MordantSourceCommitmentRegistry {
             revert NonceConsumed(attestation.issuerKeyId, attestation.nonce);
         }
 
-        (address signer,) =
+        (address signer, bytes32 attestationDigest) =
             MordantSourceAttestation.recover(attestation, issuerSignature, address(this));
         issuerRegistry.requireAuthorized(attestation.issuerKeyId, signer, attestation.identityEpoch);
 
@@ -227,6 +232,7 @@ contract MordantSourceCommitmentRegistry {
 
         revealed = RevealedSource({
             sourceRecordCommitment: key,
+            attestationDigest: attestationDigest,
             assetCommitment: attestation.assetCommitment,
             initialTermsCommitment: attestation.initialTermsCommitment,
             issuerKeyId: attestation.issuerKeyId,
