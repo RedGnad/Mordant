@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
@@ -25,7 +26,7 @@ import (
 type config struct {
 	party, publicMaterial, manifest, evaluationKeys, issuerKey, output, privateManifest string
 	rosterDigest, vault, policyID, sessionID, coverage, anchorRoot, currencyCode        string
-	identityMode, assetID, enrollmentBinding                                            string
+	identityMode, assetIDFile, enrollmentBinding                                        string
 	chainID, policyVersion, nonce, validUntil, keyEpoch, windowBase                     uint64
 	threshold                                                                           uint64
 }
@@ -103,7 +104,11 @@ func run(arguments []string) error {
 	// and there is no public link commitment at all, so nothing about the
 	// receivable is testable by anyone holding only the ciphertext.
 	if mode == fhe.IdentityFullFHE256 {
-		assetID, assetErr := decode32(c.assetID)
+		raw, readErr := os.ReadFile(c.assetIDFile)
+		if readErr != nil {
+			return readErr
+		}
+		assetID, assetErr := decode32(strings.TrimSpace(string(raw)))
 		if assetErr != nil {
 			return assetErr
 		}

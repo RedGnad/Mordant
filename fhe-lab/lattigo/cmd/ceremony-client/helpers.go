@@ -41,8 +41,11 @@ func parse(arguments []string) (config, error) {
 	f.Uint64Var(&c.threshold, "threshold", 0, "expected threshold")
 	f.StringVar(&c.identityMode, "identity-mode", string(fhe.IdentityPublicCommitment),
 		"public_salted_commitment or full_fhe_256")
-	f.StringVar(&c.assetID, "asset-id", "",
-		"strict stable asset identity, encrypted bit-by-bit in full_fhe_256 mode")
+	// The strict stable asset identity is the secret the mode exists to protect,
+	// so it is read from a 0600 file rather than passed as an argument: a command
+	// line is visible to every local process and is recorded in the evidence.
+	f.StringVar(&c.assetIDFile, "asset-id-file", "",
+		"file holding the strict stable asset identity, required in full_fhe_256")
 	f.StringVar(&c.enrollmentBinding, "enrollment-binding", "",
 		"32-byte binding carried as the signed enrollment nonce")
 	if err := f.Parse(arguments); err != nil || f.NArg() != 0 ||
@@ -52,7 +55,7 @@ func parse(arguments []string) (config, error) {
 		c.rosterDigest == "" || c.vault == "" || c.policyID == "" || c.sessionID == "" ||
 		c.keyEpoch == 0 || c.threshold < 2 || c.coverage == "" || c.anchorRoot == "" || c.currencyCode == "" ||
 		(c.identityMode != string(fhe.IdentityPublicCommitment) && c.identityMode != string(fhe.IdentityFullFHE256)) ||
-		(c.identityMode == string(fhe.IdentityFullFHE256) && (c.assetID == "" || c.enrollmentBinding == "")) {
+		(c.identityMode == string(fhe.IdentityFullFHE256) && (c.assetIDFile == "" || c.enrollmentBinding == "")) {
 		return config{}, errors.New("invalid ceremony client configuration")
 	}
 	return c, nil

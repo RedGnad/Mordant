@@ -16,7 +16,7 @@
 
 import { spawn } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -27,7 +27,7 @@ import {
   transactor, step, settle, writeAtomic, readJournal, emptyJournal, REPO,
 } from "./priv8-chain.mjs";
 import {
-  loadArtifacts, deployStack, authorizeScopes, deployAnchor, activateAnchor,
+  loadArtifacts, deployStack, deployUnits, authorizeScopes, deployAnchor, activateAnchor,
   registerSource, receivableIdentity, sideCommitments, initialTerms, IDENTITY_EPOCH,
 } from "./priv8-deploy.mjs";
 import { strictStableAssetId, currencyCode } from "../shared/identity/asset-identity.mjs";
@@ -436,6 +436,8 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     };
     const context = {
       client, tx, journal, journalPath, settings, art, scope, chainId: CHAIN_ID,
+      label: options.receivable,
+      issuerNonceBase: 1 + 2 * (Number(options.receivable) - 1),
       parties: {
         issuer: party.issuer, relayer: party.relayer,
         controllerA: party["controller-a"], controllerB: party["controller-b"],
@@ -444,6 +446,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     };
     const stack = await deployStack(context);
     const addresses = stack.addresses;
+    Object.assign(addresses, await deployUnits(context, addresses));
     evidence.deployments = { addresses, validatorSet: stack.validatorSet, transactions: stack.deployments };
     await reached("DEPLOYED");
 
@@ -478,11 +481,11 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     await reached("PARTIES_SERVING");
 
     /* --------------------------------------------------------------- ANCHORED */
-    const identity = receivableIdentity();
+    const identity = receivableIdentity(`INV-2026-00${String(40 + Number(options.receivable)).padStart(2, "0")}`);
     const stableId = strictStableAssetId(identity);
     const sides = sideCommitments(stableId, {
-      anchorMasterSecret: keccak256(stringToHex("mordant.priv8.anchor-platform.master/1")),
-      sourceMasterSecret: keccak256(stringToHex("mordant.priv8.non-vault-facility.master/1")),
+      anchorMasterSecret: keccak256(stringToHex(`mordant.priv8.anchor-platform.master/${options.receivable}`)),
+      sourceMasterSecret: keccak256(stringToHex(`mordant.priv8.non-vault-facility.master/${options.receivable}`)),
     });
     const currency = currencyCode("USD");
     const effectiveFrom = Number((await client.getBlock()).timestamp);
@@ -551,7 +554,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     await reached("SOURCE_REGISTERED");
 
     /* ------------------------------------- resume after a successful binding */
-    const alreadyBound = findBoundSession(journal);
+    const alreadyBound = findBoundSession(journal, options.receivable);
     if (alreadyBound) {
       const recovered = await recoverBoundSession({ client, art, hash: alreadyBound.hash });
       // Awaited, not returned: a bare `return` inside try/finally runs the
@@ -592,31 +595,44 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       expiry: Number(latest.timestamp) + INTENT_TTL_SECONDS,
       disclosureVersion: 1,
     };
-    const intentPayload = { chainId: CHAIN_ID, governance: addresses.governance, intent };
-    const signedA = await parties.ask(party["controller-a"], "/v1/sign-intent", intentPayload);
-    const signedB = await parties.ask(party["controller-b"], "/v1/sign-intent", intentPayload);
-    const signedIssuer = await parties.ask(party.issuer, "/v1/sign-intent", intentPayload);
-    const signatures = {
-      controllerA: signedA.signature, controllerB: signedB.signature, issuer: signedIssuer.signature,
-    };
-    const signerDigests = { A: signedA.digest, B: signedB.digest, issuer: signedIssuer.digest };
-    const signerAddresses = { A: signedA.address, B: signedB.address, issuer: signedIssuer.address };
-    let salt = `0x${randomBytes(32).toString("hex")}`;
-    const resumable = findResumableSession(journal);
+    // Resumability is decided BEFORE anyone signs. A previous attempt may have
+    // already published a commitment for this receivable, and its preimage was
+    // journalled first precisely so the session can be finished rather than
+    // abandoned. Signing a fresh intent and then restoring the old one would
+    // leave the signers attesting a digest nobody committed to.
+    const resumable = findResumableSession(journal, options.receivable);
+    let salt;
+    let signatures;
+    let signerDigests;
+    let signerAddresses;
     if (resumable) {
-      // A previous attempt already published this commitment. Its preimage was
-      // journalled first, so the session can be finished rather than abandoned.
-      ({ salt } = resumable);
       Object.assign(intent, resumable.intent);
-      signatures.controllerA = resumable.signatures.controllerA;
-      signatures.controllerB = resumable.signatures.controllerB;
-      signatures.issuer = resumable.signatures.issuer;
+      salt = resumable.salt;
+      signatures = { ...resumable.signatures };
+      const digest = mirror.intentDigest(intent, CHAIN_ID, addresses.governance);
+      const { recoverAddress } = await import("viem");
+      signerDigests = { A: digest, B: digest, issuer: digest };
+      signerAddresses = {
+        A: await recoverAddress({ hash: digest, signature: signatures.controllerA }),
+        B: await recoverAddress({ hash: digest, signature: signatures.controllerB }),
+        issuer: await recoverAddress({ hash: digest, signature: signatures.issuer }),
+      };
+    } else {
+      const intentPayload = { chainId: CHAIN_ID, governance: addresses.governance, intent };
+      const signedA = await parties.ask(party["controller-a"], "/v1/sign-intent", intentPayload);
+      const signedB = await parties.ask(party["controller-b"], "/v1/sign-intent", intentPayload);
+      const signedIssuer = await parties.ask(party.issuer, "/v1/sign-intent", intentPayload);
+      signatures = {
+        controllerA: signedA.signature, controllerB: signedB.signature, issuer: signedIssuer.signature,
+      };
+      signerDigests = { A: signedA.digest, B: signedB.digest, issuer: signedIssuer.digest };
+      signerAddresses = { A: signedA.address, B: signedB.address, issuer: signedIssuer.address };
+      salt = `0x${randomBytes(32).toString("hex")}`;
     }
     evidence.intent = {
-      intent: { ...intent },
-      signers: {
-        controllerA: signedA.address, controllerB: signedB.address, issuer: signedIssuer.address,
-      },
+      intent: serializeIntent(intent),
+      signers: signerAddresses,
+      resumedFromJournalledPreimage: Boolean(resumable),
     };
     await reached("INTENT_SIGNED");
 
@@ -644,7 +660,8 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     journal.sessions = journal.sessions ?? {};
     if (!journal.sessions[preflight.sessionCommitment]) {
       journal.sessions[preflight.sessionCommitment] = {
-        intent: serializeIntent(intent), salt, signatures, recordedAt: new Date().toISOString(),
+        label: options.receivable, intent: serializeIntent(intent), salt, signatures,
+        recordedAt: new Date().toISOString(),
       };
       await writeAtomic(journalPath, journal);
     }
@@ -660,7 +677,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       await settle(journal, journalPath, key, client, hash, { role: "relayer" });
     }
     const relayerAccount = await relayerWallet(party.relayer);
-    const commitKey = `session:commit:${preflight.sessionCommitment}`;
+    const commitKey = `session:commit:${options.receivable}:${preflight.sessionCommitment}`;
     const { hash: commitHash } = await step(journal, journalPath, commitKey, async () => ({
       hash: await tx.write(relayerAccount, {
         address: addresses.governance, abi: art.governance.abi, functionName: "commitSession",
@@ -681,7 +698,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       .filter(([name, entry]) => name.startsWith("session:commit:") && entry.status === "success"
         && !name.endsWith(preflight.sessionCommitment))
       .map(([name, entry]) => ({
-        sessionCommitment: name.slice("session:commit:".length),
+        sessionCommitment: name.slice(name.lastIndexOf(":") + 1),
         transaction: entry.hash,
         block: entry.block,
         note: "published by an interrupted run; its preimage was lost, so it can never be revealed or bound",
@@ -741,7 +758,8 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       // root. The evidence directory is keyed by the session it belongs to.
       root: resolve(options.root, `ceremony-${Date.now()}`),
       out: resolve(options.out, `ceremony-${preflight.sessionCommitment.slice(2, 14)}`),
-      vault: anchor.vault, anchorRoot: anchor.invoiceRoot, assetId: stableId, bindings,
+      vault: anchor.vault, anchorRoot: anchor.invoiceRoot, assetId: stableId,
+      secretsRoot: resolve(options.root, "secrets"), bindings,
     });
     if (ceremony.evaluator.identityMode !== "full_fhe_256") fail("IDENTITY_MODE", ceremony.evaluator.identityMode);
     if (ceremony.evaluator.conflictConfirmed !== true) fail("CONFLICT_NOT_CONFIRMED");
@@ -905,7 +923,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     ];
     const balancesBefore = await readBalances(client, art, addresses, anchor, party);
 
-    const bindKey = `recourse:bind:${preflight.sessionCommitment}`;
+    const bindKey = `recourse:bind:${options.receivable}:${preflight.sessionCommitment}`;
     const { hash: bindHash } = await step(journal, journalPath, bindKey, async () => ({
       hash: await tx.write(settings.deployer, {
         address: addresses.binder, abi: art.binder.abi, functionName: "bindRecourse", args: bindArgs,
@@ -981,10 +999,10 @@ async function finishFromBinding({
     args: [sessionCommitment],
   });
   const commitReceipt = await client.getTransactionReceipt({
-    hash: journal.steps[`session:commit:${sessionCommitment}`].hash,
+    hash: journal.steps[`session:commit:${alreadyBound.label}:${sessionCommitment}`].hash,
   });
   const commitTransaction = await client.getTransaction({
-    hash: journal.steps[`session:commit:${sessionCommitment}`].hash,
+    hash: journal.steps[`session:commit:${alreadyBound.label}:${sessionCommitment}`].hash,
   });
 
   evidence.resumed = {
@@ -1106,7 +1124,7 @@ async function finishFromBinding({
   evidence.binding = {
     transaction: alreadyBound.hash,
     block: alreadyBound.block,
-    gasUsed: journal.steps[`recourse:bind:${sessionCommitment}`].gasUsed,
+    gasUsed: journal.steps[`recourse:bind:${alreadyBound.label}:${sessionCommitment}`].gasUsed,
     value: String(recovered.transaction.value),
     from: getAddress(recovered.transaction.from),
     to: getAddress(recovered.transaction.to),
@@ -1295,15 +1313,25 @@ async function agreeOnCommitment({ client, art, addresses, intent, signatures, s
   };
 }
 
-async function runCeremony({ root, out, vault, anchorRoot, assetId, bindings }) {
+async function runCeremony({ root, out, vault, anchorRoot, assetId, secretsRoot, bindings }) {
   const started = Date.now();
-  await runCommand("go", [
-    "run", "./cmd/ceremony-lab",
-    "-root", root, "-out", out, "-repo", resolve(REPO, "fhe-lab/lattigo"),
-    "-vault", vault, "-anchor-root", anchorRoot, "-policy-label", POLICY_LABEL,
-    "-identity-mode", "full_fhe_256", "-asset-id", assetId,
-    "-enrollment-binding-a", bindings.a, "-enrollment-binding-b", bindings.b,
-  ], { cwd: resolve(REPO, "fhe-lab/lattigo") });
+  // The strict stable asset identity is the secret this mode protects. It is
+  // handed over in a 0600 file, never as an argument: a command line is visible
+  // to every local process and is recorded verbatim in the ceremony evidence.
+  await mkdir(secretsRoot, { recursive: true, mode: 0o700 });
+  const assetIdFile = resolve(secretsRoot, "strict-asset-id");
+  await writeFile(assetIdFile, `${assetId}\n`, { mode: 0o600 });
+  try {
+    await runCommand("go", [
+      "run", "./cmd/ceremony-lab",
+      "-root", root, "-out", out, "-repo", resolve(REPO, "fhe-lab/lattigo"),
+      "-vault", vault, "-anchor-root", anchorRoot, "-policy-label", POLICY_LABEL,
+      "-identity-mode", "full_fhe_256", "-asset-id-file", assetIdFile,
+      "-enrollment-binding-a", bindings.a, "-enrollment-binding-b", bindings.b,
+    ], { cwd: resolve(REPO, "fhe-lab/lattigo") });
+  } finally {
+    await rm(assetIdFile, { force: true });
+  }
   const evaluator = JSON.parse(await readFile(resolve(out, "evaluator-result.json"), "utf8"));
   const custody = JSON.parse(await readFile(resolve(out, "dealerless-custody-evidence.json"), "utf8"));
   return { evaluator, custody, durationSeconds: Math.round((Date.now() - started) / 1000) };
@@ -1603,10 +1631,11 @@ async function runReplays({
 
 /// A session whose binding transaction already succeeded. Finding one means the
 /// run got past the atomic step and only the observation phases remain.
-export function findBoundSession(journal) {
+export function findBoundSession(journal, label) {
+  const prefix = `recourse:bind:${label}:`;
   for (const [name, entry] of Object.entries(journal.steps)) {
-    if (name.startsWith("recourse:bind:") && entry.status === "success") {
-      return { sessionCommitment: name.slice("recourse:bind:".length), hash: entry.hash, block: entry.block };
+    if (name.startsWith(prefix) && entry.status === "success") {
+      return { sessionCommitment: name.slice(prefix.length), hash: entry.hash, block: entry.block, label };
     }
   }
   return null;
@@ -1636,10 +1665,11 @@ export async function recoverBoundSession({ client, art, hash }) {
 /// A session whose commitment is on-chain, whose preimage was journalled, and
 /// which has not yet been bound. Resuming it is the only way to avoid stranding
 /// an unrevealable commitment on every crash.
-export function findResumableSession(journal) {
+export function findResumableSession(journal, label) {
   for (const [commitment, preimage] of Object.entries(journal.sessions ?? {})) {
-    const committed = journal.steps[`session:commit:${commitment}`]?.status === "success";
-    const bound = journal.steps[`recourse:bind:${commitment}`]?.status === "success";
+    if (preimage.label !== label) continue;
+    const committed = journal.steps[`session:commit:${label}:${commitment}`]?.status === "success";
+    const bound = journal.steps[`recourse:bind:${label}:${commitment}`]?.status === "success";
     if (committed && !bound) return { commitment, ...preimage };
   }
   return null;
@@ -1657,12 +1687,14 @@ export function parseArgs(argv) {
     journal: resolve(HERE, "artifacts/priv8-journal.json"),
     out: resolve(HERE, "artifacts/priv8-evidence"),
     frozenCommit: "af5baad",
+    receivable: "1",
   };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--root" && argv[index + 1]) options.root = resolve(argv[++index]);
     if (argv[index] === "--journal" && argv[index + 1]) options.journal = resolve(argv[++index]);
     if (argv[index] === "--out" && argv[index + 1]) options.out = resolve(argv[++index]);
     if (argv[index] === "--frozen-commit" && argv[index + 1]) options.frozenCommit = argv[++index];
+    if (argv[index] === "--receivable" && argv[index + 1]) options.receivable = argv[++index];
   }
   return options;
 }

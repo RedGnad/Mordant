@@ -101,7 +101,7 @@ func main() {
 
 func run() error {
 	var root, out, repo, vault, policyLabel, anchorRootHex string
-	var identityMode, assetIDHex, bindingAHex, bindingBHex string
+	var identityMode, assetIDFile, bindingAHex, bindingBHex string
 	var keepRunning bool
 	flag.StringVar(&root, "root", "", "lab working directory (default: temp dir)")
 	flag.StringVar(&out, "out", "", "evidence output directory")
@@ -112,8 +112,8 @@ func run() error {
 	flag.StringVar(&anchorRootHex, "anchor-root", "", "invoice root of a deployed receivable anchor")
 	flag.StringVar(&identityMode, "identity-mode", "public_salted_commitment",
 		"public_salted_commitment or full_fhe_256")
-	flag.StringVar(&assetIDHex, "asset-id", "",
-		"strict stable asset identity, required in full_fhe_256")
+	flag.StringVar(&assetIDFile, "asset-id-file", "",
+		"file holding the strict stable asset identity, required in full_fhe_256")
 	flag.StringVar(&bindingAHex, "enrollment-binding-a", "", "runner-computed enrollment binding for side A")
 	flag.StringVar(&bindingBHex, "enrollment-binding-b", "", "runner-computed enrollment binding for side B")
 	flag.Parse()
@@ -142,12 +142,12 @@ func run() error {
 	if identityMode != "public_salted_commitment" && identityMode != "full_fhe_256" {
 		return errors.New("unsupported identity mode")
 	}
-	if identityMode == "full_fhe_256" && (assetIDHex == "" || bindingAHex == "" || bindingBHex == "") {
+	if identityMode == "full_fhe_256" && (assetIDFile == "" || bindingAHex == "" || bindingBHex == "") {
 		return errors.New("full_fhe_256 requires an asset id and both enrollment bindings")
 	}
 	lab := &lab{
 		root: root, out: out, repo: repo, vault: vault, policyID: policyID, anchorRoot: anchorRoot,
-		identityMode: identityMode, assetID: assetIDHex, bindingA: bindingAHex, bindingB: bindingBHex,
+		identityMode: identityMode, assetIDFile: assetIDFile, bindingA: bindingAHex, bindingB: bindingBHex,
 	}
 	return lab.execute()
 }
@@ -158,7 +158,7 @@ type lab struct {
 	policyID        [32]byte
 	anchorRoot      [32]byte
 	identityMode    string
-	assetID         string
+	assetIDFile     string
 	bindingA        string
 	bindingB        string
 	processes       []processRecord
@@ -528,7 +528,7 @@ func (l *lab) runClientsAndEvaluator() error {
 			"-key-epoch", "1",
 			"-threshold", "2",
 			"-identity-mode", l.identityMode,
-			"-asset-id", l.assetID,
+			"-asset-id-file", l.assetIDFile,
 			"-enrollment-binding", l.enrollmentBinding(party),
 		); err != nil {
 			return err

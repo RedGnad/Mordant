@@ -133,11 +133,11 @@ export async function deployStack(context) {
     await settle(journal, journalPath, key, client, hash, { role: label, to: account.address });
   }
 
-  // 1. Test-asset doubles the vault's own accounting requires.
+  // 1. Test-asset doubles the vault's own accounting requires. The settlement
+  //    token is shared; the receivable units are not, because the factory binds
+  //    one unit token to one receivable root.
   const eligibility = await deploy("MockEligibility", art.eligibility, []);
   const settlement = await deploy("SettlementToken", art.erc20, ["Mordant settlement (test)", "tUSD", 6]);
-  const cvaToken = await deploy("ReceivableUnits", art.erc20, ["Mordant receivable units (test)", "tINV", 6]);
-  const adapter = await deploy("MockCvaAdapter", art.adapter, [cvaToken]);
 
   // 2. Identity and governance.
   const issuerRegistry = await deploy("MordantIssuerRegistry", art.issuerRegistry, [settings.deployer.address]);
@@ -163,9 +163,6 @@ export async function deployStack(context) {
   });
   await write("config:setFacility", settings.deployer, {
     address: factory, abi: art.factory.abi, functionName: "setFacility", args: [settings.facility.address, true],
-  });
-  await write("config:setCvaAdapter", settings.deployer, {
-    address: factory, abi: art.factory.abi, functionName: "setCvaAdapter", args: [adapter, true],
   });
   await write("config:setSettlementToken", settings.deployer, {
     address: factory, abi: art.factory.abi, functionName: "setSettlementToken", args: [settlement, true],
@@ -196,12 +193,40 @@ export async function deployStack(context) {
 
   return {
     addresses: {
-      eligibility, settlement, cvaToken, adapter, issuerRegistry, factory, sources,
+      eligibility, settlement, issuerRegistry, factory, sources,
       governance, verifier, binder,
     },
     validatorSet,
     deployments: record,
   };
+}
+
+/// One receivable-units token and adapter per receivable: the factory binds a
+/// unit token to a single root, so a second anchor needs its own.
+export async function deployUnits(context, addresses) {
+  const { client, tx, journal, journalPath, settings, art, label } = context;
+  const deploy = async (name, art_, args) => {
+    const key = `deploy:${name}`;
+    const { hash } = await step(journal, journalPath, key, async () => ({
+      hash: await tx.deploy(settings.deployer, art_, args), meta: { contract: name },
+    }));
+    const settled = await settle(journal, journalPath, key, client, hash, { contract: name });
+    return getAddress(settled.contractAddress);
+  };
+  const cvaToken = await deploy(`ReceivableUnits:${label}`, art.erc20, [
+    `Mordant receivable units ${label} (test)`, `tINV${label}`, 6,
+  ]);
+  const adapter = await deploy(`MockCvaAdapter:${label}`, art.adapter, [cvaToken]);
+  const key = `config:setCvaAdapter:${label}`;
+  const { hash } = await step(journal, journalPath, key, async () => ({
+    hash: await tx.write(settings.deployer, {
+      address: addresses.factory, abi: art.factory.abi, functionName: "setCvaAdapter",
+      args: [adapter, true],
+    }),
+    meta: { call: key },
+  }));
+  await settle(journal, journalPath, key, client, hash, { call: key });
+  return { cvaToken, adapter };
 }
 
 /* ------------------------------------------------------- governance records */
@@ -268,14 +293,15 @@ export function vaultConfig(addresses, settings, invoiceRoot, protectionEnd) {
 }
 
 export async function deployAnchor(context, addresses, identity, signSource) {
-  const { client, tx, journal, journalPath, settings, art } = context;
-  const invoiceRoot = keccak256(stringToHex("mordant.priv8.receivable/1"));
+  const { client, tx, journal, journalPath, settings, art, label } = context;
+  const invoiceRoot = keccak256(stringToHex(`mordant.priv8.receivable/${label}`));
+  const createKey = `anchor:create:${label}`;
 
   // On resume the anchor already exists. Read it back off the chain rather than
   // rebuilding an attestation and asking the issuer to sign something that will
   // never be sent.
-  if (journal.steps["anchor:create"]?.status === "success") {
-    return anchorFromChain(context, addresses, journal.steps["anchor:create"].hash, invoiceRoot);
+  if (journal.steps[createKey]?.status === "success") {
+    return anchorFromChain(context, addresses, journal.steps[createKey].hash, invoiceRoot);
   }
   const latest = await client.getBlock();
   const protectionEnd = BigInt(latest.timestamp) + PROTECTION_DAYS * 86_400n;
@@ -300,11 +326,10 @@ export async function deployAnchor(context, addresses, identity, signSource) {
     invoiceRoot,
     controller: settings.originator.address,
     validUntil: BigInt(latest.timestamp) + 86_400n,
-    nonce: 1n,
+    nonce: BigInt(context.issuerNonceBase),
   };
   const signature = await signSource(attestation, addresses.factory);
 
-  const createKey = "anchor:create";
   const { hash } = await step(journal, journalPath, createKey, async () => ({
     hash: await tx.write(settings.buyer, {
       address: addresses.factory, abi: art.factory.abi, functionName: "createIdentityAnchoredVault",
@@ -356,7 +381,7 @@ export async function anchorFromChain(context, addresses, hash, invoiceRoot) {
 }
 
 export async function activateAnchor(context, addresses, anchor) {
-  const { client, tx, journal, journalPath, settings, art } = context;
+  const { client, tx, journal, journalPath, settings, art, label } = context;
   const write = async (key, account, request) => {
     const { hash } = await step(journal, journalPath, key, async () => ({
       hash: await tx.write(account, request), meta: { call: key },
@@ -364,33 +389,33 @@ export async function activateAnchor(context, addresses, anchor) {
     return settle(journal, journalPath, key, client, hash, { call: key });
   };
 
-  if (journal.steps["anchor:activate"]?.status === "success") {
+  if (journal.steps[`anchor:activate:${label}`]?.status === "success") {
     return { pledge: null, pledgeDigest: null, resumed: true };
   }
-  await write("anchor:identityValid", settings.deployer, {
+  await write(`anchor:identityValid:${label}`, settings.deployer, {
     address: addresses.eligibility, abi: art.eligibility.abi, functionName: "setIdentityValid",
     args: [anchor.vault, true],
   });
 
   // Credit the vault with its receivable units through the adapter, exactly as
   // the vault's own accounting requires.
-  await write("anchor:mintUnits", settings.deployer, {
+  await write(`anchor:mintUnits:${label}`, settings.deployer, {
     address: addresses.cvaToken, abi: art.erc20.abi, functionName: "mint",
     args: [settings.deployer.address, UNITS],
   });
-  await write("anchor:approveAdapter", settings.deployer, {
+  await write(`anchor:approveAdapter:${label}`, settings.deployer, {
     address: addresses.cvaToken, abi: art.erc20.abi, functionName: "approve",
     args: [addresses.adapter, UNITS],
   });
-  await write("anchor:creditVault", settings.deployer, {
+  await write(`anchor:creditVault:${label}`, settings.deployer, {
     address: addresses.adapter, abi: art.adapter.abi, functionName: "creditVault",
     args: [anchor.vault, UNITS],
   });
-  await write("anchor:mintSettlement", settings.deployer, {
+  await write(`anchor:mintSettlement:${label}`, settings.deployer, {
     address: addresses.settlement, abi: art.erc20.abi, functionName: "mint",
     args: [settings.holder.address, ADVANCE],
   });
-  await write("anchor:approveVault", settings.holder, {
+  await write(`anchor:approveVault:${label}`, settings.holder, {
     address: addresses.settlement, abi: art.erc20.abi, functionName: "approve",
     args: [anchor.vault, ADVANCE],
   });
@@ -400,12 +425,12 @@ export async function activateAnchor(context, addresses, anchor) {
     invoiceRoot: anchor.invoiceRoot,
     originatorSigner: settings.originator.address,
     facility: settings.facility.address,
-    obligationId: keccak256(stringToHex("mordant.priv8.obligation/1")),
+    obligationId: keccak256(stringToHex(`mordant.priv8.obligation/${label}`)),
     amount: FACE,
     currency: stringToHex("USD", { size: 32 }),
     activeFrom: BigInt(latest.timestamp) - 60n,
     activeUntil: anchor.protectionEnd + 1n,
-    nonce: 1n,
+    nonce: BigInt(context.issuerNonceBase),
     deadline: BigInt(latest.timestamp) + 2n * 86_400n,
     exclusive: true,
   };
@@ -414,7 +439,7 @@ export async function activateAnchor(context, addresses, anchor) {
   });
   const signature = await settings.originator.sign({ hash: pledgeDigest });
 
-  await write("anchor:activate", settings.facility, {
+  await write(`anchor:activate:${label}`, settings.facility, {
     address: anchor.vault, abi: art.vault.abi, functionName: "activate",
     args: [pledge, signature, settings.holder.address, [settings.holder.address], [UNITS]],
   });
@@ -425,9 +450,10 @@ export async function activateAnchor(context, addresses, anchor) {
 /* ------------------------------------------------------- the non-vault source */
 
 export async function registerSource(context, addresses, identity, signSource) {
-  const { client, tx, journal, journalPath, settings, art } = context;
-  if (journal.steps["source:register"]?.status === "success") {
-    const hash = journal.steps["source:register"].hash;
+  const { client, tx, journal, journalPath, settings, art, label } = context;
+  const registerKey = `source:register:${label}`;
+  if (journal.steps[registerKey]?.status === "success") {
+    const hash = journal.steps[registerKey].hash;
     const receipt = await client.getTransactionReceipt({ hash });
     const [event] = parseEventLogs({
       abi: art.sources.abi, eventName: "SourceIdentityRegistered", logs: receipt.logs,
@@ -441,21 +467,21 @@ export async function registerSource(context, addresses, identity, signSource) {
     factory: addresses.sources,
     // A non-vault source has no creation parameters, so it commits to its own
     // facility reference instead. It publishes no economics at all.
-    creationDigest: keccak256(stringToHex("mordant.priv8.non-vault-source/1")),
+    creationDigest: keccak256(stringToHex(`mordant.priv8.non-vault-source/${label}`)),
     assetCommitment: identity.sourceAssetCommitment,
     initialTermsCommitment: identity.sourceTermsCommitment,
     identitySchemeVersion: 3,
     termsSchemeVersion: 1,
     identityEpoch: IDENTITY_EPOCH,
     issuerKeyId: identity.issuerKeyId,
-    invoiceRoot: keccak256(stringToHex("mordant.priv8.non-vault-source.reference/1")),
+    invoiceRoot: keccak256(stringToHex(`mordant.priv8.non-vault-source.reference/${label}`)),
     controller: settings.originator.address,
     validUntil: BigInt(latest.timestamp) + 86_400n,
-    nonce: 2n,
+    nonce: BigInt(context.issuerNonceBase + 1),
   };
   const signature = await signSource(attestation, addresses.sources);
 
-  const key = "source:register";
+  const key = registerKey;
   const { hash } = await step(journal, journalPath, key, async () => ({
     hash: await tx.write(settings.deployer, {
       address: addresses.sources, abi: art.sources.abi, functionName: "register",
