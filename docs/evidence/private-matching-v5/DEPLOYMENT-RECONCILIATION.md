@@ -96,6 +96,15 @@ Read from the compiled ABI, not assumed.
 | `verifier.resultCommitmentOf` | `0xf417e039` | **only on the frozen build** |
 | `verifier.resultStructHash` | `0xa2538a0c` | **only on the frozen build** |
 | `verifier.acceptMatch` | `0x6316be9b` | callable only by `core.binder` |
+| `governance.sessionCommitmentOf` | `(intent, signatures, salt) -> bytes32` | view |
+| `governance.sessionNullifierOf` | `(intent) -> bytes32` | view; salt-independent |
+| `governance.intentDigest` | `(intent) -> bytes32` | view; what the three signers sign |
+| `governance.commitSession` | `(bytes32 commitment, bytes32 nullifier)` | authorized relayer sends |
+| `governance.authorize` | `(AuthorizationRequest) -> bytes32 recordDigest` | governor only |
+| `sources.sourceCommitmentOf` | `(attestation, issuerSignature, salt) -> bytes32` | view; no off-chain derivation needed |
+| `sources.commitSource` | `(bytes32)` | authorized submitter sends |
+| `binder.consentDigest` | `(sessionCommitment, sessionNullifier, resultCommitment, sourceRecordCommitment, anchor, consent) -> bytes32` | view; **corrected in `c709df2`** |
+| `binder.bindRecourse` | `(envelope, attestation, reveal, anchoredSource, counterpartySource, anchor, consentA, consentB) -> bytes32` | the single external transaction |
 
 **Missing API, recorded rather than worked around.** There is no
 `attestationDigest` view on `MordantFactoryV2`. `MordantSourceAttestation` is a
@@ -119,6 +128,38 @@ recovers the signer and calls `issuerRegistry.requireAuthorized`, so a wrong
 digest reverts rather than producing bad state. The same applies to
 `sources.revealSource`, which additionally exposes `sourceCommitmentOf` as a
 view so the commitment side needs no derivation at all.
+
+## Defect found by building the call matrix
+
+Building the call matrix from the compiled ABI, rather than assuming it, exposed
+two real defects in the pre-freeze binder. Both are fixed in `c709df2`.
+
+**1. The public `consentDigest` view did not produce the digest the binder
+verified.** The view read `recourses[sessionCommitment].anchorCommitment`, which
+is zero before binding, while the binding path encoded
+`core.session.sourceRecordCommitmentA`. A producer that called the view to learn
+what to sign would have signed a value the binder rejects with
+`ConsentNotSignedByController`. The view existed precisely to stop producers
+re-deriving EIP-712 encodings, and it was the one thing that could not be used
+for that.
+
+**2. Both consents bound side A's source record.** Side B therefore consented to
+a statement naming a source it never submitted.
+
+Corrected by giving the public view and the binding check a single shared
+encoder, `_consentDigest`, taking every input as a parameter so it reads no
+state that exists only after binding, and by passing each side its own
+`sourceRecordCommitment`. The `DisclosureConsentV5` EIP-712 type string is
+unchanged, so the schema freeze hash still holds; only the encoding semantics
+and the view's signature changed.
+
+The V5 test suite now obtains every consent from `binder.consentDigest`, so a
+future divergence between the view and the check fails every binding test rather
+than surfacing on chain. `testAConsentMustBindItsOwnSourceRecord` covers the
+second defect directly.
+
+This is why the freeze was regenerated: `docs/provenance/frozen-v5-sources.txt`
+now pins the corrected binder.
 
 ## Atomicity gate: PASSES
 
