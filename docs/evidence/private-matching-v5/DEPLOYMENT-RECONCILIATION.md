@@ -171,3 +171,46 @@ Verified against the source, not assumed.
 
 One externally broadcast transaction opens a recourse record, and no accepted
 result can exist independently before binding. No atomicity regression.
+
+## Source-attestation digest: three-way agreement established
+
+The mission gate required agreement between the runner implementation, an
+independent reference and pinned Solidity/JavaScript vectors before any vault
+creation is broadcast.
+
+**Leg 3 did not exist.** `sourceAttestationDigest` was present in
+`fhe-lab/shared/identity/v4-digests.mjs` but had no pinned Solidity vector and
+no test coverage. The runner would have been deriving, unverified, the one
+digest that cannot be read from any deployed contract.
+
+Now pinned, from the frozen library itself
+(`contracts/test/SourceAttestationVectors.t.sol`):
+
+| Value | |
+|---|---|
+| `ATTESTATION_TYPEHASH` | `0x5c84efcfafc8e9d8293daaf7fbc1b3023887538bb27651c6c46e8af3551b3397` |
+| struct hash (vector) | `0xce83de9e69a87c459c4770633f5d47f240404196deae25bf492c9ca695bae497` |
+| digest, verifying contract = factory | `0x49b44a18bf3a9641c23c074ce802b681777f472ddbdf4e7bb38d1d39ff880824` |
+| digest, verifying contract = source registry | `0x1d5598ee5e3236baff60335fc551898c0a2cf25f3c06994dddd5c2c4ee3e2ede` |
+| domain separator (factory) | `0x684163e2fbeb7d80a14c2603076b625a13a8015737f9e51e8a4d17688e12141e` |
+
+The three producers are:
+
+1. **Runner** - `sourceAttestationDigest`, via viem `encodeAbiParameters`.
+2. **Independent reference** - `referenceDigest` in
+   `fhe-lab/shared/identity/source-attestation-digest.test.mjs`, which builds the
+   preimage by explicit 32-byte word concatenation and shares no encoder with (1).
+3. **Pinned Solidity** - emitted by `MordantSourceAttestation` itself.
+
+`agreedSourceAttestationDigest(...)` is the gate a runner calls before signing;
+it throws `SOURCE_ATTESTATION_DIGEST_DISAGREEMENT` unless (1) and (2) match, and
+both are pinned against (3) in CI.
+
+Coverage is asserted rather than assumed: all thirteen fields are individually
+mutated and must change the digest, and transposing `assetCommitment` with
+`initialTermsCommitment` must change it too, so field ORDER is covered and not
+only field values. The factory and source-registry digests are required to
+differ, so a signature for anchor creation cannot be replayed at opaque source
+admission.
+
+Solidity 268/268, `fhe:test` 83/83.
