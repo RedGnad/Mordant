@@ -6,8 +6,11 @@ RC1 is untouched. All sixteen frozen sources still match `af5baad`, verified by
 `scripts/verify-frozen-sources.mjs` after every change. V5 is a parallel
 generation, not an edit of the frozen files.
 
-**No Monad run has been performed for V5**, per the standing instruction that no
-Monad run precedes the freeze.
+**Monad testnet state.** The V5 stack is deployed to chain 10143 and the
+schemas are frozen. The end-to-end session has been run for real **off chain**
+(complete ceremony, concurrent operator recomputation, threshold release, both
+branches). The on-chain `acceptMatch` + `bindRecourse` submission is **not yet
+done**: see "Next" below.
 
 ---
 
@@ -26,8 +29,8 @@ Monad run precedes the freeze.
 | L-03 terms scheme version signed but unchecked | Low | Corrected | `MordantSourceCommitmentRegistry.sol` |
 | M-01 terms registry initialisation | Medium | Corrected | `MordantTermsRegistry.sol` |
 | M-05 candidate reconciliation unauthenticated | Medium | Corrected | `MordantMatchResultV5.sol` |
-| M-06 binder invariants / factory admission | Medium | **Open** | - |
-| L-01 factory admission check | Low | **Open** | - |
+| M-06 binder invariants / factory admission | Medium | Corrected | `PrivateMatchBinderV5.sol` |
+| L-01 factory admission check | Low | Corrected | `PrivateMatchBinderV5.sol` |
 | I-01 / I-02 / I-03 informational | Info | **Open** | - |
 
 ---
@@ -106,9 +109,56 @@ latency.
 
 ---
 
+## Monad testnet deployment
+
+Chain 10143. Deployed and verified on chain, 20 transactions, journal at
+`fhe-lab/monad-testnet/artifacts/v5-run/journal.json`.
+
+| Contract | Address |
+|---|---|
+| `MordantIssuerRegistry` | `0xf11Ef0bD0676F16BBa977a07e9076Cb4861656cc` |
+| `MordantFactoryV2` | `0x64874787905db572D9f935e4dF3A3eE247217912` |
+| `MordantScopeGovernanceRegistryV5` | `0x100a7427Ae2af6377775DA4dc10379330a78838d` |
+| `MordantSourceCommitmentRegistry` | `0x2ea5480cf5973966c4D9A295C4B04c635f888Fac` |
+| `MordantMatchVerifierV5` | `0x2f8e22Ce68DC64cAB20cab1b87e6785132aA9992` |
+| `PrivateMatchBinderV5` | `0x977d4C9C4E8C3EDE4257Be86B41C8A87a3a4f88b` |
+
+Roles are separated by construction: the relayer and the source submitter are
+distinct from both controllers, so neither the session commitment nor a source
+commitment is published by a principal.
+
+Note: the verifier and binder above predate the `resultCommitmentOf` /
+`resultStructHash` views added in `f5cf7c3`. Redeploy both before the on-chain
+submission so producers can read the commitment from the contract that checks
+it rather than re-deriving it.
+
+## Off-chain V5 session, run for real
+
+`fhe-lab/lattigo/cmd/v5-session`, both branches, full ceremony each time:
+
+| Branch | Released | Result |
+|---|---|---|
+| Same receivable, conflicting terms | `sameEconomicAsset=true`, `policyConflict=true` | outcome 3, `SameAssetPolicyConflict` |
+| Different receivable | `sameEconomicAsset=false`, `policyConflict=false` | outcome 1, `DifferentAsset` |
+
+Both operators ran all fourteen checks, all passed, and recomputed byte-identical
+outputs. Timings for the positive branch: ceremony 11.0 s, encryption 2.4 s,
+evaluator 10.9 s, both operators concurrently 12.2 s wall against 23.7 s summed,
+threshold release 0.9 s, total 39.8 s, 37.75 MB of ciphertext transport, 1223 MB
+peak.
+
 ## Next, in order
 
-1. **M-06 / L-01** binder invariants and the factory admission check.
+1. **On-chain V5 session submission.** Redeploy verifier and binder with the
+   producer views, then: create and activate the anchored receivable; authorize
+   both scopes; publish both opaque source commitments from the submitter;
+   admit the session from the relayer; run `v5-session` against the chain-derived
+   facts; assemble the result core; collect two validator attestations; call
+   `bindRecourse`. Every digest should be read from the contract that will check
+   it (`governance.intentDigest`, `verifier.resultCommitmentOf`,
+   `verifier.attestationDigest`, `binder.consentDigest`) rather than re-derived
+   in JavaScript.
+2. **M-06 / L-01** binder invariants and the factory admission check.
 2. **V5 verifier and binder.** Deliberately not written yet: their result core,
    typehashes, provider-proof binding and transcript fields stayed provisional
    until the gates passed. The gates have now passed, so the schemas listed
