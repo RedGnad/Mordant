@@ -1,0 +1,267 @@
+{
+  "schema": "mordant.public-evidence.leak-scan/1",
+  "sessionCommitment": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+  "summary": {
+    "neverLeaks": 0,
+    "preBindingLeaks": 0,
+    "fieldNameTripwireHits": 9,
+    "fieldNameHitsAllBenign": true,
+    "unexplainedFieldMatches": [],
+    "positiveControlsDetected": 11,
+    "positiveControlsExpected": 11,
+    "representationsPerCanary": 12.272727272727273,
+    "filesScanned": 40,
+    "saltRevealedOnlyAtBinding": true
+  },
+  "neverClass": {
+    "description": "must not appear in any artifact, before or after binding",
+    "canaries": 33,
+    "leaks": 0,
+    "filesScanned": 40,
+    "representationsPerCanary": 12.272727272727273
+  },
+  "revealedAtBindingClass": {
+    "description": "published deliberately at binding; forbidden only before it",
+    "canaries": 4,
+    "preBindingLeaks": 0,
+    "presentInBindingCalldata": true
+  },
+  "positiveControls": {
+    "plantedRepresentations": 11,
+    "detectedRepresentations": [
+      "base64",
+      "base64url",
+      "big-endian",
+      "decimal",
+      "json-escaped",
+      "little-endian",
+      "prefixed-hex",
+      "prefixed-upper-hex",
+      "raw-bytes",
+      "utf8-lower-hex",
+      "utf8-upper-hex"
+    ],
+    "allRepresentationsDetected": true
+  },
+  "manifestDigests": [
+    {
+      "party": "a",
+      "fields": 9,
+      "digests": [
+        {
+          "party": "a",
+          "field": "active_from",
+          "kind": "uint",
+          "sha256": "797d194642e5b4ecdb16b1b3781c1076739003345934cddf8bbebce697a4f343",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "active_until",
+          "kind": "uint",
+          "sha256": "7271d5b991dec54316d7d455fa75ad38e64c234463ccf8edfa1259db9c09f95e",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "amount",
+          "kind": "uint",
+          "sha256": "9d54efe83320a1f94d7881df2abcf1c146fbd7b5835c0cd896d1b0cc96f8d93f",
+          "numericPresent": true
+        },
+        {
+          "party": "a",
+          "field": "authorization_credential",
+          "kind": "bytes32",
+          "sha256": "3a5a1cf112691b238c7cb8150555a4eaf6218d6a4181372d6102f4f9c5d18589",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "currency",
+          "kind": "bytes32",
+          "sha256": "cd4cb47063b24bbb9bf15241f2dc79115716a21a40c7e0fd5b93cfeeea18496b",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "exclusivity_metadata",
+          "kind": "bytes32",
+          "sha256": "42c94dfaafa97c825f663ab0671ae7b7fc705f9a316e97ba31046253a7abb5fe",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "obligation_id",
+          "kind": "bytes32",
+          "sha256": "e5b6c652fd58f343195673e6a16d54829035cc149f9ded742c1afd238e27e51d",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "receivable_identifier",
+          "kind": "bytes32",
+          "sha256": "f149684bc596ff42269a7e15fd8abd36dc926d4966a0368b5d21435e60f724bc",
+          "numericPresent": false
+        },
+        {
+          "party": "a",
+          "field": "submitter_identity",
+          "kind": "bytes32",
+          "sha256": "e040638bdc7b434b45483b32bb1187c06abff62439006658a7c8e339d5b146d5",
+          "numericPresent": false
+        }
+      ]
+    },
+    {
+      "party": "b",
+      "fields": 9,
+      "digests": [
+        {
+          "party": "b",
+          "field": "active_from",
+          "kind": "uint",
+          "sha256": "068e01b242a4cfdb37f6d44ad4aff9ad19a8f879314a672e135bbd8a64b431bd",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "active_until",
+          "kind": "uint",
+          "sha256": "1a68ab7ad6a1d5cdb3ce659e819c8d2ebaa2b2c50400fe304e9860a700ae33e9",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "amount",
+          "kind": "uint",
+          "sha256": "0b0c515ba920a135ab1cd957114668b9e15acc2bd0fedc8d5edad66b8eec91d1",
+          "numericPresent": true
+        },
+        {
+          "party": "b",
+          "field": "authorization_credential",
+          "kind": "bytes32",
+          "sha256": "6cacdace2044a1e62fa238714d19f8dba01ebaedad8e1185b4f1c88caab38040",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "currency",
+          "kind": "bytes32",
+          "sha256": "cd4cb47063b24bbb9bf15241f2dc79115716a21a40c7e0fd5b93cfeeea18496b",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "exclusivity_metadata",
+          "kind": "bytes32",
+          "sha256": "9069c88de518ebae1d1841b865b7511654f460a07680050d19c296946155d238",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "obligation_id",
+          "kind": "bytes32",
+          "sha256": "44060abfb99509fc6094b4d2d82eb5e8f1941b74bace1db0affb5d1c0d6cdca5",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "receivable_identifier",
+          "kind": "bytes32",
+          "sha256": "c0aed2f062ceb41d2b7ddb67907c0511c8999f89430a1e2f01517b795436723b",
+          "numericPresent": false
+        },
+        {
+          "party": "b",
+          "field": "submitter_identity",
+          "kind": "bytes32",
+          "sha256": "1da37203853cb8556e5ee0b74d0e1e19882dd540f1fe7acaa8cdf5d58536bddf",
+          "numericPresent": false
+        }
+      ]
+    }
+  ],
+  "manifestsDeletedAfterScan": 2,
+  "fieldNameClassification": [
+    {
+      "file": "ceremony-868bbacda43e/ceremony-evidence.json",
+      "matches": [
+        "holdsLocalSecretKey",
+        "threshold-share-sealed"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "ceremony-868bbacda43e/dealerless-custody-evidence.json",
+      "matches": [
+        "holdsLocalSecretKey",
+        "threshold-share-sealed",
+        "REFUSED: insufficient threshold shares"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "ceremony-868bbacda43e/evaluator-result.json",
+      "matches": [
+        "REFUSED: insufficient threshold shares"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "priv8-evidence-4/leak-scan.json",
+      "matches": [
+        "holdsLocalSecretKey",
+        "threshold-share-sealed",
+        "REFUSED: insufficient threshold shares",
+        "PlaintextModulus",
+        "authorization_credential"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "priv8-evidence-4/priv8-evidence.json",
+      "matches": [
+        "REFUSED: insufficient threshold shares"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "public/ceremony-evidence.json",
+      "matches": [
+        "holdsLocalSecretKey",
+        "threshold-share-sealed"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "public/collective-public-material.bin",
+      "matches": [
+        "PlaintextModulus"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "public/coverage-a.json",
+      "matches": [
+        "authorization_credential"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "public/coverage-b.json",
+      "matches": [
+        "authorization_credential"
+      ],
+      "unexplained": []
+    },
+    {
+      "file": "public/evaluator-result.json",
+      "matches": [
+        "REFUSED: insufficient threshold shares"
+      ],
+      "unexplained": []
+    }
+  ]
+}

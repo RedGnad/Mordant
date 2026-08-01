@@ -1,0 +1,70 @@
+{
+  "schema": "mordant.public-evidence.events/1",
+  "preBindingCommitment": {
+    "transactionHash": "0x0255f6bb265f79a0ba947260300b95f9395b776cdbb09bea0d198ca0495e0c9d",
+    "from": "0x5b832ed718caa91d49872e8a367aba15ffa433e3",
+    "to": "0x3d550619c4c20bd70d53b7c93fbaa46c0dce1512",
+    "value": "0",
+    "input": "0x9153d0d6868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+    "blockNumber": "49833899",
+    "gasUsed": "116040",
+    "status": "success",
+    "logs": [
+      {
+        "address": "0x3d550619c4c20bd70d53b7c93fbaa46c0dce1512",
+        "topics": [
+          "0x9b6be998c675d0764a34b1509bf5318c4a5c9af89cec5eed3e30793c4e839306",
+          "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161"
+        ],
+        "data": "0x000000000000000000000000000000000000000000000000000000006a6d55ef",
+        "logIndex": 9
+      }
+    ],
+    "note": "Exactly one event with one indexed topic: the opaque session commitment."
+  },
+  "binding": {
+    "transactionHash": "0xd12c8daecda1963a8fc79b78b8c3012994d26a2eca8ae3f4b2f032e73f0b0007",
+    "from": "0x981f6e0ea94f45fdb8ee7680dc862212e3c720e0",
+    "to": "0x1d152f44ab215f8afafa8cdb6317ce505a748233",
+    "value": "0",
+    "blockNumber": "49834094",
+    "gasUsed": "1175669",
+    "status": "success",
+    "logs": [
+      {
+        "address": "0x3d550619c4c20bd70d53b7c93fbaa46c0dce1512",
+        "topics": [
+          "0x472831f4d8f2238ff57bcc532e2bc5a86c2b999a5592112eeadf221d9c20eed1",
+          "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+          "0xc198cfcf8e65e07446942d0bd33134aac6d9becd4f83c3559c37ba874da89510",
+          "0xac7056968fed2bde726837ff4b440ae888ccb134e939327e1449a2c898de7bc1"
+        ],
+        "data": "0x0000000000000000000000001d152f44ab215f8afafa8cdb6317ce505a748233",
+        "logIndex": 5
+      },
+      {
+        "address": "0x02d71361a2a27aa4067cc40a778bf2abd626c775",
+        "topics": [
+          "0x57964afa5b5320ba563ec71cd822aec970ba25c8ad2cb4f4d3eb8a29395469e4",
+          "0x0b910869238ffe2f693d44fe6ddd3a0bda2f33b48801459e42b3f08ad232d898",
+          "0x0000000000000000000000001d152f44ab215f8afafa8cdb6317ce505a748233",
+          "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        ],
+        "data": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac1616e544dc54e5d7c76bc848733cb13ddda5249e9d09bead657f4b92e6717d216710000000000000000000000000000000000000000000000000000000000000001ef800bced451b72fbb43ad5a396cde3de0ce8436b4598aba105de579a11ff3ae",
+        "logIndex": 6
+      },
+      {
+        "address": "0x1d152f44ab215f8afafa8cdb6317ce505a748233",
+        "topics": [
+          "0x0cceb5e0054aded3810327da6488f117e43678cca31e9f0f60dd481c8b3831b4",
+          "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+          "0x0000000000000000000000003046a101cc5cfcc3aef7537f0e35ee39a33759e6",
+          "0x6e544dc54e5d7c76bc848733cb13ddda5249e9d09bead657f4b92e6717d21671"
+        ],
+        "data": "0x1edbbd5b4c51ad21d90ecbd2ad322f104b1859561424a5c0fc1a34d5c498c63088c559a5f833e98e42e7efc804bf88da6ca122ea9038bedc9300571d80d6a6f40000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006a6d6439",
+        "logIndex": 7
+      }
+    ],
+    "note": "Binding calldata is omitted here; it is large and contains the revealed intent, salt and signatures, which the report describes."
+  }
+}

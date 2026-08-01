@@ -1,0 +1,224 @@
+{
+  "schema": "mordant.public-evidence.performance/1",
+  "network": {
+    "name": "Monad testnet",
+    "chainId": 10143
+  },
+  "identityMode": "full_fhe_256",
+  "ceremony": {
+    "custodyModel": "dealerless-ceremony",
+    "coalition": [
+      1,
+      2
+    ],
+    "keyId": "6731b3b0f410cab6c51446394f5a13b22db0d1324517ec18e7204d43d5a261c8",
+    "conflictConfirmed": true,
+    "evaluatorCapabilities": {
+      "holdsThresholdParties": false,
+      "localDecryptAttempt": "REFUSED: insufficient threshold shares",
+      "provisionOperatorsAttempt": "REFUSED: invalid threshold operator material",
+      "releaseShareAttempt": "REFUSED: invalid threshold operator material",
+      "loadedArtifacts": [
+        "collective-public-material.bin",
+        "collective-evaluation-keys.bin",
+        "key-manifest.json"
+      ]
+    },
+    "negativeChecks": {
+      "clientRejectsEvaluatorSubstitutedPublicKey": "REFUSED: collective key manifest rejected: invalid ceremony signature",
+      "clientRejectsPartiallyAttestedManifest": "REFUSED: collective key manifest rejected: invalid ceremony signature: 2 of 3 operator attestations",
+      "enrollmentNonceA": "0x2635d0cf9fdafb9a4879484d6c2addda8e941b01af4bbaea35f62c5eabaf4613",
+      "enrollmentNonceB": "0x41874b0e3432c5b65f52428c58983406aab907d95c1cbe27a5604cd9af9c953e",
+      "evaluatorCreateReleaseShare": "REFUSED: invalid threshold operator material",
+      "evaluatorHoldsThresholdParties": "false",
+      "evaluatorLocalDecrypt": "REFUSED: insufficient threshold shares",
+      "evaluatorProvisionOperators": "REFUSED: invalid threshold operator material",
+      "evaluatorSourceReferencesSecretMaterialAPIs": "none",
+      "exactPolicyConflictConfirmed": "true",
+      "identityMode": "full_fhe_256"
+    },
+    "shareIsolation": {
+      "method": "per-operator sequential sweep: one share held at a time, searched byte-for-byte across every file in the lab tree outside that operator's own storage",
+      "filesScanned": 63,
+      "filesHoldingAForeignShare": [],
+      "filesHoldingMoreThanOneShare": []
+    },
+    "processes": [
+      {
+        "role": "operator-1-identity"
+      },
+      {
+        "role": "operator-2-identity"
+      },
+      {
+        "role": "operator-3-identity"
+      },
+      {
+        "role": "coordinator-identity"
+      },
+      {
+        "role": "threshold-operator-1"
+      },
+      {
+        "role": "threshold-operator-2"
+      },
+      {
+        "role": "threshold-operator-3"
+      },
+      {
+        "role": "ceremony-coordinator"
+      },
+      {
+        "role": "ceremony-client-a"
+      },
+      {
+        "role": "ceremony-client-b"
+      },
+      {
+        "role": "ceremony-evaluator"
+      }
+    ]
+  },
+  "evaluatorResult": {
+    "schemaVersion": "mordant.dealerless-evaluator-output/4",
+    "custodyModel": "dealerless-ceremony",
+    "identityMode": "full_fhe_256",
+    "conflictConfirmed": true,
+    "coalition": [
+      1,
+      2
+    ],
+    "inputCommitmentA": "0x11547e187a5aa858ffe83973af9e2ae80a9b2833d8b28816265b6e35a97770b9",
+    "inputCommitmentB": "0xbbf77624c5ce622ef5b01df8b8f5ef8e03493bfb8d0fbe296819e6ddc9554607",
+    "resultCommitment": "0x3ed84e22f6059d8ae23deb8ec4757b69519b8892ed621c1ddd28dbc5421252fa",
+    "providerProofCommitment": "0xef800bced451b72fbb43ad5a396cde3de0ce8436b4598aba105de579a11ff3ae",
+    "thresholdTranscriptCommitment": "0x5605c536fb7f5248894c5d8a81727b54cb1da04caa69c4d066b70e564d664166",
+    "enrollmentNonceA": "0x2635d0cf9fdafb9a4879484d6c2addda8e941b01af4bbaea35f62c5eabaf4613",
+    "enrollmentNonceB": "0x41874b0e3432c5b65f52428c58983406aab907d95c1cbe27a5604cd9af9c953e"
+  },
+  "quorum": {
+    "validatorSetId": "0x8127f3e5ca737ca5c4d860936ca339a5b16dff2d7bbe67ba148abba13dbd1f2f",
+    "quorumSize": 2,
+    "availableSigners": [
+      "0x22a14520C82BEC0F73d7b164E543DD36A8bcE0Ea",
+      "0x79CBd51B6b89bF041168F21440BD7247767747B9",
+      "0x38b6D530e1C4A027AB4579B7f5DC84251BcdFE6d"
+    ],
+    "usedSigners": [
+      "0x22a14520C82BEC0F73d7b164E543DD36A8bcE0Ea",
+      "0x38b6D530e1C4A027AB4579B7f5DC84251BcdFE6d"
+    ],
+    "resultCoreAgreement": {
+      "runner": "0x0b910869238ffe2f693d44fe6ddd3a0bda2f33b48801459e42b3f08ad232d898",
+      "onChain": "0x0b910869238ffe2f693d44fe6ddd3a0bda2f33b48801459e42b3f08ad232d898"
+    }
+  },
+  "preflightAgreement": {
+    "fieldsReconstructed": 24,
+    "intentHash": {
+      "client": "0x59175f8669a3b38433d9d6c881da900b69d700d7fe226ecaec23d3297eb2b3fb",
+      "runner": "0x59175f8669a3b38433d9d6c881da900b69d700d7fe226ecaec23d3297eb2b3fb",
+      "solidity": "0x59175f8669a3b38433d9d6c881da900b69d700d7fe226ecaec23d3297eb2b3fb"
+    },
+    "intentDigest": {
+      "client": "0xcc0b1cf392328157473ac3f522ef5e1ac11fb4a3be9e75f25648ab5e772ff686",
+      "solidity": "0xcc0b1cf392328157473ac3f522ef5e1ac11fb4a3be9e75f25648ab5e772ff686"
+    },
+    "signatureBundleDigest": {
+      "client": "0x2437febc288ec73711a8bb522d25bada2c17d86f37f849a9573ad1c1d014d80f",
+      "runner": "0x2437febc288ec73711a8bb522d25bada2c17d86f37f849a9573ad1c1d014d80f",
+      "solidity": "0x2437febc288ec73711a8bb522d25bada2c17d86f37f849a9573ad1c1d014d80f"
+    },
+    "sessionCommitment": {
+      "client": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+      "runner": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+      "solidity": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161"
+    },
+    "recoveredSigners": {
+      "A": "0xd70FE258D500Fd4Cf4054D74aa9eB37D97766e48",
+      "B": "0x6CF8Ff04F57B992aD69fb9c9871528E652645860",
+      "issuer": "0x95631E47DFf0a28449441Faa915d2A253Ac3035C"
+    },
+    "lowSCanonical": true,
+    "signatureOrder": [
+      "controllerA",
+      "controllerB",
+      "issuer"
+    ]
+  },
+  "timeline": [
+    {
+      "state": "PREFLIGHT",
+      "secondsFromPrevious": 0
+    },
+    {
+      "state": "IDENTITIES_PROVISIONED",
+      "secondsFromPrevious": 0
+    },
+    {
+      "state": "DEPLOYED",
+      "secondsFromPrevious": 3.7
+    },
+    {
+      "state": "GOVERNED",
+      "secondsFromPrevious": 0.2
+    },
+    {
+      "state": "PARTIES_SERVING",
+      "secondsFromPrevious": 1.6
+    },
+    {
+      "state": "ANCHORED",
+      "secondsFromPrevious": 10
+    },
+    {
+      "state": "SOURCE_REGISTERED",
+      "secondsFromPrevious": 1
+    },
+    {
+      "state": "INTENT_SIGNED",
+      "secondsFromPrevious": 0.1
+    },
+    {
+      "state": "PREFLIGHT_AGREED",
+      "secondsFromPrevious": 0.3
+    },
+    {
+      "state": "COMMITTED",
+      "secondsFromPrevious": 1.5
+    },
+    {
+      "state": "METADATA_AUDITED",
+      "secondsFromPrevious": 0
+    },
+    {
+      "state": "CEREMONY_PROVEN",
+      "secondsFromPrevious": 56.3
+    },
+    {
+      "state": "QUORUM_SIGNED",
+      "secondsFromPrevious": 0.7
+    },
+    {
+      "state": "CONSENTED",
+      "secondsFromPrevious": 0.2
+    },
+    {
+      "state": "BOUND",
+      "secondsFromPrevious": 1.5
+    },
+    {
+      "state": "READBACKS_CONFIRMED",
+      "secondsFromPrevious": 2.3
+    },
+    {
+      "state": "REPLAY_REJECTED",
+      "secondsFromPrevious": 0.9
+    },
+    {
+      "state": "COMPLETE",
+      "secondsFromPrevious": 0
+    }
+  ],
+  "lattigoVersion": "github.com/tuneinsight/lattigo/v6 v6.2.0"
+}

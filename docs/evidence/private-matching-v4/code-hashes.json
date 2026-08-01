@@ -1,0 +1,447 @@
+{
+  "schema": "mordant.public-evidence.bytecode/1",
+  "summary": {
+    "contracts": 10,
+    "allMatchOutsideImmutables": true,
+    "identicalWithNoImmutables": [
+      "MockEligibility",
+      "MordantIssuerRegistry"
+    ],
+    "differOnlyInImmutables": [
+      "SettlementToken",
+      "ReceivableUnits:3",
+      "MockCvaAdapter:3",
+      "MordantFactoryV2",
+      "MordantSourceIdentityRegistry",
+      "MordantScopeGovernanceRegistry",
+      "ECDSAQuorumMatchVerifierV4",
+      "PrivateMatchBinder"
+    ],
+    "mismatched": []
+  },
+  "contracts": [
+    {
+      "contract": "MockEligibility",
+      "address": "0xBe3B15de061BE593086c48268f662Cc4c7001E07",
+      "deployTransaction": "0x66408155eab9f880f9560cfd81460f30641a056bac281d72ac978228273b135c",
+      "sizeBytes": 1415,
+      "onChainCodeHash": "0x31a1df305b493943b673bfdff7a46f897699e7c3f60c4a7adb0dad1243488211",
+      "artifactCodeHash": "0x31a1df305b493943b673bfdff7a46f897699e7c3f60c4a7adb0dad1243488211",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": true,
+      "immutableSpans": 0,
+      "immutables": []
+    },
+    {
+      "contract": "MockERC20",
+      "address": "0x1abDd9C750fE466875Fc0F15D74e5A6d5ca6fB79",
+      "deployTransaction": "0x8124963984dbf30139ce6d71f4bc5ba4769b086f769e0762c98d1aaaa9791ba8",
+      "sizeBytes": 2692,
+      "onChainCodeHash": "0x03a921774e293eeca2766f73dfab0e1274ff0ebd57826799c25243f64b35dc4e",
+      "artifactCodeHash": "0x49539f23408852fa7169e3dd26fed12186ec58013c8a7b77f266a54bc380d967",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 1,
+      "immutables": [
+        {
+          "start": 320,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        }
+      ]
+    },
+    {
+      "contract": "MockERC20",
+      "address": "0x9F45443f63E328a20f344875b92fec05973d326d",
+      "deployTransaction": "0x0a111aaea4ae30839669e6d34d32dd57cd713ac2065ca6f85f4859174ddd3e52",
+      "sizeBytes": 2692,
+      "onChainCodeHash": "0x03a921774e293eeca2766f73dfab0e1274ff0ebd57826799c25243f64b35dc4e",
+      "artifactCodeHash": "0x49539f23408852fa7169e3dd26fed12186ec58013c8a7b77f266a54bc380d967",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 1,
+      "immutables": [
+        {
+          "start": 320,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000006"
+        }
+      ]
+    },
+    {
+      "contract": "MockCvaAdapter",
+      "address": "0x4d58c896168B3947CB60c3c86c372e8a24111549",
+      "deployTransaction": "0xec2b046bb548233a5cc3cd70a9a15c7014555bb23cf6f9d38484b4ecb235e3e5",
+      "sizeBytes": 2813,
+      "onChainCodeHash": "0x962dafd0ede3dd396d721c32c6a1b1596d1fa30be2c6c9624115f36712c06397",
+      "artifactCodeHash": "0x8bb14410dc0f3931e3f1719edd0bb79bd3c29d0db67121957a531ccd31ab629b",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 8,
+      "immutables": [
+        {
+          "start": 223,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 536,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 618,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 772,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 883,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 1118,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 1519,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        },
+        {
+          "start": 1901,
+          "length": 32,
+          "value": "0x0000000000000000000000009f45443f63e328a20f344875b92fec05973d326d"
+        }
+      ]
+    },
+    {
+      "contract": "MordantIssuerRegistry",
+      "address": "0x184B3797bee9d83D8911cE121eA894232050bEcB",
+      "deployTransaction": "0x5b8ec2dc85e1815730792f7fa085aef9e5786b613620e83c7cb7e1a59fd07954",
+      "sizeBytes": 3162,
+      "onChainCodeHash": "0x14bcfb0d8dc9afb11c30c6410d5eae960b20e3953e45531e35eda590312cbd4e",
+      "artifactCodeHash": "0x14bcfb0d8dc9afb11c30c6410d5eae960b20e3953e45531e35eda590312cbd4e",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": true,
+      "immutableSpans": 0,
+      "immutables": []
+    },
+    {
+      "contract": "MordantFactoryV2",
+      "address": "0x7eCA98adb3EE5Bd11e09Cf4cb04d9ceF4914c7b0",
+      "deployTransaction": "0x6f5d5ef552471d614278f5c1d673f72fd7e0d6f343900da8a3b05a54f3d62d58",
+      "sizeBytes": 46096,
+      "onChainCodeHash": "0xa9f0f2d5ba9401d4c85edec64d006f35190d2f9ed31e0e609766e5d2674d8cc2",
+      "artifactCodeHash": "0x5a81cc9a1afe7a61fcd629d53f344fe8c07202175dc6d964f65d08687bd03b78",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 7,
+      "immutables": [
+        {
+          "start": 561,
+          "length": 32,
+          "value": "0x000000000000000000000000be3b15de061be593086c48268f662cc4c7001e07"
+        },
+        {
+          "start": 2610,
+          "length": 32,
+          "value": "0x000000000000000000000000be3b15de061be593086c48268f662cc4c7001e07"
+        },
+        {
+          "start": 4647,
+          "length": 32,
+          "value": "0x000000000000000000000000be3b15de061be593086c48268f662cc4c7001e07"
+        },
+        {
+          "start": 4850,
+          "length": 32,
+          "value": "0x000000000000000000000000be3b15de061be593086c48268f662cc4c7001e07"
+        },
+        {
+          "start": 5054,
+          "length": 32,
+          "value": "0x000000000000000000000000be3b15de061be593086c48268f662cc4c7001e07"
+        },
+        {
+          "start": 642,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        },
+        {
+          "start": 1392,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        }
+      ]
+    },
+    {
+      "contract": "MordantSourceIdentityRegistry",
+      "address": "0xF62E401bE84e099CE3F00e3F193960Eb295259D8",
+      "deployTransaction": "0xaf9faf9124106ce089e0b3a5452d6d6eb7314e2808cab03424245e9098099418",
+      "sizeBytes": 5058,
+      "onChainCodeHash": "0xc3a3987e9732abeaf457fd01c1a800fc24b9196400b67c6bf13c60cf83fc1d4d",
+      "artifactCodeHash": "0x03e5701e79e8bf93b2722c9f69309761088d942a0c80f76a13d33447ffa704aa",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 2,
+      "immutables": [
+        {
+          "start": 268,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        },
+        {
+          "start": 707,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        }
+      ]
+    },
+    {
+      "contract": "MordantScopeGovernanceRegistry",
+      "address": "0x3d550619c4c20Bd70D53B7c93fbAa46c0dCE1512",
+      "deployTransaction": "0x9826ff13ea1519f20ecd006eed776fb82c3778e77ed4305d8162c27a3e77880f",
+      "sizeBytes": 12597,
+      "onChainCodeHash": "0x7745bc17e044ef300786e650bd599ab05d1ae29e4bf825583762fe8f07f661c9",
+      "artifactCodeHash": "0x9128648a8aa9a584d32d5e199d973865cbf6558aedf6a160bb23daf50dc632d3",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 6,
+      "immutables": [
+        {
+          "start": 397,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 1666,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 2234,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 5180,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 6339,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 6621,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        }
+      ]
+    },
+    {
+      "contract": "ECDSAQuorumMatchVerifierV4",
+      "address": "0x02D71361A2A27aa4067cc40A778Bf2ABd626C775",
+      "deployTransaction": "0x700d7a29bb73f601ff4dbc49d5179002294d67d401142a18c7381dc47222c3e0",
+      "sizeBytes": 9106,
+      "onChainCodeHash": "0xe3619b02f9894b411d3ed647fb7b32a213b00a40bebdcd8d5c8cb4fd3228659f",
+      "artifactCodeHash": "0x6b4d866bc1f43e3970fbf38f23f41b5ed36f50e95f7b9f48e11d1dbdcb019cc9",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 10,
+      "immutables": [
+        {
+          "start": 833,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 1465,
+          "length": 32,
+          "value": "0x000000000000000000000000981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+        },
+        {
+          "start": 684,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 5122,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 534,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        {
+          "start": 5593,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        {
+          "start": 5682,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        {
+          "start": 611,
+          "length": 32,
+          "value": "0x8127f3e5ca737ca5c4d860936ca339a5b16dff2d7bbe67ba148abba13dbd1f2f"
+        },
+        {
+          "start": 5463,
+          "length": 32,
+          "value": "0x8127f3e5ca737ca5c4d860936ca339a5b16dff2d7bbe67ba148abba13dbd1f2f"
+        },
+        {
+          "start": 5547,
+          "length": 32,
+          "value": "0x8127f3e5ca737ca5c4d860936ca339a5b16dff2d7bbe67ba148abba13dbd1f2f"
+        }
+      ]
+    },
+    {
+      "contract": "PrivateMatchBinder",
+      "address": "0x1D152f44Ab215F8aFafA8CDB6317ce505a748233",
+      "deployTransaction": "0x517986d02ffa1dffd68a1da94ec1cd5f1a30e04a20a40a1769447d3e88817568",
+      "sizeBytes": 13397,
+      "onChainCodeHash": "0x6867ecb27531f28f358cf63b1d7af22c696598a8323b62e20103a45b6e41c926",
+      "artifactCodeHash": "0x00f9c7b05d2cea7930c6267457d98e93d4ad9caa5cb2d591c13dcf62949e1469",
+      "matchesFrozenArtifactOutsideImmutables": true,
+      "identicalIncludingImmutables": false,
+      "immutableSpans": 24,
+      "immutables": [
+        {
+          "start": 799,
+          "length": 32,
+          "value": "0x00000000000000000000000002d71361a2a27aa4067cc40a778bf2abd626c775"
+        },
+        {
+          "start": 4498,
+          "length": 32,
+          "value": "0x00000000000000000000000002d71361a2a27aa4067cc40a778bf2abd626c775"
+        },
+        {
+          "start": 961,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 1696,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 3974,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 8575,
+          "length": 32,
+          "value": "0x0000000000000000000000003d550619c4c20bd70d53b7c93fbaa46c0dce1512"
+        },
+        {
+          "start": 1131,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        },
+        {
+          "start": 4307,
+          "length": 32,
+          "value": "0x000000000000000000000000184b3797bee9d83d8911ce121ea894232050becb"
+        },
+        {
+          "start": 1019,
+          "length": 32,
+          "value": "0x000000000000000000000000f62e401be84e099ce3f00e3f193960eb295259d8"
+        },
+        {
+          "start": 6746,
+          "length": 32,
+          "value": "0x000000000000000000000000f62e401be84e099ce3f00e3f193960eb295259d8"
+        },
+        {
+          "start": 1368,
+          "length": 32,
+          "value": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        },
+        {
+          "start": 1911,
+          "length": 32,
+          "value": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        },
+        {
+          "start": 3447,
+          "length": 32,
+          "value": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        },
+        {
+          "start": 3653,
+          "length": 32,
+          "value": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        },
+        {
+          "start": 7408,
+          "length": 32,
+          "value": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6"
+        },
+        {
+          "start": 901,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "start": 1954,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "start": 3498,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "start": 3699,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "start": 7446,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+          "start": 1170,
+          "length": 32,
+          "value": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674"
+        },
+        {
+          "start": 1277,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000e10"
+        },
+        {
+          "start": 7265,
+          "length": 32,
+          "value": "0x0000000000000000000000000000000000000000000000000000000000000e10"
+        },
+        {
+          "start": 741,
+          "length": 32,
+          "value": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a"
+        }
+      ]
+    }
+  ]
+}

@@ -9,9 +9,15 @@ permissions:
   contents: read
 
 jobs:
+  # Everything the web application and the contracts need, from a fresh clone.
+  # `pnpm validate:ci` runs lint, typecheck, unit tests, runner tests, the
+  # complete Foundry suite, `forge fmt --check`, the Cleanverse evidence gate,
+  # the secret scan, the integration gates (frozen sources, ABI selectors,
+  # repository hygiene), the FHE JavaScript suite, the production build and the
+  # end-to-end suite.
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -25,3 +31,70 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm validate:ci
+
+  # The frozen contract set is verified on its own as well as inside `validate`,
+  # so a drift is visible as its own red check rather than buried in a long log.
+  frozen-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: pnpm install --frozen-lockfile
+      - name: Frozen V4 sources match af5baad
+        run: node scripts/verify-frozen-sources.mjs
+      - name: ABI and selector drift
+        run: pnpm verify:abi
+      - name: Repository hygiene
+        run: node scripts/verify-repository-hygiene.mjs
+
+  # The Go FHE runtime: build, vet, format and the complete test suite.
+  fhe-go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: fhe-lab/lattigo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: fhe-lab/lattigo/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed for:"; echo "$unformatted"; exit 1
+          fi
+      - run: go test ./...
+
+  # Private matching must stay disabled unless it is switched on deliberately.
+  # This job sets no feature environment variable at all: if the defaults ever
+  # become permissive, or the network allow-list ever admits a chain other than
+  # Monad testnet, these tests fail.
+  production-config-disabled:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: pnpm install --frozen-lockfile
+      - name: Feature flags default to off and the chain allow-list is testnet only
+        run: pnpm test:unit
