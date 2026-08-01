@@ -19,7 +19,9 @@ import { createHmac, randomBytes } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getAddress, keccak256, stringToHex, encodeAbiParameters } from "viem";
+import {
+  getAddress, keccak256, stringToHex, encodeAbiParameters, decodeAbiParameters, decodeFunctionData,
+} from "viem";
 import {
   CHAIN_ID, RunError, fail, config, monadChain, publicClient, walletFactory,
   transactor, step, settle, writeAtomic, readJournal, emptyJournal, REPO,
@@ -68,15 +70,24 @@ const ZERO32 = `0x${"00".repeat(32)}`;
 /// A pool of independent OS processes. This runner learns each one's address and
 /// nothing else; the keys never leave the child's own storage directory.
 class Pool {
-  constructor(root, script) { this.root = root; this.script = script; this.members = []; }
+  constructor(root, script, addressFile) {
+    this.root = root; this.script = script; this.addressFile = addressFile; this.members = [];
+  }
 
+  /// Key generation is one-shot. A resumed run reuses the identity a process
+  /// already created rather than minting a second key for the same role.
   async provision(entries) {
     for (const entry of entries) {
       const storage = resolve(this.root, entry.name);
+      const existing = await readFile(resolve(storage, this.addressFile), "utf8").catch(() => null);
+      if (existing) {
+        this.members.push({ ...entry, storage, address: getAddress(existing.trim()), resumed: true });
+        continue;
+      }
       const args = ["--mode", "identity", "--storage", storage];
       if (entry.role) args.push("--role", entry.role);
       const address = (await runNode(this.script, args)).trim();
-      this.members.push({ ...entry, storage, address: getAddress(address) });
+      this.members.push({ ...entry, storage, address: getAddress(address), resumed: false });
     }
     return this.members;
   }
@@ -92,6 +103,11 @@ class Pool {
       member.process = child;
       let stderr = "";
       child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+      // Recorded so an unreachable signer reports why it went away instead of
+      // surfacing as a bare connection error.
+      child.once("exit", (code, signal) => {
+        member.exit = { code, signal, at: new Date().toISOString(), stderr: stderr.slice(-400) };
+      });
       const ready = await new Promise((done, reject) => {
         let buffer = "";
         child.stdout.on("data", (chunk) => {
@@ -128,14 +144,27 @@ class Pool {
   /// Used only by the negative checks, where a refusal is the expected outcome.
   async askExpectingRefusal(member, path, payload) {
     const body = JSON.stringify(payload);
-    const response = await fetch(`http://127.0.0.1:${member.port}${path}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-signer-auth": createHmac("sha256", member.token).update(body).digest("hex"),
-      },
-      body,
-    });
+    if (!member.port) fail("PROCESS_NOT_SERVING", `${member.name}:no port`);
+    if (member.process && member.process.exitCode !== null) {
+      fail("PROCESS_NOT_SERVING", `${member.name}:exited ${member.process.exitCode}`);
+    }
+    let response;
+    try {
+      response = await fetch(`http://127.0.0.1:${member.port}${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-signer-auth": createHmac("sha256", member.token).update(body).digest("hex"),
+        },
+        body,
+      });
+    } catch (error) {
+      fail(
+        "PROCESS_UNREACHABLE",
+        `${member.name}:port=${member.port}:pid=${member.pid}:${error?.cause?.code ?? error?.message}` +
+        `:exit=${JSON.stringify(member.exit ?? null)}`,
+      );
+    }
     const parsed = await response.json().catch(() => ({}));
     return { status: response.status, error: parsed.error ?? null };
   }
@@ -147,7 +176,9 @@ class Pool {
   }
 
   manifest() {
-    return this.members.map(({ name, role, address, pid, storage }) => ({ name, role: role ?? "validator", address, pid, storage }));
+    return this.members.map(({ name, role, address, pid, storage, resumed }) => ({
+      name, role: role ?? "validator", address, pid, storage, resumed: Boolean(resumed),
+    }));
   }
 }
 
@@ -357,8 +388,8 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     await writeAtomic(resolve(options.out, "priv8-evidence.json"), evidence);
   };
 
-  const parties = new Pool(resolve(options.root, "parties"), resolve(HERE, "party-signer.mjs"));
-  const validators = new Pool(resolve(options.root, "validators"), resolve(HERE, "match-validator-signer.mjs"));
+  const parties = new Pool(resolve(options.root, "parties"), resolve(HERE, "party-signer.mjs"), "party.address");
+  const validators = new Pool(resolve(options.root, "validators"), resolve(HERE, "match-validator-signer.mjs"), "validator.address");
 
   try {
     await mkdir(options.out, { recursive: true });
@@ -454,13 +485,18 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       sourceMasterSecret: keccak256(stringToHex("mordant.priv8.non-vault-facility.master/1")),
     });
     const currency = currencyCode("USD");
+    const effectiveFrom = Number((await client.getBlock()).timestamp);
     const identityBundle = {
       ...sides,
       issuerKeyId,
-      anchorTermsCommitment: initialTerms(stableId, { amount: 110_000_000n, dueDateDays: 20_590, currency }),
+      anchorTermsCommitment: initialTerms(stableId, {
+        currencyCode: currency, faceValueMinor: 11_000_000n, dueDateDays: 20_590, effectiveFrom,
+      }),
       // Conflicting private terms: the same receivable, a different amount and a
       // different due date on the other side.
-      sourceTermsCommitment: initialTerms(stableId, { amount: 108_500_000n, dueDateDays: 20_585, currency }),
+      sourceTermsCommitment: initialTerms(stableId, {
+        currencyCode: currency, faceValueMinor: 10_850_000n, dueDateDays: 20_585, effectiveFrom,
+      }),
     };
 
     // The issuer signs in its own process. This runner never holds that key.
@@ -490,7 +526,10 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       assetCommitment: anchor.publishedAssetCommitment,
       sourceAttestationDigest: anchor.sourceAttestationDigest,
       creationDigest: anchor.creationDigest,
-      protectionEnd: String(anchor.protectionEnd),
+      protectionEnd: String(await client.readContract({
+        address: anchor.vault, abi: art.vault.abi, functionName: "protectionEnd",
+      })),
+      resumedFromChain: Boolean(anchor.resumed),
       createdInBlock: anchor.block,
       createTransaction: anchor.hash,
     };
@@ -510,6 +549,20 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       publishesEconomics: false,
     };
     await reached("SOURCE_REGISTERED");
+
+    /* ------------------------------------- resume after a successful binding */
+    const alreadyBound = findBoundSession(journal);
+    if (alreadyBound) {
+      const recovered = await recoverBoundSession({ client, art, hash: alreadyBound.hash });
+      // Awaited, not returned: a bare `return` inside try/finally runs the
+      // finally as soon as the promise is created, which would kill every signer
+      // process while the observation phases are still using them.
+      return await finishFromBinding({
+        client, art, addresses, anchor, records, sides, evidence, options, journal, journalPath,
+        settings, parties, validators, party, recovered, alreadyBound, reached,
+        sourceRegisteredAt: evidence.nonVaultSource.registeredAt, stableId,
+      });
+    }
 
     /* ----------------------------------------------------------- INTENT_SIGNED */
     const latest = await client.getBlock();
@@ -546,7 +599,19 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     const signatures = {
       controllerA: signedA.signature, controllerB: signedB.signature, issuer: signedIssuer.signature,
     };
-    const salt = `0x${randomBytes(32).toString("hex")}`;
+    const signerDigests = { A: signedA.digest, B: signedB.digest, issuer: signedIssuer.digest };
+    const signerAddresses = { A: signedA.address, B: signedB.address, issuer: signedIssuer.address };
+    let salt = `0x${randomBytes(32).toString("hex")}`;
+    const resumable = findResumableSession(journal);
+    if (resumable) {
+      // A previous attempt already published this commitment. Its preimage was
+      // journalled first, so the session can be finished rather than abandoned.
+      ({ salt } = resumable);
+      Object.assign(intent, resumable.intent);
+      signatures.controllerA = resumable.signatures.controllerA;
+      signatures.controllerB = resumable.signatures.controllerB;
+      signatures.issuer = resumable.signatures.issuer;
+    }
     evidence.intent = {
       intent: { ...intent },
       signers: {
@@ -562,8 +627,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
         A: getAddress(party["controller-a"].address), B: getAddress(party["controller-b"].address),
         issuer: getAddress(party.issuer.address),
       },
-      signerAddresses: { A: signedA.address, B: signedB.address, issuer: signedIssuer.address },
-      digests: { A: signedA.digest, B: signedB.digest, issuer: signedIssuer.digest },
+      signerAddresses, digests: signerDigests,
     });
     evidence.preflightAgreement = preflight.report;
     await reached("PREFLIGHT_AGREED");
@@ -576,6 +640,15 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     });
     if (getAddress(relayCheck.address) !== getAddress(party.relayer.address)) fail("RELAYER_IDENTITY");
 
+    // The preimage is durable before the one-shot artifact is published.
+    journal.sessions = journal.sessions ?? {};
+    if (!journal.sessions[preflight.sessionCommitment]) {
+      journal.sessions[preflight.sessionCommitment] = {
+        intent: serializeIntent(intent), salt, signatures, recordedAt: new Date().toISOString(),
+      };
+      await writeAtomic(journalPath, journal);
+    }
+
     // Fund the relayer so it can pay for its own transaction.
     const relayerBalance = await client.getBalance({ address: party.relayer.address });
     if (relayerBalance < 1_000_000_000_000_000_000n) {
@@ -587,7 +660,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       await settle(journal, journalPath, key, client, hash, { role: "relayer" });
     }
     const relayerAccount = await relayerWallet(party.relayer);
-    const commitKey = "session:commit";
+    const commitKey = `session:commit:${preflight.sessionCommitment}`;
     const { hash: commitHash } = await step(journal, journalPath, commitKey, async () => ({
       hash: await tx.write(relayerAccount, {
         address: addresses.governance, abi: art.governance.abi, functionName: "commitSession",
@@ -604,6 +677,15 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     });
     if (!onChainCommitment.exists) fail("COMMITMENT_NOT_STORED");
     if (getAddress(onChainCommitment.submitter) !== getAddress(party.relayer.address)) fail("COMMITMENT_SUBMITTER");
+    evidence.orphanedCommitments = Object.entries(journal.steps)
+      .filter(([name, entry]) => name.startsWith("session:commit:") && entry.status === "success"
+        && !name.endsWith(preflight.sessionCommitment))
+      .map(([name, entry]) => ({
+        sessionCommitment: name.slice("session:commit:".length),
+        transaction: entry.hash,
+        block: entry.block,
+        note: "published by an interrupted run; its preimage was lost, so it can never be revealed or bound",
+      }));
     evidence.sessionCommitment = {
       sessionCommitment: preflight.sessionCommitment,
       transaction: commitHash,
@@ -655,7 +737,10 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       }),
     };
     const ceremony = await runCeremony({
-      root: resolve(options.root, "ceremony"), out: resolve(options.out, "ceremony"),
+      // The operators refuse to reuse storage, so every attempt gets its own
+      // root. The evidence directory is keyed by the session it belongs to.
+      root: resolve(options.root, `ceremony-${Date.now()}`),
+      out: resolve(options.out, `ceremony-${preflight.sessionCommitment.slice(2, 14)}`),
       vault: anchor.vault, anchorRoot: anchor.invoiceRoot, assetId: stableId, bindings,
     });
     if (ceremony.evaluator.identityMode !== "full_fhe_256") fail("IDENTITY_MODE", ceremony.evaluator.identityMode);
@@ -820,7 +905,7 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     ];
     const balancesBefore = await readBalances(client, art, addresses, anchor, party);
 
-    const bindKey = "recourse:bind";
+    const bindKey = `recourse:bind:${preflight.sessionCommitment}`;
     const { hash: bindHash } = await step(journal, journalPath, bindKey, async () => ({
       hash: await tx.write(settings.deployer, {
         address: addresses.binder, abi: art.binder.abi, functionName: "bindRecourse", args: bindArgs,
@@ -870,6 +955,237 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     parties.stop();
     validators.stop();
   }
+}
+
+/**
+ * Completes a run whose atomic binding already succeeded.
+ *
+ * Everything observed here is read back from the chain and from the binding
+ * transaction's own calldata, so a crash after the one irreversible step never
+ * costs the evidence.
+ */
+async function finishFromBinding({
+  client, art, addresses, anchor, records, sides, evidence, options, journal,
+  settings, parties, party, recovered, alreadyBound, reached, sourceRegisteredAt, stableId,
+}) {
+  const sessionCommitment = alreadyBound.sessionCommitment;
+  const envelope = fromSolidityEnvelope(recovered.envelope);
+  const matchCommitment = envelope.result.matchCommitment;
+  const consents = {
+    A: fromSolidityConsent(recovered.consents.A),
+    B: fromSolidityConsent(recovered.consents.B),
+  };
+
+  const commitmentState = await client.readContract({
+    address: addresses.governance, abi: art.governance.abi, functionName: "commitment",
+    args: [sessionCommitment],
+  });
+  const commitReceipt = await client.getTransactionReceipt({
+    hash: journal.steps[`session:commit:${sessionCommitment}`].hash,
+  });
+  const commitTransaction = await client.getTransaction({
+    hash: journal.steps[`session:commit:${sessionCommitment}`].hash,
+  });
+
+  evidence.resumed = {
+    from: "successful atomic binding",
+    bindingTransaction: alreadyBound.hash,
+    recoveredFromCalldata: true,
+  };
+  evidence.sessionCommitment = {
+    sessionCommitment,
+    transaction: commitTransaction.hash,
+    block: String(commitReceipt.blockNumber),
+    committedAt: Number(commitmentState.committedAt),
+    committedInBlock: String(commitmentState.committedInBlock),
+    relayer: getAddress(commitmentState.submitter),
+    consumed: commitmentState.consumed,
+    relayerReceivedOnly: ["chainId", "sessionCommitment"],
+  };
+  evidence.intent = {
+    intent: serializeIntent(recovered.reveal.intent),
+    saltPublishedOnlyAtBinding: true,
+  };
+  evidence.publicMetadataAudit = auditPublicMetadata({
+    transaction: commitTransaction,
+    receipt: commitReceipt,
+    forbidden: {
+      scopeA: SCOPE_A, scopeB: SCOPE_B,
+      governanceRecordA: records.A.recordDigest, governanceRecordB: records.B.recordDigest,
+      controllerA: party["controller-a"].address, controllerB: party["controller-b"].address,
+      organizationA: ORG_A, organizationB: ORG_B,
+      anchorVault: anchor.vault,
+      anchorAssetCommitment: sides.anchorAssetCommitment,
+      sourceAssetCommitment: sides.sourceAssetCommitment,
+      strictAssetId: stableId,
+      sessionSalt: recovered.reveal.salt,
+      issuerKeyId: evidence.processes.issuerKeyId,
+      policyId: POLICY_ID,
+    },
+  });
+  if (evidence.publicMetadataAudit.disclosed.length > 0) {
+    fail("PRE_BINDING_DISCLOSURE", evidence.publicMetadataAudit.disclosed.join(","));
+  }
+  await reached("METADATA_AUDITED");
+
+  const ceremonyDirectory = resolve(options.out, `ceremony-${sessionCommitment.slice(2, 14)}`);
+  const evaluator = JSON.parse(await readFile(resolve(ceremonyDirectory, "evaluator-result.json"), "utf8"));
+  const custody = JSON.parse(await readFile(resolve(ceremonyDirectory, "dealerless-custody-evidence.json"), "utf8"));
+  if (evaluator.identityMode !== "full_fhe_256") fail("IDENTITY_MODE", evaluator.identityMode);
+  if (evaluator.conflictConfirmed !== true) fail("CONFLICT_NOT_CONFIRMED");
+  const bindings = {
+    a: enrollmentBinding({
+      sessionCommitment, scopeCommitment: SCOPE_A, governanceRecord: records.A.recordDigest,
+      sourceRecord: anchor.sourceAttestationDigest, assetCommitment: sides.anchorAssetCommitment,
+    }),
+    b: enrollmentBinding({
+      sessionCommitment, scopeCommitment: SCOPE_B, governanceRecord: records.B.recordDigest,
+      sourceRecord: recovered.reveal.intent.sourceRecordB, assetCommitment: sides.sourceAssetCommitment,
+    }),
+  };
+  if (evaluator.enrollmentNonceA.toLowerCase() !== bindings.a.toLowerCase()) fail("ENROLLMENT_BINDING_A", evaluator.enrollmentNonceA);
+  if (evaluator.enrollmentNonceB.toLowerCase() !== bindings.b.toLowerCase()) fail("ENROLLMENT_BINDING_B", evaluator.enrollmentNonceB);
+  if (evaluator.providerProofCommitment.toLowerCase() !== envelope.result.providerProofCommitment.toLowerCase()) {
+    fail("PROVIDER_PROOF_MISMATCH");
+  }
+  evidence.ceremony = {
+    identityMode: evaluator.identityMode, custodyModel: evaluator.custodyModel,
+    coalition: evaluator.coalition, keyId: evaluator.keyId,
+    conflictConfirmed: evaluator.conflictConfirmed,
+    inputCommitmentA: evaluator.inputCommitmentA, inputCommitmentB: evaluator.inputCommitmentB,
+    resultCommitment: evaluator.resultCommitment,
+    providerProofCommitment: evaluator.providerProofCommitment,
+    thresholdTranscriptCommitment: evaluator.thresholdTranscriptCommitment,
+    enrollmentNonceA: evaluator.enrollmentNonceA, enrollmentNonceB: evaluator.enrollmentNonceB,
+    enrollmentBindingsRecomputed: bindings,
+    evaluatorCapabilities: evaluator.evaluatorCapabilities,
+    negativeChecks: custody.negativeChecks,
+    processes: custody.processes,
+    shareIsolation: custody.shareIsolation,
+    evidenceDirectory: ceremonyDirectory,
+  };
+  await reached("CEREMONY_PROVEN");
+
+  const validatorSetId = await client.readContract({
+    address: addresses.verifier, abi: art.verifier.abi, functionName: "validatorSetId",
+  });
+  const onChainCore = await client.readContract({
+    address: addresses.verifier, abi: art.verifier.abi, functionName: "resultCoreCommitment",
+    args: [recovered.envelope],
+  });
+  if (onChainCore.toLowerCase() !== envelope.resultCommitment.toLowerCase()) fail("RESULT_CORE_DISAGREEMENT");
+  const decoded = decodeAttestation(recovered.attestation);
+  const signers = [];
+  for (const signature of decoded.signatures) {
+    const { recoverAddress } = await import("viem");
+    signers.push(getAddress(await recoverAddress({
+      hash: mirror.attestationDigest({
+        validatorSetId, resultHash: mirror.resultDigest(envelope, CHAIN_ID, addresses.verifier),
+        chainId: CHAIN_ID, verifier: addresses.verifier,
+      }),
+      signature,
+    })));
+  }
+  evidence.quorum = {
+    validatorSetId, quorumSize: decoded.signatures.length,
+    availableSigners: validatorsFromEvidence(evidence),
+    usedSigners: signers,
+    recoveredFromCalldata: true,
+    resultCoreAgreement: { runner: envelope.resultCommitment, onChain: onChainCore },
+  };
+  await reached("QUORUM_SIGNED");
+
+  evidence.consents = {
+    A: { ...consents.A, signature: undefined },
+    B: { ...consents.B, signature: undefined },
+    bothRequired: true,
+    recoveredFromCalldata: true,
+  };
+  await reached("CONSENTED");
+
+  evidence.binding = {
+    transaction: alreadyBound.hash,
+    block: alreadyBound.block,
+    gasUsed: journal.steps[`recourse:bind:${sessionCommitment}`].gasUsed,
+    value: String(recovered.transaction.value),
+    from: getAddress(recovered.transaction.from),
+    to: getAddress(recovered.transaction.to),
+    events: recovered.receipt.logs.map((log) => ({ address: getAddress(log.address), topics: log.topics })),
+  };
+  if (recovered.transaction.value !== 0n) fail("BINDING_MOVED_VALUE", String(recovered.transaction.value));
+  await reached("BOUND");
+
+  const balancesAfter = await readBalances(client, art, addresses, anchor, party);
+  evidence.readbacks = await performReadbacks({
+    client, art, addresses, anchor, envelope, matchCommitment, consents,
+    sessionCommitment, records, sides, sourceRegisteredAt, balancesBefore: balancesAfter, party,
+  });
+  await reached("READBACKS_CONFIRMED");
+
+  const replays = await runReplays({
+    client, art, addresses, settings, bindArgs: recovered.args, envelope, consents, anchor,
+    sessionCommitment, matchCommitment, parties, party,
+  });
+  const survived = replays.filter((entry) => !entry.rejected);
+  if (survived.length > 0) fail("REPLAY_ACCEPTED", survived.map((entry) => entry.name).join(","));
+  evidence.replays = replays;
+  await reached("REPLAY_REJECTED");
+
+  evidence.completedAt = new Date().toISOString();
+  await reached("COMPLETE");
+  await writeAtomic(resolve(options.out, "priv8-evidence.json"), evidence);
+  return evidence;
+}
+
+function validatorsFromEvidence(evidence) {
+  return (evidence.processes?.validators ?? []).map((entry) => entry.address);
+}
+
+function decodeAttestation(attestation) {
+  const [validatorSetId, signatures] = decodeAbiParameters(
+    [{ type: "bytes32" }, { type: "bytes[]" }], attestation,
+  );
+  return { validatorSetId, signatures };
+}
+
+function fromSolidityEnvelope(envelope) {
+  return {
+    chainId: Number(envelope.chainId),
+    binder: getAddress(envelope.binder),
+    policyId: envelope.policyId,
+    policyVersion: Number(envelope.policyVersion),
+    sessionCommitment: envelope.sessionCommitment,
+    nonce: Number(envelope.nonce),
+    validUntil: Number(envelope.validUntil),
+    resultCommitment: envelope.resultCommitment,
+    result: {
+      sessionId: envelope.result.sessionId,
+      scopeCommitmentA: envelope.result.scopeCommitmentA,
+      scopeCommitmentB: envelope.result.scopeCommitmentB,
+      inputCommitmentA: envelope.result.inputCommitmentA,
+      inputCommitmentB: envelope.result.inputCommitmentB,
+      outcome: Number(envelope.result.outcome),
+      exactMatchConfirmed: envelope.result.exactMatchConfirmed,
+      candidateMatchSuggested: envelope.result.candidateMatchSuggested,
+      candidateFallbackAuthorized: envelope.result.candidateFallbackAuthorized,
+      conflictConfirmed: envelope.result.conflictConfirmed,
+      matchCommitment: envelope.result.matchCommitment,
+      boundCandidateAliasCommitment: envelope.result.boundCandidateAliasCommitment,
+      anchorCount: Number(envelope.result.anchorCount),
+      providerProofCommitment: envelope.result.providerProofCommitment,
+    },
+  };
+}
+
+function fromSolidityConsent(consent) {
+  return {
+    scopeCommitment: consent.scopeCommitment,
+    governanceRecord: consent.governanceRecord,
+    disclosureVersion: Number(consent.disclosureVersion),
+    validUntil: Number(consent.validUntil),
+    nonce: Number(consent.nonce),
+    signature: consent.signature,
+  };
 }
 
 /* ------------------------------------------------------------- sub-routines */
@@ -1283,6 +1599,56 @@ async function runReplays({
   });
 
   return results;
+}
+
+/// A session whose binding transaction already succeeded. Finding one means the
+/// run got past the atomic step and only the observation phases remain.
+export function findBoundSession(journal) {
+  for (const [name, entry] of Object.entries(journal.steps)) {
+    if (name.startsWith("recourse:bind:") && entry.status === "success") {
+      return { sessionCommitment: name.slice("recourse:bind:".length), hash: entry.hash, block: entry.block };
+    }
+  }
+  return null;
+}
+
+/**
+ * Rebuilds the bound session from the binding transaction's own calldata.
+ *
+ * Recovering it from the chain rather than from local notes is deliberate: the
+ * evidence then describes what was actually executed, not what the runner
+ * intended to execute.
+ */
+export async function recoverBoundSession({ client, art, hash }) {
+  const transaction = await client.getTransaction({ hash });
+  const receipt = await client.getTransactionReceipt({ hash });
+  const { functionName, args } = decodeFunctionData({ abi: art.binder.abi, data: transaction.input });
+  if (functionName !== "bindRecourse") fail("RECOVERED_WRONG_FUNCTION", functionName);
+  const [envelope, attestation, reveal, anchorAddress, consentA, consentB] = args;
+  return {
+    transaction, receipt, envelope, attestation, reveal,
+    anchor: getAddress(anchorAddress),
+    consents: { A: consentA, B: consentB },
+    args,
+  };
+}
+
+/// A session whose commitment is on-chain, whose preimage was journalled, and
+/// which has not yet been bound. Resuming it is the only way to avoid stranding
+/// an unrevealable commitment on every crash.
+export function findResumableSession(journal) {
+  for (const [commitment, preimage] of Object.entries(journal.sessions ?? {})) {
+    const committed = journal.steps[`session:commit:${commitment}`]?.status === "success";
+    const bound = journal.steps[`recourse:bind:${commitment}`]?.status === "success";
+    if (committed && !bound) return { commitment, ...preimage };
+  }
+  return null;
+}
+
+export function serializeIntent(intent) {
+  return Object.fromEntries(
+    Object.entries(intent).map(([key, value]) => [key, typeof value === "bigint" ? String(value) : value]),
+  );
 }
 
 export function parseArgs(argv) {

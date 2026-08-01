@@ -176,8 +176,46 @@ export function walletFactory(chain, rpc) {
   };
 }
 
+/**
+ * Monad's public RPC caps reads at 15/sec and answers a burst with an error
+ * rather than a queue. One paced fetch is installed for the whole process so
+ * every read, wherever it is issued from, shares the same budget.
+ */
+let paced = false;
+export function paceRpc(rpc) {
+  if (paced) return;
+  paced = true;
+  const host = new URL(rpc).host;
+  const original = globalThis.fetch;
+  let chain = Promise.resolve();
+  let last = 0;
+  const MIN_INTERVAL_MS = 90;
+  globalThis.fetch = (input, init) => {
+    const url = typeof input === "string" ? input : input?.url ?? "";
+    if (!url.includes(host)) return original(input, init);
+    const attempt = async (tries) => {
+      const wait = Math.max(0, MIN_INTERVAL_MS - (Date.now() - last));
+      if (wait > 0) await new Promise((done) => setTimeout(done, wait));
+      last = Date.now();
+      const response = await original(input, init);
+      if (response.status === 429 && tries < 6) {
+        await new Promise((done) => setTimeout(done, 500 * (tries + 1)));
+        return attempt(tries + 1);
+      }
+      return response;
+    };
+    const queued = chain.then(() => attempt(0));
+    chain = queued.then(() => undefined, () => undefined);
+    return queued;
+  };
+}
+
 export function publicClient(chain, rpc) {
-  return createPublicClient({ chain, transport: http(rpc) });
+  paceRpc(rpc);
+  return createPublicClient({
+    chain,
+    transport: http(rpc, { batch: false, retryCount: 8, retryDelay: 400, timeout: 60_000 }),
+  });
 }
 
 export { getAddress };

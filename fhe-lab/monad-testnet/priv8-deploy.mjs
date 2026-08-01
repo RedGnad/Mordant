@@ -86,15 +86,15 @@ export function sideCommitments(stableId, { anchorMasterSecret, sourceMasterSecr
   return { anchorSalt, sourceSalt, anchorAssetCommitment: anchor, sourceAssetCommitment: source };
 }
 
-export function initialTerms(stableId, { amount, dueDateDays, currency }) {
+export function initialTerms(stableId, { faceValueMinor, dueDateDays, currencyCode, effectiveFrom }) {
   return termsCommitment(stableId, {
     termsVersion: 1,
     relation: Relation.Original,
-    amendmentId: `0x${"00".repeat(32)}`,
-    supersedesTermsCommitment: `0x${"00".repeat(32)}`,
-    currency,
-    amount,
+    currencyCode,
+    faceValueMinor,
+    amountExponent: 2,
     dueDateDays,
+    effectiveFrom,
   });
 }
 
@@ -170,6 +170,17 @@ export async function deployStack(context) {
   await write("config:setSettlementToken", settings.deployer, {
     address: factory, abi: art.factory.abi, functionName: "setSettlementToken", args: [settlement, true],
   });
+  for (const [label, account, role] of [
+    ["buyer", settings.buyer, 1], ["originator", settings.originator, 2],
+    ["facility", settings.facility, 3], ["holder", settings.holder, 4],
+  ]) {
+    // The factory checks buyer and originator eligibility at admission, so the
+    // roles must exist before any vault is created.
+    await write(`config:eligible:${label}`, settings.deployer, {
+      address: eligibility, abi: art.eligibility.abi, functionName: "setEligible",
+      args: [account.address, role, true],
+    });
+  }
   await write("config:setPolicyVersion", settings.deployer, {
     address: verifier, abi: art.verifier.abi, functionName: "setPolicyVersion",
     args: [scope.policyId, scope.policyVersion],
@@ -259,6 +270,13 @@ export function vaultConfig(addresses, settings, invoiceRoot, protectionEnd) {
 export async function deployAnchor(context, addresses, identity, signSource) {
   const { client, tx, journal, journalPath, settings, art } = context;
   const invoiceRoot = keccak256(stringToHex("mordant.priv8.receivable/1"));
+
+  // On resume the anchor already exists. Read it back off the chain rather than
+  // rebuilding an attestation and asking the issuer to sign something that will
+  // never be sent.
+  if (journal.steps["anchor:create"]?.status === "success") {
+    return anchorFromChain(context, addresses, journal.steps["anchor:create"].hash, invoiceRoot);
+  }
   const latest = await client.getBlock();
   const protectionEnd = BigInt(latest.timestamp) + PROTECTION_DAYS * 86_400n;
   const config = vaultConfig(addresses, settings, invoiceRoot, protectionEnd);
@@ -310,6 +328,33 @@ export async function deployAnchor(context, addresses, identity, signSource) {
   };
 }
 
+export async function anchorFromChain(context, addresses, hash, invoiceRoot) {
+  const { client, art } = context;
+  const receipt = await client.getTransactionReceipt({ hash });
+  const [event] = parseEventLogs({
+    abi: art.factory.abi, eventName: "IdentityAnchoredVaultCreated", logs: receipt.logs,
+  });
+  if (!event) fail("ANCHOR_VAULT_MISSING");
+  const vault = getAddress(event.args.vault);
+  return {
+    vault,
+    invoiceRoot: event.args.invoiceRoot ?? invoiceRoot,
+    protectionEnd: null,
+    config: null,
+    attestation: null,
+    creationDigest: null,
+    sourceAttestationDigest: await client.readContract({
+      address: vault, abi: art.vault.abi, functionName: "sourceAttestationDigest",
+    }),
+    publishedAssetCommitment: await client.readContract({
+      address: vault, abi: art.vault.abi, functionName: "assetCommitment",
+    }),
+    block: String(receipt.blockNumber),
+    hash,
+    resumed: true,
+  };
+}
+
 export async function activateAnchor(context, addresses, anchor) {
   const { client, tx, journal, journalPath, settings, art } = context;
   const write = async (key, account, request) => {
@@ -319,19 +364,13 @@ export async function activateAnchor(context, addresses, anchor) {
     return settle(journal, journalPath, key, client, hash, { call: key });
   };
 
+  if (journal.steps["anchor:activate"]?.status === "success") {
+    return { pledge: null, pledgeDigest: null, resumed: true };
+  }
   await write("anchor:identityValid", settings.deployer, {
     address: addresses.eligibility, abi: art.eligibility.abi, functionName: "setIdentityValid",
     args: [anchor.vault, true],
   });
-  for (const [label, account, role] of [
-    ["buyer", settings.buyer, 1], ["originator", settings.originator, 2],
-    ["facility", settings.facility, 3], ["holder", settings.holder, 4],
-  ]) {
-    await write(`anchor:eligible:${label}`, settings.deployer, {
-      address: addresses.eligibility, abi: art.eligibility.abi, functionName: "setEligible",
-      args: [account.address, role, true],
-    });
-  }
 
   // Credit the vault with its receivable units through the adapter, exactly as
   // the vault's own accounting requires.
@@ -387,6 +426,15 @@ export async function activateAnchor(context, addresses, anchor) {
 
 export async function registerSource(context, addresses, identity, signSource) {
   const { client, tx, journal, journalPath, settings, art } = context;
+  if (journal.steps["source:register"]?.status === "success") {
+    const hash = journal.steps["source:register"].hash;
+    const receipt = await client.getTransactionReceipt({ hash });
+    const [event] = parseEventLogs({
+      abi: art.sources.abi, eventName: "SourceIdentityRegistered", logs: receipt.logs,
+    });
+    if (!event) fail("SOURCE_REGISTRATION_MISSING");
+    return { anchorId: event.args.anchorId, attestation: null, hash, block: String(receipt.blockNumber), resumed: true };
+  }
   const latest = await client.getBlock();
   const attestation = {
     chainId: BigInt(context.chainId),
