@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
-import {MordantIssuerRegistry} from "../src/identity/MordantIssuerRegistry.sol";
-import {MordantMatchResult as Match} from "../src/identity/MordantMatchResult.sol";
-import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation.sol";
-import {MordantSourceIdentityRegistry} from "../src/identity/MordantSourceIdentityRegistry.sol";
-import {ECDSAQuorumMatchVerifierV4} from "../src/v4/ECDSAQuorumMatchVerifierV4.sol";
-import {MordantScopeGovernanceRegistry as Governance} from
-    "../src/v4/MordantScopeGovernanceRegistry.sol";
-import {PrivateMatchBinder} from "../src/v4/PrivateMatchBinder.sol";
+import { MordantIssuerRegistry } from "../src/identity/MordantIssuerRegistry.sol";
+import { MordantMatchResult as Match } from "../src/identity/MordantMatchResult.sol";
+import { MordantSourceAttestation } from "../src/identity/MordantSourceAttestation.sol";
+import { MordantSourceIdentityRegistry } from "../src/identity/MordantSourceIdentityRegistry.sol";
+import { ECDSAQuorumMatchVerifierV4 } from "../src/v4/ECDSAQuorumMatchVerifierV4.sol";
+import {
+    MordantScopeGovernanceRegistry as Governance
+} from "../src/v4/MordantScopeGovernanceRegistry.sol";
+import { PrivateMatchBinder } from "../src/v4/PrivateMatchBinder.sol";
 
 /// @notice Emits the exact digests the frozen V4 contracts compute for one fixed
 /// input, and asserts the pinned off-chain mirrors reproduce them.
@@ -88,9 +89,7 @@ contract V4DigestVectorsTest is Test {
 
     function _signatures() private pure returns (Governance.InitiationSignatures memory) {
         return Governance.InitiationSignatures({
-            controllerA: hex"11",
-            controllerB: hex"22",
-            issuer: hex"33"
+            controllerA: hex"11", controllerB: hex"22", issuer: hex"33"
         });
     }
 

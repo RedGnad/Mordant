@@ -1,0 +1,54 @@
+{
+  "schema": "mordant.public-evidence.provenance/1",
+  "frozenContracts": "af5baad",
+  "runnerSource": "3ca83ed",
+  "evidenceSource": "dfa8fbe",
+  "tags": [
+    "v4-contracts-af5baad",
+    "m-priv8-evidence-4"
+  ],
+  "network": {
+    "name": "Monad testnet",
+    "chainId": 10143
+  },
+  "sessionCommitment": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+  "bindingTransaction": "0xd12c8daecda1963a8fc79b78b8c3012994d26a2eca8ae3f4b2f032e73f0b0007",
+  "bundle": [
+    {
+      "file": "transactions.json",
+      "bytes": 2339,
+      "sha256": "e11e7d638cf06e1b57a2fe68930b0a46d4d70cd8d599b47a6a74a9cb80b532c3"
+    },
+    {
+      "file": "events-and-receipts.json",
+      "bytes": 3462,
+      "sha256": "7e453dffe3865696fefe2d611a83881591760557bbf5ae67486b2cb718037e67"
+    },
+    {
+      "file": "readbacks.json",
+      "bytes": 4843,
+      "sha256": "866dc8a01c722a7d72d8a2597c28f4f592d6819aab22b5205d70992c203c049b"
+    },
+    {
+      "file": "code-hashes.json",
+      "bytes": 15697,
+      "sha256": "3ca22a748bc0ed3b0c737d131ec8ccac3722462d9e477f5ae955c69bd74f7795"
+    },
+    {
+      "file": "leak-scan.json",
+      "bytes": 7566,
+      "sha256": "01b70688690a9d1a0bab9e3b0cb2b804ff0d4bd2fa6b8970b60eae49e0d9c000"
+    },
+    {
+      "file": "performance.json",
+      "bytes": 7212,
+      "sha256": "9e8bfd11e2d42b2e5fc8823e2621687d53ec22be7bc349bf969435ce69631228"
+    }
+  ],
+  "curatedBy": "scripts/curate-evidence.mjs equivalent, field-by-field from the run artifacts",
+  "redactions": [
+    "Local filesystem paths in process and ceremony records were not carried over.",
+    "Private canary manifests were deleted by the leak scan; only their SHA-256 digests are retained.",
+    "Binding calldata is summarised rather than reproduced."
+  ]
+}

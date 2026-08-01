@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import {MordantIssuerRegistry} from "./MordantIssuerRegistry.sol";
+import { MordantIssuerRegistry } from "./MordantIssuerRegistry.sol";
 
 /// @notice Pre-commitments that authorize an exact matching session.
 /// @dev Owner decision 10: after a tolerant candidate signal, an authorized

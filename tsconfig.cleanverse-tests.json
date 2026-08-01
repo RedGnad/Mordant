@@ -24,6 +24,8 @@
     "src/lib/evidence/evidence.test.ts",
     "src/lib/evidence/secret-scan-cli.ts",
     "src/lib/mordant/identity.test.ts",
+    "src/lib/private-matching/config.test.ts",
+    "src/lib/private-matching/evidence.ts",
     "src/lib/mordant/lexicon.test.ts",
     "src/lib/mordant/product-model.test.ts",
     "src/lib/mordant/readiness.test.ts",

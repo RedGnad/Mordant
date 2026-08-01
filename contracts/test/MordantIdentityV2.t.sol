@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
-import {MordantFactory} from "../src/MordantFactory.sol";
-import {MordantFactoryV2} from "../src/MordantFactoryV2.sol";
-import {MordantInvoiceVault} from "../src/MordantInvoiceVault.sol";
-import {MordantInvoiceVaultV2} from "../src/MordantInvoiceVaultV2.sol";
-import {MordantAssetIdentity as Id} from "../src/identity/MordantAssetIdentity.sol";
-import {MordantIssuerRegistry} from "../src/identity/MordantIssuerRegistry.sol";
-import {MordantNormalization as N} from "../src/identity/MordantNormalization.sol";
-import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation.sol";
-import {MordantSourceIdentityRegistry} from "../src/identity/MordantSourceIdentityRegistry.sol";
-import {MordantTermsRegistry} from "../src/identity/MordantTermsRegistry.sol";
-import {MordantMatchResult as Match} from "../src/identity/MordantMatchResult.sol";
-import {MordantSessionPrecommitRegistry} from "../src/identity/MordantSessionPrecommitRegistry.sol";
-import {MockCvaAdapter} from "../src/mocks/MockCvaAdapter.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
-import {MockEligibility} from "../src/mocks/MockEligibility.sol";
+import { MordantFactory } from "../src/MordantFactory.sol";
+import { MordantFactoryV2 } from "../src/MordantFactoryV2.sol";
+import { MordantInvoiceVault } from "../src/MordantInvoiceVault.sol";
+import { MordantInvoiceVaultV2 } from "../src/MordantInvoiceVaultV2.sol";
+import { MordantAssetIdentity as Id } from "../src/identity/MordantAssetIdentity.sol";
+import { MordantIssuerRegistry } from "../src/identity/MordantIssuerRegistry.sol";
+import { MordantNormalization as N } from "../src/identity/MordantNormalization.sol";
+import { MordantSourceAttestation } from "../src/identity/MordantSourceAttestation.sol";
+import { MordantSourceIdentityRegistry } from "../src/identity/MordantSourceIdentityRegistry.sol";
+import { MordantTermsRegistry } from "../src/identity/MordantTermsRegistry.sol";
+import { MordantMatchResult as Match } from "../src/identity/MordantMatchResult.sol";
+import {
+    MordantSessionPrecommitRegistry
+} from "../src/identity/MordantSessionPrecommitRegistry.sol";
+import { MockCvaAdapter } from "../src/mocks/MockCvaAdapter.sol";
+import { MockERC20 } from "../src/mocks/MockERC20.sol";
+import { MockEligibility } from "../src/mocks/MockEligibility.sol";
 
 /// @dev External boundary so `expectRevert` can observe library reverts.
 contract IdentityHarness {
@@ -77,8 +79,13 @@ contract IdentityHarness {
         bytes32 aliasCommitment
     ) external pure returns (bytes32) {
         return Id.boundCandidateAliasCommitment(
-            issuerKeyId, candidateProfile, sourceRecordDigest, sessionId,
-            scopeCommitment, enrollmentDigest, aliasCommitment
+            issuerKeyId,
+            candidateProfile,
+            sourceRecordDigest,
+            sessionId,
+            scopeCommitment,
+            enrollmentDigest,
+            aliasCommitment
         );
     }
 }
@@ -271,7 +278,9 @@ contract MordantIdentityV2Test is Test {
         // Novation changes a party, so the stable identity necessarily differs.
         Id.StableAssetIdentity memory novated = _identity("INV-2026-0042", 20_500);
         novated.debtorId = N.normalize(N.PROFILE_ALNUM_UPPER_FIXED, "353800A3D5UNTV6H2Y19", 20);
-        assertTrue(Id.strictStableAssetId(novated) != stableId, "a party change is a different asset");
+        assertTrue(
+            Id.strictStableAssetId(novated) != stableId, "a party change is a different asset"
+        );
     }
 
     function testRelationRulesFailClosed() public {
@@ -387,7 +396,11 @@ contract MordantIdentityV2Test is Test {
 
     /* --------------------------------------------------------- admission */
 
-    function _config(bytes32 invoiceRoot) private view returns (MordantFactoryV2.InvoiceConfig memory) {
+    function _config(bytes32 invoiceRoot)
+        private
+        view
+        returns (MordantFactoryV2.InvoiceConfig memory)
+    {
         return MordantFactoryV2.InvoiceConfig({
             cvaAdapter: address(adapter),
             settlementToken: address(settlement),
@@ -408,7 +421,10 @@ contract MordantIdentityV2Test is Test {
 
     function _commitmentFor(uint256 anchorNonce) private view returns (bytes32) {
         return Id.assetCommitment(
-            stableId, 3, EPOCH, Id.deriveSalt(keccak256("issuer-master"), stableId, EPOCH, anchorNonce)
+            stableId,
+            3,
+            EPOCH,
+            Id.deriveSalt(keccak256("issuer-master"), stableId, EPOCH, anchorNonce)
         );
     }
 
@@ -440,8 +456,9 @@ contract MordantIdentityV2Test is Test {
         uint256 key,
         address verifyingContract
     ) private view returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(key, MordantSourceAttestation.digest(attestation, verifyingContract));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            key, MordantSourceAttestation.digest(attestation, verifyingContract)
+        );
         return abi.encodePacked(r, s, v);
     }
 
@@ -462,7 +479,9 @@ contract MordantIdentityV2Test is Test {
     function testAnchorCarriesSeparateIdentityAndTermsCommitments() public {
         (MordantInvoiceVaultV2 vault, bytes32 commitment) = _create(keccak256("root-1"), 1);
         assertEq(vault.assetCommitment(), commitment);
-        assertEq(vault.initialTermsCommitment(), Id.termsCommitment(stableId, 1, _original(FACE, 20_590)));
+        assertEq(
+            vault.initialTermsCommitment(), Id.termsCommitment(stableId, 1, _original(FACE, 20_590))
+        );
         assertEq(vault.identitySchemeVersion(), 3);
         assertEq(vault.termsSchemeVersion(), 1);
         // Identity and terms are different objects on the anchor.
@@ -472,11 +491,13 @@ contract MordantIdentityV2Test is Test {
 
     /* ----------------------------------------------------- terms registry */
 
-    function _amendment(bytes32 anchorId, bytes32 assetCommitment, bytes32 supersedes, uint32 version, uint256 nonce)
-        private
-        view
-        returns (MordantTermsRegistry.TermsAmendment memory)
-    {
+    function _amendment(
+        bytes32 anchorId,
+        bytes32 assetCommitment,
+        bytes32 supersedes,
+        uint32 version,
+        uint256 nonce
+    ) private view returns (MordantTermsRegistry.TermsAmendment memory) {
         Id.AssetTermsVersion memory amended = _original(FACE + 10 * ONE, 20_620);
         amended.termsVersion = version;
         amended.relation = Id.Relation.Amendment;
@@ -506,7 +527,10 @@ contract MordantIdentityV2Test is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function _initialisedAnchor() private returns (bytes32 anchorId, bytes32 commitment, bytes32 initialTerms) {
+    function _initialisedAnchor()
+        private
+        returns (bytes32 anchorId, bytes32 commitment, bytes32 initialTerms)
+    {
         MordantInvoiceVaultV2 vault;
         (vault, commitment) = _create(keccak256("root-terms"), 40);
         anchorId = bytes32(uint256(uint160(address(vault))));
@@ -524,7 +548,7 @@ contract MordantIdentityV2Test is Test {
         assertEq(current, amendment.termsCommitment);
         assertEq(version, 2);
         // The anchor's own immutable values are untouched.
-        (bytes32 storedAsset,,, ,) = termsRegistry.anchorTerms(anchorId);
+        (bytes32 storedAsset,,,,) = termsRegistry.anchorTerms(anchorId);
         assertEq(storedAsset, commitment);
     }
 
@@ -630,7 +654,9 @@ contract MordantIdentityV2Test is Test {
         vm.expectRevert(
             abi.encodeWithSelector(MordantFactoryV2.SchemeMismatch.selector, uint16(1), uint16(3))
         );
-        factory.createIdentityAnchoredVault(config, attestation, _sign(attestation, ISSUER_KEY, address(factory)));
+        factory.createIdentityAnchoredVault(
+            config, attestation, _sign(attestation, ISSUER_KEY, address(factory))
+        );
         vm.stopPrank();
     }
 
@@ -642,7 +668,9 @@ contract MordantIdentityV2Test is Test {
         attestation.initialTermsCommitment = shared;
         vm.startPrank(buyer);
         vm.expectRevert(MordantSourceAttestation.InvalidAttestation.selector);
-        factory.createIdentityAnchoredVault(config, attestation, _sign(attestation, ISSUER_KEY, address(factory)));
+        factory.createIdentityAnchoredVault(
+            config, attestation, _sign(attestation, ISSUER_KEY, address(factory))
+        );
         vm.stopPrank();
     }
 
@@ -657,7 +685,9 @@ contract MordantIdentityV2Test is Test {
                 MordantIssuerRegistry.IssuerRevoked.selector, registry.issuerKeyIdFor(issuer)
             )
         );
-        factory.createIdentityAnchoredVault(config, attestation, _sign(attestation, ISSUER_KEY, address(factory)));
+        factory.createIdentityAnchoredVault(
+            config, attestation, _sign(attestation, ISSUER_KEY, address(factory))
+        );
         vm.stopPrank();
     }
 
@@ -669,10 +699,14 @@ contract MordantIdentityV2Test is Test {
         vm.startPrank(buyer);
         vm.expectRevert(
             abi.encodeWithSelector(
-                MordantFactoryV2.AttestationReplayed.selector, registry.issuerKeyIdFor(issuer), uint256(9)
+                MordantFactoryV2.AttestationReplayed.selector,
+                registry.issuerKeyIdFor(issuer),
+                uint256(9)
             )
         );
-        factory.createIdentityAnchoredVault(config, attestation, _sign(attestation, ISSUER_KEY, address(factory)));
+        factory.createIdentityAnchoredVault(
+            config, attestation, _sign(attestation, ISSUER_KEY, address(factory))
+        );
         vm.stopPrank();
     }
 
@@ -690,13 +724,13 @@ contract MordantIdentityV2Test is Test {
 
     function testNoPostDeploymentRemappingPathExists() public {
         (MordantInvoiceVaultV2 vault, bytes32 commitment) = _create(keccak256("root-immutable"), 14);
-        (bool ok,) = address(vault).call(
-            abi.encodeWithSignature("setAssetCommitment(bytes32)", bytes32(uint256(1)))
-        );
+        (bool ok,) = address(vault)
+            .call(abi.encodeWithSignature("setAssetCommitment(bytes32)", bytes32(uint256(1))));
         assertFalse(ok, "vault must expose no identity setter");
-        (ok,) = address(vault).call(
-            abi.encodeWithSignature("setInitialTermsCommitment(bytes32)", bytes32(uint256(1)))
-        );
+        (ok,) = address(vault)
+            .call(
+                abi.encodeWithSignature("setInitialTermsCommitment(bytes32)", bytes32(uint256(1)))
+            );
         assertFalse(ok, "vault must expose no terms setter");
         assertEq(vault.assetCommitment(), commitment);
     }
@@ -705,22 +739,22 @@ contract MordantIdentityV2Test is Test {
 
     function testNonVaultSourceUsesTheSameIdentityAndTermsSpec() public {
         bytes32 salt = Id.deriveSalt(keccak256("factor-master"), stableId, EPOCH, 100);
-        MordantSourceAttestation.SourceAssetAttestation memory attestation = MordantSourceAttestation
-            .SourceAssetAttestation({
-            chainId: block.chainid,
-            factory: address(sources),
-            creationDigest: keccak256("off-chain-facility-record-1"),
-            assetCommitment: Id.assetCommitment(stableId, 3, EPOCH, salt),
-            initialTermsCommitment: Id.termsCommitment(stableId, 1, _original(FACE, 20_590)),
-            identitySchemeVersion: 3,
-            termsSchemeVersion: 1,
-            identityEpoch: EPOCH,
-            issuerKeyId: registry.issuerKeyIdFor(otherIssuer),
-            invoiceRoot: keccak256("factor-internal-reference"),
-            controller: originator,
-            validUntil: uint64(block.timestamp + 1 days),
-            nonce: 100
-        });
+        MordantSourceAttestation.SourceAssetAttestation memory attestation =
+            MordantSourceAttestation.SourceAssetAttestation({
+                chainId: block.chainid,
+                factory: address(sources),
+                creationDigest: keccak256("off-chain-facility-record-1"),
+                assetCommitment: Id.assetCommitment(stableId, 3, EPOCH, salt),
+                initialTermsCommitment: Id.termsCommitment(stableId, 1, _original(FACE, 20_590)),
+                identitySchemeVersion: 3,
+                termsSchemeVersion: 1,
+                identityEpoch: EPOCH,
+                issuerKeyId: registry.issuerKeyIdFor(otherIssuer),
+                invoiceRoot: keccak256("factor-internal-reference"),
+                controller: originator,
+                validUntil: uint64(block.timestamp + 1 days),
+                nonce: 100
+            });
         bytes32 anchorId =
             sources.register(attestation, _sign(attestation, OTHER_ISSUER_KEY, address(sources)));
         // The same stable asset, anchored by a non-vault source, under its own
@@ -761,7 +795,9 @@ contract MordantIdentityV2Test is Test {
         assertTrue(Match.opensReconciliation(candidate));
         assertFalse(Match.isPubliclySubmittable(candidate));
         vm.expectRevert(
-            abi.encodeWithSelector(Match.CandidateSessionCannotBind.selector, keccak256("session-1"))
+            abi.encodeWithSelector(
+                Match.CandidateSessionCannotBind.selector, keccak256("session-1")
+            )
         );
         harness.bindable(candidate, true);
     }
@@ -827,7 +863,11 @@ contract MordantIdentityV2Test is Test {
         });
     }
 
-    function _candidateResult() private pure returns (Match.ConfidentialMatchResultV4 memory result) {
+    function _candidateResult()
+        private
+        pure
+        returns (Match.ConfidentialMatchResultV4 memory result)
+    {
         result = _exactResult();
         result.outcome = Match.Outcome.ReconciliationRequired;
         result.exactMatchConfirmed = false;

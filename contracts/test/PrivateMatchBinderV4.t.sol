@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test, Vm} from "forge-std/Test.sol";
+import { Test, Vm } from "forge-std/Test.sol";
 
-import {MordantFactoryV2} from "../src/MordantFactoryV2.sol";
-import {MordantInvoiceVault} from "../src/MordantInvoiceVault.sol";
-import {MordantInvoiceVaultV2} from "../src/MordantInvoiceVaultV2.sol";
-import {MockCvaAdapter} from "../src/mocks/MockCvaAdapter.sol";
-import {MockEligibility} from "../src/mocks/MockEligibility.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
-import {MordantAssetIdentity as Id} from "../src/identity/MordantAssetIdentity.sol";
-import {MordantIssuerRegistry} from "../src/identity/MordantIssuerRegistry.sol";
-import {MordantMatchResult as Match} from "../src/identity/MordantMatchResult.sol";
-import {MordantNormalization as N} from "../src/identity/MordantNormalization.sol";
-import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation.sol";
-import {MordantSourceIdentityRegistry} from "../src/identity/MordantSourceIdentityRegistry.sol";
-import {ECDSAQuorumMatchVerifierV4} from "../src/v4/ECDSAQuorumMatchVerifierV4.sol";
-import {IAnchoredReceivable} from "../src/v4/IAnchoredReceivable.sol";
-import {MordantScopeGovernanceRegistry as Governance} from
-    "../src/v4/MordantScopeGovernanceRegistry.sol";
-import {PrivateMatchBinder} from "../src/v4/PrivateMatchBinder.sol";
+import { MordantFactoryV2 } from "../src/MordantFactoryV2.sol";
+import { MordantInvoiceVault } from "../src/MordantInvoiceVault.sol";
+import { MordantInvoiceVaultV2 } from "../src/MordantInvoiceVaultV2.sol";
+import { MockCvaAdapter } from "../src/mocks/MockCvaAdapter.sol";
+import { MockEligibility } from "../src/mocks/MockEligibility.sol";
+import { MockERC20 } from "../src/mocks/MockERC20.sol";
+import { MordantAssetIdentity as Id } from "../src/identity/MordantAssetIdentity.sol";
+import { MordantIssuerRegistry } from "../src/identity/MordantIssuerRegistry.sol";
+import { MordantMatchResult as Match } from "../src/identity/MordantMatchResult.sol";
+import { MordantNormalization as N } from "../src/identity/MordantNormalization.sol";
+import { MordantSourceAttestation } from "../src/identity/MordantSourceAttestation.sol";
+import { MordantSourceIdentityRegistry } from "../src/identity/MordantSourceIdentityRegistry.sol";
+import { ECDSAQuorumMatchVerifierV4 } from "../src/v4/ECDSAQuorumMatchVerifierV4.sol";
+import { IAnchoredReceivable } from "../src/v4/IAnchoredReceivable.sol";
+import {
+    MordantScopeGovernanceRegistry as Governance
+} from "../src/v4/MordantScopeGovernanceRegistry.sol";
+import { PrivateMatchBinder } from "../src/v4/PrivateMatchBinder.sol";
 
 /// @notice Settable identity anchor, for the anchor-state negatives a real vault
 /// can only reach through its own economic lifecycle.
@@ -351,7 +352,7 @@ contract PrivateMatchBinderV4Test is Test {
     function testACommitmentMadeWithoutSignaturesCannotBeOpenedLater() public {
         _prepareIntent(1);
         Governance.InitiationSignatures memory none =
-            Governance.InitiationSignatures({controllerA: "", controllerB: "", issuer: ""});
+            Governance.InitiationSignatures({ controllerA: "", controllerB: "", issuer: "" });
         bytes32 key = _commitWith(none);
         // Collecting the three signatures afterwards does not open it: they are
         // part of the preimage, so a different bundle is a different session.
@@ -402,14 +403,12 @@ contract PrivateMatchBinderV4Test is Test {
         _prepareIntent(2);
         Governance.InitiationSignatures memory committedSwapped = _signatures();
         (committedSwapped.controllerA, committedSwapped.controllerB) =
-            (committedSwapped.controllerB, committedSwapped.controllerA);
+        (committedSwapped.controllerB, committedSwapped.controllerA);
         bytes32 second = _commitWith(committedSwapped);
         _expectRevertWithReveal(
             _exactEnvelope(second, 2),
             _revealWithSignatures(committedSwapped),
-            abi.encodeWithSelector(
-                Governance.IntentNotBilateral.selector, controllerA, controllerB
-            )
+            abi.encodeWithSelector(Governance.IntentNotBilateral.selector, controllerA, controllerB)
         );
     }
 
@@ -737,7 +736,8 @@ contract PrivateMatchBinderV4Test is Test {
         versionA += 1;
         recordA = _authorize(SCOPE_A, newControllerA, KEY_A, ORG_A, versionA, versionA);
         _prepareIntent(2);
-        bytes32 fresh = _commitWith(_signaturesWith(NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY, ISSUER_KEY));
+        bytes32 fresh =
+            _commitWith(_signaturesWith(NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY, ISSUER_KEY));
         ECDSAQuorumMatchVerifierV4.MatchEnvelope memory envelope = _exactEnvelope(fresh, 2);
         _bindWith(envelope, recordA, recordB, NEW_CONTROLLER_A_KEY, CONTROLLER_B_KEY);
         assertTrue(binder.recourseOf(fresh).open);
@@ -822,8 +822,7 @@ contract PrivateMatchBinderV4Test is Test {
     }
 
     function testTwoScopesOfOneOrganizationCannotFormASession() public {
-        bytes32 sibling =
-            _authorize(keccak256("scope-sibling"), controllerB, KEY_A, ORG_A, 1, 1);
+        bytes32 sibling = _authorize(keccak256("scope-sibling"), controllerB, KEY_A, ORG_A, 1, 1);
         _prepareIntent(1);
         intent.governanceRecordB = sibling;
         intent.controllerKeyIdB = KEY_A;
@@ -935,7 +934,8 @@ contract PrivateMatchBinderV4Test is Test {
         envelope.result.inputCommitmentB = envelope.result.inputCommitmentA;
         envelope.resultCommitment = verifier.resultCoreCommitment(envelope);
         _expectRevert(
-            envelope, abi.encodeWithSelector(PrivateMatchBinder.SelfMatch.selector, anchorCommitment)
+            envelope,
+            abi.encodeWithSelector(PrivateMatchBinder.SelfMatch.selector, anchorCommitment)
         );
     }
 
@@ -1049,7 +1049,9 @@ contract PrivateMatchBinderV4Test is Test {
     function testAnAnchorWithNoUnitsBlocksBinding() public {
         MockAnchor mock = _mock();
         mock.setTotalSupply(0);
-        _expectMockRevert(mock, abi.encodeWithSelector(PrivateMatchBinder.AnchorHasNoUnits.selector));
+        _expectMockRevert(
+            mock, abi.encodeWithSelector(PrivateMatchBinder.AnchorHasNoUnits.selector)
+        );
     }
 
     function testAnotherIdentitySchemeBlocksBinding() public {
@@ -1094,7 +1096,9 @@ contract PrivateMatchBinderV4Test is Test {
             IAnchoredReceivable(address(vault)),
             _consent(binder, envelope, address(vault), SCOPE_B, recordB, CONTROLLER_B_KEY),
             _consent(binder, envelope, address(vault), SCOPE_A, recordA, CONTROLLER_A_KEY),
-            abi.encodeWithSelector(PrivateMatchBinder.ConsentScopeMismatch.selector, SCOPE_B, SCOPE_A)
+            abi.encodeWithSelector(
+                PrivateMatchBinder.ConsentScopeMismatch.selector, SCOPE_B, SCOPE_A
+            )
         );
     }
 
@@ -1395,8 +1399,9 @@ contract PrivateMatchBinderV4Test is Test {
         view
         returns (PrivateMatchBinder.SessionReveal memory)
     {
-        return
-            PrivateMatchBinder.SessionReveal({intent: intent, salt: salt, signatures: signatures});
+        return PrivateMatchBinder.SessionReveal({
+            intent: intent, salt: salt, signatures: signatures
+        });
     }
 
     function _revealWith(uint256 keyA, uint256 keyB)
@@ -1410,7 +1415,9 @@ contract PrivateMatchBinderV4Test is Test {
     function _bind(uint256 sessionNonce) private returns (bytes32 key) {
         _prepareIntent(sessionNonce);
         key = _commit();
-        _bindWith(_exactEnvelope(key, sessionNonce), recordA, recordB, CONTROLLER_A_KEY, CONTROLLER_B_KEY);
+        _bindWith(
+            _exactEnvelope(key, sessionNonce), recordA, recordB, CONTROLLER_A_KEY, CONTROLLER_B_KEY
+        );
     }
 
     function _bindWith(
@@ -1689,13 +1696,13 @@ contract PrivateMatchBinderV4Test is Test {
         uint256 nonce
     ) private view returns (PrivateMatchBinder.DisclosureConsent memory consent) {
         consent = PrivateMatchBinder.DisclosureConsent({
-            scopeCommitment: scopeCommitment,
-            governanceRecord: governanceRecord,
-            disclosureVersion: target.DISCLOSURE_VERSION(),
-            validUntil: uint64(block.timestamp + 5 days),
-            nonce: nonce,
-            signature: ""
-        });
+                scopeCommitment: scopeCommitment,
+                governanceRecord: governanceRecord,
+                disclosureVersion: target.DISCLOSURE_VERSION(),
+                validUntil: uint64(block.timestamp + 5 days),
+                nonce: nonce,
+                signature: ""
+            });
         bytes32 digest = target.consentDigest(
             envelope.sessionCommitment,
             envelope.resultCommitment,
@@ -1713,7 +1720,8 @@ contract PrivateMatchBinderV4Test is Test {
 
     function _malleate(bytes memory signature) private pure returns (bytes memory) {
         (bytes32 r, bytes32 s_, uint8 v) = _split(signature);
-        return abi.encodePacked(r, bytes32(SECP256K1_N - uint256(s_)), v == 27 ? uint8(28) : uint8(27));
+        return
+            abi.encodePacked(r, bytes32(SECP256K1_N - uint256(s_)), v == 27 ? uint8(28) : uint8(27));
     }
 
     function _flipV(bytes memory signature) private pure returns (bytes memory) {
@@ -1767,8 +1775,7 @@ contract PrivateMatchBinderV4Test is Test {
         view
         returns (MordantSourceAttestation.SourceAssetAttestation memory)
     {
-        return MordantSourceAttestation
-            .SourceAssetAttestation({
+        return MordantSourceAttestation.SourceAssetAttestation({
             chainId: block.chainid,
             factory: address(sources),
             creationDigest: keccak256(abi.encode("source-creation", nonce)),
@@ -1847,22 +1854,22 @@ contract PrivateMatchBinderV4Test is Test {
         bytes32 commitment = Id.assetCommitment(
             stableId, 3, EPOCH, Id.deriveSalt(keccak256("issuer-master"), stableId, EPOCH, nonce)
         );
-        MordantSourceAttestation.SourceAssetAttestation memory attestation = MordantSourceAttestation
-            .SourceAssetAttestation({
-            chainId: block.chainid,
-            factory: address(factory),
-            creationDigest: factory.creationDigest(config),
-            assetCommitment: commitment,
-            initialTermsCommitment: keccak256(abi.encode("terms", root)),
-            identitySchemeVersion: 3,
-            termsSchemeVersion: 1,
-            identityEpoch: EPOCH,
-            issuerKeyId: registry.issuerKeyIdFor(issuer),
-            invoiceRoot: root,
-            controller: originator,
-            validUntil: uint64(block.timestamp + 1 days),
-            nonce: nonce
-        });
+        MordantSourceAttestation.SourceAssetAttestation memory attestation =
+            MordantSourceAttestation.SourceAssetAttestation({
+                chainId: block.chainid,
+                factory: address(factory),
+                creationDigest: factory.creationDigest(config),
+                assetCommitment: commitment,
+                initialTermsCommitment: keccak256(abi.encode("terms", root)),
+                identitySchemeVersion: 3,
+                termsSchemeVersion: 1,
+                identityEpoch: EPOCH,
+                issuerKeyId: registry.issuerKeyIdFor(issuer),
+                invoiceRoot: root,
+                controller: originator,
+                validUntil: uint64(block.timestamp + 1 days),
+                nonce: nonce
+            });
         bytes memory signature =
             _sign(ISSUER_KEY, MordantSourceAttestation.digest(attestation, address(factory)));
         vm.prank(buyer);

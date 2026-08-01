@@ -1,0 +1,55 @@
+{
+  "schema": "mordant.public-evidence.transactions/1",
+  "network": {
+    "name": "Monad testnet",
+    "chainId": 10143
+  },
+  "sessionCommitment": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+  "commitment": {
+    "transactionHash": "0x0255f6bb265f79a0ba947260300b95f9395b776cdbb09bea0d198ca0495e0c9d",
+    "block": "49833899",
+    "committedAt": 1785550319,
+    "relayer": "0x5b832ED718cAA91d49872e8A367ABa15Ffa433e3",
+    "relayerSignedItsOwnTransaction": true,
+    "relayerNonceBefore": 6,
+    "relayerNonceAfter": 7,
+    "relayerReceivedOnly": [
+      "chainId",
+      "sessionCommitment"
+    ],
+    "runnerHoldsRelayerKey": false
+  },
+  "binding": {
+    "transactionHash": "0xd12c8daecda1963a8fc79b78b8c3012994d26a2eca8ae3f4b2f032e73f0b0007",
+    "block": "49834094",
+    "gasUsed": "1175669",
+    "value": "0",
+    "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+    "to": "0x1D152f44Ab215F8aFafA8CDB6317ce505a748233"
+  },
+  "anchor": {
+    "vault": "0x3046a101CC5cFCc3AEF7537F0E35ee39a33759E6",
+    "createTransaction": "0xdac88eb988d4730a995e8576bd8c4ec88e3d15d50074cce76b9cae512e0a7045",
+    "assetCommitment": "0x1edbbd5b4c51ad21d90ecbd2ad322f104b1859561424a5c0fc1a34d5c498c630",
+    "sourceAttestationDigest": "0x9bdd9accc4a7af411c0a468098709df998f4f54d61f307f4895ac4637086920c"
+  },
+  "nonVaultSource": {
+    "anchorId": "0x0dae9c8b5d1bb433cd2bfa2a3e55576d493dfc9780265b206075bfb12b478c7a",
+    "transaction": "0x2881193b1db536a4d1849a9631ff5442a4e3ccd2f1c0aead356c5f586562ef2c",
+    "assetCommitment": "0x88c559a5f833e98e42e7efc804bf88da6ca122ea9038bedc9300571d80d6a6f4",
+    "registeredAt": 1785550317,
+    "publishesEconomics": false
+  },
+  "deployments": {
+    "eligibility": "0xBe3B15de061BE593086c48268f662Cc4c7001E07",
+    "settlement": "0x1abDd9C750fE466875Fc0F15D74e5A6d5ca6fB79",
+    "issuerRegistry": "0x184B3797bee9d83D8911cE121eA894232050bEcB",
+    "factory": "0x7eCA98adb3EE5Bd11e09Cf4cb04d9ceF4914c7b0",
+    "sources": "0xF62E401bE84e099CE3F00e3F193960Eb295259D8",
+    "governance": "0x3d550619c4c20Bd70D53B7c93fbAa46c0dCE1512",
+    "verifier": "0x02D71361A2A27aa4067cc40A778Bf2ABd626C775",
+    "binder": "0x1D152f44Ab215F8aFafA8CDB6317ce505a748233",
+    "cvaToken": "0xe1A2b8561C3Aab4784e264B37b04680d719c7068",
+    "adapter": "0x224dA629b854bC5eC516aAD89617141346C2B4E4"
+  }
+}

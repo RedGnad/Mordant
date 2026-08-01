@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import {MordantIssuerRegistry} from "./MordantIssuerRegistry.sol";
+import { MordantIssuerRegistry } from "./MordantIssuerRegistry.sol";
 
 /// @notice Append-only history of terms versions for an anchor.
 /// @dev Terms change; identity does not. Amendments are appended here and never

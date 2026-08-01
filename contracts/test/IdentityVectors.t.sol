@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
-import {MordantAssetIdentity as Id} from "../src/identity/MordantAssetIdentity.sol";
-import {MordantNormalization as N} from "../src/identity/MordantNormalization.sol";
+import { Test, console } from "forge-std/Test.sol";
+import { MordantAssetIdentity as Id } from "../src/identity/MordantAssetIdentity.sol";
+import { MordantNormalization as N } from "../src/identity/MordantNormalization.sol";
 
 /// @notice Normative cross-language vectors for scheme 3.
 /// @dev Two properties are pinned here and replayed by the JavaScript reference:
@@ -128,8 +128,9 @@ contract IdentityVectorsTest is Test {
         bytes32 master = keccak256("mordant.test.issuer-master-secret");
         bytes32 salt = Id.deriveSalt(master, stableId, 1, 1);
         bytes32 commitment = Id.assetCommitment(stableId, 3, 1, salt);
-        bytes32 aliasCommitment =
-            Id.candidateAliasCommitment(Id.candidateAliasId(_candidate("INV-2026-0042", 20_500)), 1, salt);
+        bytes32 aliasCommitment = Id.candidateAliasCommitment(
+            Id.candidateAliasId(_candidate("INV-2026-0042", 20_500)), 1, salt
+        );
         console.log("salt");
         console.logBytes32(salt);
         console.log("assetCommitment");

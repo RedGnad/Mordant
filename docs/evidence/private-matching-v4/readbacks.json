@@ -1,0 +1,138 @@
+{
+  "schema": "mordant.public-evidence.readbacks/1",
+  "recourseRecord": {
+    "sessionCommitment": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+    "resultCommitment": "0x0b910869238ffe2f693d44fe6ddd3a0bda2f33b48801459e42b3f08ad232d898",
+    "matchCommitment": "0x6e544dc54e5d7c76bc848733cb13ddda5249e9d09bead657f4b92e6717d21671",
+    "anchorCommitment": "0x1edbbd5b4c51ad21d90ecbd2ad322f104b1859561424a5c0fc1a34d5c498c630",
+    "counterpartyCommitment": "0x88c559a5f833e98e42e7efc804bf88da6ca122ea9038bedc9300571d80d6a6f4",
+    "providerProofCommitment": "0xef800bced451b72fbb43ad5a396cde3de0ce8436b4598aba105de579a11ff3ae",
+    "anchor": "0x3046a101CC5cFCc3AEF7537F0E35ee39a33759E6",
+    "policyId": "0x2da948bf27690742012032619dae6a88e018311885642bc1d100f16b08f5d5c6",
+    "policyVersion": 1,
+    "conflictConfirmed": true,
+    "boundAt": 1785550377,
+    "cureDeadline": 1785553977,
+    "open": true
+  },
+  "responsibleRole": "0xe4e507c0331021261ae219c736aa71977a41f814117a0ea4f6bd31faf50d2674",
+  "consequenceId": "0xc582d47afe4f7290221fce1fee617e6a2b07a1d0c536bce3ba428d144b41328a",
+  "anchorLive": true,
+  "anchorState": {
+    "receivableState": 1,
+    "protectionState": 1,
+    "assetCommitment": "0x1edbbd5b4c51ad21d90ecbd2ad322f104b1859561424a5c0fc1a34d5c498c630",
+    "initialTermsCommitment": "0x3b8951227df39444e49d186d85d751fec82bc553f1858fd0f47bdc2a619759da",
+    "identitySchemeVersion": 3,
+    "sourceAttestationDigest": "0x9bdd9accc4a7af411c0a468098709df998f4f54d61f307f4895ac4637086920c"
+  },
+  "sourceRegisteredAt": 1785550317,
+  "consumedIdentities": {
+    "replayKey": true,
+    "decisionKey": true,
+    "matchCommitment": true,
+    "providerProof": true,
+    "sessionCommitment": true,
+    "consentNonceA": true,
+    "consentNonceB": true
+  },
+  "assetMovement": {
+    "before": {
+      "settlementInVault": "10000000",
+      "settlementInBinder": "0",
+      "unitsInBinder": "0",
+      "vaultTotalSupply": "100000000",
+      "nativeInBinder": "0",
+      "nativeInRelayer": "1917140912000000000"
+    },
+    "after": {
+      "settlementInVault": "10000000",
+      "settlementInBinder": "0",
+      "unitsInBinder": "0",
+      "vaultTotalSupply": "100000000",
+      "nativeInBinder": "0",
+      "nativeInRelayer": "1917140912000000000"
+    },
+    "moved": false
+  },
+  "replays": [
+    {
+      "name": "exact calldata replay",
+      "rejected": true,
+      "expected": "SessionAlreadyBound",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "reversed input pair",
+      "rejected": true,
+      "expected": "SessionAlreadyBound / DecisionAlreadyConsumed",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "wrong anchor",
+      "rejected": true,
+      "expected": "AnchorNotDeployed / AnchorSchemeMismatch",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "wrong binder",
+      "rejected": true,
+      "expected": "EnvelopeNotForThisBinder",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "wrong session commitment",
+      "rejected": true,
+      "expected": "UnknownCommitment / RevealNotForEnvelope",
+      "error": "The contract function \"bindRecourse\" reverted with the following signature:"
+    },
+    {
+      "name": "one-sided consent",
+      "rejected": true,
+      "expected": "ConsentScopeMismatch",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "reused consent nonce",
+      "rejected": true,
+      "expected": "SessionAlreadyBound / ConsentNonceConsumed",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "candidate result submitted as bindable",
+      "rejected": true,
+      "expected": "CandidateSessionCannotBind",
+      "error": "The contract function \"bindRecourse\" reverted."
+    },
+    {
+      "name": "reused match commitment",
+      "rejected": true,
+      "expected": "already consumed",
+      "error": null
+    },
+    {
+      "name": "reused provider-proof commitment",
+      "rejected": true,
+      "expected": "already consumed",
+      "error": null
+    },
+    {
+      "name": "controller refuses to consent to a candidate result",
+      "rejected": true,
+      "expected": "403",
+      "error": "refusing to consent to a non exact-match result"
+    }
+  ],
+  "publicMetadataAudit": {
+    "scannedWords": 7,
+    "forbiddenChecked": 18,
+    "disclosed": [],
+    "publicMetadata": {
+      "sessionCommitment": "0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161",
+      "blockNumber": "49833899",
+      "transactionHash": "0x0255f6bb265f79a0ba947260300b95f9395b776cdbb09bea0d198ca0495e0c9d",
+      "relayer": "0x5b832ED718cAA91d49872e8A367ABa15Ffa433e3",
+      "logCount": 1
+    }
+  }
+}
