@@ -712,8 +712,7 @@ contract V5VerifierBinderTest is Test {
         key = sources.sourceCommitmentOf(attestation, signature, salt);
         vm.prank(submitter);
         sources.commitSource(key);
-        reveal =
-            Binder.SourceReveal({
+        reveal = Binder.SourceReveal({
             attestation: attestation, issuerSignature: signature, salt: salt
         });
     }

@@ -206,6 +206,18 @@ contract MordantMatchVerifierV5 {
         );
     }
 
+    /// @notice The canonical result commitment for a core.
+    /// @dev Exposed so an off-chain producer never has to re-derive the
+    /// encoding and risk diverging from the verifier that will check it.
+    function resultCommitmentOf(Core.ResultCore calldata core) external pure returns (bytes32) {
+        return Core.commitmentOf(core);
+    }
+
+    /// @notice The EIP-712 struct hash for a core, for the same reason.
+    function resultStructHash(Core.ResultCore calldata core) external pure returns (bytes32) {
+        return Core.structHash(core);
+    }
+
     function replayKey(Core.ResultCore memory core) public pure returns (bytes32) {
         return keccak256(
             abi.encode(
