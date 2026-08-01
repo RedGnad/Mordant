@@ -126,7 +126,13 @@ test("no V5 runner source broadcasts outside the guard", async () => {
   const files = (await readdir(HERE))
     .filter((name) => name.startsWith("v5-") && name.endsWith(".mjs"))
     .filter((name) => !name.endsWith(".test.mjs"))
-    .filter((name) => name !== "v5-live-guard.mjs");
+    .filter((name) => name !== "v5-live-guard.mjs")
+    // The local rehearsal harness is exempt by construction, and the exemption
+    // is bounded by the test below: it can only ever reach 127.0.0.1, its
+    // broadcast target is always LOCAL, and LOCAL is ungated on purpose because
+    // an ephemeral chain carries no value. Exempting it is safer than routing
+    // the rehearsal through a production gate nobody should have to set.
+    .filter((name) => name !== "v5-local-chain.mjs");
 
   assert.ok(files.length > 0, "expected V5 runner sources to scan");
 
@@ -149,6 +155,24 @@ test("no V5 runner source broadcasts outside the guard", async () => {
     offenders, [],
     "every broadcast must go through guardedBroadcast in v5-live-guard.mjs",
   );
+});
+
+// The exemption above is only defensible if the harness genuinely cannot reach
+// a real network. It builds its RPC URL from a locally bound ephemeral port and
+// hard-codes the loopback host, so there is no path from it to Monad.
+test("the local rehearsal harness can only reach loopback", async () => {
+  const source = await readFile(resolve(HERE, "v5-local-chain.mjs"), "utf8");
+  const urls = source.match(/https?:\/\/[^`"'\s]+/g) ?? [];
+  for (const url of urls) {
+    assert.match(url, /^http:\/\/127\.0\.0\.1/, `harness references a non-loopback URL: ${url}`);
+  }
+  assert.ok(urls.length > 0, "expected the harness to build a loopback RPC URL");
+  // It must not read the Monad RPC or any deployer key from the environment.
+  assert.doesNotMatch(source, /FHE_MONAD_RPC_URL/);
+  assert.doesNotMatch(source, /FHE_MONAD_DEPLOYER_PRIVATE_KEY/);
+  // Its chain id is the local one; a handler cannot be tricked into thinking
+  // the rehearsal was Monad.
+  assert.match(source, /LOCAL_CHAIN_ID = 31_337/);
 });
 
 // The runner must never read a private key belonging to a signer it does not
