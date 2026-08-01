@@ -1,0 +1,22 @@
+# Frozen V4 contract source manifest
+#
+# Every path below must be byte-identical to its blob in af5baad.
+# Generated from af5baad; verified in CI by scripts/verify-frozen-sources.mjs.
+#
+# <git-blob-sha1>  <path>
+e224b0d17cd0397e284b37d8716363eda089bffb  contracts/src/identity/MordantNormalization.sol
+3c9dcda8cf80eba6c41d11f8711c3043e8a043a4  contracts/src/identity/MordantAssetIdentity.sol
+bdb11e86ada7d67187bf6c71502ec970d13143e2  contracts/src/identity/MordantMatchResult.sol
+91c3fff1f0eb1591d2b45c94e3a0152ef277fedf  contracts/src/identity/MordantIssuerRegistry.sol
+085b0ceacea37e90431156cf9265f7d51c3b90af  contracts/src/identity/MordantSourceAttestation.sol
+dff600a71c4fff704b20e2a9051c59d4de9157d1  contracts/src/identity/MordantSourceIdentityRegistry.sol
+a64388007ca0d343332e2dd617baa4805b4e5740  contracts/src/identity/IIdentityAnchor.sol
+cfc1f619a6257666cd8c796051a540fe8921e900  contracts/src/MordantInvoiceVault.sol
+9523dc215ecceafaa5a532aafcf876c46bb053d5  contracts/src/MordantFactory.sol
+4eab090727d9dff97b93396eacb94df3d1a831f2  contracts/src/MordantInvoiceVaultV2.sol
+2eea903cf4f9746e5b0aad7ea3528d2b9180767f  contracts/src/MordantFactoryV2.sol
+d76999d9631a9632858e02305202a521387aee1c  contracts/src/v4/MordantScopeGovernanceRegistry.sol
+385ad4679b90fbcb8d0bc9a13837d8bc3d58f6a0  contracts/src/v4/ECDSAQuorumMatchVerifierV4.sol
+b6b68a2996c5a3319f9eff7399390f81071aaab7  contracts/src/v4/PrivateMatchBinder.sol
+49e88ba465c54d8e3802636217f70dbe787902ff  contracts/src/v4/IAnchoredReceivable.sol
+3f9832f804f1b1792eb26524c232704f3add7bfb  contracts/foundry.toml
