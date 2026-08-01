@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "mordant.lattigo-benchmark-summary/1",
+  "provider": "github.com/tuneinsight/lattigo/v6@v6.2.0",
+  "license": "Apache-2.0",
+  "scheme": "scale-invariant BGV/BFV exact integer",
+  "environment": {
+    "goVersion": "go1.24.0",
+    "os": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1",
+    "logicalCpu": 8,
+    "ramBytes": 8589934592,
+    "gpuPath": "not-used",
+    "clientBoundary": "co-located-authenticated-gateway-simulation"
+  },
+  "sourceBaseCommit": "9423937",
+  "method": {
+    "warmupRunsPerMode": 1,
+    "measuredRunsPerMode": 5,
+    "p95": "nearest-rank; maximum at n=5",
+    "plaintextOrCiphertextMaterialIncluded": false
+  },
+  "setup": {
+    "thresholdSetupMilliseconds": 63.932,
+    "collectivePublicKeyMilliseconds": 41.439,
+    "relinearizationKeyMilliseconds": 294.18,
+    "galoisKeysMilliseconds": 1403.82,
+    "totalMilliseconds": 2064.711,
+    "publicKeyBytes": 7864600,
+    "evaluationKeyBytes": 314584702,
+    "thresholdShareBytesPerParty": 3932296,
+    "thresholdShareBytesAllParties": 11796888,
+    "fullFheIdentityKeyDeltaBytes": 0,
+    "publicKeyMarshalMilliseconds": 1.931,
+    "evaluationKeyMarshalMilliseconds": 167.696
+  },
+  "modes": [
+    {
+      "identityMode": "public_salted_commitment",
+      "allDecisionsConfirmed": true,
+      "sizesBytes": {
+        "pledgeA": 25168031,
+        "pledgeB": 25168031,
+        "identityCiphertext": 0,
+        "decisionCiphertext": 6291950,
+        "fheEnvelopes": 56628012
+      },
+      "latencyMilliseconds": {
+        "encryptPledgeAEndToEnd": { "median": 325.47, "p95": 352.114 },
+        "encryptPledgeBEndToEnd": { "median": 336.304, "p95": 406.976 },
+        "serializePledgeA": { "median": 16.771, "p95": 20.168 },
+        "deserializePledgeA": { "median": 12.313, "p95": 28.181 },
+        "canonicalInputCommitmentPair": { "median": 145.329, "p95": 157.482 },
+        "strictUint64ComparisonsBatchOfTwo": { "median": 2678.595, "p95": 3198.226 },
+        "strictUint64ComparisonAmortized": { "median": 1339.297, "p95": 1599.113 },
+        "currencyBytes32Equality": { "median": 1689.695, "p95": 1866.933 },
+        "receivableEquality": { "method": "public commitment equality", "separatelyTimed": false },
+        "conditions": { "median": 399.622, "p95": 415.218 },
+        "finalAnd": { "median": 287.689, "p95": 313.229 },
+        "evaluationEndToEnd": { "median": 5277.18, "p95": 6013.85 },
+        "thresholdKeySwitch": { "median": 9.425, "p95": 12.619 },
+        "receiverDecrypt": { "median": 8.078, "p95": 8.872 },
+        "thresholdDecryptEndToEnd": { "median": 39.028, "p95": 48.717 }
+      },
+      "goHeapBytes": {
+        "before": 384806200,
+        "after": 674664056,
+        "peak": 1031276760,
+        "totalAllocationDelta": 7987533424,
+        "systemAfter": 1399405904
+      }
+    },
+    {
+      "identityMode": "full_fhe_256",
+      "allDecisionsConfirmed": true,
+      "sizesBytes": {
+        "pledgeA": 31459985,
+        "pledgeB": 31459985,
+        "identityCiphertext": 6291950,
+        "decisionCiphertext": 6291950,
+        "fheEnvelopes": 69211920
+      },
+      "latencyMilliseconds": {
+        "encryptPledgeAEndToEnd": { "median": 473.705, "p95": 537.358 },
+        "encryptPledgeBEndToEnd": { "median": 380.565, "p95": 420.856 },
+        "serializePledgeA": { "median": 26.403, "p95": 54.759 },
+        "deserializePledgeA": { "median": 16.514, "p95": 52.558 },
+        "canonicalInputCommitmentPair": { "median": 189.243, "p95": 214.127 },
+        "strictUint64ComparisonsBatchOfTwo": { "median": 2843.559, "p95": 3265.566 },
+        "strictUint64ComparisonAmortized": { "median": 1421.779, "p95": 1632.783 },
+        "currencyBytes32Equality": { "median": 1809.912, "p95": 2135.125 },
+        "receivableBytes32Equality": { "median": 1753.625, "p95": 1787.354 },
+        "conditions": { "median": 429.828, "p95": 743.037 },
+        "finalAnd": { "median": 440.704, "p95": 463.043 },
+        "evaluationEndToEnd": { "median": 7665.188, "p95": 8681.644 },
+        "thresholdKeySwitch": { "median": 9.1, "p95": 22.778 },
+        "receiverDecrypt": { "median": 9.989, "p95": 15.243 },
+        "thresholdDecryptEndToEnd": { "median": 40.465, "p95": 57.749 }
+      },
+      "goHeapBytes": {
+        "before": 450399528,
+        "after": 794788824,
+        "peak": 1121442536,
+        "totalAllocationDelta": 12105963328,
+        "systemAfter": 1399471440
+      }
+    }
+  ],
+  "adapterIntegration": {
+    "environment": "controlled-local-anvil",
+    "resultToAcceptedTransactionMilliseconds": 158.5,
+    "calldataBytes": 868,
+    "acceptanceGasUsed": "105552",
+    "secondAcceptanceRejected": true,
+    "validationRerun": {
+      "completeCliToAdapterWallClockSeconds": 13.93,
+      "resultToAcceptedTransactionMilliseconds": 63.846
+    }
+  },
+  "bandwidthCaveat": "fheEnvelopes includes two encrypted pledge envelopes and the encrypted decision only; threshold transport is co-located and quorum attestation plus adapter calldata are separate",
+  "memoryCaveat": "peak is Go HeapAlloc sampling, not process peak RSS"
+}

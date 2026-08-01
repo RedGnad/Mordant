@@ -23,3 +23,8 @@ contracts/broadcast/
 .dealroom/
 docs/design/m17/references/
 .vercel
+
+# Compiled Go binaries. `fhe-lab/lattigo/ceremony-client` was committed by
+# accident on the fhe-lab branch and is deliberately not carried forward.
+fhe-lab/lattigo/ceremony-client
+fhe-lab/lattigo/cmd/**/[a-z-]*.bin

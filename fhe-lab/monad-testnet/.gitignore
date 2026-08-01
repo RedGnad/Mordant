@@ -1,0 +1,15 @@
+/artifacts/*
+
+# Retained V3 privacy-claim evidence. These are public-only artifacts: the
+# runner refuses to write a restricted field name into them and the recursive
+# leak audit sweeps them alongside the six-process capture. Ciphertexts and
+# encryption material are never retained here.
+!/artifacts/privacy-v3-latest.json
+!/artifacts/privacy-v3-journal.json
+!/artifacts/privacy-v3-process-evidence/
+!/artifacts/receivable-anchor.json
+!/artifacts/anchor-journal.json
+!/artifacts/anchored-recourse-latest.json
+!/artifacts/anchored-recourse-journal.json
+!/artifacts/anchored-leak-sweep.json
+!/artifacts/anchored-ceremony-evidence/
