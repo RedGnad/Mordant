@@ -52,6 +52,8 @@ jobs:
         run: node scripts/verify-frozen-sources.mjs
       - name: V5 EIP-712 schema freeze
         run: node scripts/verify-v5-typehashes.mjs
+      - name: Frozen V5 contract sources
+        run: node scripts/verify-frozen-v5-sources.mjs
       - name: ABI and selector drift
         run: pnpm verify:abi
       - name: Repository hygiene

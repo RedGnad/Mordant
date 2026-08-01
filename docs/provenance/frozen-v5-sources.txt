@@ -1,0 +1,24 @@
+# Frozen V5 contract source manifest
+#
+# Every path below must be byte-identical to its blob in c191be13e52f9acc27442152a8a0c74bd225e824.
+# This is the exact source the final V5 deployment is built from, and it
+# includes the producer-side resultCommitmentOf / resultStructHash views.
+#
+# The last five entries are read-only dependencies of the V5 path already
+# frozen under af5baad. They are repeated here so one check covers the
+# complete deployed surface rather than only the new contracts.
+#
+# <git-blob-sha1>  <path>
+#
+46c0f41ae887699164cd133d3c868640d5254d3a  contracts/src/identity/MordantMatchResultV5.sol
+959470c3ef94a9b0191cd25644e660df1bf618a5  contracts/src/v5/MordantResultCoreV5.sol
+3374eae67942d6c4bf6aae068c3120b6d80059ea  contracts/src/v5/MordantSourceCommitmentRegistry.sol
+f2077e64a8b9254c87e5a074bdeb244827b62408  contracts/src/v5/MordantScopeGovernanceRegistryV5.sol
+0dd5e52243ee0c0903f3d8ac749be1697b02cc18  contracts/src/v5/MordantMatchVerifierV5.sol
+c24c9a08f7bdb485b270d66e1eb79a2da4f123d2  contracts/src/v5/PrivateMatchBinderV5.sol
+30da98309a34526a2e88a142c1d2a86e2b6ce878  contracts/src/identity/MordantTermsRegistry.sol
+49e88ba465c54d8e3802636217f70dbe787902ff  contracts/src/v4/IAnchoredReceivable.sol
+085b0ceacea37e90431156cf9265f7d51c3b90af  contracts/src/identity/MordantSourceAttestation.sol
+3c9dcda8cf80eba6c41d11f8711c3043e8a043a4  contracts/src/identity/MordantAssetIdentity.sol
+91c3fff1f0eb1591d2b45c94e3a0152ef277fedf  contracts/src/identity/MordantIssuerRegistry.sol
+2eea903cf4f9746e5b0aad7ea3528d2b9180767f  contracts/src/MordantFactoryV2.sol
