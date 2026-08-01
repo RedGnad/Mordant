@@ -164,7 +164,7 @@ admits only `SameAssetPolicyConflict`.
 **Governing rule.** No load-bearing digest supplied by the coordinator is
 trusted without local recomputation.
 
-`ReleaseOperatorV5.VerifyAndRecompute` runs thirteen named checks, in order, and
+`ReleaseOperatorV5.VerifyAndRecompute` runs fourteen named checks, in order, and
 emits them into the verdict so a reviewer can see which ran rather than trusting
 that they did:
 
@@ -182,9 +182,16 @@ that they did:
 | 10 | `inputs-digest` | the descriptor's inputs digest, recomputed |
 | 11 | `coalition-membership` | the operator's own point |
 | 12 | `operator-one-shot` | the operator's own durable ledger |
-| 13 | `local-recomputation` | **the circuit itself**, compared byte for byte |
+| 13 | `runtime-fingerprint` | the operator's own build identity |
+| 14 | `local-recomputation` | **the circuit itself**, compared byte for byte |
 
-Check 13 is the H-03 correction. The operator releases shares against the
+Check 14 is the H-03 correction, and check 13 is what makes it meaningful:
+comparing bytes across two different builds is not a comparison, so a descriptor
+naming a runtime this operator is not running is refused rather than reconciled.
+The fingerprint covers the Lattigo version, the Go version, GOOS/GOARCH, the FHE
+parameters, the circuit build hash, the serialization version and the
+evaluation-key digest and epoch, and each operator derives it locally from its
+own build. The operator releases shares against the
 ciphertext **it computed**; the coordinator's proposed output is never decrypted,
 only compared. No tolerance is applied.
 
@@ -194,14 +201,15 @@ the check logic and the threshold protocol, not process separation. Genuine
 process separation is carried by Gate 1, whose 30 recomputations each ran in a
 separate OS process. A process-separated V5 run has not yet been performed.
 
-**Evidence.** `TestAnOperatorRunsEveryCheckBeforeReleasing` asserts all thirteen
+**Evidence.** `TestAnOperatorRunsEveryCheckBeforeReleasing` asserts all fourteen
 by name and order. Adversarial cases, each refused:
 `TestAnOperatorRefusesACiphertextItDidNotCompute` (the V4 substitution attack),
 `TestAnOperatorRefusesSubstitutedInputCiphertexts`,
 `TestAnOperatorRefusesADescriptorForAnotherSession`,
 `TestAnOperatorRefusesAnExpiredDescriptor`,
 `TestAnOperatorOutsideTheCoalitionRefuses`,
-`TestAnOperatorRefusesAnUnknownCircuitVersion`.
+`TestAnOperatorRefusesAnUnknownCircuitVersion`,
+`TestAnOperatorRefusesADescriptorForAnotherRuntime`.
 
 ---
 
