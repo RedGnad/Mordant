@@ -180,13 +180,24 @@ func newV5ReleaseHarness(t *testing.T, conflicting bool) *v5ReleaseHarness {
 		if _, err := fixture.runtime.RegisterEnrollmentIssuer(issuerPublic, now.Add(-time.Hour), now.Add(24*time.Hour)); err != nil {
 			t.Fatal(err)
 		}
-		operator, err := NewReleaseOperatorV5(fixture.runtime, threshold, ledger)
+		publicKey, relinKey, galoisKeys, err := fixture.aggregator.CollectiveKeys()
+		if err != nil {
+			t.Fatal(err)
+		}
+		identity, err := LocalRuntimeIdentity(fixture.params, publicKey, relinKey, galoisKeys, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		operator, err := NewReleaseOperatorV5(
+			fixture.runtime, threshold, ledger, identity, identity.Fingerprint(),
+		)
 		if err != nil {
 			t.Fatalf("operator %d: %v", index, err)
 		}
 		operators = append(operators, operator)
 	}
 
+	runtimeFingerprint := operators[0].RuntimeIdentity().Fingerprint()
 	request := OperatorReleaseRequestV5{
 		Descriptor: ReleaseDescriptorV5{
 			SessionCommitment:    sessionCommitment,
@@ -196,6 +207,7 @@ func newV5ReleaseHarness(t *testing.T, conflicting bool) *v5ReleaseHarness {
 			InputsDigest:         inputsDigest,
 			OutputsDigest:        outputsDigest,
 			CircuitVersion:       CircuitV5Version,
+			RuntimeFingerprint:   runtimeFingerprint,
 			KeyID:                fixture.runtime.KeyIDBytes(),
 			ParameterFingerprint: fixture.runtime.ParameterFingerprint(),
 			PolicyID:             label32("v5-policy"),
@@ -230,7 +242,8 @@ func TestAnOperatorRunsEveryCheckBeforeReleasing(t *testing.T) {
 		"descriptor-shape", "circuit-version", "key-epoch", "parameter-fingerprint",
 		"descriptor-freshness", "enrollment-signatures", "bilateral-pairing",
 		"descriptor-session-binding", "input-digests", "inputs-digest",
-		"coalition-membership", "operator-one-shot", "local-recomputation",
+		"coalition-membership", "operator-one-shot", "runtime-fingerprint",
+		"local-recomputation",
 	}
 	if len(verdict.Checks) != len(expected) {
 		t.Fatalf("expected %d checks, got %d", len(expected), len(verdict.Checks))
@@ -303,6 +316,17 @@ func TestAnOperatorOutsideTheCoalitionRefuses(t *testing.T) {
 	harness := newV5ReleaseHarness(t, true)
 	// Operator index 2 is point 3, which is not in coalition {1,2}.
 	if _, err := harness.operators[2].VerifyAndRecompute(harness.request, harness.now); !errors.Is(err, ErrOperatorCheckFailed) {
+		t.Fatalf("expected ErrOperatorCheckFailed, got %v", err)
+	}
+}
+
+// A coordinator claiming a build this operator is not running. Recomputation
+// across builds is not a comparison, so it is refused rather than attempted.
+func TestAnOperatorRefusesADescriptorForAnotherRuntime(t *testing.T) {
+	harness := newV5ReleaseHarness(t, true)
+	request := harness.request
+	request.Descriptor.RuntimeFingerprint = label32("some-other-build")
+	if _, err := harness.operators[0].VerifyAndRecompute(request, harness.now); !errors.Is(err, ErrOperatorCheckFailed) {
 		t.Fatalf("expected ErrOperatorCheckFailed, got %v", err)
 	}
 }

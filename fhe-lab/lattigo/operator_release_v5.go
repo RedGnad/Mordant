@@ -77,11 +77,28 @@ type ReleaseOperatorV5 struct {
 	runtime   *Runtime
 	threshold *ThresholdOperator
 	ledger    *SessionLedger
+	// identity is derived locally from this process's own build and its own
+	// loaded keys. A coordinator may not supply executable code, a circuit
+	// binary, parameters or a claimed fingerprint as an authority, so nothing
+	// on the wire can set it.
+	identity RuntimeIdentity
 }
 
 // NewReleaseOperatorV5 binds a sealed threshold operator to an evaluation
-// runtime that holds no threshold party of its own.
-func NewReleaseOperatorV5(runtime *Runtime, threshold *ThresholdOperator, ledger *SessionLedger) (*ReleaseOperatorV5, error) {
+// runtime that holds no threshold party of its own, and pins the local runtime
+// identity.
+//
+// `approvedRuntime` is the fingerprint the DEPLOYMENT approved, supplied out of
+// band. It is compared against the identity this process derives from its own
+// build; it never replaces it. Pass the zero value only in a controlled lab
+// where no approved runtime has been published yet.
+func NewReleaseOperatorV5(
+	runtime *Runtime,
+	threshold *ThresholdOperator,
+	ledger *SessionLedger,
+	identity RuntimeIdentity,
+	approvedRuntime [32]byte,
+) (*ReleaseOperatorV5, error) {
 	if runtime == nil || threshold == nil || ledger == nil {
 		return nil, ErrInvalidThresholdOperator
 	}
@@ -90,8 +107,21 @@ func NewReleaseOperatorV5(runtime *Runtime, threshold *ThresholdOperator, ledger
 	if runtime.HoldsThresholdParties() {
 		return nil, ErrInvalidThresholdOperator
 	}
-	return &ReleaseOperatorV5{runtime: runtime, threshold: threshold, ledger: ledger}, nil
+	if identity.Fingerprint() == ([32]byte{}) {
+		return nil, fmt.Errorf("%w: runtime identity was never derived", ErrRuntimeUnpinned)
+	}
+	if approvedRuntime != ([32]byte{}) {
+		if err := identity.RequireApproved(approvedRuntime); err != nil {
+			return nil, err
+		}
+	}
+	return &ReleaseOperatorV5{
+		runtime: runtime, threshold: threshold, ledger: ledger, identity: identity,
+	}, nil
 }
+
+// RuntimeIdentity is what this operator will bind into its attestations.
+func (operator *ReleaseOperatorV5) RuntimeIdentity() RuntimeIdentity { return operator.identity }
 
 // VerifyAndRecompute runs every pre-release check locally.
 //
@@ -99,7 +129,7 @@ func NewReleaseOperatorV5(runtime *Runtime, threshold *ThresholdOperator, ledger
 // is trusted without local recomputation. Where a value appears in the
 // descriptor, it is recomputed here and compared; it is never read and used.
 func (operator *ReleaseOperatorV5) VerifyAndRecompute(request OperatorReleaseRequestV5, now time.Time) (OperatorVerdictV5, error) {
-	verdict := OperatorVerdictV5{Checks: make([]OperatorCheckV5, 0, 13)}
+	verdict := OperatorVerdictV5{Checks: make([]OperatorCheckV5, 0, 14)}
 	record := func(name string, passed bool, detail string) bool {
 		verdict.Checks = append(verdict.Checks, OperatorCheckV5{Name: name, Passed: passed, Detail: detail})
 		return passed
@@ -219,7 +249,18 @@ func (operator *ReleaseOperatorV5) VerifyAndRecompute(request OperatorReleaseReq
 	}
 	record("operator-one-shot", true, "")
 
-	// 13. THE check. Recompute the circuit locally and require the coordinator's
+	// 13. The descriptor must describe THIS operator's runtime. A coordinator
+	// claiming a different circuit build, parameter set, key epoch or
+	// serialization is refused rather than reconciled: a byte comparison across
+	// builds is meaningless.
+	if descriptor.RuntimeFingerprint != operator.identity.Fingerprint() {
+		return fail("runtime-fingerprint", fmt.Sprintf(
+			"descriptor runtime %x is not this operator's %x",
+			descriptor.RuntimeFingerprint, operator.identity.Fingerprint()))
+	}
+	record("runtime-fingerprint", true, "")
+
+	// 14. THE check. Recompute the circuit locally and require the coordinator's
 	// proposed output to equal it byte for byte. No tolerance: a tolerant
 	// comparison here would restore exactly the substitution this prevents.
 	started := time.Now()

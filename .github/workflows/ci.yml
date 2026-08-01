@@ -50,6 +50,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Frozen V4 sources match af5baad
         run: node scripts/verify-frozen-sources.mjs
+      - name: V5 EIP-712 schema freeze
+        run: node scripts/verify-v5-typehashes.mjs
       - name: ABI and selector drift
         run: pnpm verify:abi
       - name: Repository hygiene

@@ -300,6 +300,7 @@ func TestReleaseDescriptorBindsBothEnrollmentDigests(t *testing.T) {
 		InputsDigest:         label32("inputs"),
 		OutputsDigest:        label32("outputs"),
 		CircuitVersion:       CircuitV5Version,
+		RuntimeFingerprint:   label32("runtime"),
 		KeyID:                label32("key-id"),
 		ParameterFingerprint: label32("parameters"),
 		PolicyID:             label32("policy"),
@@ -318,6 +319,7 @@ func TestReleaseDescriptorBindsBothEnrollmentDigests(t *testing.T) {
 		"session":       func(d *ReleaseDescriptorV5) { d.SessionCommitment = label32("x") },
 		"key id":        func(d *ReleaseDescriptorV5) { d.KeyID = label32("x") },
 		"expiry":        func(d *ReleaseDescriptorV5) { d.ExpiresAt++ },
+		"runtime":       func(d *ReleaseDescriptorV5) { d.RuntimeFingerprint = label32("x") },
 		"parameter set": func(d *ReleaseDescriptorV5) { d.ParameterFingerprint = label32("x") },
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -359,13 +359,15 @@ func (r *Runtime) VerifyEnrollmentV5(signed *SignedCiphertextEnrollmentV5, now t
 // binds the recomputed output digest, so it cannot be pointed at a ciphertext
 // the operator did not compute itself.
 type ReleaseDescriptorV5 struct {
-	SessionCommitment    [32]byte
-	SessionNullifier     [32]byte
-	EnrollmentDigestA    [32]byte
-	EnrollmentDigestB    [32]byte
-	InputsDigest         [32]byte
-	OutputsDigest        [32]byte
-	CircuitVersion       uint32
+	SessionCommitment [32]byte
+	SessionNullifier  [32]byte
+	EnrollmentDigestA [32]byte
+	EnrollmentDigestB [32]byte
+	InputsDigest      [32]byte
+	OutputsDigest     [32]byte
+	CircuitVersion    uint32
+	/// @dev The complete build identity every operator must match locally.
+	RuntimeFingerprint   [32]byte
 	KeyID                [32]byte
 	ParameterFingerprint [32]byte
 	PolicyID             [32]byte
@@ -379,7 +381,8 @@ func (descriptor ReleaseDescriptorV5) validate() error {
 		descriptor.EnrollmentDigestA == zero || descriptor.EnrollmentDigestB == zero ||
 		descriptor.EnrollmentDigestA == descriptor.EnrollmentDigestB ||
 		descriptor.InputsDigest == zero || descriptor.OutputsDigest == zero ||
-		descriptor.CircuitVersion != CircuitV5Version || descriptor.KeyID == zero ||
+		descriptor.CircuitVersion != CircuitV5Version ||
+		descriptor.RuntimeFingerprint == zero || descriptor.KeyID == zero ||
 		descriptor.ParameterFingerprint == zero || descriptor.PolicyID == zero ||
 		descriptor.PolicyVersion != PolicyVersion || descriptor.ExpiresAt == 0 {
 		return ErrMalformedEnrollment
@@ -403,6 +406,7 @@ func (descriptor ReleaseDescriptorV5) Digest() ([32]byte, error) {
 	encoded = append(encoded, descriptor.InputsDigest[:]...)
 	encoded = append(encoded, descriptor.OutputsDigest[:]...)
 	encoded = append(encoded, uint32Word(descriptor.CircuitVersion)...)
+	encoded = append(encoded, descriptor.RuntimeFingerprint[:]...)
 	encoded = append(encoded, descriptor.KeyID[:]...)
 	encoded = append(encoded, descriptor.ParameterFingerprint[:]...)
 	encoded = append(encoded, descriptor.PolicyID[:]...)
