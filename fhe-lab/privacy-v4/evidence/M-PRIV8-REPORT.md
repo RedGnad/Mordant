@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Frozen contracts commit | `af5baad` |
-| Evidence commit | `a7a9b7e` (descendant of `af5baad`) |
+| Evidence commit | `dc17cc4` (descendant of `af5baad`) |
 | Branch | `fhe-lab` |
 | Working tree at run time | clean for all tracked code |
 
@@ -27,8 +27,9 @@ frozen path differs. V1, V3 and Mode A were not touched.
 
 ## MODEL AND EFFORT
 
-Claude Opus 5, extended reasoning. Three receivables were run; receivable 3 is
-the evidence run. Receivables 1 and 2 are retained as prior attempts and are
+Claude Opus 5, extended reasoning. Four receivables were run. **Receivable 4 is
+the evidence run**: it is the first with the relayer signing and broadcasting its
+own transaction. Receivables 1 to 3 are retained as prior attempts and are
 described where they matter.
 
 ## FROZEN CONTRACT VERIFICATION · DEPLOYMENTS · BYTECODE AND IMMUTABLES
@@ -43,7 +44,7 @@ Chain 10143. Deployer `0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0`.
 | MordantScopeGovernanceRegistry | `0x3d550619c4c20Bd70D53B7c93fbAa46c0dCE1512` |
 | ECDSAQuorumMatchVerifierV4 | `0x02D71361A2A27aa4067cc40A778Bf2ABd626C775` |
 | PrivateMatchBinder | `0x1D152f44Ab215F8aFafA8CDB6317ce505a748233` |
-| MordantInvoiceVaultV2 (anchor) | `0x103b7f01664314905A76085F46dDc537AF70b8C0` |
+| MordantInvoiceVaultV2 (anchor) | `0x3046a101CC5cFCc3AEF7537F0E35ee39a33759E6` |
 
 Deployed runtime bytecode was compared against the artifacts compiled from the
 frozen tree. A byte-for-byte comparison would fail for any contract with
@@ -68,12 +69,12 @@ verifier, both governance records live and neither retired nor hard-revoked.
 
 ## VAULT V2 · NON-VAULT SOURCE · GOVERNANCE RECORDS · ISSUER AUTHORIZATION
 
-**Anchor** `0x103b7f01…` — `receivableState = 1` (Outstanding), `protectionState = 1`
+**Anchor** `0x3046a101…` — `receivableState = 1` (Outstanding), `protectionState = 1`
 (Active), totalSupply 100.000000 units, identity scheme 3, terms scheme 1,
 brought to Outstanding through the vault's own `activate` path with an
 originator-signed pledge. Test assets only.
 
-**Non-vault source** — `anchorId 0x952a4eb0…`, registered at `1785548822`,
+**Non-vault source** — `anchorId 0x0dae9c8b…`, registered before the commitment,
 publishing only the opaque identity fields: no debtor, no face value, no
 currency, no dates. Before binding there is nothing public on that record that
 correlates it with the vault.
@@ -117,14 +118,15 @@ mismatch; it does not rely on the on-chain reveal check.
 ## OPAQUE SESSION COMMITMENT · PUBLIC METADATA AUDIT
 
 ```
-sessionCommitment  0x4af7d1dee1a3574b2faffec3eb8b1eecb117fa00d13a7e1ee6eacd96088ee8b1
-transaction        0xddec4eb7257d960b6f41882f182cf1087143c3dc6d740d67f5ab478516c87f79
-block              49828955          committedAt 1785548824      gas 116040
-relayer            0x5b832ED718cAA91d49872e8A367ABa15Ffa433e3
+sessionCommitment  0x868bbacda43e4e009fcfba5fec5ad8593f6010e2dbcdba1e7b3af583a86ac161
+transaction        0x0255f6bb265f79a0ba947260300b95f9395b776cdbb09bea0d198ca0495e0c9d
+block              49833899
+relayer            0x5b832ED718cAA91d49872e8A367ABa15Ffa433e3   (nonce 6 -> 7)
 ```
 
 One event, one indexed topic. The relayer was handed `{chainId, sessionCommitment}`
-and refuses any request carrying additional session detail.
+and refuses any request carrying additional session detail. **It constructed,
+signed and broadcast this transaction itself** — see the key boundary section.
 
 **Public metadata audit: 18 forbidden values checked against every 32-byte
 window of the transaction input, every event topic and every data word.
@@ -207,8 +209,8 @@ to anything that is not a confirmed exact match.
 ## V4 VERIFIER · V4 BINDER · ATOMIC RECOURSE · MONAD TRANSACTION
 
 ```
-transaction  0x3ebe719ed0214d9693b727cd7445ba1c9e52d09dd77339c7d404483ff30d2aa3
-block        49830594     gas 1175690     value 0
+transaction  0xd12c8daecda1963a8fc79b78b8c3012994d26a2eca8ae3f4b2f032e73f0b0007
+block        49834094     gas 1175669     value 0
 ```
 
 One transaction atomically revealed and resolved the opaque intent, verified the
@@ -224,9 +226,9 @@ record.
 ## READBACKS
 
 ```
-sessionCommitment       0x4af7d1de…      open                    true
+sessionCommitment       0x868bbacd…      open                    true
 resultCommitment        matches envelope conflictConfirmed       true
-matchCommitment         matches envelope anchor                  0x103b7f01…
+matchCommitment         matches envelope anchor                  0x3046a101…
 anchorCommitment        equals the vault's published commitment
 counterpartyCommitment  equals the source record's commitment
 policyId / version      0x2da948bf… / 1
@@ -324,12 +326,27 @@ No process held both clients' plaintext, more than one operator share, more than
 one validator key, both controller keys, or a controller key together with the
 issuer key.
 
-**One deviation, stated plainly.** The relayer runs as its own process, holds its
-own key and accepts only `{chainId, sessionCommitment}` — it is given no intent,
-no salt and no signatures. But to broadcast the commitment transaction the runner
-reads the relayer's key from that process's storage directory. The *knowledge*
-boundary holds; the *signing* boundary does not. A production relayer would sign
-and submit inside its own process.
+**No deviations.** The relayer runs as its own process, holds its own key,
+accepts only `{chainId, sessionCommitment}` — no intent, no salt, no signatures —
+and then verifies its own scope, constructs its own calldata, signs, broadcasts
+and returns only a transaction hash, block, gas and receipt status.
+
+The key boundary is verified three ways rather than asserted:
+
+1. **Static self-audit.** The runner scans its own sources (`run-priv8.mjs`,
+   `priv8-chain.mjs`, `priv8-deploy.mjs`) for any read of `party.key` or
+   `validator.key` and fails the run on a hit. Result: `forbiddenReads: []`.
+2. **Nonce evidence.** The relayer's own account nonce advanced 6 → 7 across the
+   commitment, and the on-chain `submitter` recorded by the registry is the
+   relayer address.
+3. **Unit test.** `party-signer.test.mjs` drives the relay endpoint directly and
+   asserts it refuses extra session detail by name (`refuses session detail:
+   intent,salt`), refuses an out-of-scope chain, refuses a malformed commitment,
+   and reports honestly when it has no chain access.
+
+The relayer enforces its own ceilings — 500,000 gas and 500 gwei — and its only
+possible action is `commitSession`. There is no general-purpose send. The runner
+may fund the relayer address and ask it to publish; it cannot impersonate it.
 
 ## RECOVERY
 
@@ -388,8 +405,35 @@ commitment was already published, from its journalled preimage.
 
 ## WHAT IS PUBLIC
 
-Before binding: the opaque session commitment, its timestamp and block, and the
-policy-authorized non-controller relayer address.
+### The traffic boundary, precisely
+
+**Public before binding, and nothing else:**
+
+- the opaque session commitment;
+- its block number and timestamp;
+- the policy-authorized relayer address.
+
+**Explicitly not claimed:**
+
+- traffic-analysis privacy;
+- hidden session volume — the number of commitments published is public and
+  countable;
+- organizational relayer neutrality — the relayer is authorized by the same
+  governor that authorizes scopes, and this deployment runs exactly one.
+
+In this deployment a single relayer address published every commitment. An
+observer can therefore count sessions and attribute all of them to one submitter.
+That reveals no participant, no scope, no anchor and no outcome, and it is the
+irreducible residue of publishing anything at all on a public chain.
+
+**Production deployment target: a multi-relayer authorized pool.** The governance
+registry already models this — `authorizedRelayer` is a set, not a single
+address, and `resolveSession` rejects any relayer that turns out to be one of the
+two session controllers. A production deployment authorizes several independent
+relayers and distributes commitments across them, so no single address carries
+every session. That is a deployment configuration, not a contract change. No
+batching and no traffic-obfuscation cryptography were added in this mission, and
+none is claimed.
 
 After binding: the anchor address, both salted asset commitments, the match and
 provider-proof commitments, the result commitment, the intent preimage, the
@@ -414,7 +458,8 @@ session relationship must not link.
 - Organizational independence. Every process ran on one machine under one
   operator. The separation is architectural, not administrative.
 - Traffic-analysis privacy. One relayer address posted every commitment in this
-  deployment; an observer sees a single address publishing many commitments.
+  deployment; an observer sees a single address publishing many commitments, and
+  session volume is public. A multi-relayer pool is the deployment target.
 - FHE execution correctness, as above.
 - That two V2 vaults for one receivable cannot be correlated through their public
   economics. That was established as a permanent property of Candidate A and is
@@ -505,25 +550,32 @@ production readiness.
 
 ## MY RECOMMENDATION
 
-Freeze this evidence and stop building. The architecture has now survived four
-consecutive adversarial reviews and one full end-to-end execution, and the last
-two review cycles found design faults rather than implementation faults — which
-is the signal that the design has converged.
+Hand this to the independent audit and stop developing.
 
-Two things are worth doing next, and neither is architecture:
+The relayer signing boundary, which was the one deviation in the previous run, is
+closed: the runner now contains no path that reads a party or validator key, and
+that is checked by the runner against its own sources at startup, by the
+relayer's own nonce on-chain, and by a unit test that drives the endpoint.
 
-1. **Fix the relayer signing boundary.** It is the only process-separation
-   deviation in the run and it is a small change: have the relayer sign and
-   submit inside its own process. Leaving it is a standing asterisk on an
-   otherwise clean topology.
+The remaining limits are the honest ones and none of them is a code defect:
+organizational independence, FHE execution correctness, and traffic analysis.
+The first two are closed by how the system is deployed and operated, not by
+another contract revision. The third has a named deployment target — a
+multi-relayer authorized pool, which the registry already supports — and
+deliberately no cryptographic obfuscation in this mission.
 
-2. **Decide what the relayer address means for the product.** A single relayer
-   publishing every commitment is a metadata pattern an observer can follow. It
-   does not identify participants, but "no participant pairing is public" is a
-   stronger sentence than "no single address publishes every session." Batching
-   or a relayer set would close it.
+For the audit I would point a reviewer first at three places, because that is
+where I would attack it:
+
+1. **`_resolveSides` in the binder.** The two asset commitments are salted
+   independently and are never compared for equality on-chain. Everything rests
+   on the enrollment binding tying the FHE evaluation to those anchors. If that
+   chain has a gap, the product claim does not hold.
+2. **The conjunction released by the circuit.** `conflictConfirmed` is
+   `overlap ∧ flags ∧ currency ∧ identityEqual`. The claim that a true bit proves
+   strict identity equality depends entirely on that being a real AND over
+   ciphertexts.
+3. **`auditPublicMetadata`.** It scans 32-byte windows of calldata, topics and
+   data. A leak in an encoding it does not enumerate would pass.
 
 What I would not do is reopen the identity, governance or binding architecture.
-The remaining gaps are operational, and the honest limits — organizational
-independence, FHE execution correctness, traffic analysis — are the kind that
-deployment closes, not code.

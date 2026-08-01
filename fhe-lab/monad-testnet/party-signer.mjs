@@ -23,7 +23,10 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getAddress, isAddress, isHex } from "viem";
+import {
+  createPublicClient, createWalletClient, defineChain, http, encodeFunctionData,
+  getAddress, isAddress, isHex,
+} from "viem";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import {
   intentDigest, consentDigest, sessionCommitment, signatureBundleDigest,
@@ -161,6 +164,92 @@ export function reviewSourceAttestation(payload, options) {
   return null;
 }
 
+/* ------------------------------------------------------------------- relayer */
+
+/// Hard ceilings the relayer enforces for itself. It is given no fee context by
+/// the runner, so a caller cannot push it into an expensive transaction.
+export const RELAY_MAX_GAS = 500_000n;
+export const RELAY_MAX_FEE_WEI = 500_000_000_000n;
+
+const COMMIT_ABI = [{
+  type: "function", name: "commitSession", stateMutability: "nonpayable",
+  inputs: [{ type: "bytes32", name: "sessionCommitment" }], outputs: [],
+}];
+const COMMITTED_AT_ABI = [{
+  type: "function", name: "committedAt", stateMutability: "view",
+  inputs: [{ type: "bytes32" }], outputs: [{ type: "uint64" }],
+}];
+const AUTHORIZED_ABI = [{
+  type: "function", name: "authorizedRelayer", stateMutability: "view",
+  inputs: [{ type: "address" }], outputs: [{ type: "bool" }],
+}];
+
+/**
+ * Everything the relayer does with the chain, kept in one place.
+ *
+ * It verifies its own scope before it signs anything: the RPC really is the
+ * chain it was configured for, the registry really does authorize it, and the
+ * commitment is not already published. The only action it can perform is
+ * `commitSession`; there is no general-purpose send.
+ */
+export async function relayer({ account, rpc, chainId, governance }) {
+  const chain = defineChain({
+    id: Number(chainId), name: "Monad testnet",
+    nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+    rpcUrls: { default: { http: [rpc] } },
+  });
+  const publicClient = createPublicClient({ chain, transport: http(rpc) });
+  const wallet = createWalletClient({ account, chain, transport: http(rpc) });
+  const registry = getAddress(governance);
+
+  return {
+    address: account.address,
+    async publish(sessionCommitment) {
+      const observed = await publicClient.getChainId();
+      if (observed !== Number(chainId)) {
+        return { status: 503, body: { error: `rpc serves chain ${observed}` } };
+      }
+      const authorized = await publicClient.readContract({
+        address: registry, abi: AUTHORIZED_ABI, functionName: "authorizedRelayer",
+        args: [account.address],
+      });
+      if (!authorized) return { status: 403, body: { error: "not an authorized relayer on this registry" } };
+      const already = await publicClient.readContract({
+        address: registry, abi: COMMITTED_AT_ABI, functionName: "committedAt", args: [sessionCommitment],
+      });
+      if (already !== 0n) return { status: 409, body: { error: "commitment already published" } };
+
+      // Estimate without fee fields, then send with an explicit gas limit and
+      // explicit fees: Monad checks the sender can cover gas_limit * maxFeePerGas
+      // against the block gas limit otherwise.
+      const data = encodeFunctionData({ abi: COMMIT_ABI, functionName: "commitSession", args: [sessionCommitment] });
+      const estimate = await publicClient.estimateGas({ account, to: registry, data });
+      const gas = (estimate * 130n) / 100n;
+      if (gas > RELAY_MAX_GAS) return { status: 413, body: { error: `gas ${gas} above relayer ceiling` } };
+      const block = await publicClient.getBlock();
+      const maxPriorityFeePerGas = 2_000_000_000n;
+      const maxFeePerGas = (block.baseFeePerGas ?? 0n) * 2n + maxPriorityFeePerGas;
+      if (maxFeePerGas > RELAY_MAX_FEE_WEI) return { status: 413, body: { error: "fee above relayer ceiling" } };
+
+      const hash = await wallet.sendTransaction({ to: registry, data, gas, maxFeePerGas, maxPriorityFeePerGas });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 1_000 });
+      // Only public status leaves this process.
+      return {
+        status: receipt.status === "success" ? 200 : 502,
+        body: {
+          role: "relayer",
+          address: account.address,
+          transactionHash: hash,
+          blockNumber: String(receipt.blockNumber),
+          gasUsed: String(receipt.gasUsed),
+          receiptStatus: receipt.status,
+          from: getAddress(receipt.from),
+        },
+      };
+    },
+  };
+}
+
 /* --------------------------------------------------------------------- serve */
 
 export async function serve(options) {
@@ -168,6 +257,9 @@ export async function serve(options) {
   const token = (await readFile(resolve(options.storage, "runner.token"), "utf8")).trim();
   const account = privateKeyToAccount(key);
   const isController = options.role === "controller-a" || options.role === "controller-b";
+  const relay = options.role === "relayer" && options.rpc
+    ? await relayer({ account, rpc: options.rpc, chainId: options.chainId, governance: options.governance })
+    : null;
 
   const handlers = {
     // Both controllers and the issuer sign the identical intent. Each recomputes
@@ -221,6 +313,10 @@ export async function serve(options) {
     // The relayer is handed ONLY the final 32-byte commitment. It is given no
     // intent, no salt and no signatures, so relaying carries no knowledge of the
     // session it publishes.
+    //
+    // It then constructs, signs and broadcasts its own transaction. The runner
+    // never holds this key and cannot impersonate this address: it can ask for a
+    // commitment to be published and learn the resulting hash, nothing more.
     "/v1/relay-commitment": async (payload) => {
       if (options.role !== "relayer") return { status: 403, body: { error: "role may not relay" } };
       if (!bytes32(payload.sessionCommitment)) return { status: 400, body: { error: "invalid session commitment" } };
@@ -228,7 +324,11 @@ export async function serve(options) {
       if (extra.length > 0) {
         return { status: 400, body: { error: `relayer refuses session detail: ${extra.join(",")}` } };
       }
-      return { status: 200, body: { role: options.role, address: account.address, accepted: payload.sessionCommitment } };
+      if (Number(payload.chainId) !== Number(options.chainId)) {
+        return { status: 403, body: { error: "chain out of scope" } };
+      }
+      if (!relay) return { status: 503, body: { error: "relayer has no chain access" } };
+      return relay.publish(payload.sessionCommitment);
     },
   };
 
@@ -277,13 +377,14 @@ export function parseArgs(argv) {
   const options = {
     mode: "serve", storage: null, role: null, port: 0, chainId: 0,
     governance: null, binder: null, policyId: null, scope: null,
-    governanceRecord: null, controllerKeyId: null, issuerKeyId: null,
+    governanceRecord: null, controllerKeyId: null, issuerKeyId: null, rpc: null,
   };
   const flags = {
     "--mode": "mode", "--storage": "storage", "--role": "role", "--port": "port",
     "--chain-id": "chainId", "--governance": "governance", "--binder": "binder",
     "--policy-id": "policyId", "--scope": "scope", "--governance-record": "governanceRecord",
     "--controller-key-id": "controllerKeyId", "--issuer-key-id": "issuerKeyId",
+    "--rpc": "rpc",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const field = flags[argv[index]];

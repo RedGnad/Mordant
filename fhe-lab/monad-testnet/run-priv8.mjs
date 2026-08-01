@@ -277,6 +277,33 @@ export function issuerKeyIdFor(signer) {
   ));
 }
 
+/**
+ * Static self-audit of the key boundary.
+ *
+ * Scans this runner's own sources for any read of a party or validator key file.
+ * The runner is allowed to know addresses and to fund them; it is not allowed to
+ * hold their keys. A hit here fails the run rather than being explained away in
+ * a report.
+ */
+export async function auditKeyBoundary() {
+  const sources = ["run-priv8.mjs", "priv8-chain.mjs", "priv8-deploy.mjs"];
+  // Precisely the key FILES a party or validator process owns. The deployer key
+  // comes from the environment and is the runner's own, so it is not in scope.
+  const patterns = [/party\.key/, /validator\.key/];
+  const findings = [];
+  for (const name of sources) {
+    const text = await readFile(resolve(HERE, name), "utf8");
+    for (const pattern of patterns) {
+      if (pattern.test(text)) findings.push({ file: name, pattern: String(pattern) });
+    }
+  }
+  return {
+    sourcesScanned: sources,
+    forbiddenReads: findings,
+    runnerHoldsNoPartyOrValidatorKey: findings.length === 0,
+  };
+}
+
 /* ------------------------------------------------------------- source binding */
 
 export const FROZEN_SOURCES = Object.freeze([
@@ -401,6 +428,10 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     if (evidence.sourceBinding.changedSinceFreeze.length > 0) {
       fail("FROZEN_CONTRACT_CHANGED", evidence.sourceBinding.changedSinceFreeze.join(","));
     }
+    evidence.keyBoundary = await auditKeyBoundary();
+    if (!evidence.keyBoundary.runnerHoldsNoPartyOrValidatorKey) {
+      fail("RUNNER_HOLDS_A_PARTY_KEY", JSON.stringify(evidence.keyBoundary.forbiddenReads));
+    }
     evidence.preflight = {
       chainId: onChainId,
       deployer: settings.deployer.address,
@@ -470,6 +501,9 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
           "--governance-record", records.B.recordDigest);
       }
       if (member.role === "issuer") base.push("--issuer-key-id", issuerKeyId);
+      // Only the relayer is given chain access, and only so it can sign and
+      // broadcast its own commitment transaction.
+      if (member.role === "relayer") base.push("--rpc", settings.rpc);
       return base;
     });
     await validators.start(() => [
@@ -651,11 +685,6 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
     /* ------------------------------------------------------------- COMMITTED */
     // The relayer is handed ONLY the 32-byte commitment. It is given no intent,
     // no salt and no signatures.
-    const relayCheck = await parties.ask(party.relayer, "/v1/relay-commitment", {
-      chainId: CHAIN_ID, sessionCommitment: preflight.sessionCommitment,
-    });
-    if (getAddress(relayCheck.address) !== getAddress(party.relayer.address)) fail("RELAYER_IDENTITY");
-
     // The preimage is durable before the one-shot artifact is published.
     journal.sessions = journal.sessions ?? {};
     if (!journal.sessions[preflight.sessionCommitment]) {
@@ -676,15 +705,22 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       }));
       await settle(journal, journalPath, key, client, hash, { role: "relayer" });
     }
-    const relayerAccount = await relayerWallet(party.relayer);
+
+    // The relayer is handed ONLY the 32-byte commitment. It verifies its own
+    // scope, constructs and signs its own transaction, broadcasts it, and
+    // returns a hash and public status. This runner holds no relayer key and
+    // cannot impersonate that address.
     const commitKey = `session:commit:${options.receivable}:${preflight.sessionCommitment}`;
-    const { hash: commitHash } = await step(journal, journalPath, commitKey, async () => ({
-      hash: await tx.write(relayerAccount, {
-        address: addresses.governance, abi: art.governance.abi, functionName: "commitSession",
-        args: [preflight.sessionCommitment],
-      }),
-      meta: { call: commitKey },
-    }));
+    const relayerNonceBefore = await client.getTransactionCount({ address: party.relayer.address });
+    const { hash: commitHash } = await step(journal, journalPath, commitKey, async () => {
+      const relayed = await parties.ask(party.relayer, "/v1/relay-commitment", {
+        chainId: CHAIN_ID, sessionCommitment: preflight.sessionCommitment,
+      });
+      if (getAddress(relayed.address) !== getAddress(party.relayer.address)) fail("RELAYER_IDENTITY");
+      if (getAddress(relayed.from) !== getAddress(party.relayer.address)) fail("RELAYER_NOT_SENDER", relayed.from);
+      if (relayed.receiptStatus !== "success") fail("RELAY_REVERTED", String(relayed.receiptStatus));
+      return { hash: relayed.transactionHash, meta: { call: commitKey, relayedBy: relayed.address } };
+    });
     const committed = await settle(journal, journalPath, commitKey, client, commitHash, { call: commitKey });
     const commitReceipt = await client.getTransactionReceipt({ hash: commitHash });
     const commitTransaction = await client.getTransaction({ hash: commitHash });
@@ -712,6 +748,11 @@ export async function main(options = parseArgs(process.argv.slice(2))) {
       relayer: getAddress(onChainCommitment.submitter),
       consumed: onChainCommitment.consumed,
       relayerReceivedOnly: ["chainId", "sessionCommitment"],
+      // The relayer signed and broadcast this itself.
+      relayerSignedItsOwnTransaction: true,
+      relayerNonceBefore,
+      relayerNonceAfter: await client.getTransactionCount({ address: party.relayer.address }),
+      runnerHoldsRelayerKey: false,
     };
     await reached("COMMITTED");
 
@@ -1207,18 +1248,6 @@ function fromSolidityConsent(consent) {
 }
 
 /* ------------------------------------------------------------- sub-routines */
-
-async function relayerWallet(relayer) {
-  // The relayer signs its own transaction inside its own process in production.
-  // Here the runner needs a viem account for it, so the relayer key is read from
-  // its own storage directory and used only to send the commitment. This is the
-  // one place the lab collapses a process boundary, and the report says so.
-  const { privateKeyToAccount } = await import("viem/accounts");
-  const key = (await readFile(resolve(relayer.storage, "party.key"), "utf8")).trim();
-  const account = privateKeyToAccount(key);
-  if (getAddress(account.address) !== getAddress(relayer.address)) fail("RELAYER_KEY_MISMATCH");
-  return account;
-}
 
 /**
  * Four independent computations of the same opaque commitment must agree before

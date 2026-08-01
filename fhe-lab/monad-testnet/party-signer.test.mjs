@@ -228,3 +228,70 @@ test("a validator stays inside its verifier, binder and policy", () => {
   );
   assert.match(reviewResult(envelopePayload({}, { validUntil: 1 }), validatorOptions), /already expired/);
 });
+
+/* --------------------------------------------------------------- relayer */
+
+test("the relayer accepts only a commitment and a chain id", async () => {
+  const { serve, generateIdentity } = await import("./party-signer.mjs");
+  const { mkdtemp, readFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { resolve } = await import("node:path");
+  const { createHmac } = await import("node:crypto");
+
+  const storage = await mkdtemp(`${tmpdir()}/priv8-relayer-`);
+  await generateIdentity(storage, "relayer");
+  // No --rpc, so the relayer has no chain access and can sign nothing. That is
+  // exactly the shape needed to test what it REFUSES before it would ever act.
+  const { server, port, address } = await serve({
+    storage, role: "relayer", port: 0, chainId: CHAIN_ID, governance: GOVERNANCE,
+  });
+  const token = (await readFile(resolve(storage, "runner.token"), "utf8")).trim();
+  const call = async (payload) => {
+    const body = JSON.stringify(payload);
+    const response = await fetch(`http://127.0.0.1:${port}/v1/relay-commitment`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-signer-auth": createHmac("sha256", token).update(body).digest("hex"),
+      },
+      body,
+    });
+    return { status: response.status, body: await response.json() };
+  };
+
+  // Any session detail beyond the opaque commitment is refused by name.
+  const leaky = await call({
+    chainId: CHAIN_ID, sessionCommitment: SESSION,
+    intent: { policyId: POLICY_ID }, salt: `0x${"11".repeat(32)}`,
+  });
+  assert.equal(leaky.status, 400);
+  assert.match(leaky.body.error, /refuses session detail: intent,salt/);
+
+  // Wrong chain is refused as out of scope.
+  const wrongChain = await call({ chainId: 1, sessionCommitment: SESSION });
+  assert.equal(wrongChain.status, 403);
+  assert.match(wrongChain.body.error, /chain out of scope/);
+
+  // A malformed commitment never reaches the chain path.
+  const malformed = await call({ chainId: CHAIN_ID, sessionCommitment: "0x1234" });
+  assert.equal(malformed.status, 400);
+
+  // With a well-formed request and no chain access it reports that, rather than
+  // silently doing nothing.
+  const noChain = await call({ chainId: CHAIN_ID, sessionCommitment: SESSION });
+  assert.equal(noChain.status, 503);
+  assert.match(noChain.body.error, /no chain access/);
+
+  assert.ok(address.startsWith("0x"));
+  // undici keeps connections alive, so the listener must be torn down
+  // explicitly or the test runner waits for the event loop forever.
+  server.closeAllConnections?.();
+  await new Promise((done) => server.close(done));
+});
+
+test("the runner holds no party or validator key", async () => {
+  const { auditKeyBoundary } = await import("./run-priv8.mjs");
+  const audit = await auditKeyBoundary();
+  assert.deepEqual(audit.forbiddenReads, []);
+  assert.equal(audit.runnerHoldsNoPartyOrValidatorKey, true);
+});
