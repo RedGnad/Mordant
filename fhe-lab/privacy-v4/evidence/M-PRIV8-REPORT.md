@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Frozen contracts commit | `af5baad` |
-| Evidence commit | `dc17cc4` (descendant of `af5baad`) |
+| Code commit the evidence describes | `3ca83ed` (descendant of `af5baad`) |
 | Branch | `fhe-lab` |
 | Working tree at run time | clean for all tracked code |
 
