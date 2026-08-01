@@ -144,17 +144,51 @@ test("no V5 runner source broadcasts outside the guard", async () => {
     /\.sendRawTransaction\s*\(/,
   ];
 
+  // A primitive is permitted ONLY inside a `broadcast(...)` callback, which is
+  // the capability `runStage` hands to a stage and which routes through
+  // `guardedBroadcast`. Anything else is an unguarded path.
+  //
+  // The window is deliberately small: a primitive more than a few lines from
+  // its `broadcast(` is not obviously inside its callback, and "not obviously"
+  // is the wrong standard for the one check that stops an ungated broadcast.
+  const GUARD_WINDOW = 240;
   const offenders = [];
   for (const name of files) {
     const source = await readFile(resolve(HERE, name), "utf8");
     for (const pattern of broadcastPrimitives) {
-      if (pattern.test(source)) offenders.push(`${name} matches ${pattern}`);
+      const global = new RegExp(pattern.source, "g");
+      for (const match of source.matchAll(global)) {
+        const before = source.slice(Math.max(0, match.index - GUARD_WINDOW), match.index);
+        if (!/\bbroadcast\s*\(/.test(before)) {
+          const line = source.slice(0, match.index).split("\n").length;
+          offenders.push(`${name}:${line} ${match[0]} is not inside a broadcast() callback`);
+        }
+      }
     }
   }
   assert.deepEqual(
     offenders, [],
     "every broadcast must go through guardedBroadcast in v5-live-guard.mjs",
   );
+});
+
+// The refinement above is only safe if it still catches an unguarded call, so
+// that is asserted directly against a synthetic source rather than assumed.
+test("the guard scan still catches an unguarded broadcast", () => {
+  const GUARD_WINDOW = 240;
+  const primitive = /\.sendTransaction\s*\(/;
+  const guarded = `const h = await broadcast("x", async () => wallet.sendTransaction({}));`;
+  const unguarded = `const h = await wallet.sendTransaction({});`;
+
+  const scan = (source) => {
+    const global = new RegExp(primitive.source, "g");
+    return [...source.matchAll(global)].filter((match) => {
+      const before = source.slice(Math.max(0, match.index - GUARD_WINDOW), match.index);
+      return !/\bbroadcast\s*\(/.test(before);
+    }).length;
+  };
+  assert.equal(scan(guarded), 0, "a guarded call must pass");
+  assert.equal(scan(unguarded), 1, "an unguarded call must be caught");
 });
 
 // The exemption above is only defensible if the harness genuinely cannot reach
