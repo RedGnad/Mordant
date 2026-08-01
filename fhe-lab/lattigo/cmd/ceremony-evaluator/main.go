@@ -49,6 +49,8 @@ type evaluatorOutput struct {
 	KeyID                   string   `json:"keyId"`
 	ConflictConfirmed       bool     `json:"conflictConfirmed"`
 	IdentityMode            string   `json:"identityMode"`
+	EnrollmentNonceA        string   `json:"enrollmentNonceA"`
+	EnrollmentNonceB        string   `json:"enrollmentNonceB"`
 	InputCommitmentA        string   `json:"inputCommitmentA"`
 	InputCommitmentB        string   `json:"inputCommitmentB"`
 	ResultCommitment        string   `json:"resultCommitment"`
@@ -268,6 +270,12 @@ func run(arguments []string) error {
 	// currency AND encrypted-identity-equality, so a true bit proves strict
 	// identity equality without ever releasing it separately.
 	output.IdentityMode = c.identityMode
+	// Reported by the evaluator, not by either client: the runner uses these to
+	// prove both sides enrolled against the same opaque session commitment and
+	// the same frozen governance records. The nonce is inside the issuer-signed
+	// enrollment, so it cannot be edited after the fact.
+	output.EnrollmentNonceA = "0x" + hex.EncodeToString(request.EnrollmentA.Enrollment.Nonce[:])
+	output.EnrollmentNonceB = "0x" + hex.EncodeToString(request.EnrollmentB.Enrollment.Nonce[:])
 	output.InputCommitmentA = "0x" + hex.EncodeToString(inputA[:])
 	output.InputCommitmentB = "0x" + hex.EncodeToString(inputB[:])
 	output.ResultCommitment = "0x" + hex.EncodeToString(decision.ResultCiphertextCommitment[:])

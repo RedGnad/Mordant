@@ -5,28 +5,28 @@
   "parameters": "BGV LogN=15, LogQ 12 primes, LogP 3 primes, t=65537 (unchanged)",
   "modeA_IdentityPublicCommitment": {
     "mode": "IdentityPublicCommitment",
-    "clientEncryptMillisPerPledge": 206,
+    "clientEncryptMillisPerPledge": 183,
     "identityEncryptMillisPerPledge": 0,
     "envelopeBytesPerPledge": 25168031,
     "identityCiphertextBytesPerPledge": 0,
-    "evaluationMillis": 7639,
+    "evaluationMillis": 6995,
     "identityEqualityMillis": 0,
     "multiplicativeDepth": 11
   },
   "modeB_IdentityFullFHE256": {
     "mode": "IdentityFullFHE256",
-    "clientEncryptMillisPerPledge": 235,
+    "clientEncryptMillisPerPledge": 214,
     "identityEncryptMillisPerPledge": 46,
     "envelopeBytesPerPledge": 31459985,
     "identityCiphertextBytesPerPledge": 6291950,
-    "evaluationMillis": 9512,
-    "identityEqualityMillis": 2202,
+    "evaluationMillis": 11257,
+    "identityEqualityMillis": 2501,
     "multiplicativeDepth": 11
   },
   "delta": {
-    "encryptMillisPerPledge": 29,
+    "encryptMillisPerPledge": 31,
     "envelopeBytesPerPledge": 6291954,
-    "evaluationMillis": 1873,
+    "evaluationMillis": 4262,
     "totalTransportBytesForTwoPledges": 12583908
   },
   "informationModeBHidesThatModeAReveals": [
