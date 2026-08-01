@@ -285,6 +285,10 @@ func (operator *ReleaseOperatorV5) VerifyAndRecompute(request OperatorReleaseReq
 	return verdict, nil
 }
 
+// RecomputedOutputs returns the ciphertexts this operator computed itself.
+// Nil unless the verdict was accepted.
+func (verdict OperatorVerdictV5) RecomputedOutputs() *CircuitOutputsV5 { return verdict.outputs }
+
 // ReleaseShares generates this operator's two key-switch shares, one per
 // released bit, against the ciphertexts THIS OPERATOR recomputed.
 //
@@ -318,17 +322,36 @@ func (operator *ReleaseOperatorV5) shareFor(
 	coalition [2]uint64,
 	slot uint8,
 ) (ThresholdReleaseResponse, error) {
+	legacy, err := ReleaseDescriptorForSlot(descriptor, ciphertext, coalition, slot, operator.threshold.keyID)
+	if err != nil {
+		return ThresholdReleaseResponse{}, err
+	}
+	return operator.threshold.GenerateReleaseShare(legacy, ciphertext)
+}
+
+// ReleaseDescriptorForSlot builds the threshold-layer descriptor for one
+// released bit.
+//
+// The V4 descriptor is reused as the wire format, but every field in it is
+// derived from the ciphertext the operator recomputed rather than from anything
+// the coordinator supplied. Each bit gets its own threshold session id, so a
+// share generated for one bit can never be replayed as a share for the other.
+func ReleaseDescriptorForSlot(
+	descriptor ReleaseDescriptorV5,
+	ciphertext *rlwe.Ciphertext,
+	coalition [2]uint64,
+	slot uint8,
+	keyID [32]byte,
+) (ReleaseDescriptor, error) {
 	commitment, err := ciphertextCommitment(ciphertext)
 	if err != nil {
-		return ThresholdReleaseResponse{}, err
+		return ReleaseDescriptor{}, err
 	}
-	binding, err := ProtocolBindingDigest(operator.threshold.keyID, ProtocolCollectiveKeySwitchToZero, ciphertext)
+	binding, err := ProtocolBindingDigest(keyID, ProtocolCollectiveKeySwitchToZero, ciphertext)
 	if err != nil {
-		return ThresholdReleaseResponse{}, err
+		return ReleaseDescriptor{}, err
 	}
-	// The V4 descriptor is reused as the threshold-layer wire format, but every
-	// field in it is now derived from the operator's own recomputation.
-	legacy := ReleaseDescriptor{
+	return ReleaseDescriptor{
 		SessionID:                  releaseSlotSessionID(descriptor.SessionCommitment, slot),
 		KeyID:                      descriptor.KeyID,
 		ParameterFingerprint:       descriptor.ParameterFingerprint,
@@ -341,8 +364,7 @@ func (operator *ReleaseOperatorV5) shareFor(
 		ResultCiphertextCommitment: commitment,
 		ProtocolBinding:            binding,
 		Coalition:                  coalition,
-	}
-	return operator.threshold.GenerateReleaseShare(legacy, ciphertext)
+	}, nil
 }
 
 // releaseSlotSessionID gives each released bit its own threshold session id, so
