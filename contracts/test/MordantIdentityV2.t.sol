@@ -12,7 +12,7 @@ import { MordantIssuerRegistry } from "../src/identity/MordantIssuerRegistry.sol
 import { MordantNormalization as N } from "../src/identity/MordantNormalization.sol";
 import { MordantSourceAttestation } from "../src/identity/MordantSourceAttestation.sol";
 import { MordantSourceIdentityRegistry } from "../src/identity/MordantSourceIdentityRegistry.sol";
-import { MordantTermsRegistry } from "../src/identity/MordantTermsRegistry.sol";
+import { IAnchorAdmission, MordantTermsRegistry } from "../src/identity/MordantTermsRegistry.sol";
 import { MordantMatchResult as Match } from "../src/identity/MordantMatchResult.sol";
 import {
     MordantSessionPrecommitRegistry
@@ -141,7 +141,7 @@ contract MordantIdentityV2Test is Test {
         factory.setCvaAdapter(address(adapter), true);
         factory.setSettlementToken(address(settlement), true);
         sources = new MordantSourceIdentityRegistry(registry);
-        termsRegistry = new MordantTermsRegistry(registry);
+        termsRegistry = new MordantTermsRegistry(registry, IAnchorAdmission(address(factory)));
         precommits = new MordantSessionPrecommitRegistry(registry);
         harness = new IdentityHarness();
 
@@ -533,9 +533,10 @@ contract MordantIdentityV2Test is Test {
     {
         MordantInvoiceVaultV2 vault;
         (vault, commitment) = _create(keccak256("root-terms"), 40);
-        anchorId = bytes32(uint256(uint160(address(vault))));
         initialTerms = vault.initialTermsCommitment();
-        termsRegistry.initialise(anchorId, commitment, initialTerms, vault.issuerKeyId());
+        // Finding M-01: the id is derived and every stored value is read from
+        // the admitted anchor. Nothing here is a caller assertion any more.
+        anchorId = termsRegistry.initialise(address(vault));
     }
 
     function testAmendmentAppendsWithoutRewritingIdentity() public {
@@ -548,7 +549,7 @@ contract MordantIdentityV2Test is Test {
         assertEq(current, amendment.termsCommitment);
         assertEq(version, 2);
         // The anchor's own immutable values are untouched.
-        (bytes32 storedAsset,,,,) = termsRegistry.anchorTerms(anchorId);
+        (bytes32 storedAsset,,,,,,) = termsRegistry.anchorTerms(anchorId);
         assertEq(storedAsset, commitment);
     }
 
@@ -565,16 +566,48 @@ contract MordantIdentityV2Test is Test {
     function testTermsVersionRollbackIsRejected() public {
         (bytes32 anchorId, bytes32 commitment, bytes32 initialTerms) = _initialisedAnchor();
         MordantTermsRegistry.TermsAmendment memory second =
-            _amendment(anchorId, commitment, initialTerms, 3, 1);
+            _amendment(anchorId, commitment, initialTerms, 2, 1);
         termsRegistry.appendAmendment(second, _signAmendment(second, ISSUER_KEY));
 
         MordantTermsRegistry.TermsAmendment memory rollback =
             _amendment(anchorId, commitment, second.termsCommitment, 2, 2);
         bytes memory rollbackSignature = _signAmendment(rollback, ISSUER_KEY);
         vm.expectRevert(
-            abi.encodeWithSelector(MordantTermsRegistry.NotMonotonic.selector, uint32(2), uint32(3))
+            abi.encodeWithSelector(MordantTermsRegistry.NotMonotonic.selector, uint32(2), uint32(2))
         );
         termsRegistry.appendAmendment(rollback, rollbackSignature);
+    }
+
+    /// Finding M-01. "Strictly increasing" allowed gaps, so an amendment could
+    /// jump the version and leave a hole later reads cannot distinguish from a
+    /// missing amendment.
+    function testTermsVersionGapIsRejected() public {
+        (bytes32 anchorId, bytes32 commitment, bytes32 initialTerms) = _initialisedAnchor();
+        MordantTermsRegistry.TermsAmendment memory skipped =
+            _amendment(anchorId, commitment, initialTerms, 3, 1);
+        bytes memory signature = _signAmendment(skipped, ISSUER_KEY);
+        vm.expectRevert(
+            abi.encodeWithSelector(MordantTermsRegistry.NotMonotonic.selector, uint32(3), uint32(1))
+        );
+        termsRegistry.appendAmendment(skipped, signature);
+    }
+
+    /// Finding M-01. The old initialise took the asset commitment, the initial
+    /// terms and the ISSUER as arguments and never read the anchor, so anyone
+    /// could seed an unused id with a fabricated issuer and have every later
+    /// amendment authenticate against it.
+    function testTermsCannotBeInitialisedForAnUnadmittedAnchor() public {
+        MordantInvoiceVaultV2 vault;
+        (vault,) = _create(keccak256("root-terms-unadmitted"), 41);
+        // A contract that is not the anchor the factory admitted.
+        address impostor = address(new IdentityHarness());
+        vm.expectRevert();
+        termsRegistry.initialise(impostor);
+
+        // The genuine anchor initialises, and does so exactly once.
+        termsRegistry.initialise(address(vault));
+        vm.expectRevert();
+        termsRegistry.initialise(address(vault));
     }
 
     /// An issuer must not be able to detach a terms version and re-attach it to

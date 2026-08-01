@@ -3,7 +3,15 @@ pragma solidity ^0.8.28;
 
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import { IIdentityAnchor } from "./IIdentityAnchor.sol";
 import { MordantIssuerRegistry } from "./MordantIssuerRegistry.sol";
+
+/// @notice The admission surface this registry consults, implemented by the
+/// frozen V2 factory. Declared minimally here so the frozen contract is read,
+/// never modified.
+interface IAnchorAdmission {
+    function vaultForAttestation(bytes32 attestationDigest) external view returns (address);
+}
 
 /// @notice Append-only history of terms versions for an anchor.
 /// @dev Terms change; identity does not. Amendments are appended here and never
@@ -23,6 +31,8 @@ contract MordantTermsRegistry {
     error InvalidTermsRecord();
     error MalformedSignature();
     error WrongIssuer();
+    error AnchorNotAdmitted(address anchor);
+    error SchemeMismatch(uint16 supplied, uint16 expected);
 
     event TermsVersionAppended(
         bytes32 indexed anchorId,
@@ -63,35 +73,72 @@ contract MordantTermsRegistry {
         bytes32 currentTermsCommitment;
         uint32 currentVersion;
         bytes32 issuerKeyId;
+        uint16 termsSchemeVersion;
+        address anchor;
         bool initialised;
     }
 
+    bytes32 private constant ANCHOR_DOMAIN = keccak256("mordant.terms-anchor-id/2");
+
     MordantIssuerRegistry public immutable issuerRegistry;
+    IAnchorAdmission public immutable admission;
 
     mapping(bytes32 anchorId => AnchorTerms terms) public anchorTerms;
     mapping(bytes32 termsCommitment => bool recorded) public recordedTerms;
     mapping(bytes32 issuerKeyId => mapping(uint256 nonce => bool used)) public consumedNonce;
 
-    constructor(MordantIssuerRegistry registry) {
-        if (address(registry) == address(0)) revert InvalidTermsRecord();
+    constructor(MordantIssuerRegistry registry, IAnchorAdmission anchorAdmission) {
+        if (address(registry) == address(0) || address(anchorAdmission) == address(0)) {
+            revert InvalidTermsRecord();
+        }
         issuerRegistry = registry;
+        admission = anchorAdmission;
     }
 
-    /// @notice Records the anchor's creation terms as version 1.
-    /// @dev Callable once per anchor, by anyone, because it only mirrors values
-    /// the anchor already carries immutably.
-    function initialise(
-        bytes32 anchorId,
-        bytes32 assetCommitment,
-        bytes32 initialTermsCommitment,
-        bytes32 issuerKeyId
-    ) external {
-        AnchorTerms storage record = anchorTerms[anchorId];
-        if (record.initialised) revert AlreadyRecorded(initialTermsCommitment);
+    /// @notice The registry-scoped identifier for an anchor.
+    /// @dev Derived from the anchor address, never supplied by a caller, so two
+    /// callers cannot disagree about which anchor an entry describes.
+    function anchorIdOf(address anchor) public view returns (bytes32) {
+        return keccak256(abi.encode(ANCHOR_DOMAIN, block.chainid, address(this), anchor));
+    }
+
+    /// @notice Records an admitted anchor's creation terms as version 1.
+    ///
+    /// @dev External audit finding M-01. The previous version accepted the
+    /// anchor id, asset commitment, initial terms commitment and issuer key id
+    /// as ARGUMENTS from an arbitrary caller. Its comment claimed it "only
+    /// mirrors values the anchor already carries immutably", but it never read
+    /// the anchor. Anyone could seed an unused anchor id with a fabricated asset
+    /// commitment and a fabricated issuer, and every later amendment would then
+    /// authenticate against that fabricated issuer.
+    ///
+    /// This version takes only the anchor address. Admission is proven by
+    /// reading the frozen factory, and every stored value is read from the
+    /// anchor itself. There is nothing left for a caller to assert.
+    function initialise(address anchor) external returns (bytes32 anchorId) {
+        if (anchor == address(0)) revert InvalidTermsRecord();
+
+        // Admission first: the anchor must be one the factory actually created.
+        bytes32 attestationDigest = IIdentityAnchor(anchor).sourceAttestationDigest();
         if (
-            anchorId == bytes32(0) || assetCommitment == bytes32(0)
-                || initialTermsCommitment == bytes32(0) || issuerKeyId == bytes32(0)
-                || assetCommitment == initialTermsCommitment
+            attestationDigest == bytes32(0)
+                || admission.vaultForAttestation(attestationDigest) != anchor
+        ) {
+            revert AnchorNotAdmitted(anchor);
+        }
+
+        anchorId = anchorIdOf(anchor);
+        AnchorTerms storage record = anchorTerms[anchorId];
+        if (record.initialised) revert AlreadyRecorded(anchorId);
+
+        bytes32 assetCommitment = IIdentityAnchor(anchor).assetCommitment();
+        bytes32 initialTermsCommitment = IIdentityAnchor(anchor).initialTermsCommitment();
+        bytes32 issuerKeyId = IIdentityAnchor(anchor).issuerKeyId();
+        uint16 termsSchemeVersion = IIdentityAnchor(anchor).termsSchemeVersion();
+
+        if (
+            assetCommitment == bytes32(0) || initialTermsCommitment == bytes32(0)
+                || issuerKeyId == bytes32(0) || assetCommitment == initialTermsCommitment
         ) revert InvalidTermsRecord();
         if (recordedTerms[initialTermsCommitment]) revert AlreadyRecorded(initialTermsCommitment);
 
@@ -100,6 +147,8 @@ contract MordantTermsRegistry {
             currentTermsCommitment: initialTermsCommitment,
             currentVersion: 1,
             issuerKeyId: issuerKeyId,
+            termsSchemeVersion: termsSchemeVersion,
+            anchor: anchor,
             initialised: true
         });
         recordedTerms[initialTermsCommitment] = true;
@@ -120,9 +169,16 @@ contract MordantTermsRegistry {
         if (amendment.assetCommitment != record.assetCommitment) revert InvalidTermsRecord();
         // Only the issuer that anchored the asset may amend its terms.
         if (amendment.issuerKeyId != record.issuerKeyId) revert WrongIssuer();
-        // Strictly increasing: a rollback to an earlier version is impossible.
-        if (amendment.termsVersion <= record.currentVersion) {
+        // Finding M-01: "strictly increasing" allowed gaps, so an amendment
+        // could jump the version and leave a hole that later reads cannot
+        // distinguish from a missing amendment. Exactly one step, always.
+        if (amendment.termsVersion != record.currentVersion + 1) {
             revert NotMonotonic(amendment.termsVersion, record.currentVersion);
+        }
+        // The terms scheme is fixed by the anchor; an amendment may not
+        // reinterpret existing commitments under a different scheme.
+        if (amendment.termsSchemeVersion != record.termsSchemeVersion) {
+            revert SchemeMismatch(amendment.termsSchemeVersion, record.termsSchemeVersion);
         }
         // History is a chain, not a set.
         if (amendment.supersedesTermsCommitment != record.currentTermsCommitment) {

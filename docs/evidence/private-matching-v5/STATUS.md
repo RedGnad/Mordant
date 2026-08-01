@@ -24,8 +24,8 @@ Monad run precedes the freeze.
 | M-04 retirement strands committed sessions | Medium | Corrected | `MordantScopeGovernanceRegistryV5.sol` |
 | L-02 leak scanner never swept key material | Low | Corrected | `fhe-lab/privacy-v4/leak-scan.mjs` |
 | L-03 terms scheme version signed but unchecked | Low | Corrected | `MordantSourceCommitmentRegistry.sol` |
-| M-01 terms registry initialisation | Medium | **Open** | - |
-| M-05 candidate reconciliation unauthenticated | Medium | **Open** | - |
+| M-01 terms registry initialisation | Medium | Corrected | `MordantTermsRegistry.sol` |
+| M-05 candidate reconciliation unauthenticated | Medium | Corrected | `MordantMatchResultV5.sol` |
 | M-06 binder invariants / factory admission | Medium | **Open** | - |
 | L-01 factory admission check | Low | **Open** | - |
 | I-01 / I-02 / I-03 informational | Info | **Open** | - |
@@ -63,7 +63,18 @@ latency.
 - `contracts/src/v5/MordantScopeGovernanceRegistryV5.sol` - salt-independent
   session nullifier consumed at admission, and block numbers rather than
   timestamps so same-block ambiguity fails closed in both directions.
-- `contracts/test/RC2Remediation.t.sol` - 27 tests. Full suite 242/242.
+- `contracts/src/identity/MordantMatchResultV5.sol` also drops the tolerant
+  "candidate alias" path entirely (M-05). The V5 circuit compares only the
+  strict identifier, so there is no tolerant result for the schema to express;
+  removing it is what makes the unauthenticated path unreachable rather than
+  merely discouraged.
+- `contracts/src/identity/MordantTermsRegistry.sol` (M-01) - `initialise` now
+  takes only an anchor address, proves admission by reading the frozen factory,
+  and reads every stored value from the anchor. The previous version accepted
+  the asset commitment and the ISSUER as arguments and never read the anchor, so
+  anyone could seed an unused id with a fabricated issuer. Amendments now
+  require exactly one version step rather than merely increasing.
+- `contracts/test/RC2Remediation.t.sol` - 27 tests. Full suite 244/244.
 
 ### Go (V5 protocol)
 
@@ -97,18 +108,15 @@ latency.
 
 ## Next, in order
 
-1. **M-05** candidate reconciliation: authenticate it or disable it.
-2. **M-01** terms registry: initialise by reading an admitted anchor with exact
-   version increments.
-3. **M-06 / L-01** binder invariants and the factory admission check.
-4. **V5 verifier and binder.** Deliberately not written yet: their result core,
+1. **M-06 / L-01** binder invariants and the factory admission check.
+2. **V5 verifier and binder.** Deliberately not written yet: their result core,
    typehashes, provider-proof binding and transcript fields stayed provisional
    until the gates passed. The gates have now passed, so the schemas listed
    below can be frozen against the shapes in `operator_release_v5.go` and
    `MordantMatchResultV5.sol`.
-5. **Freeze**, once 1-3 land: V5 result schema, provider-proof schema, V5
+3. **Freeze**, once 1 lands: V5 result schema, provider-proof schema, V5
    verifier, V5 binder, validator digest, consent digest.
-6. **Only then**, a fresh complete Monad run.
+4. **Only then**, a fresh complete Monad run.
 
 ## Claims
 
