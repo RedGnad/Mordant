@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "mordant.ceremony-failure/1",
+  "recordedAtUtc": "2026-08-01T18:57:44Z",
+  "environment": "fresh local development rehearsal; no Monad transaction",
+  "ceremonyId": "cd572c1993cc07886faa35b50b7eb03b952ecf7d65753e3c2451be810a233355",
+  "rosterDigest": "0x522d8af5fd9197d654228607291834df0807f204446d1fcc7d787fe9a670afcd",
+  "manifestDigest": "0x79bff39d12097c2b58e79d708ab321c9d72942a203fc304e0ab315812db68889",
+  "lastCompletedBoundary": "CEREMONY_COMPLETED",
+  "observedFailure": "each signed operator status contained 25 operation records instead of the canonical 17, including nine completed private re-sharing records instead of one",
+  "cause": "restart-assigned peer ports changed the OpReshare request payload and bypassed the exact-payload cache; the already persisted private wires were retransmitted unchanged, but the durable semantic step was duplicated",
+  "classification": "FAILED_CEREMONY_INVALIDATED",
+  "disposition": [
+    "the rehearsal is not accepted as successful evidence",
+    "the ceremony identifier is terminal and its artifacts will not be reused",
+    "the completed re-sharing result is now cached by canonical roster semantics independently of ephemeral peer URLs",
+    "the public verifier now requires exactly one of every non-Galois operation and exactly nine Galois operations per operator",
+    "the corrected rehearsal must use a fresh context nonce and ceremony identifier"
+  ],
+  "productVerdict": "PRIVATE MATCHING AND GOVERNED RECOURSE: NOT PROVEN"
+}

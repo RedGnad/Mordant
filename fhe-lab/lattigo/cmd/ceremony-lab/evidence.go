@@ -13,7 +13,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
@@ -166,6 +168,293 @@ func (l *lab) collectOperatorStatements() ([]operatorProof, error) {
 		})
 	}
 	return proofs, nil
+}
+
+// writeRecoverySnapshot retains only public, operator-authored recovery
+// evidence. It deliberately obtains status through the bounded mTLS endpoint;
+// the parent never opens an operator's private ceremony ledger.
+func (l *lab) writeRecoverySnapshot() error {
+	public := filepath.Join(l.root, "public")
+	points := make([]uint64, 0, len(l.ports))
+	for point := range l.ports {
+		points = append(points, point)
+	}
+	sort.Slice(points, func(i, j int) bool { return points[i] < points[j] })
+	if len(points) == 0 {
+		return errors.New("no live operator is available for the recovery snapshot")
+	}
+	statuses := make([]json.RawMessage, 0, len(points))
+	allSealed := true
+	rosterDigest := l.roster.Digest()
+	for _, point := range points {
+		transport := &http.Transport{
+			TLSClientConfig: thresholdnet.ClientTLSConfig(l.labCert, l.roots, fmt.Sprintf("node%d.local", point)),
+		}
+		client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+		response, err := client.Get(fmt.Sprintf("https://127.0.0.1:%d/v1/ceremony/status", l.ports[point]))
+		if err != nil {
+			return fmt.Errorf("operator %d recovery status: %w", point, err)
+		}
+		body, err := readAllLimited(response)
+		transport.CloseIdleConnections()
+		if err != nil {
+			return fmt.Errorf("operator %d recovery status: %w", point, err)
+		}
+		var signed thresholdnet.SignedOperatorStatement
+		if err := json.Unmarshal(body, &signed); err != nil {
+			return fmt.Errorf("operator %d recovery status: %w", point, err)
+		}
+		rawSignature, err := hex.DecodeString(signed.Signature)
+		if err != nil || len(rawSignature) != ed25519.SignatureSize {
+			return fmt.Errorf("operator %d recovery status has an invalid signature", point)
+		}
+		var signature [ed25519.SignatureSize]byte
+		copy(signature[:], rawSignature)
+		if signed.Point != point || fhe.VerifyOperatorStatement(l.roster, point, signed.Statement, signature) != nil {
+			return fmt.Errorf("operator %d recovery status signature failed", point)
+		}
+		var statement thresholdnet.OperatorStatement
+		if err := json.Unmarshal(signed.Statement, &statement); err != nil || statement.Point != point ||
+			statement.RosterDigest != hex.EncodeToString(rosterDigest[:]) || !statement.HoldsOwnShareOnly {
+			return fmt.Errorf("operator %d recovery status is not bound to the prepared roster", point)
+		}
+		allSealed = allSealed && statement.Sealed && !statement.HoldsLocalSecretKey
+		canonical, err := json.MarshalIndent(signed, "", "  ")
+		if err != nil {
+			return err
+		}
+		canonical = append(canonical, '\n')
+		if err := os.WriteFile(filepath.Join(public, fmt.Sprintf("operator-status-%d.json", point)), canonical, 0o644); err != nil {
+			return err
+		}
+		statuses = append(statuses, json.RawMessage(canonical))
+	}
+
+	snapshot := struct {
+		SchemaVersion string            `json:"schemaVersion"`
+		CeremonyID    string            `json:"ceremonyId"`
+		RosterDigest  string            `json:"rosterDigest"`
+		ParentPID     int               `json:"parentPid"`
+		Processes     []processRecord   `json:"processes"`
+		Statuses      []json.RawMessage `json:"signedOperatorStatuses"`
+		CapturedAtUTC string            `json:"capturedAtUtc"`
+	}{
+		SchemaVersion: "mordant.ceremony-recovery-snapshot/1",
+		CeremonyID:    hex.EncodeToString(l.roster.CeremonyID[:]),
+		RosterDigest:  hex.EncodeToString(rosterDigest[:]),
+		ParentPID:     os.Getpid(),
+		Processes:     append([]processRecord(nil), l.processes...),
+		Statuses:      statuses,
+		CapturedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	encoded, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(public, "process-snapshot.json"), append(encoded, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := l.writeCeremonyResources(); err != nil {
+		return err
+	}
+	if allSealed {
+		l.stopRunningProcesses()
+		return l.runOperatorSecretAudits()
+	}
+	return nil
+}
+
+func (l *lab) stopRunningProcesses() {
+	for _, command := range l.running {
+		if command.Process != nil {
+			_ = command.Process.Signal(os.Interrupt)
+			_ = command.Wait()
+		}
+	}
+	l.running = nil
+}
+
+func (l *lab) runOperatorSecretAudits() error {
+	public := filepath.Join(l.root, "public")
+	roots := []string{public, filepath.Join(l.root, "process-tmp"), filepath.Join(l.root, "runner-tmp")}
+	roots = append(roots, l.auditRoots...)
+	for point := 1; point <= operatorCount; point++ {
+		arguments := []string{
+			"-mode", "audit",
+			"-storage", filepath.Join(l.root, "operators", strconv.Itoa(point)),
+			"-point", strconv.Itoa(point),
+			"-audit-out", filepath.Join(public, fmt.Sprintf("operator-secret-audit-%d.json", point)),
+		}
+		for _, root := range roots {
+			arguments = append(arguments, "-audit-root", root)
+		}
+		if err := l.runToCompletion(fmt.Sprintf("operator-%d-secret-audit", point), l.binaries["ceremony-operator"], arguments...); err != nil {
+			return err
+		}
+	}
+	if err := l.writeOperatorFilesystemAudit(); err != nil {
+		return err
+	}
+	report := struct {
+		SchemaVersion string          `json:"schemaVersion"`
+		Processes     []processRecord `json:"processes"`
+		CompletedAt   string          `json:"completedAtUtc"`
+	}{
+		SchemaVersion: "mordant.ceremony-audit-processes/1",
+		Processes:     append([]processRecord(nil), l.processes...),
+		CompletedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(public, "audit-processes.json"), append(encoded, '\n'), 0o644)
+}
+
+func (l *lab) writeOperatorFilesystemAudit() error {
+	type fileRecord struct {
+		Path       string `json:"path"`
+		Mode       string `json:"mode"`
+		UID        uint32 `json:"uid"`
+		GID        uint32 `json:"gid"`
+		Size       int64  `json:"size"`
+		Restricted bool   `json:"restricted"`
+	}
+	records := make([]fileRecord, 0)
+	for point := 1; point <= operatorCount; point++ {
+		root := filepath.Join(l.root, "operators", strconv.Itoa(point))
+		if err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			relativePath := relative(l.root, path)
+			restricted := info.Mode().Perm()&0o077 == 0
+			if info.IsDir() && (path == root || strings.Contains(relativePath, "ceremony-ledger") || info.Name() == "tmp") && !restricted {
+				return fmt.Errorf("operator %d private directory is not restricted: %s", point, relativePath)
+			}
+			secret := info.Name() == "identity.key" || info.Name() == "operator.bin" || info.Name() == "ledger.db" ||
+				(strings.Contains(relativePath, "ceremony-ledger") && info.Mode().IsRegular())
+			if secret && !restricted {
+				return fmt.Errorf("operator %d private file is not restricted: %s", point, relativePath)
+			}
+			uid, gid := uint32(0), uint32(0)
+			if system, ok := info.Sys().(*syscall.Stat_t); ok {
+				uid, gid = system.Uid, system.Gid
+			}
+			records = append(records, fileRecord{
+				Path: relativePath, Mode: info.Mode().String(), UID: uid, GID: gid, Size: info.Size(), Restricted: restricted,
+			})
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	report := struct {
+		SchemaVersion string       `json:"schemaVersion"`
+		OwnerUID      int          `json:"ownerUid"`
+		OwnerGID      int          `json:"ownerGid"`
+		Checks        []fileRecord `json:"checks"`
+		PrivateModes  string       `json:"privateModeRequirement"`
+		Passed        bool         `json:"passed"`
+		CompletedAt   string       `json:"completedAtUtc"`
+	}{
+		SchemaVersion: "mordant.ceremony-filesystem-audit/1", OwnerUID: os.Getuid(), OwnerGID: os.Getgid(),
+		Checks: records, PrivateModes: "operator roots and ledger directories are 0700; identity, bundle, and ledger files deny group/world access",
+		Passed: true, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(l.root, "public", "operator-filesystem-audit.json"), append(encoded, '\n'), 0o644)
+}
+
+func (l *lab) writeCeremonyResources() error {
+	type processMemory struct {
+		Role                 string `json:"role"`
+		PID                  int    `json:"pid"`
+		RSSBytesAtSnapshot   uint64 `json:"rssBytesAtSnapshot,omitempty"`
+		PeakMemoryAvailable  bool   `json:"peakMemoryAvailable"`
+		PeakMemoryLimitation string `json:"peakMemoryLimitation,omitempty"`
+	}
+	operatorDisk := map[string]uint64{}
+	for point := 1; point <= operatorCount; point++ {
+		size, err := directorySize(filepath.Join(l.root, "operators", fmt.Sprintf("%d", point)))
+		if err != nil {
+			return err
+		}
+		operatorDisk[strconv.Itoa(point)] = size
+	}
+	publicSize, err := directorySize(filepath.Join(l.root, "public"))
+	if err != nil {
+		return err
+	}
+	rootSize, err := directorySize(l.root)
+	if err != nil {
+		return err
+	}
+	var filesystem syscall.Statfs_t
+	if err := syscall.Statfs(l.root, &filesystem); err != nil {
+		return err
+	}
+	memory := make([]processMemory, 0, len(l.processes))
+	for _, process := range l.processes {
+		entry := processMemory{Role: process.Role, PID: process.PID, PeakMemoryAvailable: false,
+			PeakMemoryLimitation: "portable child peak RSS is unavailable while the separated process is live"}
+		if process.PID > 0 {
+			command := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(process.PID))
+			if output, commandErr := command.Output(); commandErr == nil {
+				if kibibytes, parseErr := strconv.ParseUint(strings.TrimSpace(string(output)), 10, 64); parseErr == nil {
+					entry.RSSBytesAtSnapshot = kibibytes * 1024
+				}
+			}
+		}
+		memory = append(memory, entry)
+	}
+	report := struct {
+		SchemaVersion      string            `json:"schemaVersion"`
+		OperatorDiskBytes  map[string]uint64 `json:"operatorDiskBytes"`
+		PublicBundleBytes  uint64            `json:"publicBundleBytes"`
+		CombinedDiskBytes  uint64            `json:"combinedDiskBytesAtSnapshot"`
+		CombinedPeakBasis  string            `json:"combinedPeakBasis"`
+		CeremonyWallMillis int64             `json:"ceremonyWallMillis"`
+		ProcessMemory      []processMemory   `json:"processMemory"`
+		FreeDiskBytes      uint64            `json:"freeDiskBytes"`
+		CleanupBehavior    string            `json:"cleanupBehavior"`
+		CustodyLimitation  string            `json:"custodyLimitation"`
+		CapturedAtUTC      string            `json:"capturedAtUtc"`
+	}{
+		SchemaVersion:      "mordant.ceremony-resource-report/1",
+		OperatorDiskBytes:  operatorDisk,
+		PublicBundleBytes:  publicSize,
+		CombinedDiskBytes:  rootSize,
+		CombinedPeakBasis:  "the completed ceremony snapshot is the measured high-water state; partial snapshots are current-state measurements",
+		CeremonyWallMillis: time.Since(l.startedAt).Milliseconds(),
+		ProcessMemory:      memory,
+		FreeDiskBytes:      uint64(filesystem.Bavail) * uint64(filesystem.Bsize),
+		CleanupBehavior:    "operator processes are killed and reaped by the parent after this durable public snapshot is written; the explicitly supplied root is retained",
+		CustodyLimitation:  "process separation on one host is not independent organizational custody",
+		CapturedAtUTC:      time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(l.root, "public", "ceremony-resources.json"), append(encoded, '\n'), 0o644)
+}
+
+func directorySize(root string) (uint64, error) {
+	var size uint64
+	err := filepath.Walk(root, func(_ string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.Mode().IsRegular() {
+			size += uint64(info.Size())
+		}
+		return nil
+	})
+	return size, err
 }
 
 // auditShareIsolation proves that no file holds more than one operator's Shamir

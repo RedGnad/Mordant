@@ -9,7 +9,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Journal, STAGES, STATES } from "./v5-journal.mjs";
+import { Journal, STAGES } from "./v5-journal.mjs";
 import {
   assertPreconditions, PreconditionError, remainingGas, remainingDiskPeak,
   requiredBalance, requiredFreeDisk, ABSOLUTE_MINIMUM_FREE_BYTES, STAGE_GAS,
@@ -18,6 +18,7 @@ import {
 const COMMIT = "ee62f91";
 const CHAIN = 10_143;
 const GWEI = 1_000_000_000n;
+const ampleFilesystem = async () => ({ bavail: 16n * 1024n * 1024n * 1024n, bsize: 1n });
 
 async function freshJournal() {
   const path = join(await mkdtemp(join(tmpdir(), "v5-pre-")), "journal.json");
@@ -87,6 +88,7 @@ test("preconditions pass with ample balance and disk", async () => {
     client: client({ balance: 1_000n * 10n ** 18n }),
     deployer: "0xdeployer",
     path: tmpdir(),
+    readFilesystemStats: ampleFilesystem,
   });
   assert.equal(facts.passed, true);
   assert.equal(facts.nextStage, "INITIALIZED");
@@ -120,12 +122,12 @@ test("a fee spike alone can fail a previously passing balance", async () => {
   const balance = 20n * 10n ** 18n;
   await assertPreconditions({
     journal, client: client({ baseFee: 20n * GWEI, balance }),
-    deployer: "0xd", path: tmpdir(),
+    deployer: "0xd", path: tmpdir(), readFilesystemStats: ampleFilesystem,
   });
   await assert.rejects(
     () => assertPreconditions({
       journal, client: client({ baseFee: 400n * GWEI, balance }),
-      deployer: "0xd", path: tmpdir(),
+      deployer: "0xd", path: tmpdir(), readFilesystemStats: ampleFilesystem,
     }),
     (error) => error.code === "INSUFFICIENT_BALANCE",
   );
@@ -139,14 +141,18 @@ test("a partially completed run needs less than a fresh one", async () => {
   const fees = { baseFee: 100n * GWEI, balance };
 
   await assert.rejects(
-    () => assertPreconditions({ journal, client: client(fees), deployer: "0xd", path: tmpdir() }),
+    () => assertPreconditions({
+      journal, client: client(fees), deployer: "0xd", path: tmpdir(), readFilesystemStats: ampleFilesystem,
+    }),
     (error) => error.code === "INSUFFICIENT_BALANCE",
   );
 
   for (const name of ["INITIALIZED", "FINAL_STACK_PLANNED", "FINAL_STACK_DEPLOYED", "BYTECODE_VERIFIED", "VAULT_CREATED"]) {
     await journal.recordOffChain(name, {});
   }
-  const facts = await assertPreconditions({ journal, client: client(fees), deployer: "0xd", path: tmpdir() });
+  const facts = await assertPreconditions({
+    journal, client: client(fees), deployer: "0xd", path: tmpdir(), readFilesystemStats: ampleFilesystem,
+  });
   assert.equal(facts.passed, true);
 });
 

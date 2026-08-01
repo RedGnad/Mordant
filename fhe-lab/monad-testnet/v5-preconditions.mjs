@@ -63,6 +63,22 @@ export const STAGE_GAS = Object.freeze({
   SESSION_PREPARED: 0n,
   SESSION_NULLIFIER_RESERVED: 0n,
   SESSION_COMMITTED: 200_000n,
+  CEREMONY_CONTEXT_PREPARED: 0n,
+  CEREMONY_IDENTITIES_CONFIRMED: 0n,
+  CEREMONY_OPERATOR_1_READY: 0n,
+  CEREMONY_OPERATOR_2_READY: 0n,
+  CEREMONY_OPERATOR_3_READY: 0n,
+  CEREMONY_CONTRIBUTIONS_GENERATED: 0n,
+  CEREMONY_CONTRIBUTIONS_EXCHANGED: 0n,
+  CEREMONY_COLLECTIVE_PUBLIC_KEY_COMPLETED: 0n,
+  CEREMONY_RELINEARIZATION_COMPLETED: 0n,
+  CEREMONY_GALOIS_COMPLETED: 0n,
+  CEREMONY_EVALUATION_KEY_BUNDLE_COMPLETED: 0n,
+  CEREMONY_PUBLIC_MANIFEST_CONSTRUCTED: 0n,
+  CEREMONY_MANIFEST_SIGNATURE_1: 0n,
+  CEREMONY_MANIFEST_SIGNATURE_2: 0n,
+  CEREMONY_MANIFEST_SIGNATURE_3: 0n,
+  CEREMONY_PUBLIC_BUNDLE_VERIFIED: 0n,
   CEREMONY_COMPLETED: 0n,
   ENROLLMENTS_ADMITTED: 0n,
   EVALUATION_COMPLETED: 0n,
@@ -83,9 +99,10 @@ export const STAGE_GAS = Object.freeze({
 
 /// Disk each remaining stage still needs, in bytes. Measured where measured.
 export const STAGE_DISK = Object.freeze({
-  // 344 MB of ceremony material, written once and then read by each separated
-  // operator process from its own directory.
-  CEREMONY_COMPLETED: 344n * 1024n * 1024n,
+  // Measured fresh recovery rehearsal: three compact private ledgers plus the
+  // 300 MB public evaluation bundle peak just below 1 GiB. Keep 1.25 GiB as
+  // the stage projection; the global 2x margin applies below.
+  CEREMONY_CONTEXT_PREPARED: 1280n * 1024n * 1024n,
   // Three operator directories, because no operator may share another's
   // artifacts.
   OPERATOR_RECOMPUTATION_COMPLETED: 3n * 344n * 1024n * 1024n,
@@ -163,7 +180,7 @@ const gib = (bytes) => (Number(bytes) / 1024 ** 3).toFixed(2);
 ///
 /// `path` is any path on the volume the run writes to; free space is read from
 /// that volume rather than assumed to be the repository's.
-export async function assertPreconditions({ journal, client, deployer, path }) {
+export async function assertPreconditions({ journal, client, deployer, path, readFilesystemStats = statfs }) {
   const block = await client.getBlock();
   const base = block.baseFeePerGas ?? (await client.getGasPrice());
   const maxFeePerGas = base * 2n + 2_000_000_000n;
@@ -174,7 +191,7 @@ export async function assertPreconditions({ journal, client, deployer, path }) {
 
   const projectedPeak = remainingDiskPeak(journal);
   const requiredDisk = requiredFreeDisk(projectedPeak);
-  const stats = await statfs(path);
+  const stats = await readFilesystemStats(path);
   const freeBytes = BigInt(stats.bavail) * BigInt(stats.bsize);
 
   const facts = {

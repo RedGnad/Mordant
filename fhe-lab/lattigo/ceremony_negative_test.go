@@ -477,16 +477,14 @@ func TestManifestVerificationRejectsSubstitutedAndUnauthenticatedKeys(t *testing
 	_ = operators
 }
 
-// TestCeremonyRestartIsDetectedAndFailsClosed covers the documented restart rule.
+// TestCeremonyUnsafeReinitializationIsDetectedAndFailsClosed proves that a
+// caller cannot bypass the private recovery ledger by constructing fresh state
+// under an existing ceremony identifier.
 //
-// A ceremony operator keeps its RLWE secret, its Shamir polynomial and its CRS
-// contribution in memory only. If the process dies mid-ceremony and comes back,
-// it necessarily samples fresh material, so it can no longer agree with the
-// cohort. The divergence is caught before any key is published: the restarted
-// operator derives a different CRS commitment, and the coordinator compares
-// every operator's commitment against its own before proceeding. There is no
-// path that resumes a ceremony with reused shares or reused protocol randomness.
-func TestCeremonyRestartIsDetectedAndFailsClosed(t *testing.T) {
+// The supported process restart restores the operator-local immutable ledger.
+// A direct constructor necessarily samples fresh material and cannot silently
+// join the persisted cohort; divergence is caught before key publication.
+func TestCeremonyUnsafeReinitializationIsDetectedAndFailsClosed(t *testing.T) {
 	params := ceremonyParameters(t)
 	roster, keys, operators := newSetupFixture(t)
 	original := make(map[uint64][32]byte, len(operators))

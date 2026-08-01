@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
 	fhe "mordant.dev/fhe-lab/lattigo"
 	"mordant.dev/fhe-lab/lattigo/internal/thresholdnet"
@@ -46,6 +48,7 @@ type options struct {
 	chainID        uint64
 	policyID       string
 	validitySecond int64
+	stopAfter      string
 }
 
 type rosterFile struct {
@@ -159,6 +162,12 @@ func conduct(settings options) error {
 		}
 	}
 	points := sortedPoints(endpoints)
+	if complete, err := verifyExistingPublicBundle(settings, params, roster, clients, points); err != nil {
+		return err
+	} else if complete {
+		fmt.Println("CEREMONY_COORDINATOR_RECONCILED")
+		return nil
+	}
 	aggregator, err := fhe.NewCeremonyAggregator(params, roster)
 	if err != nil {
 		return err
@@ -177,8 +186,9 @@ func conduct(settings options) error {
 	// Round 1: collect public CRS contributions and hand the full table back so
 	// every operator derives the identical stream.
 	contributions := make(map[uint64][32]byte, len(points))
+	checkpointed := false
 	if err := timed("crs-contributions", func() error {
-		for _, point := range points {
+		for index, point := range points {
 			raw, err := clients[point].Step(ctx, thresholdnet.OpContribution, nil)
 			if err != nil {
 				return err
@@ -192,10 +202,17 @@ func conduct(settings options) error {
 			if err := aggregator.AcceptCRSContribution(point, value); err != nil {
 				return err
 			}
+			if coordinatorCheckpoint(settings.stopAfter, fmt.Sprintf("contribution-%d", index+1)) {
+				checkpointed = true
+				return nil
+			}
 		}
 		return nil
 	}); err != nil {
 		return err
+	}
+	if checkpointed || coordinatorCheckpoint(settings.stopAfter, "contributions") {
+		return nil
 	}
 	table := thresholdnet.EncodeCRSContributions(contributions)
 	if err := timed("crs-seal", func() error {
@@ -215,6 +232,9 @@ func conduct(settings options) error {
 	}); err != nil {
 		return err
 	}
+	if coordinatorCheckpoint(settings.stopAfter, "crs-sealed") {
+		return nil
+	}
 
 	// Round 2: instruct each operator to push its Shamir re-sharing directly to
 	// its peers. The payload below is a public address book, not a share.
@@ -223,7 +243,7 @@ func conduct(settings options) error {
 		return err
 	}
 	if err := timed("private-reshare", func() error {
-		for _, point := range points {
+		for index, point := range points {
 			raw, err := clients[point].Step(ctx, thresholdnet.OpReshare, peerTable)
 			if err != nil {
 				return err
@@ -231,6 +251,14 @@ func conduct(settings options) error {
 			if len(raw) != 1 || int(raw[0]) != len(points) {
 				return fmt.Errorf("operator %d served %v recipients", point, raw)
 			}
+			if coordinatorCheckpoint(settings.stopAfter, fmt.Sprintf("reshare-%d", index+1)) {
+				checkpointed = true
+				return nil
+			}
+		}
+		if coordinatorCheckpoint(settings.stopAfter, "reshare-complete") {
+			checkpointed = true
+			return nil
 		}
 		for _, point := range points {
 			if _, err := clients[point].Step(ctx, thresholdnet.OpSealShares, nil); err != nil {
@@ -240,6 +268,9 @@ func conduct(settings options) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+	if checkpointed || coordinatorCheckpoint(settings.stopAfter, "shares-sealed") {
+		return nil
 	}
 
 	// Round 3: collective public key.
@@ -257,6 +288,9 @@ func conduct(settings options) error {
 	}); err != nil {
 		return err
 	}
+	if coordinatorCheckpoint(settings.stopAfter, "public-key") {
+		return nil
+	}
 
 	// Rounds 4 and 5: two-round collective relinearization key.
 	if err := timed("relinearization-key", func() error {
@@ -273,6 +307,10 @@ func conduct(settings options) error {
 		if err != nil {
 			return err
 		}
+		if coordinatorCheckpoint(settings.stopAfter, "relin-one") {
+			checkpointed = true
+			return nil
+		}
 		for _, point := range points {
 			wire, err := clients[point].Step(ctx, thresholdnet.OpRelinTwo, combined)
 			if err != nil {
@@ -285,6 +323,9 @@ func conduct(settings options) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+	if checkpointed || coordinatorCheckpoint(settings.stopAfter, "relin-complete") {
+		return nil
 	}
 
 	// Round 6: one collective Galois key per circuit rotation.
@@ -309,6 +350,9 @@ func conduct(settings options) error {
 	}); err != nil {
 		return err
 	}
+	if coordinatorCheckpoint(settings.stopAfter, "galois-complete") {
+		return nil
+	}
 
 	publicKey, relinKey, galoisKeys, err := aggregator.CollectiveKeys()
 	if err != nil {
@@ -326,16 +370,36 @@ func conduct(settings options) error {
 	if err != nil {
 		return err
 	}
+	manifestStatement := fhe.MarshalCeremonyManifestStatement(roster, digests)
+	if err := os.MkdirAll(settings.out, 0o755); err != nil {
+		return err
+	}
+	statementPath := filepath.Join(settings.out, "ceremony-manifest-statement.bin")
+	if existing, readErr := os.ReadFile(statementPath); readErr == nil {
+		if !bytes.Equal(existing, manifestStatement) {
+			return errors.New("persisted canonical ceremony manifest drifted")
+		}
+	} else if !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
+	} else if err := os.WriteFile(statementPath, manifestStatement, 0o644); err != nil {
+		return err
+	}
+	if coordinatorCheckpoint(settings.stopAfter, "manifest-constructed") {
+		return nil
+	}
 
 	// Publish the key epoch so each operator can bind its own sealed bundle to
 	// it, then collect the attestations.
 	if err := publishKeyEpoch(ctx, certificate, roots, endpoints, keyID); err != nil {
 		return err
 	}
+	if coordinatorCheckpoint(settings.stopAfter, "evaluation-key-complete") {
+		return nil
+	}
 	attestations := make([]fhe.CeremonyAttestation, 0, len(points))
 	if err := timed("seal-manifest", func() error {
 		payload := thresholdnet.EncodeKeyDigests(digests)
-		for _, point := range points {
+		for index, point := range points {
 			raw, err := clients[point].Step(ctx, thresholdnet.OpSealManifest, payload)
 			if err != nil {
 				return err
@@ -346,13 +410,33 @@ func conduct(settings options) error {
 			attestation := fhe.CeremonyAttestation{Point: point}
 			copy(attestation.Signature[:], raw)
 			attestations = append(attestations, attestation)
+			attestationPath := filepath.Join(settings.out, fmt.Sprintf("manifest-attestation-%d.bin", point))
+			if existing, readErr := os.ReadFile(attestationPath); readErr == nil {
+				if !bytes.Equal(existing, raw) {
+					return fmt.Errorf("operator %d manifest attestation drifted", point)
+				}
+			} else if !errors.Is(readErr, os.ErrNotExist) {
+				return readErr
+			} else if err := os.WriteFile(attestationPath, raw, 0o644); err != nil {
+				return err
+			}
+			if coordinatorCheckpoint(settings.stopAfter, fmt.Sprintf("signature-%d", index+1)) {
+				checkpointed = true
+				return nil
+			}
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
+	if checkpointed {
+		return nil
+	}
 	if err := fhe.VerifyCeremonyAttestations(roster, digests, attestations); err != nil {
 		return err
+	}
+	if coordinatorCheckpoint(settings.stopAfter, "manifest-signed") {
+		return nil
 	}
 
 	now := time.Now().UTC()
@@ -378,6 +462,9 @@ func conduct(settings options) error {
 	if err != nil {
 		return err
 	}
+	if coordinatorCheckpoint(settings.stopAfter, "bundle-constructed") {
+		return nil
+	}
 	if err := os.MkdirAll(settings.out, 0o755); err != nil {
 		return err
 	}
@@ -393,6 +480,9 @@ func conduct(settings options) error {
 	}
 	if err := os.WriteFile(filepath.Join(settings.out, "key-manifest.json"), manifestBytes, 0o644); err != nil {
 		return err
+	}
+	if coordinatorCheckpoint(settings.stopAfter, "public-bundle-written") {
+		return nil
 	}
 
 	// Independent operator evidence: read each operator's own account.
@@ -432,7 +522,182 @@ func conduct(settings options) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(settings.out, "ceremony-evidence.json"), append(encoded, '\n'), 0o644)
+	if err := os.WriteFile(filepath.Join(settings.out, "ceremony-evidence.json"), append(encoded, '\n'), 0o644); err != nil {
+		return err
+	}
+	coordinatorCheckpoint(settings.stopAfter, "confirmed")
+	return nil
+}
+
+func verifyExistingPublicBundle(
+	settings options,
+	params bgv.Parameters,
+	roster fhe.CeremonyRoster,
+	clients map[uint64]*thresholdnet.CeremonyClient,
+	points []uint64,
+) (bool, error) {
+	paths := []string{
+		filepath.Join(settings.out, "collective-public-material.bin"),
+		filepath.Join(settings.out, "collective-evaluation-keys.bin"),
+		filepath.Join(settings.out, "key-manifest.json"),
+		filepath.Join(settings.out, "ceremony-evidence.json"),
+	}
+	present := 0
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			present++
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+	}
+	if present == 0 {
+		return false, nil
+	}
+	if present != len(paths) {
+		return false, errors.New("incomplete public ceremony bundle")
+	}
+
+	publicMaterial, err := os.ReadFile(paths[0])
+	if err != nil {
+		return false, err
+	}
+	client, err := fhe.NewExternalClient(publicMaterial)
+	if err != nil || client.CustodyModel() != fhe.CustodyDealerlessCeremony {
+		return false, errors.New("public ceremony material rejected")
+	}
+	publicKeyBytes, err := client.CollectivePublicKeyBytes()
+	if err != nil {
+		return false, err
+	}
+	publicKey := rlwe.NewPublicKey(params)
+	if err := publicKey.UnmarshalBinary(publicKeyBytes); err != nil {
+		return false, errors.New("collective public key rejected")
+	}
+	evaluationBytes, err := os.ReadFile(paths[1])
+	if err != nil {
+		return false, err
+	}
+	relinKey, galoisKeys, _, err := fhe.UnmarshalEvaluationKeys(params, evaluationBytes)
+	if err != nil {
+		return false, err
+	}
+	runtime, err := fhe.NewEvaluationRuntime(params, publicKey, relinKey, galoisKeys)
+	if err != nil || runtime.HoldsThresholdParties() {
+		return false, errors.New("public evaluation bundle requires secret material")
+	}
+
+	manifestBytes, err := os.ReadFile(paths[2])
+	if err != nil {
+		return false, err
+	}
+	manifest, err := fhe.UnmarshalCollectiveKeyManifest(manifestBytes)
+	if err != nil {
+		return false, err
+	}
+	policyID, err := decodeHex32(settings.policyID)
+	if err != nil {
+		return false, err
+	}
+	rosterDigest := roster.Digest()
+	if err := fhe.VerifyCollectiveKeyManifest(manifest, fhe.ClientKeyExpectation{
+		RosterDigest: rosterDigest, Threshold: 2, KeyEpoch: roster.KeyEpoch,
+		ChainID: settings.chainID, PolicyID: policyID, PolicyVersion: fhe.PolicyVersion, Now: time.Now().UTC(),
+	}, client.KeyIDBytes(), fhe.PublicKeyCommitmentFor(publicKeyBytes)); err != nil {
+		return false, err
+	}
+	relinDigest, galoisDigest, err := fhe.EvaluationKeyDigestsFrom(params, evaluationBytes)
+	if err != nil || manifest.RelinearizationKeyDigest != hex.EncodeToString(relinDigest[:]) ||
+		manifest.GaloisKeyCommitment != hex.EncodeToString(galoisDigest[:]) {
+		return false, errors.New("evaluation bundle digest mismatch")
+	}
+	digests, err := manifestKeyDigests(manifest)
+	if err != nil {
+		return false, err
+	}
+	evaluationDigest := fhe.CeremonyEvaluationKeyDigest(digests)
+	manifestDigest := fhe.CeremonyManifestDigest(roster, digests)
+	expectedStatement := fhe.MarshalCeremonyManifestStatement(roster, digests)
+	statement, err := os.ReadFile(filepath.Join(settings.out, "ceremony-manifest-statement.bin"))
+	if err != nil || !bytes.Equal(statement, expectedStatement) || sha256.Sum256(statement) != manifestDigest {
+		return false, errors.New("canonical signed ceremony manifest mismatch")
+	}
+	for _, operator := range roster.Operators {
+		signature, err := os.ReadFile(filepath.Join(settings.out, fmt.Sprintf("manifest-attestation-%d.bin", operator.Point)))
+		if err != nil || len(signature) != ed25519.SignatureSize || !ed25519.Verify(operator.SigningPublicKey[:], manifestDigest[:], signature) {
+			return false, fmt.Errorf("operator %d canonical manifest attestation rejected", operator.Point)
+		}
+	}
+
+	seen := make(map[uint64]struct{}, len(points))
+	statementSignatures := make(map[string]struct{}, len(points))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	for _, point := range points {
+		raw, err := clients[point].CeremonyStatus(ctx)
+		if err != nil {
+			return false, err
+		}
+		var signed thresholdnet.SignedOperatorStatement
+		if err := json.Unmarshal(raw, &signed); err != nil || signed.Point != point {
+			return false, errors.New("operator status rejected")
+		}
+		signatureBytes, err := hex.DecodeString(signed.Signature)
+		if err != nil || len(signatureBytes) != ed25519.SignatureSize {
+			return false, errors.New("operator status signature rejected")
+		}
+		var signature [ed25519.SignatureSize]byte
+		copy(signature[:], signatureBytes)
+		if err := fhe.VerifyOperatorStatement(roster, point, signed.Statement, signature); err != nil {
+			return false, err
+		}
+		if _, duplicate := statementSignatures[signed.Signature]; duplicate {
+			return false, errors.New("operator status signatures are not distinct")
+		}
+		statementSignatures[signed.Signature] = struct{}{}
+		var statement thresholdnet.OperatorStatement
+		if err := json.Unmarshal(signed.Statement, &statement); err != nil || statement.Point != point || !statement.Sealed ||
+			statement.HoldsLocalSecretKey || !statement.HoldsOwnShareOnly ||
+			statement.PublicKeyDigest != hex.EncodeToString(digests.PublicKeyCommitment[:]) ||
+			statement.EvaluationKeyDigest != hex.EncodeToString(evaluationDigest[:]) ||
+			statement.ManifestDigest != hex.EncodeToString(manifestDigest[:]) {
+			return false, errors.New("operator public digest readback mismatch")
+		}
+		seen[point] = struct{}{}
+	}
+	if len(seen) != 3 || roster.Threshold != 2 || len(roster.Operators) != 3 {
+		return false, errors.New("ceremony is not exactly 2-of-3")
+	}
+	evidenceBytes, err := os.ReadFile(paths[3])
+	if err != nil || !json.Valid(evidenceBytes) || sha256.Sum256(evidenceBytes) == ([32]byte{}) {
+		return false, errors.New("ceremony evidence rejected")
+	}
+	return true, nil
+}
+
+func manifestKeyDigests(manifest fhe.CollectiveKeyManifest) (fhe.CeremonyKeyDigests, error) {
+	var digests fhe.CeremonyKeyDigests
+	for target, encoded := range map[*[32]byte]string{
+		&digests.CRSCommitment:            manifest.CRSCommitment,
+		&digests.PublicKeyCommitment:      manifest.PublicKeyCommitment,
+		&digests.RelinearizationKeyDigest: manifest.RelinearizationKeyDigest,
+		&digests.GaloisKeyCommitment:      manifest.GaloisKeyCommitment,
+		&digests.PolicyCircuitCommitment:  manifest.PolicyCircuitCommitment,
+	} {
+		raw, err := hex.DecodeString(encoded)
+		if err != nil || len(raw) != 32 {
+			return digests, errors.New("manifest digest rejected")
+		}
+		copy(target[:], raw)
+	}
+	return digests, nil
+}
+
+func coordinatorCheckpoint(configured, reached string) bool {
+	if configured != reached {
+		return false
+	}
+	fmt.Println("CEREMONY_COORDINATOR_CHECKPOINT:" + reached)
+	return true
 }
 
 func publishKeyEpoch(ctx context.Context, certificate tls.Certificate, roots *x509.CertPool, endpoints map[uint64]string, keyID [32]byte) error {
@@ -569,6 +834,7 @@ func parseOptions(arguments []string) (options, error) {
 	flags.Uint64Var(&settings.chainID, "chain-id", 0, "policy scope chain id")
 	flags.StringVar(&settings.policyID, "policy-id", "", "policy id")
 	flags.Int64Var(&settings.validitySecond, "validity-seconds", 3600, "manifest validity")
+	flags.StringVar(&settings.stopAfter, "stop-after", "", "controlled recovery checkpoint")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || settings.storage == "" {
 		return options{}, errors.New("invalid ceremony-coordinator configuration")
 	}

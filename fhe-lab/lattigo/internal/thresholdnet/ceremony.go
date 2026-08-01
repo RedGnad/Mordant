@@ -48,6 +48,11 @@ const (
 	maxCeremonyPeerBytes     = 32 << 20
 )
 
+// CeremonyProtocolVersion is the existing Gate 1 coordinator/operator wire
+// authority. It is exported only so the immutable runner context can name the
+// exact protocol it is preparing.
+const CeremonyProtocolVersion = ceremonyWireDomain
+
 // CeremonyOperation identifies one coordinator-driven ceremony step.
 type CeremonyOperation uint8
 
@@ -75,6 +80,10 @@ var (
 type CeremonyServer struct {
 	State                *spike.CeremonyOperatorState
 	CoordinatorPublicKey ed25519.PublicKey
+	// Recovery is the operator-local immutable checkpoint ledger. When set,
+	// every mutating result is fsynced before any response leaves this process,
+	// and an already completed request returns its exact cached bytes.
+	Recovery *CeremonyPrivateLedger
 	// PeerDialer builds the client used to push private shares to peers. It is
 	// injected so the operator process controls its own client identity.
 	PeerDialer func(point uint64, endpoint string) (*http.Client, error)
@@ -84,10 +93,11 @@ type CeremonyServer struct {
 	// KeyID binds the sealed bundle to the collective key epoch.
 	KeyID func() ([32]byte, error)
 
-	mu       sync.Mutex
-	steps    []CeremonyStepRecord
-	consumed map[CeremonyOperation]int
-	peers    map[uint64]struct{}
+	protocolMu sync.Mutex
+	mu         sync.Mutex
+	steps      []CeremonyStepRecord
+	consumed   map[CeremonyOperation]int
+	peers      map[uint64]struct{}
 }
 
 // CeremonyStepRecord is the operator's own account of a completed round. The
@@ -131,11 +141,31 @@ func (server *CeremonyServer) handleCeremonyStatus(writer http.ResponseWriter, r
 		writeBoundedError(writer, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	server.mu.Lock()
-	steps := append([]CeremonyStepRecord(nil), server.steps...)
-	server.mu.Unlock()
+	server.protocolMu.Lock()
+	defer server.protocolMu.Unlock()
+	var steps []CeremonyStepRecord
+	if server.Recovery != nil {
+		steps = server.Recovery.Steps()
+	} else {
+		server.mu.Lock()
+		steps = append([]CeremonyStepRecord(nil), server.steps...)
+		server.mu.Unlock()
+	}
 	crs := server.State.CRSCommitment()
 	roster := server.State.RosterDigest()
+	publicKeyDigest, evaluationKeyDigest, manifestDigest := "", "", ""
+	if server.Recovery != nil {
+		if digests, present, err := server.Recovery.FinalKeyDigests(); err != nil {
+			writeBoundedError(writer, http.StatusConflict, "operator ledger unavailable")
+			return
+		} else if present {
+			publicKeyDigest = hex.EncodeToString(digests.PublicKeyCommitment[:])
+			evaluation := spike.CeremonyEvaluationKeyDigest(digests)
+			evaluationKeyDigest = hex.EncodeToString(evaluation[:])
+			manifest := spike.CeremonyManifestDigest(server.State.Roster(), digests)
+			manifestDigest = hex.EncodeToString(manifest[:])
+		}
+	}
 	statement := OperatorStatement{
 		Point:               server.State.Point(),
 		RosterDigest:        hex.EncodeToString(roster[:]),
@@ -143,6 +173,9 @@ func (server *CeremonyServer) handleCeremonyStatus(writer http.ResponseWriter, r
 		Sealed:              server.State.Sealed(),
 		HoldsLocalSecretKey: server.State.HoldsLocalSecretKey(),
 		HoldsOwnShareOnly:   true,
+		PublicKeyDigest:     publicKeyDigest,
+		EvaluationKeyDigest: evaluationKeyDigest,
+		ManifestDigest:      manifestDigest,
 		Steps:               steps,
 		ObservedAt:          time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -177,6 +210,9 @@ type OperatorStatement struct {
 	Sealed              bool                 `json:"sealed"`
 	HoldsLocalSecretKey bool                 `json:"holdsLocalSecretKey"`
 	HoldsOwnShareOnly   bool                 `json:"holdsOwnShareOnly"`
+	PublicKeyDigest     string               `json:"publicKeyDigest,omitempty"`
+	EvaluationKeyDigest string               `json:"evaluationKeyDigest,omitempty"`
+	ManifestDigest      string               `json:"manifestDigest,omitempty"`
 	Steps               []CeremonyStepRecord `json:"steps"`
 	ObservedAt          string               `json:"observedAt"`
 }
@@ -242,9 +278,33 @@ func (server *CeremonyServer) handlePeerShare(writer http.ResponseWriter, reques
 		writeBoundedError(writer, http.StatusForbidden, "private share author does not match the peer identity")
 		return
 	}
+	server.protocolMu.Lock()
+	defer server.protocolMu.Unlock()
+	if server.Recovery != nil {
+		digest := sha256.Sum256(body)
+		persisted, exists, ledgerErr := server.Recovery.InboundDigest(senderPoint)
+		if ledgerErr != nil {
+			writeBoundedError(writer, http.StatusConflict, "operator ledger unavailable")
+			return
+		}
+		if exists {
+			if persisted != digest {
+				writeBoundedError(writer, http.StatusConflict, "private share conflicts with persisted input")
+				return
+			}
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
 	if err := server.State.AcceptPrivateShare(share); err != nil {
 		writeBoundedError(writer, http.StatusConflict, "private share rejected")
 		return
+	}
+	if server.Recovery != nil {
+		if err := server.Recovery.SaveInbound(senderPoint, body); err != nil {
+			writeBoundedError(writer, http.StatusConflict, "operator ledger unavailable")
+			return
+		}
 	}
 	server.mu.Lock()
 	if server.peers == nil {
@@ -277,7 +337,9 @@ func (server *CeremonyServer) handleCeremony(writer http.ResponseWriter, request
 		writeBoundedError(writer, http.StatusUnauthorized, "invalid signed ceremony request")
 		return
 	}
+	server.protocolMu.Lock()
 	response, err := server.step(request.Context(), parsed)
+	server.protocolMu.Unlock()
 	if err != nil {
 		writeBoundedError(writer, http.StatusConflict, "ceremony step rejected")
 		return
@@ -289,11 +351,40 @@ func (server *CeremonyServer) handleCeremony(writer http.ResponseWriter, request
 }
 
 func (server *CeremonyServer) step(ctx context.Context, request ceremonyRequest) ([]byte, error) {
+	if server.Recovery != nil {
+		cached, exists, err := server.Recovery.Cached(request.Operation, request.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			if request.Operation == OpSealManifest && server.Persist != nil {
+				bundle, present, err := server.Recovery.SealedBundle()
+				if err != nil || !present {
+					return nil, ErrCeremonyRejected
+				}
+				if err := server.Persist(bundle); err != nil {
+					return nil, err
+				}
+			}
+			return cached, nil
+		}
+		if request.Operation == OpReshare {
+			cached, completed, err := server.Recovery.CachedReshare()
+			if err != nil {
+				return nil, err
+			}
+			if completed {
+				if _, err := server.peerEndpointsForRoster(request.Payload); err != nil {
+					return nil, err
+				}
+				return cached, nil
+			}
+		}
+	}
 	switch request.Operation {
 	case OpContribution:
 		contribution := server.State.CRSContribution()
-		server.record(request.Operation, "")
-		return contribution[:], nil
+		return server.finish(request, contribution[:], "", nil)
 	case OpSealCRS:
 		if err := server.applyContributions(request.Payload); err != nil {
 			return nil, err
@@ -302,42 +393,36 @@ func (server *CeremonyServer) step(ctx context.Context, request ceremonyRequest)
 			return nil, err
 		}
 		commitment := server.State.CRSCommitment()
-		server.record(request.Operation, fmt.Sprintf("crs=%x", commitment[:8]))
-		return commitment[:], nil
+		return server.finish(request, commitment[:], fmt.Sprintf("crs=%x", commitment[:8]), nil)
 	case OpReshare:
 		sent, err := server.pushPrivateShares(ctx, request.Payload)
 		if err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, fmt.Sprintf("recipients=%d", sent))
-		return []byte{byte(sent)}, nil
+		return server.finish(request, []byte{byte(sent)}, fmt.Sprintf("recipients=%d", sent), nil)
 	case OpSealShares:
 		if err := server.State.SealThresholdShare(); err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, "")
-		return nil, nil
+		return server.finish(request, nil, "", nil)
 	case OpPublicKeyShare:
 		wire, err := server.State.PublicKeyShare()
 		if err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, fmt.Sprintf("bytes=%d", len(wire)))
-		return wire, nil
+		return server.finish(request, wire, fmt.Sprintf("bytes=%d", len(wire)), nil)
 	case OpRelinOne:
 		wire, err := server.State.RelinearizationShareRoundOne()
 		if err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, fmt.Sprintf("bytes=%d", len(wire)))
-		return wire, nil
+		return server.finish(request, wire, fmt.Sprintf("bytes=%d", len(wire)), nil)
 	case OpRelinTwo:
 		wire, err := server.State.RelinearizationShareRoundTwo(request.Payload)
 		if err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, fmt.Sprintf("bytes=%d", len(wire)))
-		return wire, nil
+		return server.finish(request, wire, fmt.Sprintf("bytes=%d", len(wire)), nil)
 	case OpGalois:
 		if len(request.Payload) != 8 {
 			return nil, ErrCeremonyRequest
@@ -347,13 +432,23 @@ func (server *CeremonyServer) step(ctx context.Context, request ceremonyRequest)
 		if err != nil {
 			return nil, err
 		}
-		server.record(request.Operation, fmt.Sprintf("element=%d", element))
-		return wire, nil
+		return server.finish(request, wire, fmt.Sprintf("element=%d", element), nil)
 	case OpSealManifest:
-		return server.sealManifest(request.Payload)
+		return server.sealManifest(request)
 	default:
 		return nil, ErrCeremonyRequest
 	}
+}
+
+func (server *CeremonyServer) finish(request ceremonyRequest, response []byte, detail string, aux []byte) ([]byte, error) {
+	if server.Recovery != nil {
+		if err := server.Recovery.CommitOperation(request.Operation, request.Payload, response, detail, aux); err != nil {
+			return nil, err
+		}
+	} else {
+		server.record(request.Operation, detail)
+	}
+	return response, nil
 }
 
 func (server *CeremonyServer) applyContributions(payload []byte) error {
@@ -378,7 +473,7 @@ func (server *CeremonyServer) applyContributions(payload []byte) error {
 // coordinator connection: the coordinator only learns how many recipients were
 // served.
 func (server *CeremonyServer) pushPrivateShares(ctx context.Context, payload []byte) (int, error) {
-	endpoints, err := decodePeerEndpoints(payload)
+	endpoints, err := server.peerEndpointsForRoster(payload)
 	if err != nil {
 		return 0, err
 	}
@@ -387,18 +482,63 @@ func (server *CeremonyServer) pushPrivateShares(ctx context.Context, payload []b
 	}
 	sent := 0
 	for _, endpoint := range endpoints {
-		share, err := server.State.PrivateShareFor(endpoint.Point)
-		if err != nil {
-			return 0, err
-		}
-		wire, err := share.MarshalBinary()
-		if err != nil {
-			return 0, err
+		var wire []byte
+		if server.Recovery != nil {
+			cached, exists, err := server.Recovery.Outbound(endpoint.Point)
+			if err != nil {
+				return 0, err
+			}
+			if exists {
+				wire = cached
+			} else {
+				share, err := server.State.PrivateShareFor(endpoint.Point)
+				if err != nil {
+					return 0, err
+				}
+				wire, err = share.MarshalBinary()
+				if err != nil {
+					return 0, err
+				}
+				if err := server.Recovery.SaveOutbound(endpoint.Point, wire); err != nil {
+					return 0, err
+				}
+			}
+		} else {
+			share, err := server.State.PrivateShareFor(endpoint.Point)
+			if err != nil {
+				return 0, err
+			}
+			wire, err = share.MarshalBinary()
+			if err != nil {
+				return 0, err
+			}
 		}
 		if endpoint.Point == server.State.Point() {
 			// The operator's own contribution to itself never leaves the process.
-			if err := server.State.AcceptPrivateShare(share); err != nil {
-				return 0, err
+			persisted := false
+			if server.Recovery != nil {
+				digest := sha256.Sum256(wire)
+				seen, exists, err := server.Recovery.InboundDigest(endpoint.Point)
+				if err != nil {
+					return 0, err
+				}
+				if exists {
+					if seen != digest {
+						return 0, ErrCeremonyRejected
+					}
+					persisted = true
+				}
+			}
+			if !persisted {
+				share, err := spike.UnmarshalCeremonyPrivateShare(wire)
+				if err != nil || server.State.AcceptPrivateShare(share) != nil {
+					return 0, ErrCeremonyRejected
+				}
+				if server.Recovery != nil {
+					if err := server.Recovery.SaveInbound(endpoint.Point, wire); err != nil {
+						return 0, err
+					}
+				}
 			}
 			sent++
 			continue
@@ -426,7 +566,32 @@ func (server *CeremonyServer) pushPrivateShares(ctx context.Context, payload []b
 	return sent, nil
 }
 
-func (server *CeremonyServer) sealManifest(payload []byte) ([]byte, error) {
+// peerEndpointsForRoster accepts changed process URLs after a restart, but it
+// requires the exact canonical participant set. A completed re-sharing can
+// therefore be acknowledged from its durable result without re-dialling any
+// peer, while a substituted, missing, duplicated, or reordered point fails.
+func (server *CeremonyServer) peerEndpointsForRoster(payload []byte) ([]PeerEndpoint, error) {
+	if server == nil || server.State == nil {
+		return nil, ErrCeremonyRejected
+	}
+	endpoints, err := decodePeerEndpoints(payload)
+	if err != nil {
+		return nil, err
+	}
+	expected := server.State.RosterOperatorPoints()
+	if len(endpoints) != len(expected) {
+		return nil, ErrCeremonyRequest
+	}
+	for index, point := range expected {
+		if endpoints[index].Point != point {
+			return nil, ErrCeremonyRequest
+		}
+	}
+	return endpoints, nil
+}
+
+func (server *CeremonyServer) sealManifest(request ceremonyRequest) ([]byte, error) {
+	payload := request.Payload
 	if len(payload) != 160 {
 		return nil, ErrCeremonyRequest
 	}
@@ -440,21 +605,27 @@ func (server *CeremonyServer) sealManifest(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var bundle []byte
 	if server.KeyID != nil && server.Persist != nil {
 		keyID, err := server.KeyID()
 		if err != nil {
 			return nil, err
 		}
-		bundle, err := server.State.SealedOperatorBundle(keyID)
+		bundle, err = server.State.SealedOperatorBundle(keyID)
 		if err != nil {
 			return nil, err
 		}
+	}
+	response := attestation.Signature[:]
+	if _, err := server.finish(request, response, "", bundle); err != nil {
+		return nil, err
+	}
+	if server.Persist != nil && len(bundle) != 0 {
 		if err := server.Persist(bundle); err != nil {
 			return nil, err
 		}
 	}
-	server.record(OpSealManifest, "")
-	return attestation.Signature[:], nil
+	return response, nil
 }
 
 func (server *CeremonyServer) record(operation CeremonyOperation, detail string) {

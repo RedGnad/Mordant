@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "mordant.recoverable-ceremony-checkpoint/1",
+  "recordedAtUtc": "2026-08-01T19:37:51.523194Z",
+  "classification": "FRESH LOCAL ONLY — NO MONAD BROADCAST",
+  "baselineSourceCommit": "ab4945015962c02cc2b10d28497e5a01ff98a04e",
+  "localAdmission": {
+    "chainId": 31337,
+    "sessionCommitment": "0xb262cb50d771b984d7695fa638a585fbf03361efa5523b35305cd6f5247108aa",
+    "sessionNullifier": "0xf9a839ad1d4885b286f9990ea52bdc49f017879e763108bd58f0b4f1caf9f7aa"
+  },
+  "ceremony": {
+    "ceremonyId": "61c8b723f293849257869d22e2583687ed676f201fcbf6cc2bb3c384f44584c6",
+    "rosterDigest": "0x47381896cc41b6cbfcf747b513afd60571e291c17b792215af6f0b72084aa7a5",
+    "manifestDigest": "0x23e676fb792eed0e7709eb73849340a66475493c497f510537464a4dba6a9c87",
+    "operatorStepDigest": "0x96e43a1541b86601d66a3fcc313dcb47de962dea8ca830214f046f821d9e1776",
+    "parameterFingerprint": "d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "threshold": "2-of-3",
+    "operatorOperationCounts": {
+      "1": { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1, "8": 9, "9": 1 },
+      "2": { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1, "8": 9, "9": 1 },
+      "3": { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1, "8": 9, "9": 1 }
+    },
+    "attestationDigests": {
+      "1": "0x6a8f29289f47e814cc84523653fdc119818752a3fa79e906b1aae38619e2b708",
+      "2": "0xfe8ca014d6dd3ae61812ad19c0438c84c9b446b1f37b125ffa018c8ebba26f9c",
+      "3": "0xeb8082bbe2da1d883aae1495b5f610011bbf3de1e5729fa81595676df80a504f"
+    },
+    "secretAuditReportDigests": {
+      "1": "0x9963946dea431e92aecee901d1cd3009b9c5492a550e6c0050ee1a2fe840d7c3",
+      "2": "0xfc8f7a4c0caa6dab44691f0f27d424592b3c2600a05203dafbe146100a76fcfa",
+      "3": "0xa74ecf9ef5d7b2e0d5ecdfd53447844173f5977d280081e037180367ed7aa915"
+    },
+    "allLeakScansClean": true,
+    "allPositiveControlsDetectedAndRemoved": true,
+    "publicEvaluatorLoadVerified": true,
+    "completedCeremonyRepeatRefused": true
+  },
+  "runtimeBinarySha256": {
+    "ceremony-client": "e56ea2b6d4a14c0a3ba42f240d45bef17d13989a073f7839f592e9b843096b1a",
+    "ceremony-coordinator": "a986b58c578afa2f968bb7b41835ef5133494951dd6d6e955012c86b4fee324a",
+    "ceremony-evaluator": "2e7f6e3ab1e15d0e1fc4aab186899e46ea1e1e9ee94ae8d9a3288818102765b5",
+    "ceremony-operator": "bd166da304024d805934dd94d161ae094afc31ac31bf03d91999789bcf91e6b5"
+  },
+  "publicArtifactSha256": {
+    "ceremony-context.json": "0x6406449bafd014f465d829f3eb409d2c0abf6e7a458e27523b067ebcaab5d762",
+    "roster.json": "0xa949c2ff49f00f865450524115101dd2f010fdd326a404a1d6076d9349fdb36a",
+    "ceremony-manifest-statement.bin": "0x23e676fb792eed0e7709eb73849340a66475493c497f510537464a4dba6a9c87",
+    "collective-public-material.bin": "0x6dbacd9274c6fa712f654b7a60c141da1015dbeb8ee6a8b6b6d219e3367897bd",
+    "collective-evaluation-keys.bin": "0xd5be762171f7d7ee9ebfa50e80b9ca05e9ffd8247795a72fd1849fb1ee49182c",
+    "key-manifest.json": "0x884b61cb01fd247d40835e57d461db3dd9686afe21c79a5a01b60db25a2dc809",
+    "ceremony-evidence.json": "0x61e3a5c150bc2253846b0798cd406f9bd92be71d0a931eb7bde484bf207851bd"
+  },
+  "crashRecovery": {
+    "boundaryCount": 21,
+    "readinessSequence": [
+      { "stage": "CEREMONY_OPERATOR_1_READY", "readyCount": 1 },
+      { "stage": "CEREMONY_OPERATOR_2_READY", "readyCount": 2 },
+      { "stage": "CEREMONY_OPERATOR_3_READY", "readyCount": 3 }
+    ],
+    "boundaries": [
+      "CEREMONY_CONTEXT_PREPARED",
+      "CEREMONY_IDENTITIES_CONFIRMED",
+      "CEREMONY_OPERATOR_1_READY",
+      "CEREMONY_OPERATOR_2_READY",
+      "CEREMONY_OPERATOR_3_READY",
+      "CRASH_AFTER_RUNNER_CONFIRMATION_BEFORE_PROCESS_SHUTDOWN",
+      "CRASH_AFTER_CONTRIBUTION_1",
+      "CRASH_AFTER_CONTRIBUTION_2",
+      "CEREMONY_CONTRIBUTIONS_GENERATED",
+      "CEREMONY_CONTRIBUTIONS_EXCHANGED",
+      "CEREMONY_COLLECTIVE_PUBLIC_KEY_COMPLETED",
+      "CRASH_AFTER_PARTIAL_EVALUATION_KEY",
+      "CEREMONY_RELINEARIZATION_COMPLETED",
+      "CEREMONY_GALOIS_COMPLETED",
+      "CEREMONY_EVALUATION_KEY_BUNDLE_COMPLETED",
+      "CEREMONY_PUBLIC_MANIFEST_CONSTRUCTED",
+      "CEREMONY_MANIFEST_SIGNATURE_1",
+      "CEREMONY_MANIFEST_SIGNATURE_2",
+      "CEREMONY_MANIFEST_SIGNATURE_3",
+      "CEREMONY_PUBLIC_BUNDLE_VERIFIED",
+      "CEREMONY_COMPLETED"
+    ],
+    "runnerConfirmationBeforeShutdown": {
+      "confirmedStage": "CEREMONY_OPERATOR_3_READY",
+      "stateAtShutdown": "CONFIRMED",
+      "operatorCount": 3,
+      "allObservedAliveBeforeShutdown": true,
+      "allStoppedAfterShutdown": true
+    }
+  },
+  "resources": {
+    "totalCeremonyWallMillisAcrossRestarts": 207397,
+    "operatorDiskBytes": {
+      "1": 216319463,
+      "2": 216319462,
+      "3": 216319461
+    },
+    "publicBundleBytes": 322528527,
+    "combinedDiskBytesAtCompletedSnapshot": 1040403950,
+    "freeDiskBytesAtCompletedSnapshot": 2412085248,
+    "operatorRssBytesAtSnapshot": {
+      "1": 8376320,
+      "2": 8466432,
+      "3": 8294400
+    },
+    "peakMemoryAvailable": false,
+    "peakMemoryLimitation": "portable child peak RSS is unavailable while the separated process is live"
+  },
+  "postCeremonyStages": {
+    "ENROLLMENTS_ADMITTED": "NOT_STARTED",
+    "EVALUATION_COMPLETED": "NOT_STARTED",
+    "OPERATOR_RECOMPUTATION_COMPLETED": "NOT_STARTED",
+    "THRESHOLD_RELEASE_COMPLETED": "NOT_STARTED",
+    "VALIDATOR_ATTESTATIONS_COMPLETED": "NOT_STARTED",
+    "DISCLOSURE_CONSENTS_COMPLETED": "NOT_STARTED",
+    "BINDING_PREPARED": "NOT_STARTED",
+    "BINDING_BROADCAST": "NOT_STARTED",
+    "BINDING_CONFIRMED": "NOT_STARTED"
+  },
+  "stoppedAt": "CEREMONY_COMPLETED",
+  "allCeremonyProcessesStopped": true,
+  "oneHostLimitation": "process separation on one host is not independent organizational custody",
+  "productVerdict": "PRIVATE MATCHING AND GOVERNED RECOURSE: NOT PROVEN"
+}

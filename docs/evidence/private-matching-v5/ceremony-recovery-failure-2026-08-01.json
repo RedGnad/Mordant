@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "mordant.ceremony-failure/1",
+  "recordedAtUtc": "2026-08-01T20:37:00Z",
+  "environment": "fresh local development rehearsal; no Monad transaction",
+  "ceremonyId": "faa5228b5b1ab11b70b855db2f28df75e48d8a84e78b2f1a3b85115a999ee6b3",
+  "lastCompletedBoundary": "relin-complete",
+  "attemptedResumeBoundary": "galois-complete",
+  "observedFailure": "all three context-pinned operator binaries refused recovery before opening listeners",
+  "cause": "the private-state validator rejected the intentionally retained relinearization ephemeral in the post-round-two Galois phase",
+  "classification": "FAILED_CEREMONY_INVALIDATED",
+  "disposition": [
+    "the failed ceremony identifier is terminal",
+    "its pinned binaries were not replaced in place",
+    "its private or public material will not be mixed with another ceremony",
+    "the corrected rehearsal must use a fresh context nonce and ceremony identifier"
+  ],
+  "productVerdict": "PRIVATE MATCHING AND GOVERNED RECOURSE: NOT PROVEN"
+}

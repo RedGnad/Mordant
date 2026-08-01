@@ -24,9 +24,12 @@ import (
 // share.
 //
 // Lattigo's multiparty package is secure against passive adversaries only and
-// documents that retrying a round with reused shares and the same public
-// polynomial can leak secret material. Every round below is therefore one-shot
-// per (ceremony, epoch, round, recipient); a failed ceremony is terminal.
+// documents that retrying a round with regenerated shares and the same public
+// polynomial can leak secret material. Every cryptographic action below is
+// therefore one-shot per (ceremony, epoch, round, recipient). The private
+// ledger persists the post-action state and exact wire atomically; transport
+// retries replay that wire, while an unrecoverable ledger makes the ceremony
+// terminal and requires a fresh identifier.
 
 const (
 	ceremonyRosterDomain     = "mordant.ceremony.roster/v4"
@@ -257,18 +260,45 @@ type CeremonyKeyDigests struct {
 }
 
 func (digests CeremonyKeyDigests) manifestDigest(roster CeremonyRoster) [32]byte {
+	return sha256.Sum256(MarshalCeremonyManifestStatement(roster, digests))
+}
+
+// MarshalCeremonyManifestStatement exposes the exact existing V4 signature
+// preimage. It is public ceremony material: a verifier can mutate any byte and
+// prove that every operator attestation stops verifying, without introducing
+// a second manifest or signature protocol.
+func MarshalCeremonyManifestStatement(roster CeremonyRoster, digests CeremonyKeyDigests) []byte {
 	rosterDigest := roster.Digest()
+	out := make([]byte, 0, len(ceremonyManifestDomain)+6*sha256.Size)
+	out = append(out, []byte(ceremonyManifestDomain)...)
+	out = append(out, rosterDigest[:]...)
+	out = append(out, digests.CRSCommitment[:]...)
+	out = append(out, digests.PublicKeyCommitment[:]...)
+	out = append(out, digests.RelinearizationKeyDigest[:]...)
+	out = append(out, digests.GaloisKeyCommitment[:]...)
+	out = append(out, digests.PolicyCircuitCommitment[:]...)
+	return out
+}
+
+// CeremonyManifestDigest exposes the exact existing V4 digest signed by every
+// operator. Recovery and independent verifiers use it to compare operator
+// statements without introducing a second manifest-signing construction.
+func CeremonyManifestDigest(roster CeremonyRoster, digests CeremonyKeyDigests) [32]byte {
+	return digests.manifestDigest(roster)
+}
+
+// CeremonyEvaluationKeyDigest is a public summary of the two evaluation-key
+// commitments already bound by the V4 manifest signature. It is reporting
+// metadata only; the protocol authority remains the separately domain-bound
+// relinearization and Galois commitments above.
+func CeremonyEvaluationKeyDigest(digests CeremonyKeyDigests) [32]byte {
 	hash := sha256.New()
-	_, _ = hash.Write([]byte(ceremonyManifestDomain))
-	_, _ = hash.Write(rosterDigest[:])
-	_, _ = hash.Write(digests.CRSCommitment[:])
-	_, _ = hash.Write(digests.PublicKeyCommitment[:])
+	_, _ = hash.Write([]byte("mordant.ceremony.evaluation-key-summary/v4"))
 	_, _ = hash.Write(digests.RelinearizationKeyDigest[:])
 	_, _ = hash.Write(digests.GaloisKeyCommitment[:])
-	_, _ = hash.Write(digests.PolicyCircuitCommitment[:])
-	var digest [32]byte
-	copy(digest[:], hash.Sum(nil))
-	return digest
+	var result [32]byte
+	copy(result[:], hash.Sum(nil))
+	return result
 }
 
 // CeremonyAttestation is one operator's signature over the final key manifest.
@@ -359,6 +389,14 @@ func (state *CeremonyOperatorState) Point() uint64 { return uint64(state.point) 
 
 // RosterDigest exposes the binding this operator will enforce on every message.
 func (state *CeremonyOperatorState) RosterDigest() [32]byte { return state.rosterHash }
+
+// Roster returns a defensive copy of the public ceremony roster for signed
+// status verification. It exposes no operator-private state.
+func (state *CeremonyOperatorState) Roster() CeremonyRoster {
+	roster := state.roster
+	roster.Operators = append([]CeremonyOperatorIdentity(nil), state.roster.Operators...)
+	return roster
+}
 
 // RosterSigningPoint maps a presented transport identity back to a roster point.
 // The private channel uses it so an operator's mTLS identity and its signed

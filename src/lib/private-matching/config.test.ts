@@ -45,15 +45,19 @@ test("the network allow-list contains Monad testnet and nothing else", () => {
   }
 });
 
-test("a live session needs both flags and an allowed chain", () => {
+test("a live session needs both flags, an allowed chain, and the supported protocol", () => {
   const all = {
     enabled: true, evidenceExplorerEnabled: true, demoEnabled: true, liveSessionsEnabled: true,
   };
-  assert.equal(canStartLiveSession(all, MONAD_TESTNET_CHAIN_ID), true);
+  assert.equal(canStartLiveSession(all, MONAD_TESTNET_CHAIN_ID, PRODUCT_PROTOCOL_VERSION), true);
   // Mainnet stays refused even with every flag on: the allow-list is not a flag.
-  assert.equal(canStartLiveSession(all, 1), false);
-  assert.equal(canStartLiveSession({ ...all, enabled: false }, MONAD_TESTNET_CHAIN_ID), false);
-  assert.equal(canStartLiveSession({ ...all, liveSessionsEnabled: false }, MONAD_TESTNET_CHAIN_ID), false);
+  assert.equal(canStartLiveSession(all, 1, PRODUCT_PROTOCOL_VERSION), false);
+  assert.equal(canStartLiveSession(
+    { ...all, enabled: false }, MONAD_TESTNET_CHAIN_ID, PRODUCT_PROTOCOL_VERSION,
+  ), false);
+  assert.equal(canStartLiveSession(
+    { ...all, liveSessionsEnabled: false }, MONAD_TESTNET_CHAIN_ID, PRODUCT_PROTOCOL_VERSION,
+  ), false);
 });
 
 test("the approved copy carries no prohibited claim", () => {

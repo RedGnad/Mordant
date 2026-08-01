@@ -12,6 +12,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -43,6 +44,7 @@ const (
 	identityPublicFile  = "identity.pub"
 	operatorBundleFile  = "operator.bin"
 	ledgerFile          = "ledger.db"
+	ceremonyLedgerDir   = "ceremony-ledger"
 )
 
 type options struct {
@@ -56,6 +58,8 @@ type options struct {
 	evaluatorKey   string
 	roster         string
 	point          uint64
+	auditRoots     []string
+	auditOut       string
 }
 
 // rosterFile is the public roster the orchestrator distributes. It carries no
@@ -86,6 +90,8 @@ func run(arguments []string) error {
 		return generateIdentity(settings.storage)
 	case "serve":
 		return serve(settings)
+	case "audit":
+		return auditPrivateSurfaces(settings)
 	default:
 		return errors.New("invalid mode")
 	}
@@ -126,10 +132,13 @@ func serve(settings options) error {
 	if err != nil {
 		return err
 	}
-	state, err := fhe.NewCeremonyOperatorState(params, roster, settings.point, signingKey)
+	ceremonyLedger, err := thresholdnet.OpenCeremonyPrivateLedger(
+		filepath.Join(settings.storage, ceremonyLedgerDir), params, roster, settings.point, signingKey,
+	)
 	if err != nil {
 		return err
 	}
+	state := ceremonyLedger.State()
 
 	coordinatorKey, err := os.ReadFile(settings.coordinatorKey)
 	if err != nil || len(coordinatorKey) != ed25519.PublicKeySize {
@@ -147,11 +156,11 @@ func serve(settings options) error {
 	if !roots.AppendCertsFromPEM(caBytes) {
 		return errors.New("invalid peer CA")
 	}
-	ledger, err := thresholdnet.Open(filepath.Join(settings.storage, ledgerFile))
+	releaseLedger, err := thresholdnet.Open(filepath.Join(settings.storage, ledgerFile))
 	if err != nil {
 		return err
 	}
-	defer ledger.Close()
+	defer releaseLedger.Close()
 
 	evaluatorKey, err := os.ReadFile(settings.evaluatorKey)
 	if err != nil || len(evaluatorKey) != ed25519.PublicKeySize {
@@ -161,12 +170,13 @@ func serve(settings options) error {
 	// coordinator may drive ceremony rounds and publish the key epoch; only the
 	// evaluator may ask for a release share.
 	gate := &releaseGate{
-		ledger:         ledger,
+		ledger:         releaseLedger,
 		coordinatorKey: append(ed25519.PublicKey(nil), coordinatorKey...),
 		evaluatorKey:   append(ed25519.PublicKey(nil), evaluatorKey...),
 	}
 	ceremonyServer := &thresholdnet.CeremonyServer{
 		State:                state,
+		Recovery:             ceremonyLedger,
 		CoordinatorPublicKey: append(ed25519.PublicKey(nil), coordinatorKey...),
 		PeerDialer: func(point uint64, endpoint string) (*http.Client, error) {
 			expected, ok := rosterKeyFor(roster, point)
@@ -182,11 +192,18 @@ func serve(settings options) error {
 		KeyID: gate.keyID,
 		Persist: func(bundle []byte) error {
 			path := filepath.Join(settings.storage, operatorBundleFile)
-			if err := writeExclusive(path, bundle, 0o600); err != nil {
+			if err := writeExactOrExclusive(path, bundle, 0o600); err != nil {
 				return err
 			}
 			return gate.install(bundle)
 		},
+	}
+	if bundle, present, err := ceremonyLedger.SealedBundle(); err != nil {
+		return err
+	} else if present {
+		if err := ceremonyServer.Persist(bundle); err != nil {
+			return err
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -401,10 +418,24 @@ func parseOptions(arguments []string) (options, error) {
 	flags.StringVar(&settings.evaluatorKey, "evaluator-key", "", "raw Ed25519 evaluator public key authorised for releases")
 	flags.StringVar(&settings.roster, "roster", "", "public ceremony roster")
 	flags.Uint64Var(&settings.point, "point", 0, "this operator's Shamir point")
+	flags.Func("audit-root", "public file or directory to scan for this operator's secret", func(value string) error {
+		if value == "" {
+			return errors.New("empty audit root")
+		}
+		settings.auditRoots = append(settings.auditRoots, value)
+		return nil
+	})
+	flags.StringVar(&settings.auditOut, "audit-out", "", "public signed secret-audit report")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || settings.storage == "" {
 		return options{}, errors.New("invalid ceremony-operator configuration")
 	}
 	if settings.mode == "identity" {
+		return settings, nil
+	}
+	if settings.mode == "audit" {
+		if settings.point == 0 || settings.auditOut == "" || len(settings.auditRoots) == 0 {
+			return options{}, errors.New("invalid ceremony-operator audit configuration")
+		}
 		return settings, nil
 	}
 	if settings.listen == "" || settings.certificate == "" || settings.peerCA == "" ||
@@ -472,6 +503,21 @@ func writeExclusive(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return file.Sync()
+}
+
+func writeExactOrExclusive(path string, data []byte, mode os.FileMode) error {
+	existing, err := os.ReadFile(path)
+	if err == nil {
+		info, statErr := os.Stat(path)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || !bytes.Equal(existing, data) {
+			return errors.New("existing private artifact differs")
+		}
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return writeExclusive(path, data, mode)
 }
 
 func readSecretFile(path string, maximum int64) ([]byte, error) {
