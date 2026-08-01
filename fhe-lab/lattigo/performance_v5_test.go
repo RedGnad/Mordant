@@ -214,15 +214,23 @@ func TestV5ConcurrentOperatorPerformance(t *testing.T) {
 		"No verification was weakened to improve any figure here.",
 	}
 
-	encoded, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll("../../docs/evidence/private-matching-v5", 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile("../../docs/evidence/private-matching-v5/performance.json", append(encoded, '\n'), 0o644); err != nil {
-		t.Fatal(err)
+	// Writing evidence is opt-in. Two reasons, both learned the hard way:
+	// a full `go test ./...` run has the rest of the suite competing for cores,
+	// so the figures it produces are contended and less valid than an isolated
+	// run; and an unconditional write dirties the tree, which is exactly what
+	// must not happen before a deployment.
+	if os.Getenv("MORDANT_WRITE_PERFORMANCE_EVIDENCE") == "1" {
+		encoded, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll("../../docs/evidence/private-matching-v5", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile("../../docs/evidence/private-matching-v5/performance.json", append(encoded, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("performance evidence written")
 	}
 	t.Logf("evaluator %dms | concurrent operators %dms (sum %dms, speedup %s of 2.00x) | release %dms | end-to-end %dms",
 		report.EvaluatorMillis, report.WallClockConcurrentM, report.SumOperatorMillis,

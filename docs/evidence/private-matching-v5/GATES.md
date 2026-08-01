@@ -247,6 +247,23 @@ independent custody, fraud detection, market completeness, absence of
 undisclosed pledges, or production readiness. Gate 1's cross-host and
 cross-toolchain determinism is untested. No V5 Monad run has been performed.
 
+## Regenerating the performance evidence
+
+`performance.json` is written only when `MORDANT_WRITE_PERFORMANCE_EVIDENCE=1`.
+It must be produced by an **isolated** run:
+
+```
+cd fhe-lab/lattigo
+MORDANT_WRITE_PERFORMANCE_EVIDENCE=1 go test -run TestV5ConcurrentOperatorPerformance -count=1 .
+```
+
+A figure taken during a full `go test ./...` is contended by the rest of the
+suite and is not a clean measurement: the same test reports 15.1 s of concurrent
+operator wall time under full-suite load against 10.1 s isolated. The committed
+figures are the isolated ones. The write is opt-in for that reason and because
+an unconditional write leaves the tree dirty, which must not happen before a
+deployment.
+
 ## Reproducing
 
 ```

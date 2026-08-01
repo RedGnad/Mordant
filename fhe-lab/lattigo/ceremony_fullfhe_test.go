@@ -175,11 +175,15 @@ func TestFullFHEIdentityEqualityUnderDealerlessKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll("../privacy-v4/evidence", 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile("../privacy-v4/evidence/fullfhe-measurement.json", append(encoded, '\n'), 0o644); err != nil {
-		t.Fatal(err)
+	// Opt-in for the same reason as the V5 performance evidence: an
+	// unconditional write leaves the tree dirty after any test run.
+	if os.Getenv("MORDANT_WRITE_PERFORMANCE_EVIDENCE") == "1" {
+		if err := os.MkdirAll("../privacy-v4/evidence", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile("../privacy-v4/evidence/fullfhe-measurement.json", append(encoded, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Logf("Mode A encrypt %dms envelope %dB eval %dms", baseline.ClientEncryptMillis, baseline.EnvelopeBytes, baseline.EvaluationMillis)
 	t.Logf("Mode B encrypt %dms envelope %dB eval %dms (identity equality %dms, identity ct %dB)",
