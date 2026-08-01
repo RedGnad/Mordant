@@ -201,13 +201,41 @@ contract PrivateMatchBinderV5 {
     }
 
     /// @notice The digest a controller signs to consent to disclosure.
+    ///
+    /// @dev The producer calls this BEFORE binding, so it must not read state
+    /// that only exists after binding. Everything it needs is a parameter, and
+    /// the binding path calls the very same encoder, so the value signed here
+    /// is by construction the value verified there.
+    ///
+    /// `sourceRecordCommitment` is the CONSENTING side's own opaque source
+    /// record, not the counterparty's: a controller consents to disclose its
+    /// own participation.
     function consentDigest(
         bytes32 sessionCommitment,
         bytes32 sessionNullifier,
         bytes32 resultCommitment,
+        bytes32 sourceRecordCommitment,
         address anchor,
         DisclosureConsent calldata consent
     ) public view returns (bytes32) {
+        return _consentDigest(
+            sessionCommitment,
+            sessionNullifier,
+            resultCommitment,
+            sourceRecordCommitment,
+            anchor,
+            consent
+        );
+    }
+
+    function _consentDigest(
+        bytes32 sessionCommitment,
+        bytes32 sessionNullifier,
+        bytes32 resultCommitment,
+        bytes32 sourceRecordCommitment,
+        address anchor,
+        DisclosureConsent calldata consent
+    ) private view returns (bytes32) {
         bytes32 structHash = keccak256(
             bytes.concat(
                 abi.encode(
@@ -223,7 +251,7 @@ contract PrivateMatchBinderV5 {
                 abi.encode(
                     consent.scopeCommitment,
                     consent.governanceRecord,
-                    _sourceForScope(sessionCommitment, consent.scopeCommitment),
+                    sourceRecordCommitment,
                     anchor,
                     consent.disclosureVersion,
                     consent.validUntil,
@@ -232,19 +260,6 @@ contract PrivateMatchBinderV5 {
             )
         );
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
-    }
-
-    /// @dev Reads back which source a scope was bound to for a session already
-    /// resolved. Zero before binding, which is what makes the consent digest
-    /// unforgeable ahead of the reveal.
-    function _sourceForScope(bytes32 sessionCommitment, bytes32 scopeCommitment)
-        private
-        view
-        returns (bytes32)
-    {
-        RecourseRecord memory record = recourses[sessionCommitment];
-        if (record.sessionCommitment == bytes32(0)) return bytes32(0);
-        return scopeCommitment == bytes32(0) ? bytes32(0) : record.anchorCommitment;
     }
 
     /// @notice Opens a recourse record for a confirmed policy conflict.
@@ -478,6 +493,7 @@ contract PrivateMatchBinderV5 {
             anchor,
             session.scopeCommitmentA,
             session.governanceRecordA,
+            core.session.sourceRecordCommitmentA,
             session.controllerA,
             consentA
         );
@@ -487,6 +503,7 @@ contract PrivateMatchBinderV5 {
             anchor,
             session.scopeCommitmentB,
             session.governanceRecordB,
+            core.session.sourceRecordCommitmentB,
             session.controllerB,
             consentB
         );
@@ -498,6 +515,7 @@ contract PrivateMatchBinderV5 {
         address anchor,
         bytes32 expectedScope,
         bytes32 expectedRecord,
+        bytes32 sourceRecordCommitment,
         address controller,
         DisclosureConsent calldata consent
     ) private {
@@ -521,43 +539,16 @@ contract PrivateMatchBinderV5 {
         }
         consumedConsentNonce[consent.scopeCommitment][consent.nonce] = true;
 
-        bytes32 digest = _consentDigestFor(core, resultCommitment, anchor, consent);
+        bytes32 digest = _consentDigest(
+            core.session.sessionCommitment,
+            core.session.sessionNullifier,
+            resultCommitment,
+            sourceRecordCommitment,
+            anchor,
+            consent
+        );
         address recovered = _recover(digest, consent.signature);
         if (recovered != controller) revert ConsentNotSignedByController(controller, recovered);
-    }
-
-    function _consentDigestFor(
-        Core.ResultCore calldata core,
-        bytes32 resultCommitment,
-        address anchor,
-        DisclosureConsent calldata consent
-    ) private view returns (bytes32) {
-        bytes32 structHash = keccak256(
-            bytes.concat(
-                abi.encode(
-                    CONSENT_TYPEHASH,
-                    block.chainid,
-                    address(this),
-                    policyId,
-                    policyVersion,
-                    core.session.sessionCommitment,
-                    core.session.sessionNullifier,
-                    resultCommitment
-                ),
-                abi.encode(
-                    consent.scopeCommitment,
-                    consent.governanceRecord,
-                    consent.scopeCommitment == bytes32(0)
-                        ? bytes32(0)
-                        : core.session.sourceRecordCommitmentA,
-                    anchor,
-                    consent.disclosureVersion,
-                    consent.validUntil,
-                    consent.nonce
-                )
-            )
-        );
-        return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
     }
 
     function _recover(bytes32 digest, bytes calldata signature)

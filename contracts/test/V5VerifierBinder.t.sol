@@ -431,6 +431,58 @@ contract V5VerifierBinderTest is Test {
         this.submitBind(CONTROLLER_A_KEY, CONTROLLER_B_KEY, uint64(block.timestamp - 1));
     }
 
+    /// A consent must bind the CONSENTING side's own opaque source record. If
+    /// both consents bound side A's, side B would be consenting to a statement
+    /// about a source it never named.
+    function testAConsentMustBindItsOwnSourceRecord() public {
+        Core.ResultCore memory core = _core(1);
+        _stage(core, address(vault));
+        Binder.DisclosureConsent memory a =
+            _consent(SCOPE_A, recordA, CONTROLLER_A_KEY, uint64(block.timestamp + 1 days), 1);
+        // Side B signs a digest built over side A's source record.
+        Binder.DisclosureConsent memory b = Binder.DisclosureConsent({
+            scopeCommitment: SCOPE_B,
+            governanceRecord: recordB,
+            disclosureVersion: POLICY_VERSION,
+            validUntil: uint64(block.timestamp + 1 days),
+            nonce: 2,
+            signature: ""
+        });
+        b.signature = _sig(
+            CONTROLLER_B_KEY,
+            binder.consentDigest(
+                core.session.sessionCommitment,
+                core.session.sessionNullifier,
+                pendingResult,
+                core.session.sourceRecordCommitmentA, // wrong side
+                address(vault),
+                b
+            )
+        );
+        (Verifier.MatchEnvelopeV5 memory envelope, bytes memory attestation) = _envelopeFor(core);
+        vm.expectRevert();
+        this.submitConsents(envelope, attestation, a, b);
+    }
+
+    /// @dev External so `expectRevert` targets the bind and not the view calls.
+    function submitConsents(
+        Verifier.MatchEnvelopeV5 calldata envelope,
+        bytes calldata attestation,
+        Binder.DisclosureConsent calldata a,
+        Binder.DisclosureConsent calldata b
+    ) external {
+        binder.bindRecourse(
+            envelope,
+            attestation,
+            _reveal(),
+            anchoredReveal,
+            counterpartyReveal,
+            IAnchoredReceivable(pendingAnchor),
+            a,
+            b
+        );
+    }
+
     /* ------------------------------- binder: source records --------------- */
 
     function testASourceRecordThatIsNotTheOneInTheResultIsRefused() public {
@@ -645,6 +697,9 @@ contract V5VerifierBinderTest is Test {
         return out;
     }
 
+    /// @dev Builds a consent by asking the BINDER for the digest to sign, which
+    /// is the only way a producer should ever obtain it. If the public view and
+    /// the binding check ever diverge again, every binding test fails.
     function _consent(bytes32 scope, bytes32 record, uint256 key, uint64 validUntil, uint256 nonce)
         private
         view
@@ -658,31 +713,19 @@ contract V5VerifierBinderTest is Test {
             nonce: nonce,
             signature: ""
         });
-        bytes32 structHash = keccak256(
-            bytes.concat(
-                abi.encode(
-                    binder.CONSENT_TYPEHASH(),
-                    block.chainid,
-                    address(binder),
-                    POLICY_ID,
-                    POLICY_VERSION,
-                    pendingCore.session.sessionCommitment,
-                    pendingCore.session.sessionNullifier,
-                    pendingResult
-                ),
-                abi.encode(
-                    scope,
-                    record,
-                    pendingCore.session.sourceRecordCommitmentA,
-                    pendingAnchor,
-                    POLICY_VERSION,
-                    validUntil,
-                    nonce
-                )
-            )
-        );
+        bytes32 source = scope == SCOPE_A
+            ? pendingCore.session.sourceRecordCommitmentA
+            : pendingCore.session.sourceRecordCommitmentB;
         consent.signature = _sig(
-            key, keccak256(abi.encodePacked("\x19\x01", binder.domainSeparator(), structHash))
+            key,
+            binder.consentDigest(
+                pendingCore.session.sessionCommitment,
+                pendingCore.session.sessionNullifier,
+                pendingResult,
+                source,
+                pendingAnchor,
+                consent
+            )
         );
     }
 

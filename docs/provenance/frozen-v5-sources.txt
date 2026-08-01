@@ -15,7 +15,7 @@
 3374eae67942d6c4bf6aae068c3120b6d80059ea  contracts/src/v5/MordantSourceCommitmentRegistry.sol
 f2077e64a8b9254c87e5a074bdeb244827b62408  contracts/src/v5/MordantScopeGovernanceRegistryV5.sol
 0dd5e52243ee0c0903f3d8ac749be1697b02cc18  contracts/src/v5/MordantMatchVerifierV5.sol
-c24c9a08f7bdb485b270d66e1eb79a2da4f123d2  contracts/src/v5/PrivateMatchBinderV5.sol
+4c675010a31b68cd23e7aef7d40b4733c3739da8  contracts/src/v5/PrivateMatchBinderV5.sol
 30da98309a34526a2e88a142c1d2a86e2b6ce878  contracts/src/identity/MordantTermsRegistry.sol
 49e88ba465c54d8e3802636217f70dbe787902ff  contracts/src/v4/IAnchoredReceivable.sol
 085b0ceacea37e90431156cf9265f7d51c3b90af  contracts/src/identity/MordantSourceAttestation.sol
