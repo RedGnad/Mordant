@@ -251,12 +251,17 @@ export class Journal {
   async recordOffChain(name, outputs) {
     const entry = this.stage(name);
     if (entry.state === STATES.CONFIRMED) return entry;
-    this.#requirePredecessors(name);
+    if (entry.state !== STATES.PREPARED) this.#requirePredecessors(name);
+    // MERGE onto the prepared record rather than replacing it. The frozen
+    // inputs (calldata, salts, nonces) are part of the stage's permanent
+    // evidence: a later reconcile compares against them, and an evidence
+    // bundle that lost them could not show what was actually submitted.
     this.#data.stages[name] = {
+      ...entry,
+      ...outputs,
       state: STATES.CONFIRMED,
       confirmedAt: new Date().toISOString(),
       outputDigest: digestOf(outputs),
-      ...outputs,
     };
     await this.#flush();
     return this.stage(name);
@@ -327,6 +332,13 @@ export class Journal {
       findings.push({ stage: name, resolved: "STILL_PENDING" });
     }
     return findings;
+  }
+
+  /// Persists the verification flags a stage set on its entry.
+  async recordVerification(name) {
+    if (!STAGES.includes(name)) throw new JournalError("UNKNOWN_STAGE", name);
+    await this.#flush();
+    return this.stage(name);
   }
 
   summary() {
