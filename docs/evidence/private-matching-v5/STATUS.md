@@ -6,11 +6,11 @@ RC1 is untouched. All sixteen frozen sources still match `af5baad`, verified by
 `scripts/verify-frozen-sources.mjs` after every change. V5 is a parallel
 generation, not an edit of the frozen files.
 
-**Monad testnet state.** The V5 stack is deployed to chain 10143 and the
-schemas are frozen. The end-to-end session has been run for real **off chain**
-(complete ceremony, concurrent operator recomputation, threshold release, both
-branches). The on-chain `acceptMatch` + `bindRecourse` submission is **not yet
-done**: see "Next" below.
+## PRIVATE MATCHING AND GOVERNED RECOURSE: NOT PROVEN
+
+The final atomic on-chain path has not been executed. The existing Monad
+deployment is **PROVISIONAL** and is not final evidence: see
+`DEPLOYMENT-RECONCILIATION.md`.
 
 ---
 
@@ -109,10 +109,13 @@ latency.
 
 ---
 
-## Monad testnet deployment
+## Monad testnet deployment: PROVISIONAL, superseded
 
-Chain 10143. Deployed and verified on chain, 20 transactions, journal at
-`fhe-lab/monad-testnet/artifacts/v5-run/journal.json`.
+Chain 10143, source commit `c191be13`, before the freeze. The deployed verifier
+lacks the `resultCommitmentOf` (`0xf417e039`) and `resultStructHash`
+(`0xa2538a0c`) selectors, established by inspecting the deployed runtime. No
+session identity was ever consumed on it, so abandoning it strands nothing.
+Full inventory and call matrix: `DEPLOYMENT-RECONCILIATION.md`.
 
 | Contract | Address |
 |---|---|
