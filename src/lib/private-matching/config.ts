@@ -45,6 +45,39 @@ export function readPrivateMatchingFlags(
   };
 }
 
+/**
+ * The protocol version the live product path speaks.
+ *
+ * An external audit returned NO-GO on every public claim made for the V4/RC1
+ * protocol. RC1 remains in the repository as immutable historical evidence, and
+ * its sixteen frozen sources are unchanged, but it must not stay reachable as a
+ * product protocol. Anything below V5 fails closed here rather than depending on
+ * a deployment remembering not to select it.
+ */
+export const PRODUCT_PROTOCOL_VERSION = 5;
+export const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 5;
+
+export class ProtocolVersionRetiredError extends Error {
+  readonly version: number;
+  constructor(version: number) {
+    super(
+      `Private matching protocol v${version} is retired and cannot serve a live ` +
+      `session. The live path requires v${MINIMUM_SUPPORTED_PROTOCOL_VERSION} or ` +
+      "later. Protocol versions below that failed external audit on every public " +
+      "claim and are retained only as historical evidence.",
+    );
+    this.name = "ProtocolVersionRetiredError";
+    this.version = version;
+  }
+}
+
+/// Throws unless the protocol version is one the live path may serve.
+export function assertProtocolVersionSupported(version: number): void {
+  if (!Number.isInteger(version) || version < MINIMUM_SUPPORTED_PROTOCOL_VERSION) {
+    throw new ProtocolVersionRetiredError(version);
+  }
+}
+
 export class NetworkNotAllowedError extends Error {
   readonly chainId: number;
   constructor(chainId: number) {
@@ -63,12 +96,23 @@ export function assertNetworkAllowed(chainId: number): void {
   if (!ALLOWED_CHAIN_IDS.includes(chainId)) throw new NetworkNotAllowedError(chainId);
 }
 
-/// A live session needs BOTH the feature and the live flag, on an allowed chain.
+/**
+ * A live session needs the feature, the live flag, an allowed chain AND a
+ * supported protocol version.
+ *
+ * The protocol version defaults to the retired V4 rather than to the current
+ * one, so a caller that forgets to pass it gets a refusal instead of an
+ * unintended live V4 session.
+ */
 export function canStartLiveSession(
   flags: PrivateMatchingFlags,
   chainId: number,
+  protocolVersion = 4,
 ): boolean {
   if (!flags.enabled || !flags.liveSessionsEnabled) return false;
+  if (!Number.isInteger(protocolVersion) || protocolVersion < MINIMUM_SUPPORTED_PROTOCOL_VERSION) {
+    return false;
+  }
   return ALLOWED_CHAIN_IDS.includes(chainId);
 }
 

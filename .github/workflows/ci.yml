@@ -58,7 +58,9 @@ jobs:
   # The Go FHE runtime: build, vet, format and the complete test suite.
   fhe-go:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The V5 gate tests run real ceremonies and real threshold releases, and one
+    # operator recomputation of the circuit alone takes about nine seconds.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: fhe-lab/lattigo
@@ -76,7 +78,9 @@ jobs:
           if [ -n "$unformatted" ]; then
             echo "gofmt needed for:"; echo "$unformatted"; exit 1
           fi
-      - run: go test ./...
+      # Default per-package timeout is 10 minutes, which the V5 release gates
+      # exceed by construction. The recomputation is not weakened to fit it.
+      - run: go test -timeout 40m ./...
 
   # Private matching must stay disabled unless it is switched on deliberately.
   # This job sets no feature environment variable at all: if the defaults ever

@@ -13,6 +13,7 @@
 // process has terminated, and it opens one party's private canary manifest at a
 // time so the auditing process never holds both parties' secrets at once.
 
+import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -144,6 +145,114 @@ export async function scanCanaries({ canaries, roots }) {
     canaryCount: canaries.length,
     representationCount: targets.length,
     representationsPerCanary: canaries.length === 0 ? 0 : targets.length / canaries.length,
+    leaks,
+  };
+}
+
+/* ------------------------------------------------------- secret material */
+
+// External audit finding L-02. Every scan above searches for canaries derived
+// from a party's commercial terms and identifiers. None of them searched for
+// the threshold key material itself, so a leaked Shamir share, RLWE secret or
+// operator signing key would have passed the gate silently. The canaries and
+// the secrets are different things, and only the canaries were ever swept.
+//
+// This sweep takes the raw secret bytes and searches every file for them,
+// including the large binary key material the text scans skip.
+
+// The prefix length used for partial-leak detection. A truncated or
+// hex-encoded fragment of a secret is still a leak, and a 16-byte prefix of a
+// high-entropy value has no plausible accidental collision.
+const SECRET_PREFIX_BYTES = 16;
+
+// 8 MiB chunks with an overlap, so a needle straddling a chunk boundary is
+// still found and a 344 MB key file never lands in memory whole.
+const STREAM_CHUNK_BYTES = 8 * 1024 * 1024;
+
+export function secretRepresentations(secret) {
+  const raw = Buffer.isBuffer(secret.bytes) ? secret.bytes : Buffer.from(secret.bytes);
+  if (raw.length < SECRET_PREFIX_BYTES) {
+    throw new Error(`SECRET_TOO_SHORT:${secret.label}`);
+  }
+  const hex = raw.toString("hex");
+  const forms = new Map();
+  const add = (name, buffer) => {
+    if (!buffer || buffer.length < SECRET_PREFIX_BYTES) return;
+    const key = `${name}:${buffer.toString("base64")}`;
+    if (!forms.has(key)) forms.set(key, { name, bytes: buffer });
+  };
+  add("raw-bytes", raw);
+  add("raw-prefix", raw.subarray(0, SECRET_PREFIX_BYTES));
+  add("reversed-bytes", Buffer.from([...raw].reverse()));
+  add("utf8-lower-hex", Buffer.from(hex, "utf8"));
+  add("utf8-upper-hex", Buffer.from(hex.toUpperCase(), "utf8"));
+  add("prefixed-hex", Buffer.from(`0x${hex}`, "utf8"));
+  add("base64", Buffer.from(raw.toString("base64"), "utf8"));
+  add("base64url", Buffer.from(raw.toString("base64url"), "utf8"));
+  return [...forms.values()];
+}
+
+// streamContains searches one file for any of the needles without holding it
+// in memory. The carry-over keeps the last (maxNeedle - 1) bytes so a match
+// spanning two chunks is not missed.
+export async function streamContains(path, needles) {
+  const longest = needles.reduce((max, needle) => Math.max(max, needle.bytes.length), 0);
+  const overlap = Math.max(0, longest - 1);
+  const found = new Set();
+  let carry = Buffer.alloc(0);
+  await new Promise((resolveStream, rejectStream) => {
+    const stream = createReadStream(path, { highWaterMark: STREAM_CHUNK_BYTES });
+    stream.on("error", rejectStream);
+    stream.on("data", (chunk) => {
+      const window = carry.length === 0 ? chunk : Buffer.concat([carry, chunk]);
+      for (const needle of needles) {
+        if (found.has(needle.name)) continue;
+        if (window.includes(needle.bytes)) found.add(needle.name);
+      }
+      carry = overlap === 0 ? Buffer.alloc(0) : window.subarray(Math.max(0, window.length - overlap));
+      if (found.size === needles.length) stream.destroy();
+    });
+    stream.on("close", resolveStream);
+    stream.on("end", resolveStream);
+  }).catch(() => {});
+  return [...found];
+}
+
+// scanSecretMaterial sweeps every file under `roots` for every representation
+// of every supplied secret. Unlike the text scans it applies NO size cap: the
+// files most likely to contain key material are exactly the large ones.
+export async function scanSecretMaterial({ secrets, roots, exclude = [] }) {
+  const excluded = new Set(exclude.map((path) => resolve(path)));
+  const targets = [];
+  for (const secret of secrets) {
+    for (const form of secretRepresentations(secret)) {
+      targets.push({ label: secret.label, representation: form.name, name: `${secret.label}:${form.name}`, bytes: form.bytes });
+    }
+  }
+  const files = [];
+  for (const root of roots) files.push(...(await filesAt(root)));
+
+  const leaks = [];
+  let scannedBytes = 0;
+  let scannedFiles = 0;
+  for (const path of files) {
+    if (excluded.has(resolve(path))) continue;
+    const info = await stat(path).catch(() => null);
+    if (!info) continue;
+    scannedFiles += 1;
+    scannedBytes += info.size;
+    for (const name of await streamContains(path, targets)) {
+      const target = targets.find((candidate) => candidate.name === name);
+      leaks.push({ label: target.label, representation: target.representation, file: path });
+    }
+  }
+  return {
+    scannedRoots: roots,
+    scannedFiles,
+    scannedBytes,
+    secretCount: secrets.length,
+    representationCount: targets.length,
+    representationsPerSecret: secrets.length === 0 ? 0 : targets.length / secrets.length,
     leaks,
   };
 }

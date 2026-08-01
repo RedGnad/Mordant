@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, writeFile, readFile, access } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdtemp, mkdir, writeFile, readFile, access, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   representations, scanCanaries, scanFieldNames, sweep, readManifest, FORBIDDEN_FIELD_NAMES,
+  scanSecretMaterial, secretRepresentations,
 } from "./leak-scan.mjs";
 
 const HEX = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
@@ -165,4 +167,52 @@ test("a leak in any scanned root fails, not just the first", async () => {
   const report = await sweep({ manifestPaths: [join(privateDir, "c.json")], roots: [first, second] });
   assert.equal(report.ok, false);
   assert.equal(report.leaks[0].field, "currency");
+});
+
+// External audit finding L-02. The canary sweep searched for a party's terms
+// and identifiers. It never searched for the threshold key material itself, so
+// a leaked Shamir share would have passed the gate. These are the positive
+// controls proving each secret representation is genuinely detected.
+test("secret material is detected in every representation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "leak-secret-"));
+  const share = randomBytes(64);
+  const secrets = [{ label: "threshold-share-1", bytes: share }];
+  const forms = secretRepresentations(secrets[0]);
+  assert.ok(forms.length >= 8, "expected at least eight secret representations");
+
+  for (const form of forms) {
+    const path = join(root, `carrier-${form.name}.bin`);
+    // Bury the leak in the middle of a file larger than one stream chunk, so
+    // this also exercises the chunk-boundary carry-over.
+    await writeFile(path, Buffer.concat([randomBytes(9 << 20), form.bytes, randomBytes(1 << 20)]));
+    const report = await scanSecretMaterial({ secrets, roots: [root] });
+    assert.equal(report.leaks.length >= 1, true, `${form.name} was not detected`);
+    assert.ok(
+      report.leaks.some((leak) => leak.representation === form.name),
+      `${form.name} was not reported under its own name`,
+    );
+    await rm(path);
+  }
+  await rm(root, { recursive: true, force: true });
+});
+
+test("a clean surface reports no secret leaks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "leak-secret-clean-"));
+  await writeFile(join(root, "public.bin"), randomBytes(12 << 20));
+  const report = await scanSecretMaterial({
+    secrets: [{ label: "threshold-share-1", bytes: randomBytes(64) }],
+    roots: [root],
+  });
+  assert.deepEqual(report.leaks, []);
+  assert.equal(report.scannedFiles, 1);
+  // No size cap: the whole file was read, unlike the 8 MiB-capped text scans.
+  assert.ok(report.scannedBytes > 8 * 1024 * 1024);
+  await rm(root, { recursive: true, force: true });
+});
+
+test("a secret shorter than the prefix length is refused rather than skipped", () => {
+  assert.throws(
+    () => secretRepresentations({ label: "too-short", bytes: randomBytes(8) }),
+    /SECRET_TOO_SHORT:too-short/,
+  );
 });

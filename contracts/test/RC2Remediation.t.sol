@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
-import {MordantIssuerRegistry} from "../src/identity/MordantIssuerRegistry.sol";
-import {MordantMatchResultV5 as R} from "../src/identity/MordantMatchResultV5.sol";
-import {MordantSourceAttestation} from "../src/identity/MordantSourceAttestation.sol";
-import {MordantSourceCommitmentRegistry} from "../src/v5/MordantSourceCommitmentRegistry.sol";
-import {MordantScopeGovernanceRegistryV5 as G} from "../src/v5/MordantScopeGovernanceRegistryV5.sol";
+import { MordantIssuerRegistry } from "../src/identity/MordantIssuerRegistry.sol";
+import { MordantMatchResultV5 as R } from "../src/identity/MordantMatchResultV5.sol";
+import { MordantSourceAttestation } from "../src/identity/MordantSourceAttestation.sol";
+import { MordantSourceCommitmentRegistry } from "../src/v5/MordantSourceCommitmentRegistry.sol";
+import {
+    MordantScopeGovernanceRegistryV5 as G
+} from "../src/v5/MordantScopeGovernanceRegistryV5.sol";
 
 /// @dev Library reverts are same-depth, so `expectRevert` needs an external call.
 contract ResultHarness {
@@ -66,7 +68,9 @@ contract RC2RemediationTest is Test {
 
     function testTheTwoReleasedBitsDetermineTheOutcome() public view {
         assertEq(uint256(harness.outcomeOf(false, false)), uint256(R.Outcome.DifferentAsset));
-        assertEq(uint256(harness.outcomeOf(true, false)), uint256(R.Outcome.SameAssetNoPolicyConflict));
+        assertEq(
+            uint256(harness.outcomeOf(true, false)), uint256(R.Outcome.SameAssetNoPolicyConflict)
+        );
         assertEq(uint256(harness.outcomeOf(true, true)), uint256(R.Outcome.SameAssetPolicyConflict));
     }
 
@@ -79,7 +83,8 @@ contract RC2RemediationTest is Test {
 
     function testDifferentAssetAndNoConflictAreDistinguishable() public view {
         // The RC1 defect: one conjunction bit could not tell these apart.
-        R.ConfidentialMatchResultV5 memory different = _result(false, false, R.Outcome.DifferentAsset);
+        R.ConfidentialMatchResultV5 memory different =
+            _result(false, false, R.Outcome.DifferentAsset);
         R.ConfidentialMatchResultV5 memory noConflict =
             _result(true, false, R.Outcome.SameAssetNoPolicyConflict);
         harness.coherent(different);
@@ -102,7 +107,9 @@ contract RC2RemediationTest is Test {
         harness.bindable(_result(false, false, R.Outcome.DifferentAsset), true);
 
         vm.expectRevert(
-            abi.encodeWithSelector(R.ResultNotBindable.selector, R.Outcome.SameAssetNoPolicyConflict)
+            abi.encodeWithSelector(
+                R.ResultNotBindable.selector, R.Outcome.SameAssetNoPolicyConflict
+            )
         );
         harness.bindable(_result(true, false, R.Outcome.SameAssetNoPolicyConflict), true);
 
@@ -128,8 +135,7 @@ contract RC2RemediationTest is Test {
     }
 
     function testNotComparablePerformsNoEvaluation() public {
-        R.ConfidentialMatchResultV5 memory result =
-            _result(false, false, R.Outcome.NotComparable);
+        R.ConfidentialMatchResultV5 memory result = _result(false, false, R.Outcome.NotComparable);
         result.providerProofCommitment = bytes32(0);
         result.thresholdTranscriptCommitment = bytes32(0);
         harness.coherent(result);
@@ -177,7 +183,8 @@ contract RC2RemediationTest is Test {
         )
     {
         attestation = _attestation(controller, nonce);
-        signature = _sign(ISSUER_KEY, MordantSourceAttestation.digest(attestation, address(sources)));
+        signature =
+            _sign(ISSUER_KEY, MordantSourceAttestation.digest(attestation, address(sources)));
         key = sources.sourceCommitmentOf(attestation, signature, salt);
         vm.prank(submitter);
         sources.commitSource(key);
@@ -234,7 +241,9 @@ contract RC2RemediationTest is Test {
         ) = _commitSource(address(0xC0117), 1, keccak256("salt"));
         vm.prank(address(0xBAD));
         vm.expectRevert(
-            abi.encodeWithSelector(MordantSourceCommitmentRegistry.Unauthorized.selector, address(0xBAD))
+            abi.encodeWithSelector(
+                MordantSourceCommitmentRegistry.Unauthorized.selector, address(0xBAD)
+            )
         );
         sources.revealSource(attestation, signature, keccak256("salt"));
     }
@@ -255,7 +264,9 @@ contract RC2RemediationTest is Test {
         assertEq(revealed.termsSchemeVersion, 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(MordantSourceCommitmentRegistry.CommitmentAlreadyRevealed.selector, key)
+            abi.encodeWithSelector(
+                MordantSourceCommitmentRegistry.CommitmentAlreadyRevealed.selector, key
+            )
         );
         sources.revealSource(attestation, signature, keccak256("salt"));
     }
@@ -325,10 +336,13 @@ contract RC2RemediationTest is Test {
 
     /* ================== M-02: session one-shot nullifier =================== */
 
-    function _authorize(bytes32 scope, address controller, bytes32 org, uint32 version, uint256 nonce)
-        private
-        returns (bytes32)
-    {
+    function _authorize(
+        bytes32 scope,
+        address controller,
+        bytes32 org,
+        uint32 version,
+        uint256 nonce
+    ) private returns (bytes32) {
         return governance.authorize(
             G.AuthorizationRequest({
                 scopeCommitment: scope,
@@ -446,7 +460,9 @@ contract RC2RemediationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                G.NullifierMismatch.selector, governance.sessionNullifierOf(intent), keccak256("some-other-nullifier")
+                G.NullifierMismatch.selector,
+                governance.sessionNullifierOf(intent),
+                keccak256("some-other-nullifier")
             )
         );
         governance.resolveSession(intent, keccak256("salt"), signatures);
@@ -468,7 +484,10 @@ contract RC2RemediationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                G.RecordNotStrictlyBeforeCommitment.selector, recordA, uint64(block.number), uint64(block.number)
+                G.RecordNotStrictlyBeforeCommitment.selector,
+                recordA,
+                uint64(block.number),
+                uint64(block.number)
             )
         );
         governance.resolveSession(intent, keccak256("salt"), signatures);
@@ -488,7 +507,10 @@ contract RC2RemediationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                G.RecordNotStrictlyBeforeCommitment.selector, recordA, uint64(block.number - 1), uint64(block.number)
+                G.RecordNotStrictlyBeforeCommitment.selector,
+                recordA,
+                uint64(block.number - 1),
+                uint64(block.number)
             )
         );
         governance.resolveSession(intent, keccak256("salt"), signatures);
@@ -507,7 +529,8 @@ contract RC2RemediationTest is Test {
         vm.roll(block.number + 1);
         governance.retire(recordA);
 
-        G.ResolvedSession memory resolved = governance.resolveSession(intent, keccak256("salt"), signatures);
+        G.ResolvedSession memory resolved =
+            governance.resolveSession(intent, keccak256("salt"), signatures);
         assertEq(resolved.sessionCommitment, key);
         assertEq(resolved.controllerA, controllerA);
         assertEq(resolved.scopeCommitmentA, keccak256("scope-a"));
@@ -580,10 +603,7 @@ contract RC2RemediationTest is Test {
             outcome: outcome,
             sameEconomicAsset: sameAsset,
             policyConflict: policyConflict,
-            candidateMatchSuggested: false,
-            candidateFallbackAuthorized: false,
             matchCommitment: keccak256("match"),
-            boundCandidateAliasCommitment: bytes32(0),
             anchorCount: 2,
             providerProofCommitment: keccak256("proof"),
             thresholdTranscriptCommitment: keccak256("transcript")

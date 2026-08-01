@@ -36,7 +36,9 @@ contract MordantScopeGovernanceRegistryV5 {
     error AlreadyHardRevoked(bytes32 recordDigest);
     error ControllerEmergencyRevoked(bytes32 recordDigest, uint64 hardRevokedAtBlock);
     error RecordNotLiveAtBlock(bytes32 recordDigest, uint64 blockNumber);
-    error RecordNotStrictlyBeforeCommitment(bytes32 recordDigest, uint64 recordBlock, uint64 commitBlock);
+    error RecordNotStrictlyBeforeCommitment(
+        bytes32 recordDigest, uint64 recordBlock, uint64 commitBlock
+    );
     error RelayerNotAuthorized(address submitter);
     error RelayerIsController(address submitter);
     error CommitmentExists(bytes32 sessionCommitment);
@@ -86,8 +88,10 @@ contract MordantScopeGovernanceRegistryV5 {
     );
 
     bytes32 private constant RECORD_DOMAIN = keccak256("mordant.scope-authorization/3");
-    bytes32 private constant COMMITMENT_DOMAIN = keccak256("mordant.bilateral-session-commitment/3");
-    bytes32 private constant SIGNATURE_DOMAIN = keccak256("mordant.session-initiation-signatures/2");
+    bytes32 private constant COMMITMENT_DOMAIN =
+        keccak256("mordant.bilateral-session-commitment/3");
+    bytes32 private constant SIGNATURE_DOMAIN =
+        keccak256("mordant.session-initiation-signatures/2");
     bytes32 private constant NULLIFIER_DOMAIN = keccak256("mordant.session-nullifier/1");
     string internal constant DOMAIN_NAME = "Mordant Bilateral Session Intent";
     string internal constant DOMAIN_VERSION = "2";
@@ -95,8 +99,9 @@ contract MordantScopeGovernanceRegistryV5 {
     bytes32 public constant INTENT_TYPEHASH = keccak256(
         "BilateralSessionIntentV5(uint256 chainId,address governanceRegistry,bytes32 policyId,uint32 policyVersion,bytes32 governanceRecordA,bytes32 governanceRecordB,bytes32 controllerKeyIdA,bytes32 controllerKeyIdB,uint32 controllerEpochA,uint32 controllerEpochB,uint32 scopeAuthorizationVersionA,uint32 scopeAuthorizationVersionB,bytes32 sourceRecordCommitmentA,bytes32 sourceRecordCommitmentB,bytes32 scopeCommitmentA,bytes32 scopeCommitmentB,bytes32 issuerKeyId,uint32 identityEpoch,bytes32 strictAssetCommitmentA,bool candidateAuthorized,uint32 exactBudget,uint32 candidateBudget,uint256 sessionNonce,uint64 expiry,uint32 disclosureVersion)"
     );
-    bytes32 private constant EIP712_DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
     uint256 private constant SECP256K1_HALF_ORDER =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
@@ -319,7 +324,9 @@ contract MordantScopeGovernanceRegistryV5 {
     /// authorization, which is exactly the probing surface finding M-02 named.
     function commitSession(bytes32 sessionCommitment, bytes32 sessionNullifier) external {
         if (!authorizedRelayer[msg.sender]) revert RelayerNotAuthorized(msg.sender);
-        if (sessionCommitment == bytes32(0) || sessionNullifier == bytes32(0)) revert InvalidIntent();
+        if (sessionCommitment == bytes32(0) || sessionNullifier == bytes32(0)) {
+            revert InvalidIntent();
+        }
         if (_commitments[sessionCommitment].exists) revert CommitmentExists(sessionCommitment);
         if (consumedNullifier[sessionNullifier]) revert NullifierConsumed(sessionNullifier);
 
@@ -341,7 +348,11 @@ contract MordantScopeGovernanceRegistryV5 {
         return _commitments[sessionCommitment].committedInBlock;
     }
 
-    function commitment(bytes32 sessionCommitment) external view returns (SessionCommitment memory) {
+    function commitment(bytes32 sessionCommitment)
+        external
+        view
+        returns (SessionCommitment memory)
+    {
         return _commitments[sessionCommitment];
     }
 
@@ -558,10 +569,14 @@ contract MordantScopeGovernanceRegistryV5 {
             revert ControllerEmergencyRevoked(intent.governanceRecordB, b.hardRevokedAtBlock);
         }
         if (!_isLiveForCommitmentInBlock(a, commitBlock)) {
-            revert RecordNotStrictlyBeforeCommitment(intent.governanceRecordA, a.validFromBlock, commitBlock);
+            revert RecordNotStrictlyBeforeCommitment(
+                intent.governanceRecordA, a.validFromBlock, commitBlock
+            );
         }
         if (!_isLiveForCommitmentInBlock(b, commitBlock)) {
-            revert RecordNotStrictlyBeforeCommitment(intent.governanceRecordB, b.validFromBlock, commitBlock);
+            revert RecordNotStrictlyBeforeCommitment(
+                intent.governanceRecordB, b.validFromBlock, commitBlock
+            );
         }
         return (a.controller, b.controller);
     }
@@ -640,7 +655,11 @@ contract MordantScopeGovernanceRegistryV5 {
         return keccak256(
             abi.encodePacked(
                 abi.encode(
-                    RECORD_DOMAIN, block.chainid, address(this), request.scopeCommitment, request.controller
+                    RECORD_DOMAIN,
+                    block.chainid,
+                    address(this),
+                    request.scopeCommitment,
+                    request.controller
                 ),
                 abi.encode(
                     request.controllerKeyId,
@@ -654,7 +673,11 @@ contract MordantScopeGovernanceRegistryV5 {
         );
     }
 
-    function _recover(bytes32 digest, bytes calldata signature) private pure returns (address signer) {
+    function _recover(bytes32 digest, bytes calldata signature)
+        private
+        pure
+        returns (address signer)
+    {
         if (signature.length != 65) revert MalformedSignature();
         bytes32 r = bytes32(signature[0:32]);
         bytes32 s = bytes32(signature[32:64]);

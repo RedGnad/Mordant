@@ -5,8 +5,11 @@ import {
   MONAD_TESTNET_CHAIN_ID,
   NetworkNotAllowedError,
   PRIVATE_MATCHING_COPY,
+  PRODUCT_PROTOCOL_VERSION,
   PROHIBITED_CLAIMS,
+  ProtocolVersionRetiredError,
   assertNetworkAllowed,
+  assertProtocolVersionSupported,
   canStartLiveSession,
   readPrivateMatchingFlags,
 } from "./config";
@@ -109,4 +112,41 @@ test("the evidence explorer reads the published bundle", async () => {
 
   const [rejected, total] = summary.replaysRejected.split("/").map(Number);
   assert.ok(total > 0 && rejected === total, "every replay must be rejected");
+});
+
+test("the live path fails closed for protocol versions below V5", () => {
+  const flags = {
+    enabled: true,
+    evidenceExplorerEnabled: true,
+    demoEnabled: true,
+    liveSessionsEnabled: true,
+  };
+
+  // Everything else is as permissive as it can be, so the protocol version is
+  // the only thing deciding these cases.
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 5), true);
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 6), true);
+
+  // RC1 failed external audit on every public claim. It stays in the repository
+  // as evidence, and stays unreachable as a product protocol.
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 4), false);
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 3), false);
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 1), false);
+
+  // Omitting the version must not open a live V4 session by default.
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID), false);
+
+  // A non-integer version is not a version.
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, 5.5), false);
+  assert.equal(canStartLiveSession(flags, MONAD_TESTNET_CHAIN_ID, Number.NaN), false);
+});
+
+test("assertProtocolVersionSupported names the retired version", () => {
+  assert.doesNotThrow(() => assertProtocolVersionSupported(PRODUCT_PROTOCOL_VERSION));
+  assert.throws(
+    () => assertProtocolVersionSupported(4),
+    (error: unknown) =>
+      error instanceof ProtocolVersionRetiredError && error.version === 4,
+  );
+  assert.throws(() => assertProtocolVersionSupported(0), ProtocolVersionRetiredError);
 });

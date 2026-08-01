@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {MordantAssetIdentity} from "../identity/MordantAssetIdentity.sol";
-import {MordantIssuerRegistry} from "../identity/MordantIssuerRegistry.sol";
-import {MordantSourceAttestation} from "../identity/MordantSourceAttestation.sol";
+import { MordantAssetIdentity } from "../identity/MordantAssetIdentity.sol";
+import { MordantIssuerRegistry } from "../identity/MordantIssuerRegistry.sol";
+import { MordantSourceAttestation } from "../identity/MordantSourceAttestation.sol";
 
 /// @notice Opaque admission for a non-vault receivable source.
 ///
@@ -57,8 +57,7 @@ contract MordantSourceCommitmentRegistry {
     event SubmitterSet(address indexed submitter, bool allowed);
     event RevealerSet(address indexed revealer, bool allowed);
 
-    bytes32 private constant COMMITMENT_DOMAIN =
-        keccak256("mordant.source-record-commitment/1");
+    bytes32 private constant COMMITMENT_DOMAIN = keccak256("mordant.source-record-commitment/1");
 
     struct SourceCommitment {
         uint64 committedAt;
@@ -213,7 +212,8 @@ contract MordantSourceCommitmentRegistry {
             revert NonceConsumed(attestation.issuerKeyId, attestation.nonce);
         }
 
-        (address signer,) = MordantSourceAttestation.recover(attestation, issuerSignature, address(this));
+        (address signer,) =
+            MordantSourceAttestation.recover(attestation, issuerSignature, address(this));
         issuerRegistry.requireAuthorized(attestation.issuerKeyId, signer, attestation.identityEpoch);
 
         // The allowlist is a policy statement, not proof. A submitter that turns

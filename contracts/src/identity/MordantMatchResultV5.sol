@@ -27,13 +27,19 @@ pragma solidity ^0.8.28;
 /// | false             | true           | incoherent, always rejected   |
 ///
 /// Only `SameAssetPolicyConflict` may open a recourse record.
+///
+/// External audit finding M-05: V4 carried a tolerant "candidate alias" path
+/// whose suggestion nothing authenticated. It is not present here. The V5
+/// circuit compares only the strict identifier, under encryption, and produces
+/// exactly two bits, so there is no tolerant result for the schema to express.
+/// Removing it rather than gating it is what makes the unauthenticated path
+/// unreachable instead of merely discouraged.
 library MordantMatchResultV5 {
     error EmptyResult();
     error OutcomeInconsistent(Outcome outcome);
     error PolicyConflictWithoutAssetMatch();
     error ResultNotBindable(Outcome outcome);
     error MissingPrecommitment(bytes32 sessionCommitment);
-    error CandidateResultNotBindable();
     error NotComparableMustNotEvaluate();
     error ReleasedBitsDisagreeWithOutcome();
 
@@ -49,8 +55,6 @@ library MordantMatchResultV5 {
         SameAssetNoPolicyConflict,
         /// Same receivable AND the terms conflict under the configured policy.
         SameAssetPolicyConflict,
-        /// The tolerant path suggested an alias match. Never bindable.
-        ReconciliationRequired,
         /// The submissions were not comparable. No FHE ran.
         NotComparable
     }
@@ -72,11 +76,7 @@ library MordantMatchResultV5 {
         bool sameEconomicAsset;
         /// @dev Released bit 1. The encrypted policy conjunction.
         bool policyConflict;
-        /// @dev Tolerant path only. Never bindable.
-        bool candidateMatchSuggested;
-        bool candidateFallbackAuthorized;
         bytes32 matchCommitment;
-        bytes32 boundCandidateAliasCommitment;
         uint8 anchorCount;
         /// @dev Commits to the circuit, its parameters, both input ciphertexts,
         /// both enrollments and the released output. Zero only for NotComparable.
@@ -101,7 +101,9 @@ library MordantMatchResultV5 {
 
     /// @notice Structural coherence. Every consumer runs this first.
     function requireCoherent(ConfidentialMatchResultV5 memory result) internal pure {
-        if (result.schemaVersion != RESULT_SCHEMA_VERSION) revert OutcomeInconsistent(result.outcome);
+        if (result.schemaVersion != RESULT_SCHEMA_VERSION) {
+            revert OutcomeInconsistent(result.outcome);
+        }
         if (
             result.sessionCommitment == bytes32(0) || result.inputCommitmentA == bytes32(0)
                 || result.inputCommitmentB == bytes32(0) || result.scopeCommitmentA == bytes32(0)
@@ -112,7 +114,7 @@ library MordantMatchResultV5 {
 
         if (result.outcome == Outcome.NotComparable) {
             // No FHE ran, so there is nothing to attest and nothing to release.
-            if (result.sameEconomicAsset || result.policyConflict || result.candidateMatchSuggested) {
+            if (result.sameEconomicAsset || result.policyConflict) {
                 revert OutcomeInconsistent(result.outcome);
             }
             if (
@@ -122,18 +124,7 @@ library MordantMatchResultV5 {
             return;
         }
 
-        if (result.outcome == Outcome.ReconciliationRequired) {
-            if (!result.candidateMatchSuggested || result.sameEconomicAsset || result.policyConflict) {
-                revert OutcomeInconsistent(result.outcome);
-            }
-            if (!result.candidateFallbackAuthorized) revert OutcomeInconsistent(result.outcome);
-            if (result.boundCandidateAliasCommitment == bytes32(0)) revert EmptyResult();
-            if (result.providerProofCommitment == bytes32(0)) revert EmptyResult();
-            return;
-        }
-
         // Every remaining outcome came from a real evaluation of the strict path.
-        if (result.candidateMatchSuggested) revert OutcomeInconsistent(result.outcome);
         if (result.providerProofCommitment == bytes32(0)) revert EmptyResult();
         if (result.thresholdTranscriptCommitment == bytes32(0)) revert EmptyResult();
         if (result.enrollmentDigestA == bytes32(0) || result.enrollmentDigestB == bytes32(0)) {
@@ -156,25 +147,17 @@ library MordantMatchResultV5 {
         pure
     {
         requireCoherent(result);
-        if (result.outcome == Outcome.ReconciliationRequired) revert CandidateResultNotBindable();
         // DifferentAsset and SameAssetNoPolicyConflict are both real answers.
         // Neither opens a recourse: one says it is not the same receivable, the
         // other says it is but the terms do not conflict.
-        if (result.outcome != Outcome.SameAssetPolicyConflict) revert ResultNotBindable(result.outcome);
+        if (result.outcome != Outcome.SameAssetPolicyConflict) {
+            revert ResultNotBindable(result.outcome);
+        }
         if (!result.sameEconomicAsset || !result.policyConflict) {
             revert ReleasedBitsDisagreeWithOutcome();
         }
         if (result.matchCommitment == bytes32(0) || result.anchorCount == 0) revert EmptyResult();
         if (!precommitted) revert MissingPrecommitment(result.sessionCommitment);
-    }
-
-    /// @notice Whether a result may open a private reconciliation workflow.
-    function opensReconciliation(ConfidentialMatchResultV5 memory result)
-        internal
-        pure
-        returns (bool)
-    {
-        return result.outcome == Outcome.ReconciliationRequired;
     }
 
     /// @notice Only a confirmed policy conflict is publicly submittable.
@@ -201,9 +184,6 @@ library MordantMatchResultV5 {
         }
         if (outcome == Outcome.SameAssetPolicyConflict) {
             return "the same receivable, and the submitted terms conflict";
-        }
-        if (outcome == Outcome.ReconciliationRequired) {
-            return "the identifiers may describe the same receivable; private reconciliation is required";
         }
         return "the submissions were not comparable; no evaluation was performed";
     }
