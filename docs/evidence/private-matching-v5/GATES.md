@@ -67,7 +67,40 @@ toolchain (`go1.24.0`), one OS (`darwin`). Determinism across a genuinely
 different host, OS or Go version is not evidenced here. The `amd64` run executes
 under Rosetta 2 rather than on native x86-64 silicon.
 
-### Measured cost of recomputation
+### Measured cost of recomputation, concurrent operators
+
+Both selected operators recompute **concurrently**, which is how a release
+actually runs. Raw data: `performance.json`, produced by
+`TestV5ConcurrentOperatorPerformance`.
+
+| Metric | Value |
+|---|---|
+| Evaluator evaluation | 9.2 s |
+| Both operators, wall clock | 10.1 s |
+| Both operators, summed | 20.1 s |
+| Parallel speedup | 1.99x of a theoretical 2.00x |
+| Threshold release, both bits | 0.2 s |
+| **Total end to end** | **20.0 s** |
+| Evaluation-key load | 0.5 s |
+| Ciphertext transport to each operator | 37.75 MB |
+| Peak process memory (evaluator + 2 operators, one address space) | 1537 MB |
+| Refusal of a substituted output | 9.4 s, terminal |
+
+The second operator costs almost no additional wall time on this host: 1.99x of
+a theoretical 2.00x means the two ran essentially in parallel rather than
+contending. That will not hold on a host with fewer than two free cores per
+operator, and it is a single-host figure in any case; three separate operator
+hosts would each carry roughly the single-operator memory figure rather than
+sharing 1537 MB.
+
+Refusal costs a full recomputation by construction. An operator cannot know the
+proposed output differs until it has computed its own, so a rejected release is
+as expensive as an accepted one. That is the correct trade and it was not
+optimized away.
+
+### Single-operator figures
+
+
 
 | Metric | Value |
 |---|---|

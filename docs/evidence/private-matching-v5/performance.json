@@ -1,0 +1,63 @@
+{
+  "schema_version": "mordant.v5-performance/1",
+  "runtime": {
+    "lattigo_version": "v6.2.0",
+    "go_version": "go1.24.0",
+    "goos": "darwin",
+    "goarch": "amd64",
+    "circuit_version": 5,
+    "circuit_hash": "2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameter_fingerprint": "152d0aaf2bf071b43211a3ade2be4959363d625725d4efe66a0e05fce6b5efa1",
+    "evaluation_key_digest": "655da17e267053d0c8c5234fb0fa0383560b16d2c86f9a2107d83826fdd4240b",
+    "evaluation_key_epoch": 1,
+    "serialization_version": 1,
+    "release_layout_version": 1,
+    "fingerprint": "171a853f88070b9fdf176505076341b0967f2453f846e424dac08abe27bf8f89"
+  },
+  "concurrency": {
+    "operators_run_concurrently": 2,
+    "gomaxprocs": 8
+  },
+  "evaluator_ms": 9214,
+  "key_load_ms": 86,
+  "ciphertext_transport_bytes": 37751700,
+  "threshold_release_ms": 215,
+  "end_to_end_ms": 19989,
+  "concurrent_operator_wall_ms": 10088,
+  "sum_operator_ms": 20127,
+  "parallel_speedup": "1.99x",
+  "heap_alloc_peak_mb": 886,
+  "sys_peak_mb": 1537,
+  "total_alloc_mb": 2883,
+  "operators": [
+    {
+      "point": 1,
+      "recompute_ms": 9774,
+      "verify_ms": 10087,
+      "share_ms": 202,
+      "checks_run": 14,
+      "accepted": true,
+      "output_digest": "3139982262f59e72324e1b6281acf4d3aef6adc936daca7d3c7a2fe8c30b7e17",
+      "runtime_matched": true
+    },
+    {
+      "point": 2,
+      "recompute_ms": 9726,
+      "verify_ms": 10040,
+      "share_ms": 384,
+      "checks_run": 14,
+      "accepted": true,
+      "output_digest": "3139982262f59e72324e1b6281acf4d3aef6adc936daca7d3c7a2fe8c30b7e17",
+      "runtime_matched": true
+    }
+  ],
+  "refusal_ms": 9448,
+  "refusal_is_terminal": true,
+  "notes": [
+    "The two operator recomputations run concurrently, which is how a release runs and where the cost lands.",
+    "Refusal costs a full recomputation by construction: the operator cannot know the output differs until it has computed it.",
+    "Peak memory is process-wide and covers the evaluator plus both operators in one address space; three separate hosts would each carry roughly the single-operator figure.",
+    "parallel_speedup is summed operator time over wall-clock time with two operators: 2.00x is perfect parallelism, 1.00x is full serialization.",
+    "No verification was weakened to improve any figure here."
+  ]
+}
