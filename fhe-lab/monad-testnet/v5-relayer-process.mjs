@@ -7,7 +7,7 @@
 // property the opaque commitment exists to provide.
 //
 // So the boundary is an object, not a convention. The runner holds a handle
-// that accepts exactly two values and exposes exactly one method. There is no
+// that accepts exactly three values and exposes exactly one method. There is no
 // field on it that could carry an intent, and no method that could carry
 // arbitrary calldata.
 import { encodeFunctionData, getAddress, toFunctionSelector } from "viem";
@@ -55,7 +55,7 @@ export function createRelayerProcess({
   const boundRegistry = getAddress(registry);
   const boundChainId = Number(chainId);
 
-  async function publishSessionCommitment(request) {
+  async function publishSessionCommitment(request, { onBroadcast } = {}) {
     if (request === null || typeof request !== "object" || Array.isArray(request)) {
       throw new RelayerRefused("MALFORMED_REQUEST", typeof request);
     }
@@ -101,6 +101,11 @@ export function createRelayerProcess({
     if (existing?.exists) {
       throw new RelayerRefused("ALREADY_PUBLISHED", sessionCommitment);
     }
+    const consumed = await client.readContract({
+      address: boundRegistry, abi: governanceAbi, functionName: "consumedNullifier",
+      args: [sessionNullifier],
+    });
+    if (consumed) throw new RelayerRefused("NULLIFIER_CONSUMED", sessionNullifier);
 
     // The relayer constructs its own calldata. It never accepts calldata.
     const data = encodeFunctionData({
@@ -124,11 +129,19 @@ export function createRelayerProcess({
       throw new RelayerRefused("FEE_CEILING", `${maxFeePerGas} > ${maxFeeWei}`);
     }
 
+    // The sender nonce is public process state, but it must be captured before
+    // broadcast so the journal can fail closed if a hash later disappears.
+    const nonce = await client.getTransactionCount({ address: account.address, blockTag: "pending" });
     const hash = await broadcast("relayer commitSession", async () =>
       walletFor(account).sendTransaction({
         account, to: boundRegistry, data, value: 0n, gas: bounded,
         maxFeePerGas, maxPriorityFeePerGas: 1_000_000_000n,
       }));
+
+    // This callback is intentionally before the receipt wait. It is the
+    // relayer's only acknowledgement to the durable runner and lets it fsync
+    // the hash before a crash can erase the nonce-consumption evidence.
+    if (onBroadcast) await onBroadcast({ transactionHash: hash, sender: account.address, nonce: Number(nonce) });
 
     const receipt = await client.waitForTransactionReceipt({ hash });
     // Public status only. No calldata, no signature, no internal state.

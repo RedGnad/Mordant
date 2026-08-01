@@ -74,7 +74,13 @@ export async function runStage(stage, context) {
   if (state === STATES.AMBIGUOUS) {
     throw new StageError("STAGE_AMBIGUOUS", stage.name, journal.stage(stage.name).reason);
   }
-  if (state === STATES.CONFIRMED) return { stage: stage.name, skipped: true };
+  if (state === STATES.CONFIRMED) {
+    // A crash may happen after the receipt transition but before the independent
+    // readback is fsynced. Confirmation without this flag is therefore not a
+    // licence to skip verification on restart.
+    if (!journal.stage(stage.name).verified) await verifyAndSeal(stage, context);
+    return { stage: stage.name, skipped: true };
+  }
   if (state === STATES.FAILED) {
     throw new StageError("STAGE_FAILED", stage.name, journal.stage(stage.name).reason);
   }
@@ -92,6 +98,10 @@ export async function runStage(stage, context) {
       await journal.markAmbiguous(stage.name, finding.reason ?? "reconciliation was inconclusive");
       throw new StageError("STAGE_AMBIGUOUS", stage.name, finding.reason);
     }
+    if (finding?.awaitingExternal) {
+      await journal.markAwaitingExternal(stage.name, finding.request ?? {});
+      return { stage: stage.name, awaitingExternal: true };
+    }
   }
 
   // 2. Prepare. The handler runs even when the stage is already PREPARED, so a
@@ -101,7 +111,7 @@ export async function runStage(stage, context) {
   //    A handler that must generate randomness (a salt, a nonce) receives the
   //    frozen record as `existing` and is required to reuse it. That is the
   //    only way to both freeze the value and keep the check meaningful.
-  if (stage.prepare) {
+  if (stage.prepare && journal.state(stage.name) !== STATES.AWAITING_EXTERNAL) {
     const existing = journal.state(stage.name) === STATES.PREPARED
       ? deepFreeze({ ...journal.stage(stage.name) })
       : null;
@@ -117,7 +127,18 @@ export async function runStage(stage, context) {
     const broadcast = (description, send) =>
       guardedBroadcast({ target: stage.target, description, send, env: context.env ?? process.env });
 
-    const outcome = await stage.execute({ prepared, broadcast, journal, stage: stage.name });
+    // An execution capability is a deliberately tiny closure supplied by the
+    // environment. It can submit only this stage's already-frozen calldata;
+    // it is not the live context and exposes neither a signer nor a client.
+    const execution = context.executionForStage?.(stage.name);
+    const args = { prepared, broadcast, journal, stage: stage.name };
+    if (execution) args.execution = execution;
+    const outcome = await stage.execute(args);
+
+    if (outcome?.awaitingExternal) {
+      await journal.markAwaitingExternal(stage.name, outcome.request ?? {});
+      return { stage: stage.name, awaitingExternal: true };
+    }
 
     if (outcome?.transactionHash) {
       await journal.markBroadcast(stage.name, outcome.transactionHash);
@@ -166,6 +187,7 @@ export async function runPipeline(stages, context) {
   for (const stage of stages) {
     const outcome = await runStage(stage, context);
     results.push(outcome);
+    if (outcome.awaitingExternal) break;
     if (context.stopAfter && context.stopAfter === stage.name) break;
   }
   return results;

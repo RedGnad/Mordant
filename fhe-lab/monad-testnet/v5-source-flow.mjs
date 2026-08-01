@@ -9,7 +9,7 @@
 // Here exactly one 32-byte value reaches the chain before binding. Everything
 // else lives in a reveal package that never leaves the private working root.
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { encodeFunctionData, keccak256, toBytes, toHex } from "viem";
 
@@ -138,6 +138,9 @@ export async function writeRevealPackage({ path, preimage, signature, digest, co
     null, 2,
   );
   await writeFile(path, body + "\n", { mode: 0o600 });
+  // `mode` only applies at creation on some platforms. Reassert it so a
+  // resumed preparation cannot leave a private reveal package group-readable.
+  await chmod(path, 0o600);
   return { path, bytes: body.length };
 }
 

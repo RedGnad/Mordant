@@ -50,12 +50,18 @@ export const STAGE_GAS = Object.freeze({
     MEASURED_GAS["deploy-binder"] +
     MEASURED_GAS["config-call"] * 10n,
   BYTECODE_VERIFIED: 0n,
-  // Vault creation is a CREATE2 deployment plus admission checks, then
-  // activation moves units and funds protection.
+  // Vault creation is a CREATE2 deployment plus admission checks.
   VAULT_CREATED: 6_000_000n,
-  SOURCE_COMMITTED: 200_000n,
-  GOVERNANCE_CREATED: 400_000n,
+  AWAITING_VAULT_APASS: 0n,
+  // Activation includes the bounded local custody/funding prerequisites and
+  // the protected receivable state transition.
+  VAULT_ACTIVATED: 4_000_000n,
+  SOURCE_A_COMMITTED: 200_000n,
+  SOURCE_B_COMMITTED: 200_000n,
+  GOVERNANCE_A_CREATED: 200_000n,
+  GOVERNANCE_B_CREATED: 200_000n,
   SESSION_PREPARED: 0n,
+  SESSION_NULLIFIER_RESERVED: 0n,
   SESSION_COMMITTED: 200_000n,
   CEREMONY_COMPLETED: 0n,
   ENROLLMENTS_ADMITTED: 0n,

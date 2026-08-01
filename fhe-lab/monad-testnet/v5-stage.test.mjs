@@ -253,3 +253,31 @@ test("a pipeline can stop at a named stage without touching later ones", async (
   assert.equal(ctx.journal.state("FINAL_STACK_PLANNED"), STATES.CONFIRMED);
   assert.equal(ctx.journal.state("FINAL_STACK_DEPLOYED"), STATES.NOT_STARTED);
 });
+
+test("an external checkpoint persists its bounded request and resumes only by reconciliation", async () => {
+  const ctx = await context();
+  let issued = false;
+  const request = {
+    chainId: CHAIN,
+    vaultAddress: "0x1111111111111111111111111111111111111111",
+    requiredIdentityStatus: "valid A-Pass",
+    minimumValidity: "isValidAPass(vault) === true",
+  };
+  const stage = defineStage({
+    name: "INITIALIZED",
+    prepare: async () => ({ externalActionRequest: request }),
+    execute: async ({ prepared }) => ({ awaitingExternal: true, request: prepared.externalActionRequest }),
+    reconcile: async () => issued ? { alreadyDone: true, outputs: { reconciledFromChain: true } } : null,
+    verify: async () => ({ ok: issued }),
+  });
+  const first = await runStage(stage, ctx);
+  assert.equal(first.awaitingExternal, true);
+  assert.equal(ctx.journal.state("INITIALIZED"), STATES.AWAITING_EXTERNAL);
+  assert.deepEqual(ctx.journal.stage("INITIALIZED").externalActionRequest, request);
+
+  issued = true; // separate authority acts while the runner is down
+  const resumed = await Journal.open(ctx.path, { sourceCommit: COMMIT, chainId: CHAIN });
+  const result = await runStage(stage, { ...ctx, journal: resumed });
+  assert.equal(result.reconciled, true);
+  assert.equal(resumed.state("INITIALIZED"), STATES.CONFIRMED);
+});

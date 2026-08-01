@@ -18,19 +18,29 @@
 //      map ordering) and would then broadcast something the operator never
 //      reviewed. Preparation is the review point; broadcast replays bytes.
 import { createHash } from "node:crypto";
-import { open, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { open, mkdir, readFile, rename } from "node:fs/promises";
+import { dirname } from "node:path";
 
-/// The 23 stages, in order. A stage may only advance forwards.
+/// The durable stages, in order. A stage may only advance forwards.
+///
+/// The admission spine is deliberately finer grained than its RC1 predecessor:
+/// each source, governance record and the A-Pass hand-off has independent
+/// continuity.  Collapsing any pair would make a restart unable to distinguish
+/// "the first action happened" from "the whole group happened".
 export const STAGES = Object.freeze([
   "INITIALIZED",
   "FINAL_STACK_PLANNED",
   "FINAL_STACK_DEPLOYED",
   "BYTECODE_VERIFIED",
   "VAULT_CREATED",
-  "SOURCE_COMMITTED",
-  "GOVERNANCE_CREATED",
+  "AWAITING_VAULT_APASS",
+  "VAULT_ACTIVATED",
+  "SOURCE_A_COMMITTED",
+  "SOURCE_B_COMMITTED",
+  "GOVERNANCE_A_CREATED",
+  "GOVERNANCE_B_CREATED",
   "SESSION_PREPARED",
+  "SESSION_NULLIFIER_RESERVED",
   "SESSION_COMMITTED",
   "CEREMONY_COMPLETED",
   "ENROLLMENTS_ADMITTED",
@@ -52,6 +62,9 @@ export const STAGES = Object.freeze([
 export const STATES = Object.freeze({
   NOT_STARTED: "NOT_STARTED",
   PREPARED: "PREPARED",
+  /// An external, separately-authorized action is required.  Unlike FAILED or
+  /// AMBIGUOUS this is resumable: reconciliation is the only way out.
+  AWAITING_EXTERNAL: "AWAITING_EXTERNAL",
   BROADCAST: "BROADCAST",
   CONFIRMED: "CONFIRMED",
   FAILED: "FAILED",
@@ -78,7 +91,9 @@ const digestOf = (value) =>
 async function writeAtomic(path, text) {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.tmp`;
-  const handle = await open(temporary, "w");
+  // Journals contain salts and opaque signing material. They are durable
+  // private process artifacts, not evidence-bundle input.
+  const handle = await open(temporary, "w", 0o600);
   try {
     await handle.writeFile(text);
     await handle.sync();
@@ -251,7 +266,9 @@ export class Journal {
   async recordOffChain(name, outputs) {
     const entry = this.stage(name);
     if (entry.state === STATES.CONFIRMED) return entry;
-    if (entry.state !== STATES.PREPARED) this.#requirePredecessors(name);
+    if (entry.state !== STATES.PREPARED && entry.state !== STATES.AWAITING_EXTERNAL) {
+      this.#requirePredecessors(name);
+    }
     // MERGE onto the prepared record rather than replacing it. The frozen
     // inputs (calldata, salts, nonces) are part of the stage's permanent
     // evidence: a later reconcile compares against them, and an evidence
@@ -262,6 +279,25 @@ export class Journal {
       state: STATES.CONFIRMED,
       confirmedAt: new Date().toISOString(),
       outputDigest: digestOf(outputs),
+    };
+    await this.#flush();
+    return this.stage(name);
+  }
+
+  /// Persist a bounded external-action request.  Only reconciliation can
+  /// confirm this stage later; an operator assertion is intentionally not an
+  /// input to this transition.
+  async markAwaitingExternal(name, request) {
+    const entry = this.stage(name);
+    if (entry.state === STATES.CONFIRMED) return entry;
+    if (entry.state !== STATES.PREPARED && entry.state !== STATES.AWAITING_EXTERNAL) {
+      throw new JournalError("STAGE_NOT_PREPARED", `${name} is ${entry.state}`);
+    }
+    this.#data.stages[name] = {
+      ...entry,
+      ...request,
+      state: STATES.AWAITING_EXTERNAL,
+      awaitingSince: entry.awaitingSince ?? new Date().toISOString(),
     };
     await this.#flush();
     return this.stage(name);
@@ -337,6 +373,22 @@ export class Journal {
   /// Persists the verification flags a stage set on its entry.
   async recordVerification(name) {
     if (!STAGES.includes(name)) throw new JournalError("UNKNOWN_STAGE", name);
+    await this.#flush();
+    return this.stage(name);
+  }
+
+  /// Persist a value that is knowable only after a transaction has executed,
+  /// such as a governance record digest containing the mined block number.
+  /// Reconciliation may call this after a crash; a different re-derived value
+  /// is evidence of a different transaction and is refused.
+  async recordDerived(name, values) {
+    const entry = this.stage(name);
+    for (const [key, value] of Object.entries(values)) {
+      if (entry[key] !== undefined && JSON.stringify(entry[key]) !== JSON.stringify(value)) {
+        throw new JournalError("DERIVED_OUTPUT_DRIFT", `${name}.${key}`);
+      }
+    }
+    this.#data.stages[name] = { ...entry, ...values };
     await this.#flush();
     return this.stage(name);
   }
