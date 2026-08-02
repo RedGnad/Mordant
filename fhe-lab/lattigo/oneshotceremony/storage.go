@@ -106,6 +106,25 @@ func (c *OperatorStorageCapability) StartupProvenance() ExecutableProvenance {
 	return c.startup
 }
 
+// PublicWitnessRecords returns only the signed public witness history retained
+// by this operator. It exists for the narrow network-runtime evidence boundary;
+// the capability still exposes no storage path, key, share or private bundle.
+func (c *OperatorStorageCapability) PublicWitnessRecords(ceremonyID [32]byte) ([]WitnessRecord, error) {
+	if c == nil || c.witness == nil || isZero32(ceremonyID) {
+		return nil, ErrPersistence
+	}
+	return c.witness.Records(ceremonyID)
+}
+
+// PublicTerminalTombstone returns the operator's public terminal usability
+// decision without exposing its witness store or completed-private boundary.
+func (c *OperatorStorageCapability) PublicTerminalTombstone(ceremonyID [32]byte) (TerminalTombstone, error) {
+	if c == nil || c.witness == nil || isZero32(ceremonyID) {
+		return TerminalTombstone{}, ErrPersistence
+	}
+	return c.witness.TerminalTombstone(ceremonyID)
+}
+
 func (c *OperatorStorageCapability) storeCompletedPrivate(key [32]byte, sealed SealedOperatorBundle) error {
 	if c == nil || isZero32(key) || sealed.OperatorPoint != c.identity.Point || sealed.CeremonyID == ([32]byte{}) {
 		return ErrPersistence
