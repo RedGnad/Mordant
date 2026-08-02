@@ -1,0 +1,260 @@
+package oneshotceremony
+
+import (
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// WitnessStore is one operator's private administrative replica. Stores must
+// never be shared between operators or administrators.
+type WitnessStore struct {
+	root string
+}
+
+func OpenWitnessStore(root string) (*WitnessStore, error) {
+	if !filepath.IsAbs(root) {
+		return nil, fmt.Errorf("%w: store path must be absolute", ErrPersistence)
+	}
+	if err := ensureNoSymlinkPath(root); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(root)
+	if errorsIsNotExist(err) {
+		if err := os.Mkdir(root, 0o700); err != nil {
+			return nil, fmt.Errorf("%w: create store", ErrPersistence)
+		}
+		if err := syncDirectory(filepath.Dir(root)); err != nil {
+			return nil, err
+		}
+		info, err = os.Lstat(root)
+	}
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("%w: unsafe store root", ErrPersistence)
+	}
+	return &WitnessStore{root: root}, nil
+}
+
+func (s *WitnessStore) Reserve(reservation AttemptReservation) error {
+	if s == nil || reservation.OperatorPoint == 0 {
+		return fmt.Errorf("%w: reservation", ErrPersistence)
+	}
+	encoded, err := reservation.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	name := "used-" + hex.EncodeToString(reservation.CeremonyID[:]) + ".marker"
+	if err := s.writeNoReplace(name, encoded); err != nil {
+		return fmt.Errorf("%w: ceremony identifier already used", ErrReplay)
+	}
+	scopeName := "scope-" + hex.EncodeToString(reservation.ScopeOrdinalDigest[:]) + ".marker"
+	if err := s.writeNoReplace(scopeName, encoded); err != nil {
+		return fmt.Errorf("%w: scope ordinal already used", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) StoreReservation(reservation AttemptReservation) error {
+	encoded, err := reservation.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	name := fmt.Sprintf("reservation-%s-%020d.bin", hex.EncodeToString(reservation.CeremonyID[:]), reservation.OperatorPoint)
+	if err := s.writeNoReplace(name, encoded); err != nil {
+		return fmt.Errorf("%w: reservation already stored", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) PublicHead() ([32]byte, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("%w: read store", ErrPersistence)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || strings.Contains(entry.Name(), ".tmp-") {
+			return [32]byte{}, fmt.Errorf("%w: unexpected store entry", ErrPersistence)
+		}
+		if strings.HasPrefix(entry.Name(), "record-") || strings.HasPrefix(entry.Name(), "reservation-") || strings.HasPrefix(entry.Name(), "status-") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	var e encoder
+	e.text("MordantOneShotLocalWitnessHead/v1")
+	for _, name := range names {
+		data, readErr := os.ReadFile(filepath.Join(s.root, name))
+		if readErr != nil {
+			return [32]byte{}, fmt.Errorf("%w: read witness head", ErrPersistence)
+		}
+		digest := hashDomain("MordantOneShotLocalWitnessEntry/v1", []byte(name), data)
+		e.fixed(digest[:])
+	}
+	return hashDomain("MordantOneShotLocalWitnessHeadDigest/v1", e.Bytes()), nil
+}
+
+func (s *WitnessStore) WriteDecision(ceremonyID [32]byte, sequence uint64, statementDigest [32]byte, signature []byte) error {
+	var e encoder
+	e.text("MordantOneShotSigningDecision/v1")
+	e.fixed(ceremonyID[:])
+	e.u64(sequence)
+	e.fixed(statementDigest[:])
+	e.field(signature)
+	name := fmt.Sprintf("decision-%s-%020d.bin", hex.EncodeToString(ceremonyID[:]), sequence)
+	if err := s.writeNoReplace(name, e.Bytes()); err != nil {
+		return fmt.Errorf("%w: signing decision already exists", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) writeStatusDecision(keyID [32]byte, sequence uint64, statementDigest [32]byte, signature []byte) error {
+	var e encoder
+	e.text("MordantOneShotStatusSigningDecision/v1")
+	e.fixed(keyID[:])
+	e.u64(sequence)
+	e.fixed(statementDigest[:])
+	e.field(signature)
+	name := fmt.Sprintf("status-decision-%s-%020d.bin", hex.EncodeToString(keyID[:]), sequence)
+	if err := s.writeNoReplace(name, e.Bytes()); err != nil {
+		return fmt.Errorf("%w: status signing decision already exists", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) Append(record WitnessRecord) error {
+	encoded, err := record.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	digest := sha256Record(encoded)
+	name := fmt.Sprintf("record-%s-%020d-%s.bin", hex.EncodeToString(record.Statement.CeremonyID[:]), record.Statement.Sequence, hex.EncodeToString(digest[:]))
+	if err := s.writeNoReplace(name, encoded); err != nil {
+		return fmt.Errorf("%w: witness record already exists", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) Records(ceremonyID [32]byte) ([]WitnessRecord, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return nil, fmt.Errorf("%w: read store", ErrPersistence)
+	}
+	prefix := "record-" + hex.EncodeToString(ceremonyID[:]) + "-"
+	names := make([]string, 0)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || strings.Contains(name, ".tmp-") {
+			return nil, fmt.Errorf("%w: unexpected store entry", ErrPersistence)
+		}
+		if strings.HasPrefix(name, prefix) {
+			names = append(names, name)
+			continue
+		}
+		if !strings.HasPrefix(name, "record-") && !strings.HasPrefix(name, "used-") && !strings.HasPrefix(name, "scope-") && !strings.HasPrefix(name, "decision-") && !strings.HasPrefix(name, "reservation-") && !strings.HasPrefix(name, "status-") {
+			return nil, fmt.Errorf("%w: unknown store entry", ErrPersistence)
+		}
+	}
+	sort.Strings(names)
+	records := make([]WitnessRecord, 0, len(names))
+	for _, name := range names {
+		data, readErr := os.ReadFile(filepath.Join(s.root, name))
+		if readErr != nil {
+			return nil, fmt.Errorf("%w: read witness", ErrPersistence)
+		}
+		record, parseErr := ParseWitnessRecord(data)
+		if parseErr != nil || record.Statement.CeremonyID != ceremonyID {
+			return nil, fmt.Errorf("%w: corrupt witness", ErrPersistence)
+		}
+		expected := sha256Record(data)
+		if !strings.HasSuffix(name, hex.EncodeToString(expected[:])+".bin") {
+			return nil, fmt.Errorf("%w: witness filename mismatch", ErrPersistence)
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+func (s *WitnessStore) writeNoReplace(name string, data []byte) error {
+	if s == nil || filepath.Base(name) != name || strings.Contains(name, string(filepath.Separator)) {
+		return fmt.Errorf("%w: invalid filename", ErrPersistence)
+	}
+	if err := ensureNoSymlinkPath(s.root); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(s.root, ".tmp-oneshot-")
+	if err != nil {
+		return fmt.Errorf("%w: create temporary", ErrPersistence)
+	}
+	tempName := temp.Name()
+	defer func() { _ = os.Remove(tempName) }()
+	if err := temp.Chmod(0o600); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("%w: temporary permissions", ErrPersistence)
+	}
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("%w: write temporary", ErrPersistence)
+	}
+	if err := temp.Sync(); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("%w: sync temporary", ErrPersistence)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("%w: close temporary", ErrPersistence)
+	}
+	finalName := filepath.Join(s.root, name)
+	if err := os.Link(tempName, finalName); err != nil {
+		return fmt.Errorf("%w: no-replace publish", ErrPersistence)
+	}
+	if err := syncDirectory(s.root); err != nil {
+		return err
+	}
+	if err := os.Remove(tempName); err != nil {
+		return fmt.Errorf("%w: remove temporary", ErrPersistence)
+	}
+	return syncDirectory(s.root)
+}
+
+func ensureNoSymlinkPath(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("%w: absolute path", ErrPersistence)
+	}
+	volume := filepath.VolumeName(abs)
+	remainder := strings.TrimPrefix(abs, volume)
+	current := volume + string(filepath.Separator)
+	for _, component := range strings.Split(strings.TrimPrefix(remainder, string(filepath.Separator)), string(filepath.Separator)) {
+		if component == "" {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, statErr := os.Lstat(current)
+		if errorsIsNotExist(statErr) {
+			return nil
+		}
+		if statErr != nil || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%w: symlinked path", ErrPersistence)
+		}
+	}
+	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("%w: open directory", ErrPersistence)
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil {
+		return fmt.Errorf("%w: sync directory", ErrPersistence)
+	}
+	return nil
+}
+
+func errorsIsNotExist(err error) bool { return err != nil && errors.Is(err, fs.ErrNotExist) }

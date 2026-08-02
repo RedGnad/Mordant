@@ -1,3 +1,5 @@
+//go:build obsolete_recoverable_ceremony
+
 // Command ceremony-operator runs exactly one dealerless threshold operator.
 //
 // It has two modes. `identity` generates the operator's own long-lived signing

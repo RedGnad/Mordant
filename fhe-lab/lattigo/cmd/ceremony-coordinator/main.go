@@ -1,3 +1,5 @@
+//go:build obsolete_recoverable_ceremony
+
 // Command ceremony-coordinator drives the dealerless key ceremony.
 //
 // It aggregates public protocol shares and writes public artifacts. It holds no
