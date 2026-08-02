@@ -3,7 +3,6 @@ package oneshotruntime
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +49,8 @@ type testCluster struct {
 	root         string
 	publication  string
 	evidence     string
+	export       string
+	authorityKey string
 	configs      []OperatorConfig
 	runnerConfig RunnerConfig
 	processes    []*exec.Cmd
@@ -62,6 +62,13 @@ func newTestCluster(t *testing.T) *testCluster {
 	root := strictTestRoot(t)
 	publication := filepath.Join(root, "canonical-publication")
 	evidence := filepath.Join(root, "public-evidence")
+	export := filepath.Join(root, "verified-export")
+	authorityDirectory := filepath.Join(root, "offline-authority")
+	authority, err := InitializeSessionAuthority(authorityDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorityPublicPath := filepath.Join(authorityDirectory, "session-authority-public.json")
 	identities := make([]PublicIdentity, ceremony.PartyCount)
 	bootstrapPaths := make([]string, ceremony.PartyCount)
 	ports := make([]int, ceremony.PartyCount)
@@ -70,7 +77,7 @@ func newTestCluster(t *testing.T) *testCluster {
 		ports[index] = freePort(t)
 		directory := filepath.Join(root, fmt.Sprintf("operator-%d-config", index+1))
 		stateRoot := filepath.Join(root, fmt.Sprintf("operator-%d-state", index+1))
-		arguments := []string{"init", "--dir", directory, "--point", fmt.Sprint(index + 1), "--administrator-id", fmt.Sprintf("demo-admin/operator-%d", index+1), "--listen", fmt.Sprintf("127.0.0.1:%d", ports[index]), "--state-root", stateRoot, "--publication-root", publication}
+		arguments := []string{"init", "--dir", directory, "--point", fmt.Sprint(index + 1), "--administrator-id", fmt.Sprintf("demo-admin/operator-%d", index+1), "--listen", fmt.Sprintf("127.0.0.1:%d", ports[index]), "--state-root", stateRoot, "--publication-root", publication, "--session-authority-public", authorityPublicPath}
 		runTestCommand(t, testOperatorBinary, arguments...)
 		identity, err := LoadPublicIdentity(filepath.Join(directory, "public-identity.json"))
 		if err != nil {
@@ -97,8 +104,9 @@ func newTestCluster(t *testing.T) *testCluster {
 		runnerOperators[index] = RunnerOperator{Endpoint: "https://" + config.ListenAddress, Identity: config.Identity}
 	}
 	return &testCluster{
-		t: t, root: root, publication: publication, evidence: evidence, configs: configs, secretPaths: secretPaths,
-		runnerConfig: RunnerConfig{SchemaVersion: RunnerConfigSchema, ProtocolVersion: ceremony.ProtocolVersion, ContextSchema: ceremony.ContextSchema, ParameterProfile: ParameterProfile, PublicationRoot: publication, EvidenceRoot: evidence, Operators: runnerOperators, Context: DefaultContextTemplate()},
+		t: t, root: root, publication: publication, evidence: evidence, export: export, configs: configs,
+		authorityKey: filepath.Join(authorityDirectory, "session-authority.key"), secretPaths: secretPaths,
+		runnerConfig: RunnerConfig{SchemaVersion: RunnerConfigSchema, ProtocolVersion: ceremony.ProtocolVersion, ContextSchema: ceremony.ContextSchema, ParameterProfile: ParameterProfile, SessionAuthorityPublicKey: authority.PublicKey, PublicationRoot: publication, EvidenceRoot: evidence, ExportRoot: export, Operators: runnerOperators, Context: DefaultContextTemplate()},
 	}
 }
 
@@ -157,41 +165,40 @@ func (c *testCluster) runner(t *testing.T) *Runner {
 	return runner
 }
 
+func (c *testCluster) authorizedSession(t *testing.T) AuthorizedSession {
+	t.Helper()
+	params, err := RuntimeParameters()
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority, err := LoadSessionAuthorityPrivate(c.authorityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values, err := FreshSessionValues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewAuthorizedSession(c.runnerConfig, params, authority, values, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return session
+}
+
 func TestOperatorRejectsWrongIdentityMalformedAndReplay(t *testing.T) {
 	cluster := newTestCluster(t)
 	cluster.start()
 	defer cluster.stop()
 	runner := cluster.runner(t)
 	defer runner.Close()
-	values, err := FreshSessionValues()
-	if err != nil {
-		t.Fatal(err)
-	}
-	valid, err := runner.BuildContext(values, time.Now().UTC())
-	if err != nil {
-		t.Fatal(err)
-	}
-	wrong := valid
-	wrong.Operators = slices.Clone(valid.Operators)
-	wrong.Operators[0].AdministratorID = "wrong-roster-point-identity"
-	wrongBytes, err := wrong.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
+	session := cluster.authorizedSession(t)
 	var phase PhaseResponse
-	err = runner.clients[0].call(context.Background(), "/v1/prepare", PrepareRequest{Context: wrongBytes}, &phase)
-	if remoteCode(err) != "BINDING_REJECTED" {
-		t.Fatalf("wrong identity accepted: %v", err)
+	if err := postRawWire(runner.clients[0], "/v1/prepare", wireRequest{SchemaVersion: RuntimeWireSchema, Payload: mustJSON(t, PrepareRequest{Context: session.ContextBytes})}); err == nil {
+		t.Fatal("unauthenticated prepare accepted")
 	}
-	validBytes, err := valid.MarshalBinary()
-	if err != nil {
+	if err := runner.clients[0].callAuthorized(context.Background(), session, "/v1/prepare", PrepareRequest{Context: session.ContextBytes}, &phase); err != nil {
 		t.Fatal(err)
-	}
-	if err := runner.clients[0].call(context.Background(), "/v1/prepare", PrepareRequest{Context: validBytes}, &phase); err != nil {
-		t.Fatal(err)
-	}
-	if err := runner.clients[0].call(context.Background(), "/v1/prepare", PrepareRequest{Context: validBytes}, &phase); remoteCode(err) != "REPLAY_REJECTED" {
-		t.Fatalf("replay accepted: %v", err)
 	}
 	malformedPayload, _ := json.Marshal(map[string]any{"heads": []any{}, "stateRoot": "/caller/path", "processInstance": "caller", "bootSession": "caller"})
 	body, _ := json.Marshal(wireRequest{SchemaVersion: RuntimeWireSchema, Payload: malformedPayload})
@@ -230,13 +237,19 @@ func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
 	defer cluster.stop()
 	runner := cluster.runner(t)
 	defer runner.Close()
-	values, err := FreshSessionValues()
-	if err != nil {
-		t.Fatal(err)
+	losses := make([]*responseLossTransport, len(runner.clients))
+	for index, client := range runner.clients {
+		loss := &responseLossTransport{
+			base: client.client.Transport, remaining: map[string]int{"/v1/accept-galois": 1, "/v1/finalize-private": 1},
+			lost: make(map[string]int),
+		}
+		client.client.Transport = loss
+		losses[index] = loss
 	}
+	session := cluster.authorizedSession(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	result, err := runner.RunSuccess(ctx, values)
+	result, err := runner.RunSuccess(ctx, session)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +257,53 @@ func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
 		t.Fatal("published bundle readback failed")
 	}
 	for _, operator := range result.Operators {
-		if operator.Phase != ceremony.PhaseCompleted || operator.RuntimeState != "COMPLETED" || len(operator.TerminalTombstone) == 0 {
+		if operator.Phase != ceremony.PhaseCompleted || operator.Disposition != "COMPLETED" || len(operator.TerminalTombstone) == 0 {
 			t.Fatal("operator did not complete")
+		}
+		tombstone, err := ceremony.ParseTerminalTombstone(operator.TerminalTombstone)
+		if err != nil || dispositionName(tombstone.Disposition) != operator.Disposition {
+			t.Fatal("public disposition disagrees with durable terminal tombstone")
+		}
+	}
+	for index, loss := range losses {
+		if loss.lostCount("/v1/accept-galois") != 1 || loss.lostCount("/v1/finalize-private") != 1 {
+			t.Fatalf("operator %d did not exercise both response-loss retries", index+1)
+		}
+		journalRoot := filepath.Join(cluster.configs[index].StateRoot, "runtime-request-journal")
+		entries, err := os.ReadDir(journalRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		operationCounts := make(map[string]int)
+		finalizedConfirmed := false
+		for _, entry := range entries {
+			if !strings.HasSuffix(entry.Name(), ".meta.json") {
+				continue
+			}
+			var record requestJournalRecord
+			if err := readStrictJSONExact(filepath.Join(journalRoot, entry.Name()), &record, maxConfigBytes, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			operationCounts[record.Operation]++
+			if record.Operation == "/v1/finalize-private" {
+				responseBytes, err := readRestrictedExact(filepath.Join(journalRoot, record.ResponseArtifact), maxResponseBytes, 0o600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var response wireResponse
+				var confirmation FinalizeResponse
+				if decodeStrictJSON(responseBytes, &response) != nil || !response.OK || decodeCanonicalPayload(response.Payload, &confirmation) != nil || !confirmation.Finalized {
+					t.Fatal("finalization journal lacks durable finalized=true confirmation")
+				}
+				finalizedConfirmed = true
+			}
+		}
+		if operationCounts["/v1/accept-galois"] != 1 || operationCounts["/v1/finalize-private"] != 1 || !finalizedConfirmed {
+			t.Fatal("response-loss retry duplicated galois acceptance or finalization")
+		}
+		completed, err := os.ReadDir(filepath.Join(cluster.configs[index].StateRoot, "completed-private"))
+		if err != nil || len(completed) != 1 {
+			t.Fatal("finalization retry created more than one completed-private artifact")
 		}
 	}
 	knownSecrets := make([][]byte, 0, len(cluster.secretPaths))
@@ -256,8 +314,35 @@ func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
 		}
 		knownSecrets = append(knownSecrets, secret)
 	}
-	if err := ScanPublicEvidence(result.EvidencePath, knownSecrets); err != nil {
+	paths, err := verifyEvidenceTree(result.EvidencePath, &cluster.runnerConfig, true)
+	if err != nil || scanKnownSecretFiles(paths, knownSecrets) != nil {
 		t.Fatalf("public evidence contains secret material: %v", err)
+	}
+	exported, err := ExportCompletedEvidence(cluster.runnerConfig, filepath.Base(result.EvidencePath))
+	if err != nil {
+		t.Fatalf("verified completed export: %v", err)
+	}
+	exportedPaths, err := verifyEvidenceTree(exported, &cluster.runnerConfig, true)
+	if err != nil || scanKnownSecretFiles(exportedPaths, knownSecrets) != nil {
+		t.Fatal("verified export failed public-evidence checks")
+	}
+	operatorRootConfig := cluster.runnerConfig
+	operatorRootConfig.EvidenceRoot = cluster.configs[0].StateRoot
+	operatorRootConfig.ExportRoot = filepath.Join(cluster.root, "operator-root-export")
+	if _, err := ExportCompletedEvidence(operatorRootConfig, "runtime-request-journal"); err == nil {
+		t.Fatal("operator state root was accepted as public evidence")
+	}
+	if _, err := ExportCompletedEvidence(cluster.runnerConfig, "../"+filepath.Base(result.EvidencePath)); err == nil {
+		t.Fatal("non-child evidence path accepted")
+	}
+	privateArtifact := filepath.Join(result.EvidencePath, "operator-1", "private.bundle")
+	if err := writeNoReplace(privateArtifact, []byte("completed-private-test-artifact"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secondExportConfig := cluster.runnerConfig
+	secondExportConfig.ExportRoot = filepath.Join(cluster.root, "second-export")
+	if _, err := ExportCompletedEvidence(secondExportConfig, filepath.Base(result.EvidencePath)); err == nil {
+		t.Fatal("completed-private artifact entered public export")
 	}
 }
 
@@ -267,13 +352,10 @@ func TestStaleReplicaPreventsRealGeneration(t *testing.T) {
 	defer cluster.stop()
 	runner := cluster.runner(t)
 	defer runner.Close()
-	values, err := FreshSessionValues()
-	if err != nil {
-		t.Fatal(err)
-	}
+	session := cluster.authorizedSession(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	result, err := runner.RunStaleReplica(ctx, values)
+	result, err := runner.RunStaleReplica(ctx, session)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,22 +363,20 @@ func TestStaleReplicaPreventsRealGeneration(t *testing.T) {
 		t.Fatal("stale run emitted a public bundle")
 	}
 	for index, operator := range result.Operators {
-		if operator.RuntimeState != "POISONED" || index < ceremony.Threshold && len(operator.TerminalTombstone) == 0 {
+		if index < ceremony.Threshold && (operator.Disposition != "POISONED" || len(operator.TerminalTombstone) == 0) ||
+			index >= ceremony.Threshold && operator.Disposition != "ACTIVE" {
 			t.Fatal("stale operator was not terminally poisoned")
 		}
 	}
 }
 
-func TestAbortTerminalAfterOrdinaryRestartAndNonceChange(t *testing.T) {
+func TestAbortTerminalRejectsExactCeremonyAfterOrdinaryRestart(t *testing.T) {
 	cluster := newTestCluster(t)
 	cluster.start()
 	runner := cluster.runner(t)
-	values, err := FreshSessionValues()
-	if err != nil {
-		t.Fatal(err)
-	}
+	session := cluster.authorizedSession(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	result, err := runner.RunAbort(ctx, values)
+	result, err := runner.RunAbort(ctx, session)
 	cancel()
 	runner.Close()
 	if err != nil {
@@ -308,10 +388,17 @@ func TestAbortTerminalAfterOrdinaryRestartAndNonceChange(t *testing.T) {
 	defer cluster.stop()
 	restarted := cluster.runner(t)
 	defer restarted.Close()
-	newNonce := sha256.Sum256([]byte("changed-nonce-after-ordinary-restart"))
+	authority, err := LoadSessionAuthorityPrivate(cluster.authorityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reauthorized, err := AuthorizeContext(cluster.runnerConfig, authority, result.Context, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	if err := restarted.VerifyRestartConsumed(ctx, result.Context, newNonce); err != nil {
+	if err := restarted.VerifyRestartConsumed(ctx, reauthorized); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -328,7 +415,7 @@ func TestTransportRejectsUnpinnedOperator(t *testing.T) {
 	}
 	defer client.Close()
 	var phase PhaseResponse
-	if err := client.call(context.Background(), "/v1/phase", EmptyRequest{}, &phase); err == nil {
+	if err := client.callPublic(context.Background(), "/v1/phase", EmptyRequest{}, &phase); err == nil {
 		t.Fatal("unpinned endpoint accepted")
 	}
 }
@@ -340,13 +427,13 @@ func TestPublicEvidenceScannerRejectsKnownSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	secret := []byte("0123456789abcdef-private-test-material")
-	if err := ScanPublicEvidence(root, [][]byte{secret}); err != nil {
+	if err := scanKnownSecretFiles([]string{filepath.Join(root, "public.txt")}, [][]byte{secret}); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeNoReplace(filepath.Join(root, "leak.bin"), secret, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := ScanPublicEvidence(root, [][]byte{secret}); err == nil {
+	if err := scanKnownSecretFiles([]string{filepath.Join(root, "leak.bin")}, [][]byte{secret}); err == nil {
 		t.Fatal("known secret was not detected")
 	}
 }
@@ -382,6 +469,25 @@ func strictTestRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func postRawWire(client *OperatorClient, path string, envelope wireRequest) error {
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		return err
+	}
+	var output PhaseResponse
+	_, err = client.send(context.Background(), preparedOperatorCall{path: path, body: body}, &output, false)
+	return err
 }
 
 func freePort(t *testing.T) int {

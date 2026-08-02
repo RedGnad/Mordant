@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -21,9 +22,17 @@ type RemoteError struct {
 func (e *RemoteError) Error() string { return "operator rejected request: " + e.Code }
 
 type OperatorClient struct {
-	point   uint64
-	baseURL string
-	client  *http.Client
+	point    uint64
+	baseURL  string
+	client   *http.Client
+	mu       sync.Mutex
+	sequence uint64
+}
+
+type preparedOperatorCall struct {
+	path    string
+	body    []byte
+	request AuthorizedRequest
 }
 
 func NewOperatorClient(config RunnerOperator) (*OperatorClient, error) {
@@ -81,52 +90,114 @@ func NewOperatorClient(config RunnerOperator) (*OperatorClient, error) {
 }
 
 func (c *OperatorClient) Close() {
-	if transport, ok := c.client.Transport.(*http.Transport); ok {
-		transport.CloseIdleConnections()
+	if c != nil && c.client != nil {
+		c.client.CloseIdleConnections()
 	}
 }
 
-func (c *OperatorClient) call(ctx context.Context, path string, input, output any) error {
+func (c *OperatorClient) callPublic(ctx context.Context, path string, input, output any) error {
 	if c == nil || c.client == nil || !allowedClientPath(path) {
 		return ErrTransport
 	}
 	payload, err := json.Marshal(input)
-	if err != nil {
+	limits, ok := limitsForOperation(path)
+	if err != nil || !ok || protectedOperation(path) {
 		return ErrTransport
 	}
 	requestBody, err := json.Marshal(wireRequest{SchemaVersion: RuntimeWireSchema, Payload: payload})
-	if err != nil || len(requestBody) > maxWireBytes {
+	if err != nil || int64(len(requestBody)) > limits.Request {
 		return ErrTransport
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(requestBody))
+	_, err = c.send(ctx, preparedOperatorCall{path: path, body: requestBody}, output, false)
+	return err
+}
+
+func (c *OperatorClient) prepareAuthorized(session AuthorizedSession, path string, input any, now time.Time) (preparedOperatorCall, error) {
+	if c == nil || c.client == nil || !protectedOperation(path) || session.Validate(now) != nil {
+		return preparedOperatorCall{}, ErrTransport
+	}
+	payload, err := json.Marshal(input)
+	limits, ok := limitsForOperation(path)
+	if err != nil || !ok || len(payload) == 0 {
+		return preparedOperatorCall{}, ErrTransport
+	}
+	requestID, err := random32()
 	if err != nil {
-		return ErrTransport
+		return preparedOperatorCall{}, err
+	}
+	c.mu.Lock()
+	c.sequence++
+	sequence := c.sequence
+	c.mu.Unlock()
+	authorized, err := NewAuthorizedRequest(session, path, payload, requestID, sequence, now)
+	if err != nil {
+		return preparedOperatorCall{}, err
+	}
+	authorizedBytes, err := authorized.MarshalBinary()
+	if err != nil {
+		return preparedOperatorCall{}, err
+	}
+	requestBody, err := json.Marshal(wireRequest{
+		SchemaVersion: RuntimeWireSchema, Authorization: session.AuthorizationBytes, Request: authorizedBytes, Payload: payload,
+	})
+	if err != nil || int64(len(requestBody)) > limits.Request {
+		return preparedOperatorCall{}, ErrTransport
+	}
+	return preparedOperatorCall{path: path, body: requestBody, request: authorized}, nil
+}
+
+func (c *OperatorClient) callAuthorized(ctx context.Context, session AuthorizedSession, path string, input, output any) error {
+	prepared, err := c.prepareAuthorized(session, path, input, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	_, err = c.send(ctx, prepared, output, false)
+	if errors.Is(err, ErrTransport) {
+		// A transport failure may occur after the operator durably completed the
+		// request. Retry the exact signed bytes so the operator journal can return
+		// the exact prior response without regenerating or reapplying anything.
+		_, err = c.send(ctx, prepared, output, false)
+	}
+	return err
+}
+
+func (c *OperatorClient) send(ctx context.Context, prepared preparedOperatorCall, output any, discardResponse bool) ([]byte, error) {
+	limits, ok := limitsForOperation(prepared.path)
+	if c == nil || c.client == nil || !ok || len(prepared.body) == 0 || int64(len(prepared.body)) > limits.Request {
+		return nil, ErrTransport
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+prepared.path, bytes.NewReader(prepared.body))
+	if err != nil {
+		return nil, ErrTransport
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	response, err := c.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("%w: operator %d", ErrTransport, c.point)
+		return nil, fmt.Errorf("%w: operator %d", ErrTransport, c.point)
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxWireBytes+1))
-	if err != nil || len(body) == 0 || len(body) > maxWireBytes {
-		return ErrTransport
+	if discardResponse {
+		return nil, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, limits.Response+1))
+	if err != nil || len(body) == 0 || int64(len(body)) > limits.Response {
+		return nil, ErrTransport
 	}
 	var envelope wireResponse
-	if strictDecode(body, &envelope) != nil || envelope.SchemaVersion != RuntimeWireSchema {
-		return ErrTransport
+	if decodeStrictJSON(body, &envelope) != nil || envelope.SchemaVersion != RuntimeWireSchema {
+		return nil, ErrTransport
 	}
 	if response.StatusCode != http.StatusOK || !envelope.OK {
 		if envelope.ErrorCode == "" {
-			return ErrTransport
+			return body, ErrTransport
 		}
-		return &RemoteError{Code: envelope.ErrorCode}
+		return body, &RemoteError{Code: envelope.ErrorCode}
 	}
-	if envelope.ErrorCode != "" || len(envelope.Payload) == 0 || strictDecode(envelope.Payload, output) != nil {
-		return ErrTransport
+	if envelope.ErrorCode != "" || len(envelope.Payload) == 0 || decodeCanonicalPayload(envelope.Payload, output) != nil {
+		return body, ErrTransport
 	}
-	return nil
+	return body, nil
 }
 
 func allowedClientPath(path string) bool {

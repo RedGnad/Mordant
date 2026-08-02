@@ -77,15 +77,22 @@ func runInit(arguments []string) error {
 	flags := flag.NewFlagSet("oneshot-operator init", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var options oneshotruntime.InitOptions
+	var authorityPath string
 	flags.StringVar(&options.Directory, "dir", "", "operator configuration directory")
 	flags.Uint64Var(&options.Point, "point", 0, "fixed roster point")
 	flags.StringVar(&options.AdministratorID, "administrator-id", "", "distinct operator identity label")
 	flags.StringVar(&options.ListenAddress, "listen", "", "fixed IP listen address")
 	flags.StringVar(&options.StateRoot, "state-root", "", "operator-local state root")
 	flags.StringVar(&options.PublicationRoot, "publication-root", "", "canonical public publication root")
+	flags.StringVar(&authorityPath, "session-authority-public", "", "fixed session-authority public document")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 {
 		return errors.New("invalid init arguments")
 	}
+	authority, err := oneshotruntime.LoadSessionAuthorityPublic(authorityPath)
+	if err != nil {
+		return err
+	}
+	options.Authority = authority
 	bootstrap, err := oneshotruntime.InitializeOperator(options)
 	if err != nil {
 		return err

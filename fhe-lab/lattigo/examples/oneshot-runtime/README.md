@@ -17,6 +17,10 @@ operator host, written mode `0600`, and never emitted on stdout or over the runt
 private bundle is produced only inside the completed operator boundary. The service discards the
 sealed return value rather than sending it to the runner.
 
+When a runner and operators are co-located, run them as separate unprivileged OS identities with
+disjoint filesystem permissions, or in containers with disjoint mount namespaces. Separate
+processes and ports alone are not a private-storage boundary.
+
 The immediate topology is:
 
 ```text
@@ -36,22 +40,29 @@ root. Requests cannot supply a filesystem path, process instance, boot session, 
 ## Transport authentication
 
 Transport is HTTPS with TLS 1.3, exact leaf-certificate SHA-256 pinning, hostname/IP verification,
-no redirects, strict timeouts, strict versioned JSON, unknown-field rejection and bounded request
-bodies. It provides **server authentication only**, not mutual TLS. The accepted Ed25519 protocol
-signatures, canonical context checks and three signed replica-head attestations remain mandatory.
+no redirects, strict timeouts, strict versioned JSON, unknown-field rejection and endpoint-specific
+request and response caps. TLS provides server authentication, not mutual TLS. Separately, every
+session is authorized by the fixed offline Ed25519 session authority and every protected request is
+signed by the authorization's ephemeral request key. The accepted protocol signatures, canonical
+context checks and three signed replica-head attestations remain mandatory.
 
 ## Provisioning
 
 All paths passed below are absolute. Create the parent directories locally first. The checked-in
 JSON files are non-secret shape examples only; do not install their illustrative public values.
-The commands generate the actual immutable files.
+The commands generate the actual immutable files. First create the session authority on an offline
+administrative system and distribute only its public document:
+
+```text
+oneshot-runner init-authority --dir /offline/mordant/oneshot-authority
+```
 
 Run `init` on the corresponding operator host:
 
 ```text
-oneshot-operator init --dir /etc/mordant/oneshot/operator-a --point 1 --administrator-id demo-admin/operator-a --listen 10.0.0.11:9441 --state-root /var/lib/mordant/oneshot/operator-a --publication-root /srv/mordant/oneshot/publication
-oneshot-operator init --dir /etc/mordant/oneshot/operator-b --point 2 --administrator-id demo-admin/operator-b --listen 10.0.0.12:9442 --state-root /var/lib/mordant/oneshot/operator-b --publication-root /srv/mordant/oneshot/publication
-oneshot-operator init --dir /etc/mordant/oneshot/operator-c --point 3 --administrator-id demo-admin/operator-c --listen 10.0.0.11:9443 --state-root /var/lib/mordant/oneshot/operator-c --publication-root /srv/mordant/oneshot/publication
+oneshot-operator init --dir /etc/mordant/oneshot/operator-a --point 1 --administrator-id demo-admin/operator-a --listen 10.0.0.11:9441 --state-root /var/lib/mordant/oneshot/operator-a --publication-root /srv/mordant/oneshot/publication --session-authority-public /exchange/session-authority-public.json
+oneshot-operator init --dir /etc/mordant/oneshot/operator-b --point 2 --administrator-id demo-admin/operator-b --listen 10.0.0.12:9442 --state-root /var/lib/mordant/oneshot/operator-b --publication-root /srv/mordant/oneshot/publication --session-authority-public /exchange/session-authority-public.json
+oneshot-operator init --dir /etc/mordant/oneshot/operator-c --point 3 --administrator-id demo-admin/operator-c --listen 10.0.0.11:9443 --state-root /var/lib/mordant/oneshot/operator-c --publication-root /srv/mordant/oneshot/publication --session-authority-public /exchange/session-authority-public.json
 ```
 
 Exchange only the generated `public-identity.json` files. On an administrative workstation, build
@@ -73,7 +84,7 @@ oneshot-operator configure --bootstrap /etc/mordant/oneshot/operator-c/operator.
 Configure the runner from public identities only:
 
 ```text
-oneshot-runner configure --operator 1,https://10.0.0.11:9441,/exchange/operator-a.public.json --operator 2,https://10.0.0.12:9442,/exchange/operator-b.public.json --operator 3,https://10.0.0.11:9443,/exchange/operator-c.public.json --publication-root /srv/mordant/oneshot/publication --evidence-root /var/lib/mordant/oneshot/evidence --out /etc/mordant/oneshot/runner.json
+oneshot-runner configure --operator 1,https://10.0.0.11:9441,/exchange/operator-a.public.json --operator 2,https://10.0.0.12:9442,/exchange/operator-b.public.json --operator 3,https://10.0.0.11:9443,/exchange/operator-c.public.json --publication-root /srv/mordant/oneshot/publication --evidence-root /var/lib/mordant/oneshot/evidence --export-root /var/lib/mordant/oneshot/verified-export --session-authority-public /exchange/session-authority-public.json --out /etc/mordant/oneshot/runner.json
 ```
 
 Start all three services:
@@ -86,23 +97,34 @@ oneshot-operator serve --config /etc/mordant/oneshot/operator-c/operator.json
 
 ## Functional commands
 
+On the offline authority system, create a fresh context, signed authorization and ephemeral
+request-signing key. Transfer the resulting mode-`0600` session plan only to the assigned runner;
+never transfer `session-authority.key` to the runner or an operator.
+
 ```text
-oneshot-runner success --config /etc/mordant/oneshot/runner.json
-oneshot-runner stale-replica --config /etc/mordant/oneshot/runner.json
-oneshot-runner abort-restart --stage abort --config /etc/mordant/oneshot/runner.json
+oneshot-runner authorize-session --config /etc/mordant/oneshot/runner.json --authority-key /offline/mordant/oneshot-authority/session-authority.key --out /run/mordant/session-001.json
+```
+
+```text
+oneshot-runner success --config /etc/mordant/oneshot/runner.json --session /run/mordant/session-001.json
+oneshot-runner stale-replica --config /etc/mordant/oneshot/runner.json --session /run/mordant/session-002.json
+oneshot-runner abort-restart --stage abort --config /etc/mordant/oneshot/runner.json --session /run/mordant/session-003.json
 ```
 
 For the restart check, stop all three services normally, start them again with the same immutable
-configs and state roots, then pass the absolute evidence directory printed by the abort stage:
+configs and state roots, then have the offline authority re-authorize the exact context in the abort
+evidence. Changing the CeremonyID would not test exact replay rejection.
 
 ```text
-oneshot-runner abort-restart --stage verify --run /var/lib/mordant/oneshot/evidence/aborted-EXAMPLE --config /etc/mordant/oneshot/runner.json
+oneshot-runner authorize-session --config /etc/mordant/oneshot/runner.json --authority-key /offline/mordant/oneshot-authority/session-authority.key --evidence-run /var/lib/mordant/oneshot/evidence/abort-EXAMPLE --out /run/mordant/session-003-restart.json
+oneshot-runner abort-restart --stage verify --run /var/lib/mordant/oneshot/evidence/abort-EXAMPLE --config /etc/mordant/oneshot/runner.json --session /run/mordant/session-003-restart.json
 ```
 
-Export only after the built-in public-evidence scan succeeds:
+Export accepts only a direct child run name under the configured evidence root, verifies a completed
+success manifest and every allowlisted artifact, and writes only below the configured export root:
 
 ```text
-oneshot-runner export-evidence --source /var/lib/mordant/oneshot/evidence/success-EXAMPLE --out /var/lib/mordant/oneshot/export-EXAMPLE
+oneshot-runner export-evidence --config /etc/mordant/oneshot/runner.json --run success-EXAMPLE
 ```
 
 Successful, stale and aborted scenarios consume fresh bilateral-session values. Never reuse a
@@ -110,6 +132,10 @@ state root for a demo rerun. Ordinary restart deliberately reuses the same state
 terminal and consumed-session state persists.
 
 ## Evidence and cleanup
+
+Each operator's bounded durable request journal is stored below its fixed state root. It retains at
+most 4096 completed request records and 1 GiB of exact response artifacts; corruption, orphaned
+artifacts or capacity exhaustion fail closed. It is retained and cleaned up with that state root.
 
 The evidence directory contains only the source tag/runtime commit, binary and configuration
 digests, public identities, canonical context identifiers, public bundle and receipt when present,

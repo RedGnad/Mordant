@@ -8,8 +8,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
 	ceremony "mordant.dev/fhe-lab/lattigo/oneshotceremony"
@@ -24,9 +26,10 @@ type OperatorService struct {
 	signingKey    ed25519.PrivateKey
 	encryptionKey *ecdh.PrivateKey
 	storage       *ceremony.OperatorStorageCapability
+	journal       *requestJournal
+	authority     ed25519.PublicKey
 	participant   *ceremony.Participant
 	context       ceremony.Context
-	runtimeState  string
 }
 
 func NewOperatorService(config OperatorConfig, params bgv.Parameters) (*OperatorService, error) {
@@ -51,6 +54,14 @@ func NewOperatorService(config OperatorConfig, params bgv.Parameters) (*Operator
 	if err != nil {
 		return nil, err
 	}
+	journal, err := openRequestJournal(config.StateRoot)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := decodePublicKey(config.SessionAuthorityPublicKey)
+	if err != nil {
+		return nil, err
+	}
 	digest, err := OperatorConfigDigest(config)
 	if err != nil {
 		return nil, err
@@ -63,7 +74,8 @@ func NewOperatorService(config OperatorConfig, params bgv.Parameters) (*Operator
 		signingKey:    signing,
 		encryptionKey: encryption,
 		storage:       storage,
-		runtimeState:  "READY",
+		journal:       journal,
+		authority:     authority,
 	}, nil
 }
 
@@ -110,29 +122,87 @@ func (s *OperatorService) Handler() http.Handler {
 }
 
 func (s *OperatorService) withRequest(response http.ResponseWriter, request *http.Request, target any, operation func() (any, error)) {
-	if request.Method != http.MethodPost || request.URL.RawQuery != "" || request.URL.Fragment != "" || request.Header.Get("Content-Type") != "application/json" {
+	limits, known := limitsForOperation(request.URL.Path)
+	if !known || request.Method != http.MethodPost || request.URL.RawQuery != "" || request.URL.Fragment != "" || request.Header.Get("Content-Type") != "application/json" {
 		writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
 		return
 	}
-	request.Body = http.MaxBytesReader(response, request.Body, maxWireBytes)
+	request.Body = http.MaxBytesReader(response, request.Body, limits.Request)
 	body, err := io.ReadAll(request.Body)
-	if err != nil || len(body) == 0 {
+	if err != nil || len(body) == 0 || int64(len(body)) > limits.Request {
 		writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
 		return
 	}
 	var envelope wireRequest
-	if strictDecode(body, &envelope) != nil || envelope.SchemaVersion != RuntimeWireSchema || len(envelope.Payload) == 0 || strictDecode(envelope.Payload, target) != nil {
+	if decodeStrictJSON(body, &envelope) != nil || envelope.SchemaVersion != RuntimeWireSchema || len(envelope.Payload) == 0 || decodeCanonicalPayload(envelope.Payload, target) != nil {
 		writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if protectedOperation(request.URL.Path) {
+		contextValue := s.context
+		if request.URL.Path == "/v1/prepare" {
+			prepare, ok := target.(*PrepareRequest)
+			if !ok {
+				writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
+				return
+			}
+			contextValue, err = ceremony.ParseContext(prepare.Context)
+			if err != nil {
+				writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
+				return
+			}
+		}
+		authorization, authorizationErr := ParseSessionAuthorization(envelope.Authorization)
+		authorizedRequest, requestErr := ParseAuthorizedRequest(envelope.Request)
+		now := time.Now().UTC()
+		if authorizationErr != nil || requestErr != nil || VerifySessionAuthorization(s.authority, contextValue, authorization, now) != nil ||
+			VerifyAuthorizedRequest(authorization, authorizedRequest, request.URL.Path, envelope.Payload, now) != nil {
+			writeWireError(response, http.StatusUnauthorized, "AUTHORIZATION_REJECTED")
+			return
+		}
+		prior, found, journalErr := s.journal.lookup(authorizedRequest)
+		if journalErr != nil {
+			writeWireError(response, http.StatusConflict, publicErrorCode(journalErr))
+			return
+		}
+		if found {
+			writeWireBytes(response, prior)
+			return
+		}
+		result, operationErr := operation()
+		if operationErr != nil {
+			writeWireError(response, http.StatusConflict, publicErrorCode(operationErr))
+			return
+		}
+		encoded, encodeErr := marshalWireSuccess(result, limits.Response)
+		if encodeErr != nil {
+			writeWireError(response, http.StatusInternalServerError, "RESPONSE_REJECTED")
+			return
+		}
+		if s.journal.complete(authorizedRequest, encoded, now) != nil {
+			writeWireError(response, http.StatusInternalServerError, "JOURNAL_REJECTED")
+			return
+		}
+		writeWireBytes(response, encoded)
+		return
+	}
+	if len(envelope.Authorization) != 0 || len(envelope.Request) != 0 {
+		writeWireError(response, http.StatusBadRequest, "MALFORMED_REQUEST")
+		return
+	}
 	result, err := operation()
 	if err != nil {
 		writeWireError(response, http.StatusConflict, publicErrorCode(err))
 		return
 	}
-	writeWireSuccess(response, result)
+	encoded, err := marshalWireSuccess(result, limits.Response)
+	if err != nil {
+		writeWireError(response, http.StatusInternalServerError, "RESPONSE_REJECTED")
+		return
+	}
+	writeWireBytes(response, encoded)
 }
 
 func (s *OperatorService) requireParticipant() (*ceremony.Participant, error) {
@@ -145,7 +215,7 @@ func (s *OperatorService) requireParticipant() (*ceremony.Participant, error) {
 func (s *OperatorService) handlePrepare(w http.ResponseWriter, r *http.Request) {
 	var input PrepareRequest
 	s.withRequest(w, r, &input, func() (any, error) {
-		if s.participant != nil || s.runtimeState != "READY" {
+		if s.participant != nil {
 			return nil, ceremony.ErrReplay
 		}
 		context, err := ceremony.ParseContext(input.Context)
@@ -159,8 +229,7 @@ func (s *OperatorService) handlePrepare(w http.ResponseWriter, r *http.Request) 
 		}
 		s.participant = participant
 		s.context = context
-		s.runtimeState = "ACTIVE"
-		return PhaseResponse{Phase: participant.Phase(), RuntimeState: s.runtimeState}, nil
+		return s.phaseResponse(participant)
 	})
 }
 
@@ -172,7 +241,11 @@ func (s *OperatorService) handleHead(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		head, err := participant.AttestReplicaHead()
-		return HeadResponse{Head: head}, err
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := marshalReplicaHead(head)
+		return HeadResponse{Head: encoded}, err
 	})
 }
 
@@ -183,8 +256,11 @@ func (s *OperatorService) handleReserve(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		if err := participant.Reserve(input.Heads); err != nil {
-			s.runtimeState = "POISONED"
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		if err := participant.Reserve(heads); err != nil {
 			return nil, err
 		}
 		reservation, err := participant.Reservation()
@@ -207,7 +283,7 @@ func (s *OperatorService) handleAcceptReservations(w http.ResponseWriter, r *htt
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: participant.Phase(), RuntimeState: s.runtimeState}, participant.AcceptReservations(reservations)
+		return s.phaseResult(participant, participant.AcceptReservations(reservations))
 	})
 }
 
@@ -219,7 +295,11 @@ func (s *OperatorService) handleProposeTransition(w http.ResponseWriter, r *http
 			return nil, err
 		}
 		statement, err := participant.ProposedTransition(input.ToPhase, input.ReasonDigest)
-		return TransitionProposalResponse{Statement: statement}, err
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := statement.MarshalBinary()
+		return TransitionProposalResponse{Statement: encoded}, err
 	})
 }
 
@@ -230,11 +310,20 @@ func (s *OperatorService) handleSignTransition(w http.ResponseWriter, r *http.Re
 		if err != nil {
 			return nil, err
 		}
-		signature, err := participant.SignTransition(input.Statement, input.Heads)
+		statement, err := parseWitnessStatementBytes(input.Statement)
 		if err != nil {
-			s.runtimeState = "POISONED"
+			return nil, err
 		}
-		return SignTransitionResponse{Signature: signature}, err
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		signature, err := participant.SignTransition(statement, heads)
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := marshalWitnessSignature(signature)
+		return SignTransitionResponse{Signature: encoded}, err
 	})
 }
 
@@ -250,29 +339,31 @@ func (s *OperatorService) handleCommitTransition(w http.ResponseWriter, r *http.
 			return nil, err
 		}
 		if err := participant.CommitTransition(record); err != nil {
-			s.runtimeState = "POISONED"
 			return nil, err
 		}
-		if participant.Phase() == ceremony.PhaseCompleted {
-			s.runtimeState = "COMPLETED"
-		} else if participant.Phase() == ceremony.PhaseAborted {
-			s.runtimeState = "ABORTED"
-		}
-		return PhaseResponse{Phase: participant.Phase(), RuntimeState: s.runtimeState}, nil
+		return s.phaseResponse(participant)
 	})
 }
 
 func (s *OperatorService) handleBeginSecrets(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.BeginSecrets(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		return s.phaseResult(p, p.BeginSecrets(heads))
 	})
 }
 
 func (s *OperatorService) handleCRSCommit(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		envelope, err := p.CRSCommitEnvelope(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := p.CRSCommitEnvelope(heads)
 		if err != nil {
 			return nil, err
 		}
@@ -288,14 +379,18 @@ func (s *OperatorService) handleAcceptCRSCommit(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.AcceptCRSCommitStage(envelopes)
+		return s.phaseResult(p, p.AcceptCRSCommitStage(envelopes))
 	})
 }
 
 func (s *OperatorService) handleCRSReveal(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		envelope, err := p.CRSRevealEnvelope(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := p.CRSRevealEnvelope(heads)
 		if err != nil {
 			return nil, err
 		}
@@ -306,8 +401,8 @@ func (s *OperatorService) handleCRSReveal(w http.ResponseWriter, r *http.Request
 
 func (s *OperatorService) handleAcceptCRSReveal(w http.ResponseWriter, r *http.Request) {
 	type request struct {
-		Envelopes [][]byte                          `json:"envelopes"`
-		Heads     []ceremony.ReplicaHeadAttestation `json:"heads"`
+		Envelopes [][]byte `json:"envelopes" required:"true"`
+		Heads     [][]byte `json:"heads" required:"true"`
 	}
 	var input request
 	s.withMutation(w, r, &input, func(p *ceremony.Participant) (any, error) {
@@ -315,14 +410,22 @@ func (s *OperatorService) handleAcceptCRSReveal(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.AcceptCRSRevealStage(envelopes, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		return s.phaseResult(p, p.AcceptCRSRevealStage(envelopes, heads))
 	})
 }
 
 func (s *OperatorService) handlePrivateMessages(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		messages, err := p.PrivateMessages(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		messages, err := p.PrivateMessages(heads)
 		if err != nil {
 			return nil, err
 		}
@@ -338,7 +441,11 @@ func (s *OperatorService) handleReceivePrivate(w http.ResponseWriter, r *http.Re
 		if err != nil {
 			return nil, err
 		}
-		receipts, err := p.ReceivePrivateMessages(messages, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		receipts, err := p.ReceivePrivateMessages(messages, heads)
 		if err != nil {
 			return nil, err
 		}
@@ -358,14 +465,18 @@ func (s *OperatorService) handleAcceptPrivate(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.AcceptPrivateStage(messages, receipts)
+		return s.phaseResult(p, p.AcceptPrivateStage(messages, receipts))
 	})
 }
 
 func (s *OperatorService) handlePublicKeyShare(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withEnvelopeGeneration(w, r, &input, func(p *ceremony.Participant) (ceremony.SignedEnvelope, error) {
-		return p.PublicKeyShareEnvelope(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return ceremony.SignedEnvelope{}, err
+		}
+		return p.PublicKeyShareEnvelope(heads)
 	})
 }
 
@@ -378,7 +489,11 @@ func (s *OperatorService) handleAcceptPublicKey(w http.ResponseWriter, r *http.R
 func (s *OperatorService) handleRelinOne(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withEnvelopeGeneration(w, r, &input, func(p *ceremony.Participant) (ceremony.SignedEnvelope, error) {
-		return p.RelinRoundOneEnvelope(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return ceremony.SignedEnvelope{}, err
+		}
+		return p.RelinRoundOneEnvelope(heads)
 	})
 }
 
@@ -391,7 +506,11 @@ func (s *OperatorService) handleAcceptRelinOne(w http.ResponseWriter, r *http.Re
 func (s *OperatorService) handleRelinTwo(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withEnvelopeGeneration(w, r, &input, func(p *ceremony.Participant) (ceremony.SignedEnvelope, error) {
-		return p.RelinRoundTwoEnvelope(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return ceremony.SignedEnvelope{}, err
+		}
+		return p.RelinRoundTwoEnvelope(heads)
 	})
 }
 
@@ -404,7 +523,11 @@ func (s *OperatorService) handleAcceptRelinTwo(w http.ResponseWriter, r *http.Re
 func (s *OperatorService) handleGaloisShare(w http.ResponseWriter, r *http.Request) {
 	var input GaloisRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		envelope, err := p.GaloisShareEnvelope(input.Index, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := p.GaloisShareEnvelope(input.Index, heads)
 		if err != nil {
 			return nil, err
 		}
@@ -420,14 +543,22 @@ func (s *OperatorService) handleAcceptGalois(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.AcceptGaloisStage(input.Index, envelopes, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		return s.phaseResult(p, p.AcceptGaloisStage(input.Index, envelopes, heads))
 	})
 }
 
 func (s *OperatorService) handlePublicState(w http.ResponseWriter, r *http.Request) {
 	var input HeadsRequest
 	s.withGeneration(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		material, err := p.PublicMaterial(input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		material, err := p.PublicMaterial(heads)
 		if err != nil {
 			return nil, err
 		}
@@ -446,7 +577,7 @@ func (s *OperatorService) handlePublicState(w http.ResponseWriter, r *http.Reque
 func (s *OperatorService) handleSetManifest(w http.ResponseWriter, r *http.Request) {
 	var input DigestRequest
 	s.withMutation(w, r, &input, func(p *ceremony.Participant) (any, error) {
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.SetManifestPending(input.Digest)
+		return s.phaseResult(p, p.SetManifestPending(input.Digest))
 	})
 }
 
@@ -457,7 +588,11 @@ func (s *OperatorService) handleAttestBundle(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			return nil, err
 		}
-		envelope, err := p.AttestUnsignedBundle(unsigned, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := p.AttestUnsignedBundle(unsigned, heads)
 		if err != nil {
 			return nil, err
 		}
@@ -473,7 +608,11 @@ func (s *OperatorService) handlePrivateReady(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			return nil, err
 		}
-		envelope, err := p.AttestPrivateReadiness(unsigned, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := p.AttestPrivateReadiness(unsigned, heads)
 		if err != nil {
 			return nil, err
 		}
@@ -486,16 +625,20 @@ func (s *OperatorService) handleInstallPublished(w http.ResponseWriter, r *http.
 	var input PublishedRequest
 	s.withMutation(w, r, &input, func(p *ceremony.Participant) (any, error) {
 		bundle, err := ceremony.ParsePublicBundle(input.Bundle)
-		if err != nil || input.Receipt.ObjectPath != filepath.Join(s.config.PublicationRoot, "public.bundle") {
+		if err != nil {
+			return nil, err
+		}
+		receipt, err := parsePublicationReceipt(input.Receipt)
+		if err != nil || receipt.ObjectPath != filepath.Join(s.config.PublicationRoot, "public.bundle") {
 			return nil, ceremony.ErrPersistence
 		}
-		if ceremony.VerifyPublicationReceipt(input.Receipt, bundle) != nil {
+		if ceremony.VerifyPublicationReceipt(receipt, bundle) != nil {
 			local, publishErr := ceremony.PublishPublicBundle(s.config.PublicationRoot, bundle)
-			if publishErr != nil || local.Digest() != input.Receipt.Digest() {
+			if publishErr != nil || local.Digest() != receipt.Digest() {
 				return nil, ceremony.ErrPersistence
 			}
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.SetPublishedPending(bundle, input.Receipt)
+		return s.phaseResult(p, p.SetPublishedPending(bundle, receipt))
 	})
 }
 
@@ -506,7 +649,11 @@ func (s *OperatorService) handleSetCompleted(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, p.SetCompletedPending(bundle, input.Receipt)
+		receipt, err := parsePublicationReceipt(input.Receipt)
+		if err != nil {
+			return nil, err
+		}
+		return s.phaseResult(p, p.SetCompletedPending(bundle, receipt))
 	})
 }
 
@@ -517,11 +664,19 @@ func (s *OperatorService) handleFinalizePrivate(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return nil, err
 		}
+		receipt, err := parsePublicationReceipt(input.Receipt)
+		if err != nil {
+			return nil, err
+		}
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
 		replicas, err := parseReplicas(input.Replicas)
 		if err != nil {
 			return nil, err
 		}
-		_, err = p.FinalizeCompletedOperatorBundle(bundle, input.Receipt, input.Heads, replicas...)
+		_, err = p.FinalizeCompletedOperatorBundle(bundle, receipt, heads, replicas...)
 		if err != nil {
 			return nil, err
 		}
@@ -544,22 +699,17 @@ func (s *OperatorService) handleEvidence(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return nil, err
 		}
-		var tombstoneBytes []byte
-		if tombstone, tombstoneErr := s.storage.PublicTerminalTombstone(context.CeremonyID()); tombstoneErr == nil {
-			tombstoneBytes, err = tombstone.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-		}
 		phase := ceremony.PhaseNotStarted
-		state := "DURABLE_EVIDENCE"
 		if s.participant != nil && s.context.ContextDigest() == context.ContextDigest() {
 			phase = s.participant.Phase()
-			state = s.runtimeState
 		} else if len(records) > 0 {
 			phase = records[len(records)-1].Statement.ToPhase
 		}
-		return OperatorEvidenceResponse{Identity: s.config.Identity, ConfigurationHash: s.configDigest, Phase: phase, RuntimeState: state, Records: encoded, TerminalTombstone: tombstoneBytes}, nil
+		disposition, tombstoneBytes, err := s.durableDisposition(context, phase)
+		if err != nil {
+			return nil, err
+		}
+		return OperatorEvidenceResponse{Identity: s.config.Identity, ConfigurationHash: s.configDigest, Phase: phase, Disposition: disposition, Records: encoded, TerminalTombstone: tombstoneBytes}, nil
 	})
 }
 
@@ -567,9 +717,9 @@ func (s *OperatorService) handlePhase(w http.ResponseWriter, r *http.Request) {
 	var input EmptyRequest
 	s.withRequest(w, r, &input, func() (any, error) {
 		if s.participant == nil {
-			return PhaseResponse{Phase: ceremony.PhaseNotStarted, RuntimeState: s.runtimeState}, nil
+			return PhaseResponse{Phase: ceremony.PhaseNotStarted, Disposition: "READY"}, nil
 		}
-		return PhaseResponse{Phase: s.participant.Phase(), RuntimeState: s.runtimeState}, nil
+		return s.phaseResponse(s.participant)
 	})
 }
 
@@ -589,11 +739,7 @@ func (s *OperatorService) withGeneration(w http.ResponseWriter, r *http.Request,
 		if err != nil {
 			return nil, err
 		}
-		result, err := operation(participant)
-		if err != nil {
-			s.runtimeState = "POISONED"
-		}
-		return result, err
+		return operation(participant)
 	})
 }
 
@@ -610,8 +756,8 @@ func (s *OperatorService) withEnvelopeGeneration(w http.ResponseWriter, r *http.
 
 func (s *OperatorService) handleAcceptEnvelopesWithHeads(w http.ResponseWriter, r *http.Request, accept func(*ceremony.Participant, []ceremony.SignedEnvelope, []ceremony.ReplicaHeadAttestation) error) {
 	type request struct {
-		Envelopes [][]byte                          `json:"envelopes"`
-		Heads     []ceremony.ReplicaHeadAttestation `json:"heads"`
+		Envelopes [][]byte `json:"envelopes" required:"true"`
+		Heads     [][]byte `json:"heads" required:"true"`
 	}
 	var input request
 	s.withMutation(w, r, &input, func(p *ceremony.Participant) (any, error) {
@@ -619,23 +765,102 @@ func (s *OperatorService) handleAcceptEnvelopesWithHeads(w http.ResponseWriter, 
 		if err != nil {
 			return nil, err
 		}
-		return PhaseResponse{Phase: p.Phase(), RuntimeState: s.runtimeState}, accept(p, envelopes, input.Heads)
+		heads, err := parseHeads(input.Heads)
+		if err != nil {
+			return nil, err
+		}
+		return s.phaseResult(p, accept(p, envelopes, heads))
 	})
 }
 
-func writeWireSuccess(response http.ResponseWriter, value any) {
+func (s *OperatorService) phaseResult(participant *ceremony.Participant, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	return s.phaseResponse(participant)
+}
+
+func (s *OperatorService) phaseResponse(participant *ceremony.Participant) (any, error) {
+	phase := participant.Phase()
+	disposition, _, err := s.durableDisposition(s.context, phase)
+	if err != nil {
+		return nil, err
+	}
+	return PhaseResponse{Phase: phase, Disposition: disposition}, nil
+}
+
+func (s *OperatorService) durableDisposition(contextValue ceremony.Context, phase ceremony.Phase) (string, []byte, error) {
+	if contextValue.Validate() != nil {
+		if phase == ceremony.PhaseNotStarted {
+			return "READY", nil, nil
+		}
+		return "", nil, ceremony.ErrPersistence
+	}
+	ceremonyID := contextValue.CeremonyID()
+	tombstonePath := filepath.Join(s.config.StateRoot, "witness", "terminal-"+encodeHex(ceremonyID[:])+".bin")
+	_, statErr := os.Lstat(tombstonePath)
+	tombstonePresent := statErr == nil
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return "", nil, ceremony.ErrPersistence
+	}
+	tombstone, err := s.storage.PublicTerminalTombstone(ceremonyID)
+	if tombstonePresent {
+		if err != nil {
+			return "", nil, ceremony.ErrPersistence
+		}
+		encoded, marshalErr := tombstone.MarshalBinary()
+		if marshalErr != nil || tombstone.CeremonyID != ceremonyID || tombstone.SessionBindingDigest != contextValue.SessionBindingDigest() {
+			return "", nil, ceremony.ErrPersistence
+		}
+		switch tombstone.Disposition {
+		case ceremony.DispositionPoisoned:
+			return "POISONED", encoded, nil
+		case ceremony.DispositionAborted:
+			return "ABORTED", encoded, nil
+		case ceremony.DispositionCompleted:
+			return "COMPLETED", encoded, nil
+		default:
+			return "", nil, ceremony.ErrPersistence
+		}
+	}
+	if err == nil {
+		// The capability found a tombstone where the fixed local path did not.
+		return "", nil, ceremony.ErrPersistence
+	}
+	if phase == ceremony.PhaseCompleted || phase == ceremony.PhaseAborted {
+		return "", nil, ceremony.ErrPersistence
+	}
+	if phase == ceremony.PhaseNotStarted && s.participant == nil {
+		return "READY", nil, nil
+	}
+	return "ACTIVE", nil, nil
+}
+
+func marshalWireSuccess(value any, maximum int64) ([]byte, error) {
 	payload, err := json.Marshal(value)
 	if err != nil {
-		writeWireError(response, http.StatusInternalServerError, "INTERNAL_REJECTED")
-		return
+		return nil, ErrTransport
 	}
-	response.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(response).Encode(wireResponse{SchemaVersion: RuntimeWireSchema, OK: true, Payload: payload})
+	encoded, err := json.Marshal(wireResponse{SchemaVersion: RuntimeWireSchema, OK: true, Payload: payload})
+	if err != nil || len(encoded) == 0 || int64(len(encoded)+1) > maximum {
+		return nil, ErrTransport
+	}
+	return append(encoded, '\n'), nil
 }
 
 func writeWireError(response http.ResponseWriter, status int, code string) {
+	encoded, err := json.Marshal(wireResponse{SchemaVersion: RuntimeWireSchema, OK: false, ErrorCode: code})
+	if err != nil || int64(len(encoded)+1) > maxResponseBytes {
+		status = http.StatusInternalServerError
+		encoded = []byte(`{"schemaVersion":"mordant.oneshot-runtime-wire/1","ok":false,"errorCode":"INTERNAL_REJECTED"}`)
+	}
 	response.WriteHeader(status)
-	_ = json.NewEncoder(response).Encode(wireResponse{SchemaVersion: RuntimeWireSchema, OK: false, ErrorCode: code})
+	_, _ = response.Write(append(encoded, '\n'))
+}
+
+func writeWireBytes(response http.ResponseWriter, encoded []byte) {
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(encoded)
 }
 
 func publicErrorCode(err error) string {
@@ -645,6 +870,8 @@ func publicErrorCode(err error) string {
 	case errors.Is(err, ceremony.ErrState):
 		return "STATE_REJECTED"
 	case errors.Is(err, ceremony.ErrReplay):
+		return "REPLAY_REJECTED"
+	case errors.Is(err, ErrRequestReplay):
 		return "REPLAY_REJECTED"
 	case errors.Is(err, ceremony.ErrSignature):
 		return "SIGNATURE_REJECTED"
@@ -656,6 +883,10 @@ func publicErrorCode(err error) string {
 		return "PERSISTENCE_REJECTED"
 	case errors.Is(err, ceremony.ErrSecretAccess):
 		return "SECRET_ACCESS_REJECTED"
+	case errors.Is(err, ErrAuthorization):
+		return "AUTHORIZATION_REJECTED"
+	case errors.Is(err, ErrJournal):
+		return "JOURNAL_REJECTED"
 	default:
 		return "OPERATION_REJECTED"
 	}

@@ -3,6 +3,7 @@ package oneshotruntime
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,6 +40,7 @@ type Runner struct {
 	contextBytes   []byte
 	reservations   []ceremony.AttemptReservation
 	operationCount int
+	session        AuthorizedSession
 }
 
 func NewRunner(config RunnerConfig, params bgv.Parameters) (*Runner, error) {
@@ -84,10 +86,14 @@ func FreshSessionValues() (SessionValues, error) {
 }
 
 func (r *Runner) BuildContext(values SessionValues, now time.Time) (ceremony.Context, error) {
+	return buildContext(r.config, r.params, values, now)
+}
+
+func buildContext(config RunnerConfig, params bgv.Parameters, values SessionValues, now time.Time) (ceremony.Context, error) {
 	if values.SessionIdentity == ([32]byte{}) || values.SessionCommitment == ([32]byte{}) || values.Nonce == ([32]byte{}) {
 		return ceremony.Context{}, ErrConfig
 	}
-	rosterPublic := identitiesFromRunner(r.config)
+	rosterPublic := identitiesFromRunner(config)
 	revision, err := sourceRevision(rosterPublic)
 	if err != nil {
 		return ceremony.Context{}, err
@@ -99,7 +105,7 @@ func (r *Runner) BuildContext(values SessionValues, now time.Time) (ceremony.Con
 			return ceremony.Context{}, err
 		}
 	}
-	template := r.config.Context
+	template := config.Context
 	privacy := mustDecode32(template.PrivacyDomain)
 	service := mustDecode32(template.ServiceID)
 	policy := mustDecode32(template.PolicyID)
@@ -119,18 +125,18 @@ func (r *Runner) BuildContext(values SessionValues, now time.Time) (ceremony.Con
 		CircuitDigest:         circuit,
 		ReleaseLayout:         template.ReleaseLayout,
 		MaximumReleaseQueries: template.MaximumReleaseQueries,
-		GaloisElements:        []uint64{r.params.GaloisElementForColRotation(1)},
+		GaloisElements:        []uint64{params.GaloisElementForColRotation(1)},
 		ActivatesAtUnix:       now.Unix(),
 		ExpiresAtUnix:         now.Add(time.Duration(template.LifetimeSeconds) * time.Second).Unix(),
 		SourceCommit:          revision,
 		Operators:             roster,
 	}
-	return ceremony.NewContext(r.params, contextInput)
+	return ceremony.NewContext(params, contextInput)
 }
 
-func (r *Runner) RunSuccess(ctx context.Context, values SessionValues) (RunResult, error) {
+func (r *Runner) RunSuccess(ctx context.Context, session AuthorizedSession) (RunResult, error) {
 	started := time.Now().UTC()
-	if err := r.prepare(ctx, values); err != nil {
+	if err := r.prepare(ctx, session); err != nil {
 		return RunResult{}, err
 	}
 	if err := r.reserveAndStart(ctx, true); err != nil {
@@ -326,9 +332,13 @@ func (r *Runner) RunSuccess(ctx context.Context, values SessionValues) (RunResul
 	if ceremony.VerifyPublicationReceipt(receipt, bundle) != nil {
 		return RunResult{}, ErrProtocol
 	}
+	receiptBytes, err := receipt.MarshalBinary()
+	if err != nil {
+		return RunResult{}, err
+	}
 	for _, client := range r.clients {
 		var response PhaseResponse
-		if err := r.call(ctx, client, "/v1/install-published", PublishedRequest{Bundle: bundleBytes, Receipt: receipt}, &response); err != nil {
+		if err := r.call(ctx, client, "/v1/install-published", PublishedRequest{Bundle: bundleBytes, Receipt: receiptBytes}, &response); err != nil {
 			return RunResult{}, err
 		}
 	}
@@ -337,7 +347,7 @@ func (r *Runner) RunSuccess(ctx context.Context, values SessionValues) (RunResul
 	}
 	for _, client := range r.clients {
 		var response PhaseResponse
-		if err := r.call(ctx, client, "/v1/set-completed", PublishedRequest{Bundle: bundleBytes, Receipt: receipt}, &response); err != nil {
+		if err := r.call(ctx, client, "/v1/set-completed", PublishedRequest{Bundle: bundleBytes, Receipt: receiptBytes}, &response); err != nil {
 			return RunResult{}, err
 		}
 	}
@@ -356,13 +366,18 @@ func (r *Runner) RunSuccess(ctx context.Context, values SessionValues) (RunResul
 	if ceremony.VerifyPublishedCeremony(r.context, bundle, receipt, replicas...) != nil {
 		return RunResult{}, ErrProtocol
 	}
+	for _, item := range operatorEvidence {
+		if item.Phase != ceremony.PhaseCompleted || item.Disposition != "COMPLETED" || len(item.TerminalTombstone) == 0 {
+			return RunResult{}, ErrProtocol
+		}
+	}
 	replicaBytes := make([][][]byte, len(operatorEvidence))
 	for index := range operatorEvidence {
 		replicaBytes[index] = operatorEvidence[index].Records
 	}
 	for _, client := range r.clients {
 		var response FinalizeResponse
-		if err := r.call(ctx, client, "/v1/finalize-private", FinalizeRequest{Bundle: bundleBytes, Receipt: receipt, Heads: heads, Replicas: replicaBytes}, &response); err != nil || !response.Finalized {
+		if err := r.call(ctx, client, "/v1/finalize-private", FinalizeRequest{Bundle: bundleBytes, Receipt: receiptBytes, Heads: heads, Replicas: replicaBytes}, &response); err != nil || !response.Finalized {
 			return RunResult{}, ErrProtocol
 		}
 	}
@@ -372,9 +387,9 @@ func (r *Runner) RunSuccess(ctx context.Context, values SessionValues) (RunResul
 	return result, err
 }
 
-func (r *Runner) RunStaleReplica(ctx context.Context, values SessionValues) (RunResult, error) {
+func (r *Runner) RunStaleReplica(ctx context.Context, session AuthorizedSession) (RunResult, error) {
 	started := time.Now().UTC()
-	if err := r.prepare(ctx, values); err != nil {
+	if err := r.prepare(ctx, session); err != nil {
 		return RunResult{}, err
 	}
 	if err := r.reserveAndStart(ctx, true); err != nil {
@@ -413,7 +428,10 @@ func (r *Runner) RunStaleReplica(ctx context.Context, values SessionValues) (Run
 		return RunResult{}, err
 	}
 	for index, item := range evidence {
-		if item.RuntimeState != "POISONED" || index < ceremony.Threshold && len(item.TerminalTombstone) == 0 {
+		if index < ceremony.Threshold && (item.Disposition != "POISONED" || len(item.TerminalTombstone) == 0) {
+			return RunResult{}, ErrProtocol
+		}
+		if index >= ceremony.Threshold && (item.Disposition != "ACTIVE" || len(item.TerminalTombstone) != 0) {
 			return RunResult{}, ErrProtocol
 		}
 	}
@@ -423,9 +441,9 @@ func (r *Runner) RunStaleReplica(ctx context.Context, values SessionValues) (Run
 	return result, err
 }
 
-func (r *Runner) RunAbort(ctx context.Context, values SessionValues) (RunResult, error) {
+func (r *Runner) RunAbort(ctx context.Context, session AuthorizedSession) (RunResult, error) {
 	started := time.Now().UTC()
-	if err := r.prepare(ctx, values); err != nil {
+	if err := r.prepare(ctx, session); err != nil {
 		return RunResult{}, err
 	}
 	if err := r.reserveAndStart(ctx, true); err != nil {
@@ -440,7 +458,7 @@ func (r *Runner) RunAbort(ctx context.Context, values SessionValues) (RunResult,
 		return RunResult{}, err
 	}
 	for _, item := range evidence {
-		if item.Phase != ceremony.PhaseAborted || item.RuntimeState != "ABORTED" || len(item.TerminalTombstone) == 0 {
+		if item.Phase != ceremony.PhaseAborted || item.Disposition != "ABORTED" || len(item.TerminalTombstone) == 0 {
 			return RunResult{}, ErrProtocol
 		}
 	}
@@ -450,45 +468,41 @@ func (r *Runner) RunAbort(ctx context.Context, values SessionValues) (RunResult,
 	return result, err
 }
 
-func (r *Runner) VerifyRestartConsumed(ctx context.Context, original ceremony.Context, newNonce [32]byte) error {
-	if newNonce == ([32]byte{}) || newNonce == original.Nonce {
-		return ErrConfig
+func (r *Runner) VerifyRestartConsumed(ctx context.Context, session AuthorizedSession) error {
+	now := time.Now().UTC()
+	configuredAuthority, err := decodePublicKey(r.config.SessionAuthorityPublicKey)
+	if err != nil || session.Validate(now) != nil || VerifySessionAuthorization(configuredAuthority, session.Context, session.Authorization, now) != nil ||
+		!contextMatchesRunner(r.config, session.Context) {
+		return ErrAuthorization
 	}
-	values := SessionValues{SessionIdentity: original.SessionIdentity, SessionCommitment: original.SessionCommitment, Nonce: newNonce}
-	if err := r.prepare(ctx, values); err != nil {
-		return err
-	}
-	heads, err := r.heads(ctx)
-	if err != nil {
-		return err
-	}
+	r.session = session
+	r.context, r.contextBytes, r.reservations = session.Context, slices.Clone(session.ContextBytes), nil
 	for _, client := range r.clients {
-		var reservation ReservationResponse
-		err := r.call(ctx, client, "/v1/reserve", HeadsRequest{Heads: heads}, &reservation)
-		if err == nil || remoteCode(err) != "REPLAY_REJECTED" && remoteCode(err) != "PERSISTENCE_REJECTED" {
+		var phase PhaseResponse
+		prepareErr := r.call(ctx, client, "/v1/prepare", PrepareRequest{Context: r.contextBytes}, &phase)
+		code := remoteCode(prepareErr)
+		if prepareErr == nil || code != "REPLAY_REJECTED" && code != "PERSISTENCE_REJECTED" && code != "TERMINAL_REJECTED" {
 			return ErrProtocol
 		}
-		var phase PhaseResponse
-		if beginErr := r.call(ctx, client, "/v1/begin-secrets", HeadsRequest{Heads: heads}, &phase); beginErr == nil {
+		if beginErr := r.call(ctx, client, "/v1/begin-secrets", HeadsRequest{Heads: [][]byte{{1}}}, &phase); beginErr == nil {
 			return ErrProtocol
 		}
 	}
 	return nil
 }
 
-func (r *Runner) prepare(ctx context.Context, values SessionValues) error {
-	contextValue, err := r.BuildContext(values, time.Now().UTC())
-	if err != nil {
-		return err
+func (r *Runner) prepare(ctx context.Context, session AuthorizedSession) error {
+	now := time.Now().UTC()
+	configuredAuthority, err := decodePublicKey(r.config.SessionAuthorityPublicKey)
+	if err != nil || session.Validate(now) != nil || VerifySessionAuthorization(configuredAuthority, session.Context, session.Authorization, now) != nil ||
+		!contextMatchesRunner(r.config, session.Context) {
+		return ErrAuthorization
 	}
-	encoded, err := contextValue.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	r.context, r.contextBytes, r.reservations = contextValue, encoded, nil
+	r.session = session
+	r.context, r.contextBytes, r.reservations = session.Context, slices.Clone(session.ContextBytes), nil
 	for _, client := range r.clients {
 		var response PhaseResponse
-		if err := r.call(ctx, client, "/v1/prepare", PrepareRequest{Context: encoded}, &response); err != nil {
+		if err := r.call(ctx, client, "/v1/prepare", PrepareRequest{Context: r.contextBytes}, &response); err != nil {
 			return err
 		}
 		if response.Phase != ceremony.PhaseNotStarted {
@@ -551,6 +565,10 @@ func (r *Runner) transition(ctx context.Context, to ceremony.Phase, reason [32]b
 	if err := r.call(ctx, r.clients[signers[0]], "/v1/propose-transition", TransitionProposalRequest{ToPhase: to, ReasonDigest: reason}, &proposal); err != nil {
 		return ceremony.WitnessRecord{}, err
 	}
+	statement, err := parseWitnessStatementBytes(proposal.Statement)
+	if err != nil {
+		return ceremony.WitnessRecord{}, err
+	}
 	heads, err := r.heads(ctx)
 	if err != nil {
 		return ceremony.WitnessRecord{}, err
@@ -561,9 +579,13 @@ func (r *Runner) transition(ctx context.Context, to ceremony.Phase, reason [32]b
 		if err := r.call(ctx, r.clients[signer], "/v1/sign-transition", SignTransitionRequest{Statement: proposal.Statement, Heads: heads}, &response); err != nil {
 			return ceremony.WitnessRecord{}, err
 		}
-		signatures[index] = response.Signature
+		signature, err := parseWitnessSignature(response.Signature)
+		if err != nil {
+			return ceremony.WitnessRecord{}, err
+		}
+		signatures[index] = signature
 	}
-	record, err := ceremony.AssembleWitnessRecord(r.context, proposal.Statement, signatures)
+	record, err := ceremony.AssembleWitnessRecord(r.context, statement, signatures)
 	if err != nil {
 		return ceremony.WitnessRecord{}, err
 	}
@@ -583,12 +605,16 @@ func (r *Runner) transition(ctx context.Context, to ceremony.Phase, reason [32]b
 	return record, nil
 }
 
-func (r *Runner) heads(ctx context.Context) ([]ceremony.ReplicaHeadAttestation, error) {
-	heads := make([]ceremony.ReplicaHeadAttestation, len(r.clients))
+func (r *Runner) heads(ctx context.Context) ([][]byte, error) {
+	heads := make([][]byte, len(r.clients))
 	for index, client := range r.clients {
 		var response HeadResponse
 		if err := r.call(ctx, client, "/v1/head", EmptyRequest{}, &response); err != nil {
 			return nil, err
+		}
+		parsed, err := parseReplicaHead(response.Head)
+		if err != nil || parsed.OperatorPoint != uint64(index+1) || parsed.CeremonyID != r.context.CeremonyID() || parsed.ContextDigest != r.context.ContextDigest() {
+			return nil, ErrProtocol
 		}
 		heads[index] = response.Head
 	}
@@ -626,7 +652,7 @@ func (r *Runner) collectEnvelopes(ctx context.Context, path string, request any)
 	return result, nil
 }
 
-func (r *Runner) acceptEnvelopes(ctx context.Context, path string, envelopes [][]byte, heads []ceremony.ReplicaHeadAttestation) error {
+func (r *Runner) acceptEnvelopes(ctx context.Context, path string, envelopes [][]byte, heads [][]byte) error {
 	for _, client := range r.clients {
 		var response PhaseResponse
 		var err error
@@ -634,8 +660,8 @@ func (r *Runner) acceptEnvelopes(ctx context.Context, path string, envelopes [][
 			err = r.call(ctx, client, path, EnvelopesRequest{Envelopes: envelopes}, &response)
 		} else {
 			request := struct {
-				Envelopes [][]byte                          `json:"envelopes"`
-				Heads     []ceremony.ReplicaHeadAttestation `json:"heads"`
+				Envelopes [][]byte `json:"envelopes" required:"true"`
+				Heads     [][]byte `json:"heads" required:"true"`
 			}{Envelopes: envelopes, Heads: heads}
 			err = r.call(ctx, client, path, request, &response)
 		}
@@ -674,7 +700,10 @@ func (r *Runner) collectEvidence(ctx context.Context, contextValue ceremony.Cont
 
 func (r *Runner) call(ctx context.Context, client *OperatorClient, path string, input, output any) error {
 	r.operationCount++
-	return client.call(ctx, path, input, output)
+	if err := client.callAuthorized(ctx, r.session, path, input, output); err != nil {
+		return fmt.Errorf("operator %d %s: %w", client.point, path, err)
+	}
+	return nil
 }
 
 func allOperators() []int { return []int{0, 1, 2} }
@@ -700,7 +729,14 @@ func publicStatesEqual(states []PublicStateResponse) bool {
 }
 
 func LoadContextFromEvidence(path string) (ceremony.Context, error) {
-	data, err := os.ReadFile(filepath.Join(path, "context.bin"))
+	if !filepath.IsAbs(path) || path != filepath.Clean(path) {
+		return ceremony.Context{}, ErrEvidence
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+		return ceremony.Context{}, ErrEvidence
+	}
+	data, err := readRestrictedExact(filepath.Join(path, "context.bin"), maxWireBytes, 0o600)
 	if err != nil {
 		return ceremony.Context{}, ErrEvidence
 	}

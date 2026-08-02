@@ -1,7 +1,6 @@
 package oneshotruntime
 
 import (
-	"bytes"
 	"crypto/ecdh"
 	"crypto/ed25519"
 	cryptorand "crypto/rand"
@@ -19,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,87 +47,92 @@ var (
 )
 
 type PublicIdentity struct {
-	SchemaVersion            string `json:"schemaVersion"`
-	Point                    uint64 `json:"point"`
-	AdministratorID          string `json:"administratorId"`
-	SigningPublicKey         string `json:"signingPublicKey"`
-	EncryptionPublicKey      string `json:"encryptionPublicKey"`
-	TransportCertFingerprint string `json:"transportCertFingerprint"`
-	StorageBindingDigest     string `json:"storageBindingDigest"`
-	RuntimeBinaryDigest      string `json:"runtimeBinaryDigest"`
-	GoVersion                string `json:"goVersion"`
-	OperatingSystem          string `json:"operatingSystem"`
-	Architecture             string `json:"architecture"`
-	SourceRevision           string `json:"sourceRevision"`
-	SourceModified           bool   `json:"sourceModified"`
-	DependencyDigest         string `json:"dependencyDigest"`
+	SchemaVersion            string `json:"schemaVersion" required:"true"`
+	Point                    uint64 `json:"point" required:"true"`
+	AdministratorID          string `json:"administratorId" required:"true"`
+	SigningPublicKey         string `json:"signingPublicKey" required:"true"`
+	EncryptionPublicKey      string `json:"encryptionPublicKey" required:"true"`
+	TransportCertFingerprint string `json:"transportCertFingerprint" required:"true"`
+	StorageBindingDigest     string `json:"storageBindingDigest" required:"true"`
+	StateRootDigest          string `json:"stateRootDigest" required:"true"`
+	RuntimeBinaryDigest      string `json:"runtimeBinaryDigest" required:"true"`
+	GoVersion                string `json:"goVersion" required:"true"`
+	OperatingSystem          string `json:"operatingSystem" required:"true"`
+	Architecture             string `json:"architecture" required:"true"`
+	SourceRevision           string `json:"sourceRevision" required:"true"`
+	SourceModified           bool   `json:"sourceModified" required:"true" allowzero:"true"`
+	DependencyDigest         string `json:"dependencyDigest" required:"true"`
 }
 
 type RosterDocument struct {
-	SchemaVersion string           `json:"schemaVersion"`
-	Operators     []PublicIdentity `json:"operators"`
+	SchemaVersion string           `json:"schemaVersion" required:"true"`
+	Operators     []PublicIdentity `json:"operators" required:"true"`
 }
 
 type OperatorBootstrap struct {
-	SchemaVersion       string         `json:"schemaVersion"`
-	ListenAddress       string         `json:"listenAddress"`
-	StateRoot           string         `json:"stateRoot"`
-	PublicationRoot     string         `json:"publicationRoot"`
-	Identity            PublicIdentity `json:"identity"`
-	SigningKeyPath      string         `json:"signingKeyPath"`
-	EncryptionKeyPath   string         `json:"encryptionKeyPath"`
-	TLSCertificatePath  string         `json:"tlsCertificatePath"`
-	TLSPrivateKeyPath   string         `json:"tlsPrivateKeyPath"`
-	StorageIdentityPath string         `json:"storageIdentityPath"`
-	ProcessInstancePath string         `json:"processInstancePath"`
+	SchemaVersion             string         `json:"schemaVersion" required:"true"`
+	ListenAddress             string         `json:"listenAddress" required:"true"`
+	StateRoot                 string         `json:"stateRoot" required:"true"`
+	PublicationRoot           string         `json:"publicationRoot" required:"true"`
+	SessionAuthorityPublicKey string         `json:"sessionAuthorityPublicKey" required:"true"`
+	Identity                  PublicIdentity `json:"identity" required:"true"`
+	SigningKeyPath            string         `json:"signingKeyPath" required:"true"`
+	EncryptionKeyPath         string         `json:"encryptionKeyPath" required:"true"`
+	TLSCertificatePath        string         `json:"tlsCertificatePath" required:"true"`
+	TLSPrivateKeyPath         string         `json:"tlsPrivateKeyPath" required:"true"`
+	StorageIdentityPath       string         `json:"storageIdentityPath" required:"true"`
+	ProcessInstancePath       string         `json:"processInstancePath" required:"true"`
 }
 
 type OperatorConfig struct {
-	SchemaVersion       string           `json:"schemaVersion"`
-	ProtocolVersion     string           `json:"protocolVersion"`
-	ContextSchema       string           `json:"contextSchema"`
-	ParameterProfile    string           `json:"parameterProfile"`
-	ListenAddress       string           `json:"listenAddress"`
-	StateRoot           string           `json:"stateRoot"`
-	PublicationRoot     string           `json:"publicationRoot"`
-	Identity            PublicIdentity   `json:"identity"`
-	Roster              []PublicIdentity `json:"roster"`
-	SigningKeyPath      string           `json:"signingKeyPath"`
-	EncryptionKeyPath   string           `json:"encryptionKeyPath"`
-	TLSCertificatePath  string           `json:"tlsCertificatePath"`
-	TLSPrivateKeyPath   string           `json:"tlsPrivateKeyPath"`
-	StorageIdentityPath string           `json:"storageIdentityPath"`
-	ProcessInstancePath string           `json:"processInstancePath"`
+	SchemaVersion             string           `json:"schemaVersion" required:"true"`
+	ProtocolVersion           string           `json:"protocolVersion" required:"true"`
+	ContextSchema             string           `json:"contextSchema" required:"true"`
+	ParameterProfile          string           `json:"parameterProfile" required:"true"`
+	ListenAddress             string           `json:"listenAddress" required:"true"`
+	StateRoot                 string           `json:"stateRoot" required:"true"`
+	PublicationRoot           string           `json:"publicationRoot" required:"true"`
+	SessionAuthorityPublicKey string           `json:"sessionAuthorityPublicKey" required:"true"`
+	Identity                  PublicIdentity   `json:"identity" required:"true"`
+	Roster                    []PublicIdentity `json:"roster" required:"true"`
+	SigningKeyPath            string           `json:"signingKeyPath" required:"true"`
+	EncryptionKeyPath         string           `json:"encryptionKeyPath" required:"true"`
+	TLSCertificatePath        string           `json:"tlsCertificatePath" required:"true"`
+	TLSPrivateKeyPath         string           `json:"tlsPrivateKeyPath" required:"true"`
+	StorageIdentityPath       string           `json:"storageIdentityPath" required:"true"`
+	ProcessInstancePath       string           `json:"processInstancePath" required:"true"`
 }
 
 type RunnerOperator struct {
-	Endpoint string         `json:"endpoint"`
-	Identity PublicIdentity `json:"identity"`
+	Endpoint string         `json:"endpoint" required:"true"`
+	Identity PublicIdentity `json:"identity" required:"true"`
 }
 
 type ContextTemplate struct {
-	PrivacyDomain         string `json:"privacyDomain"`
-	ServiceID             string `json:"serviceId"`
-	ServiceVersion        uint32 `json:"serviceVersion"`
-	ChainID               uint64 `json:"chainId"`
-	PolicyID              string `json:"policyId"`
-	PolicyVersion         uint32 `json:"policyVersion"`
-	CircuitVersion        uint32 `json:"circuitVersion"`
-	CircuitDigest         string `json:"circuitDigest"`
-	ReleaseLayout         uint32 `json:"releaseLayout"`
-	MaximumReleaseQueries uint32 `json:"maximumReleaseQueries"`
-	LifetimeSeconds       int64  `json:"lifetimeSeconds"`
+	PrivacyDomain         string `json:"privacyDomain" required:"true"`
+	ServiceID             string `json:"serviceId" required:"true"`
+	ServiceVersion        uint32 `json:"serviceVersion" required:"true"`
+	ChainID               uint64 `json:"chainId" required:"true"`
+	PolicyID              string `json:"policyId" required:"true"`
+	PolicyVersion         uint32 `json:"policyVersion" required:"true"`
+	CircuitVersion        uint32 `json:"circuitVersion" required:"true"`
+	CircuitDigest         string `json:"circuitDigest" required:"true"`
+	ReleaseLayout         uint32 `json:"releaseLayout" required:"true"`
+	MaximumReleaseQueries uint32 `json:"maximumReleaseQueries" required:"true"`
+	LifetimeSeconds       int64  `json:"lifetimeSeconds" required:"true"`
 }
 
 type RunnerConfig struct {
-	SchemaVersion    string           `json:"schemaVersion"`
-	ProtocolVersion  string           `json:"protocolVersion"`
-	ContextSchema    string           `json:"contextSchema"`
-	ParameterProfile string           `json:"parameterProfile"`
-	PublicationRoot  string           `json:"publicationRoot"`
-	EvidenceRoot     string           `json:"evidenceRoot"`
-	Operators        []RunnerOperator `json:"operators"`
-	Context          ContextTemplate  `json:"context"`
+	SchemaVersion             string           `json:"schemaVersion" required:"true"`
+	ProtocolVersion           string           `json:"protocolVersion" required:"true"`
+	ContextSchema             string           `json:"contextSchema" required:"true"`
+	ParameterProfile          string           `json:"parameterProfile" required:"true"`
+	SessionAuthorityPublicKey string           `json:"sessionAuthorityPublicKey" required:"true"`
+	PublicationRoot           string           `json:"publicationRoot" required:"true"`
+	EvidenceRoot              string           `json:"evidenceRoot" required:"true"`
+	ExportRoot                string           `json:"exportRoot" required:"true"`
+	Operators                 []RunnerOperator `json:"operators" required:"true"`
+	Context                   ContextTemplate  `json:"context" required:"true"`
 }
 
 type InitOptions struct {
@@ -137,6 +142,7 @@ type InitOptions struct {
 	ListenAddress   string
 	StateRoot       string
 	PublicationRoot string
+	Authority       SessionAuthorityDocument
 }
 
 func RuntimeParameters() (bgv.Parameters, error) {
@@ -150,7 +156,7 @@ func RuntimeParameters() (bgv.Parameters, error) {
 	})
 }
 
-func publicIdentity(identity ceremony.OperatorIdentity, provenance ceremony.ExecutableProvenance) PublicIdentity {
+func publicIdentity(identity ceremony.OperatorIdentity, provenance ceremony.ExecutableProvenance, stateRoot string) PublicIdentity {
 	return PublicIdentity{
 		SchemaVersion:            PublicIdentitySchema,
 		Point:                    identity.Point,
@@ -159,6 +165,7 @@ func publicIdentity(identity ceremony.OperatorIdentity, provenance ceremony.Exec
 		EncryptionPublicKey:      encodeHex(identity.EncryptionPublicKey[:]),
 		TransportCertFingerprint: encodeHex(identity.TransportCertFingerprint[:]),
 		StorageBindingDigest:     encodeHex(identity.StorageBindingDigest[:]),
+		StateRootDigest:          digestPath(stateRoot),
 		RuntimeBinaryDigest:      encodeHex(identity.RuntimeBinaryDigest[:]),
 		GoVersion:                identity.GoVersion,
 		OperatingSystem:          identity.OperatingSystem,
@@ -172,7 +179,7 @@ func publicIdentity(identity ceremony.OperatorIdentity, provenance ceremony.Exec
 func (p PublicIdentity) operatorIdentity() (ceremony.OperatorIdentity, error) {
 	var identity ceremony.OperatorIdentity
 	if p.SchemaVersion != PublicIdentitySchema || p.Point == 0 || p.AdministratorID == "" || p.GoVersion == "" ||
-		p.OperatingSystem == "" || p.Architecture == "" || len(p.SourceRevision) != 40 {
+		p.OperatingSystem == "" || p.Architecture == "" || len(p.SourceRevision) != 40 || len(p.StateRootDigest) != 64 {
 		return identity, ErrConfig
 	}
 	identity.Point = p.Point
@@ -191,7 +198,8 @@ func (p PublicIdentity) operatorIdentity() (ceremony.OperatorIdentity, error) {
 		return ceremony.OperatorIdentity{}, ErrConfig
 	}
 	dependency := make([]byte, 32)
-	if decodeFixed(p.DependencyDigest, dependency) != nil {
+	stateRoot := make([]byte, 32)
+	if decodeFixed(p.DependencyDigest, dependency) != nil || decodeFixed(p.StateRootDigest, stateRoot) != nil {
 		return ceremony.OperatorIdentity{}, ErrConfig
 	}
 	return identity, nil
@@ -222,7 +230,12 @@ func (p PublicIdentity) provenance(path string) (ceremony.ExecutableProvenance, 
 func InitializeOperator(options InitOptions) (OperatorBootstrap, error) {
 	var bootstrap OperatorBootstrap
 	if !filepath.IsAbs(options.Directory) || !filepath.IsAbs(options.StateRoot) || !filepath.IsAbs(options.PublicationRoot) ||
-		options.Point < 1 || options.Point > ceremony.PartyCount || options.AdministratorID == "" || validateListenAddress(options.ListenAddress) != nil {
+		options.Point < 1 || options.Point > ceremony.PartyCount || options.AdministratorID == "" || validateListenAddress(options.ListenAddress) != nil ||
+		validateDisjointPaths(options.Directory, options.StateRoot, options.PublicationRoot) != nil {
+		return bootstrap, ErrConfig
+	}
+	authorityPublic, err := options.Authority.publicKey()
+	if err != nil || len(authorityPublic) != ed25519.PublicKeySize {
 		return bootstrap, ErrConfig
 	}
 	if err := os.Mkdir(options.Directory, 0o700); err != nil {
@@ -273,17 +286,18 @@ func InitializeOperator(options InitOptions) (OperatorBootstrap, error) {
 	}
 	paths := func(name string) string { return filepath.Join(options.Directory, name) }
 	bootstrap = OperatorBootstrap{
-		SchemaVersion:       OperatorBootstrapSchema,
-		ListenAddress:       options.ListenAddress,
-		StateRoot:           filepath.Clean(options.StateRoot),
-		PublicationRoot:     filepath.Clean(options.PublicationRoot),
-		Identity:            publicIdentity(identity, provenance),
-		SigningKeyPath:      paths("signing.key"),
-		EncryptionKeyPath:   paths("x25519.key"),
-		TLSCertificatePath:  paths("tls.crt"),
-		TLSPrivateKeyPath:   paths("tls.key"),
-		StorageIdentityPath: paths("storage.id"),
-		ProcessInstancePath: paths("process.id"),
+		SchemaVersion:             OperatorBootstrapSchema,
+		ListenAddress:             options.ListenAddress,
+		StateRoot:                 filepath.Clean(options.StateRoot),
+		PublicationRoot:           filepath.Clean(options.PublicationRoot),
+		SessionAuthorityPublicKey: options.Authority.PublicKey,
+		Identity:                  publicIdentity(identity, provenance, options.StateRoot),
+		SigningKeyPath:            paths("signing.key"),
+		EncryptionKeyPath:         paths("x25519.key"),
+		TLSCertificatePath:        paths("tls.crt"),
+		TLSPrivateKeyPath:         paths("tls.key"),
+		StorageIdentityPath:       paths("storage.id"),
+		ProcessInstancePath:       paths("process.id"),
 	}
 	writes := []struct {
 		path string
@@ -320,21 +334,22 @@ func ConfigureOperator(bootstrapPath, rosterPath, outputPath string) (OperatorCo
 		return OperatorConfig{}, ErrConfig
 	}
 	config := OperatorConfig{
-		SchemaVersion:       OperatorConfigSchema,
-		ProtocolVersion:     ceremony.ProtocolVersion,
-		ContextSchema:       ceremony.ContextSchema,
-		ParameterProfile:    ParameterProfile,
-		ListenAddress:       bootstrap.ListenAddress,
-		StateRoot:           bootstrap.StateRoot,
-		PublicationRoot:     bootstrap.PublicationRoot,
-		Identity:            bootstrap.Identity,
-		Roster:              slices.Clone(roster.Operators),
-		SigningKeyPath:      bootstrap.SigningKeyPath,
-		EncryptionKeyPath:   bootstrap.EncryptionKeyPath,
-		TLSCertificatePath:  bootstrap.TLSCertificatePath,
-		TLSPrivateKeyPath:   bootstrap.TLSPrivateKeyPath,
-		StorageIdentityPath: bootstrap.StorageIdentityPath,
-		ProcessInstancePath: bootstrap.ProcessInstancePath,
+		SchemaVersion:             OperatorConfigSchema,
+		ProtocolVersion:           ceremony.ProtocolVersion,
+		ContextSchema:             ceremony.ContextSchema,
+		ParameterProfile:          ParameterProfile,
+		ListenAddress:             bootstrap.ListenAddress,
+		StateRoot:                 bootstrap.StateRoot,
+		PublicationRoot:           bootstrap.PublicationRoot,
+		SessionAuthorityPublicKey: bootstrap.SessionAuthorityPublicKey,
+		Identity:                  bootstrap.Identity,
+		Roster:                    slices.Clone(roster.Operators),
+		SigningKeyPath:            bootstrap.SigningKeyPath,
+		EncryptionKeyPath:         bootstrap.EncryptionKeyPath,
+		TLSCertificatePath:        bootstrap.TLSCertificatePath,
+		TLSPrivateKeyPath:         bootstrap.TLSPrivateKeyPath,
+		StorageIdentityPath:       bootstrap.StorageIdentityPath,
+		ProcessInstancePath:       bootstrap.ProcessInstancePath,
 	}
 	if err := config.validate(); err != nil {
 		return OperatorConfig{}, err
@@ -347,7 +362,7 @@ func ConfigureOperator(bootstrapPath, rosterPath, outputPath string) (OperatorCo
 
 func LoadOperatorConfig(path string) (OperatorConfig, error) {
 	var config OperatorConfig
-	if err := readStrictJSON(path, &config, maxConfigBytes, true); err != nil || config.validate() != nil {
+	if err := readStrictJSONExact(path, &config, maxConfigBytes, 0o400); err != nil || config.validate() != nil {
 		return OperatorConfig{}, ErrConfig
 	}
 	return config, nil
@@ -355,7 +370,7 @@ func LoadOperatorConfig(path string) (OperatorConfig, error) {
 
 func LoadRunnerConfig(path string) (RunnerConfig, error) {
 	var config RunnerConfig
-	if err := readStrictJSON(path, &config, maxConfigBytes, false); err != nil || config.validate() != nil {
+	if err := readStrictJSONExact(path, &config, maxConfigBytes, 0o400); err != nil || config.validate() != nil {
 		return RunnerConfig{}, ErrConfig
 	}
 	return config, nil
@@ -384,7 +399,7 @@ func WriteRunnerConfig(path string, config RunnerConfig) error {
 	if config.validate() != nil {
 		return ErrConfig
 	}
-	return writeJSONNoReplace(path, config, 0o600)
+	return writeJSONNoReplace(path, config, 0o400)
 }
 
 func DefaultContextTemplate() ContextTemplate {
@@ -409,6 +424,9 @@ func (c OperatorConfig) validate() error {
 		!filepath.IsAbs(c.PublicationRoot) || validateRoster(c.Roster) != nil {
 		return ErrConfig
 	}
+	if _, err := decodePublicKey(c.SessionAuthorityPublicKey); err != nil {
+		return ErrConfig
+	}
 	local, err := c.Identity.operatorIdentity()
 	if err != nil || local.Point < 1 || local.Point > ceremony.PartyCount {
 		return ErrConfig
@@ -417,25 +435,38 @@ func (c OperatorConfig) validate() error {
 	if err != nil || registered != local || c.Roster[local.Point-1] != c.Identity {
 		return ErrConfig
 	}
-	for _, path := range []string{c.SigningKeyPath, c.EncryptionKeyPath, c.TLSCertificatePath, c.TLSPrivateKeyPath, c.StorageIdentityPath, c.ProcessInstancePath} {
-		if !filepath.IsAbs(path) {
+	localPaths := []string{c.SigningKeyPath, c.EncryptionKeyPath, c.TLSCertificatePath, c.TLSPrivateKeyPath, c.StorageIdentityPath, c.ProcessInstancePath}
+	configRoot := filepath.Dir(c.SigningKeyPath)
+	for _, path := range localPaths {
+		if !filepath.IsAbs(path) || filepath.Dir(path) != configRoot {
 			return ErrConfig
 		}
+	}
+	if validateDisjointPaths(configRoot, c.StateRoot, c.PublicationRoot) != nil || c.Identity.StateRootDigest != digestPath(c.StateRoot) {
+		return ErrConfig
 	}
 	return nil
 }
 
 func (c RunnerConfig) validate() error {
 	if c.SchemaVersion != RunnerConfigSchema || c.ProtocolVersion != ceremony.ProtocolVersion || c.ContextSchema != ceremony.ContextSchema ||
-		c.ParameterProfile != ParameterProfile || !filepath.IsAbs(c.PublicationRoot) || !filepath.IsAbs(c.EvidenceRoot) ||
+		c.ParameterProfile != ParameterProfile || !filepath.IsAbs(c.PublicationRoot) || !filepath.IsAbs(c.EvidenceRoot) || !filepath.IsAbs(c.ExportRoot) ||
 		len(c.Operators) != ceremony.PartyCount || validateContextTemplate(c.Context) != nil {
 		return ErrConfig
 	}
+	if _, err := decodePublicKey(c.SessionAuthorityPublicKey); err != nil || validateDisjointPaths(c.PublicationRoot, c.EvidenceRoot, c.ExportRoot) != nil {
+		return ErrConfig
+	}
 	identities := make([]PublicIdentity, len(c.Operators))
+	endpoints := make(map[string]struct{})
 	for index, operator := range c.Operators {
 		if validateEndpoint(operator.Endpoint) != nil {
 			return ErrConfig
 		}
+		if _, duplicate := endpoints[operator.Endpoint]; duplicate {
+			return ErrConfig
+		}
+		endpoints[operator.Endpoint] = struct{}{}
 		identities[index] = operator.Identity
 	}
 	return validateRoster(identities)
@@ -462,6 +493,8 @@ func validateRoster(roster []PublicIdentity) error {
 	admins := map[string]struct{}{}
 	signers := map[string]struct{}{}
 	encryption := map[string]struct{}{}
+	fingerprints := map[string]struct{}{}
+	stateRoots := map[string]struct{}{}
 	for index, public := range roster {
 		identity, err := public.operatorIdentity()
 		if err != nil || identity.Point != uint64(index+1) {
@@ -481,6 +514,14 @@ func validateRoster(roster []PublicIdentity) error {
 			return ErrConfig
 		}
 		encryption[public.EncryptionPublicKey] = struct{}{}
+		if _, ok := fingerprints[public.TransportCertFingerprint]; ok {
+			return ErrConfig
+		}
+		fingerprints[public.TransportCertFingerprint] = struct{}{}
+		if _, ok := stateRoots[public.StateRootDigest]; ok {
+			return ErrConfig
+		}
+		stateRoots[public.StateRootDigest] = struct{}{}
 	}
 	return nil
 }
@@ -549,12 +590,15 @@ func readStrictJSON(path string, target any, maximum int64, restricted bool) err
 	if err != nil {
 		return err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	if decodeStrictJSON(data, target) != nil {
 		return ErrConfig
 	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+	return nil
+}
+
+func readStrictJSONExact(path string, target any, maximum int64, mode os.FileMode) error {
+	data, err := readRestrictedExact(path, maximum, mode)
+	if err != nil || decodeStrictJSON(data, target) != nil {
 		return ErrConfig
 	}
 	return nil
@@ -563,6 +607,18 @@ func readStrictJSON(path string, target any, maximum int64, restricted bool) err
 func readRestricted(path string, maximum int64) ([]byte, error) {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maximum {
+		return nil, ErrConfig
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || int64(len(data)) != info.Size() {
+		return nil, ErrConfig
+	}
+	return data, nil
+}
+
+func readRestrictedExact(path string, maximum int64, mode os.FileMode) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != mode.Perm() || info.Size() <= 0 || info.Size() > maximum {
 		return nil, ErrConfig
 	}
 	data, err := os.ReadFile(path)
@@ -660,7 +716,10 @@ func selfSignedCertificate(listen, administrator string, public ed25519.PublicKe
 
 func validateListenAddress(address string) error {
 	host, port, err := net.SplitHostPort(address)
-	if err != nil || net.ParseIP(host) == nil || port == "" {
+	parsedIP := net.ParseIP(host)
+	parsedPort, portErr := strconv.Atoi(port)
+	if err != nil || parsedIP == nil || portErr != nil || parsedPort < 1 || parsedPort > 65535 ||
+		net.JoinHostPort(parsedIP.String(), strconv.Itoa(parsedPort)) != address {
 		return ErrConfig
 	}
 	return nil
@@ -709,6 +768,36 @@ func encodeHex(value []byte) string { return hex.EncodeToString(value) }
 func digestHex(label string) string {
 	digest := sha256.Sum256([]byte(label))
 	return encodeHex(digest[:])
+}
+
+func digestPath(path string) string {
+	digest := sha256.Sum256(append([]byte("MordantOneShotLocalPathDigest/v1\x00"), []byte(filepath.Clean(path))...))
+	return encodeHex(digest[:])
+}
+
+func validateDisjointPaths(paths ...string) error {
+	for _, path := range paths {
+		if !filepath.IsAbs(path) || path != filepath.Clean(path) || filepath.Clean(path) == string(filepath.Separator) {
+			return ErrConfig
+		}
+	}
+	for left := 0; left < len(paths); left++ {
+		for right := left + 1; right < len(paths); right++ {
+			if pathsOverlap(paths[left], paths[right]) {
+				return ErrConfig
+			}
+		}
+	}
+	return nil
+}
+
+func pathsOverlap(left, right string) bool {
+	left, right = filepath.Clean(left), filepath.Clean(right)
+	within := func(base, target string) bool {
+		relative, err := filepath.Rel(base, target)
+		return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+	}
+	return within(left, right) || within(right, left)
 }
 
 func sameIdentity(a, b PublicIdentity) bool { return a == b }
