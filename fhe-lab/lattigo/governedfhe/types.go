@@ -96,6 +96,9 @@ type FHECaseBinding struct {
 	ParticipantOrder            []Digest            `json:"participantOrder"`
 	InputSchema                 string              `json:"inputSchema"`
 	ResultSchema                string              `json:"resultSchema"`
+	ReleaseMode                 string              `json:"releaseMode"`
+	ReleaseAuthorityID          Digest              `json:"releaseAuthorityId"`
+	ReleaseAuthorityPublicKey   []byte              `json:"releaseAuthorityPublicKey"`
 	CaseNonce                   Digest              `json:"caseNonce"`
 	CreatedAtUnix               int64               `json:"createdAtUnix"`
 	ExpiresAtUnix               int64               `json:"expiresAtUnix"`
@@ -112,6 +115,8 @@ func (b FHECaseBinding) validate() error {
 		b.PolicyVersion != fhe.PolicyVersion || b.CircuitID != CircuitID || b.CircuitVersion != fhe.CircuitV5Version ||
 		b.CircuitDigest != FixedCircuitDigest() || b.ParameterProfile != ParameterProfile || b.ParameterFingerprint != expectedFingerprint ||
 		b.InputSchema != InputSchema || b.ResultSchema != ResultSchema || !nonzero(b.CaseID, b.AssetIdentity, b.PolicyID, b.PublicKeyDigest, b.EvaluationKeyManifestDigest, b.CaseNonce) ||
+		b.ReleaseMode != ReleaseModeGovernedDecryptor || !nonzero(b.ReleaseAuthorityID) || len(b.ReleaseAuthorityPublicKey) != ed25519.PublicKeySize ||
+		releaseAuthorityIdentity(b.ReleaseMode, ed25519.PublicKey(b.ReleaseAuthorityPublicKey)) != b.ReleaseAuthorityID ||
 		b.ParticipantA.validate(RoleA) != nil || b.ParticipantB.validate(RoleB) != nil || len(b.ParticipantOrder) != 2 ||
 		b.ParticipantA.ID == b.ParticipantB.ID || slices.Equal(b.ParticipantA.SigningPublicKey, b.ParticipantB.SigningPublicKey) ||
 		b.ParticipantOrder[0] != b.ParticipantA.ID || b.ParticipantOrder[1] != b.ParticipantB.ID || b.CreatedAtUnix <= 0 || b.ExpiresAtUnix <= b.CreatedAtUnix {
@@ -224,13 +229,12 @@ func (a ReleaseAuthorityManifest) signingValue() ReleaseAuthorityManifest {
 }
 
 func knownReleaseMode(mode string) bool {
-	return mode == ReleaseModeGovernedDecryptor || mode == ReleaseModeThreshold2Of3
+	return mode == ReleaseModeGovernedDecryptor
 }
 
-func releaseAuthorityIdentity(bindingDigest Digest, mode string, publicKey ed25519.PublicKey) Digest {
+func releaseAuthorityIdentity(mode string, publicKey ed25519.PublicKey) Digest {
 	value := append([]byte("MordantReleaseAuthorityIdentity/v1\x00"), []byte(mode)...)
 	value = append(value, 0)
-	value = append(value, bindingDigest[:]...)
 	value = append(value, publicKey...)
 	return DigestBytes(value)
 }
@@ -250,6 +254,7 @@ type GovernedConflictResult struct {
 	ParameterProfile           string   `json:"parameterProfile"`
 	ParameterFingerprint       Digest   `json:"parameterFingerprint"`
 	ParticipantArtifactDigests []Digest `json:"participantArtifactDigests"`
+	EvaluatedArtifactDigest    Digest   `json:"evaluatedArtifactDigest"`
 	ResultCiphertextDigest     Digest   `json:"resultCiphertextDigest"`
 	ResultCiphertextCommitment Digest   `json:"resultCiphertextCommitment"`
 	Conflict                   bool     `json:"conflict"`
@@ -260,6 +265,20 @@ type GovernedConflictResult struct {
 	ReleasedAtUnix             int64    `json:"releasedAtUnix"`
 	SourceProvenance           Digest   `json:"sourceProvenance"`
 	Signature                  []byte   `json:"signature"`
+}
+
+// TrustedRecoursePins is emitted by the trusted release service over its
+// authenticated local control channel. The recourse adapter compares every
+// field against the signed result instead of accepting result-selected pins.
+type TrustedRecoursePins struct {
+	ParticipantArtifactDigestA       Digest `json:"participantArtifactDigestA"`
+	ParticipantArtifactDigestB       Digest `json:"participantArtifactDigestB"`
+	EvaluatedArtifactDigest          Digest `json:"evaluatedArtifactDigest"`
+	RecomputedResultCiphertextDigest Digest `json:"recomputedResultCiphertextDigest"`
+	ResultCiphertextCommitment       Digest `json:"resultCiphertextCommitment"`
+	DecryptorProvenance              Digest `json:"decryptorProvenance"`
+	ReleaseMode                      string `json:"releaseMode"`
+	ReleaseAuthorityID               Digest `json:"releaseAuthorityId"`
 }
 
 func (r GovernedConflictResult) signingValue() GovernedConflictResult {

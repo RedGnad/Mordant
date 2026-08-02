@@ -75,6 +75,7 @@ func SubmitParticipant(options ParticipantSubmissionOptions) (EncryptedParticipa
 	if err != nil {
 		return EncryptedParticipantArtifact{}, report, err
 	}
+	defer store.close()
 	binding, cryptoManifest, err := loadCaseFoundation(store)
 	if err != nil || options.Now.Unix() < binding.CreatedAtUnix || options.Now.Unix() > binding.ExpiresAtUnix ||
 		options.ExpiresAtUnix <= options.Now.Unix() || options.ExpiresAtUnix > binding.ExpiresAtUnix {

@@ -26,9 +26,10 @@ type GovernedDecryptor struct {
 }
 
 type ReleaseReport struct {
-	Duration    time.Duration `json:"duration"`
-	ResultBytes int64         `json:"resultBytes"`
-	ExactRetry  bool          `json:"exactRetry"`
+	Duration    time.Duration       `json:"duration"`
+	ResultBytes int64               `json:"resultBytes"`
+	ExactRetry  bool                `json:"exactRetry"`
+	Pins        TrustedRecoursePins `json:"trustedRecoursePins"`
 }
 
 type releaseAdmission struct {
@@ -62,9 +63,22 @@ func NewGovernedDecryptor(config GovernedDecryptorConfig) (*GovernedDecryptor, e
 	}
 	privateStore, err := openObjectStore(config.PrivateRoot, PrivateCaseQuota, true)
 	if err != nil {
+		_ = publicStore.close()
 		return nil, err
 	}
 	return &GovernedDecryptor{publicStore: publicStore, privateStore: privateStore, provenance: config.Provenance, now: config.Now}, nil
+}
+
+func (d *GovernedDecryptor) Close() error {
+	if d == nil {
+		return nil
+	}
+	publicErr := d.publicStore.close()
+	privateErr := d.privateStore.close()
+	if publicErr != nil || privateErr != nil {
+		return ErrStore
+	}
+	return nil
 }
 
 func loadReleaseAuthority(store *objectStore, manifest FHECaseManifest) (ReleaseAuthorityManifest, error) {
@@ -74,12 +88,14 @@ func loadReleaseAuthority(store *objectStore, manifest FHECaseManifest) (Release
 	}
 	bindingDigest, _ := manifest.Binding.Digest()
 	if authority.SchemaVersion != ReleaseAuthoritySchema || authority.CaseID != manifest.Binding.CaseID || authority.CaseBindingDigest != bindingDigest ||
+		authority.ReleaseMode != manifest.Binding.ReleaseMode || authority.AuthorityID != manifest.Binding.ReleaseAuthorityID ||
+		!bytes.Equal(authority.SigningPublicKey, manifest.Binding.ReleaseAuthorityPublicKey) ||
 		!knownReleaseMode(authority.ReleaseMode) || !nonzero(authority.AuthorityID, authority.SourceProvenance) ||
 		len(authority.SigningPublicKey) != ed25519.PublicKeySize ||
 		verifyCanonical(ed25519.PublicKey(authority.SigningPublicKey), "MordantReleaseAuthority/v1", authority.signingValue(), authority.Signature) != nil {
 		return authority, ErrBinding
 	}
-	expectedID := releaseAuthorityIdentity(bindingDigest, authority.ReleaseMode, ed25519.PublicKey(authority.SigningPublicKey))
+	expectedID := releaseAuthorityIdentity(authority.ReleaseMode, ed25519.PublicKey(authority.SigningPublicKey))
 	if expectedID != authority.AuthorityID {
 		return authority, ErrBinding
 	}
@@ -101,6 +117,7 @@ func loadEvaluatedArtifact(store *objectStore, manifest FHECaseManifest) (Evalua
 
 func verifyGovernedResult(result GovernedConflictResult, manifest FHECaseManifest, artifact EvaluatedConflictArtifact, authority ReleaseAuthorityManifest) error {
 	bindingDigest, _ := manifest.Binding.Digest()
+	artifactDigest, _ := artifact.Digest()
 	if result.SchemaVersion != GovernedResultSchema || result.CaseID != manifest.Binding.CaseID || result.CaseBindingDigest != bindingDigest ||
 		result.AssetIdentity != manifest.Binding.AssetIdentity || result.ServiceID != ServiceID || result.ServiceVersion != ServiceVersion ||
 		result.PolicyID != manifest.Binding.PolicyID || result.PolicyVersion != fhe.PolicyVersion || result.CircuitID != CircuitID ||
@@ -108,6 +125,7 @@ func verifyGovernedResult(result GovernedConflictResult, manifest FHECaseManifes
 		result.ParameterFingerprint != manifest.Binding.ParameterFingerprint || len(result.ParticipantArtifactDigests) != 2 ||
 		!bytes.Equal(result.ParticipantArtifactDigests[0][:], artifact.ParticipantArtifactDigests[0][:]) ||
 		!bytes.Equal(result.ParticipantArtifactDigests[1][:], artifact.ParticipantArtifactDigests[1][:]) ||
+		result.EvaluatedArtifactDigest != artifactDigest ||
 		result.ResultCiphertextDigest != artifact.ResultCiphertext.Digest || result.ResultCiphertextCommitment != artifact.ResultCiphertextCommitment ||
 		result.ReleaseOrdinal != ReleaseOrdinal || result.ReleaseMode != authority.ReleaseMode || !knownReleaseMode(result.ReleaseMode) || result.ReleaseAuthorityID != authority.AuthorityID ||
 		!bytes.Equal(result.ReleaseAuthorityPublicKey, authority.SigningPublicKey) || result.ReleasedAtUnix <= 0 || !nonzero(result.SourceProvenance) ||
@@ -117,13 +135,152 @@ func verifyGovernedResult(result GovernedConflictResult, manifest FHECaseManifes
 	return nil
 }
 
+func recoursePinsForResult(result GovernedConflictResult) TrustedRecoursePins {
+	var digestA, digestB Digest
+	if len(result.ParticipantArtifactDigests) == 2 {
+		digestA, digestB = result.ParticipantArtifactDigests[0], result.ParticipantArtifactDigests[1]
+	}
+	return TrustedRecoursePins{
+		ParticipantArtifactDigestA: digestA, ParticipantArtifactDigestB: digestB,
+		EvaluatedArtifactDigest:          result.EvaluatedArtifactDigest,
+		RecomputedResultCiphertextDigest: result.ResultCiphertextDigest,
+		ResultCiphertextCommitment:       result.ResultCiphertextCommitment,
+		DecryptorProvenance:              result.SourceProvenance, ReleaseMode: result.ReleaseMode,
+		ReleaseAuthorityID: result.ReleaseAuthorityID,
+	}
+}
+
+func validateRecomputeAdmission(admission recomputeAdmission, manifest FHECaseManifest, artifact EvaluatedConflictArtifact, artifactDigest Digest) error {
+	bindingDigest, _ := manifest.Binding.Digest()
+	if admission.SchemaVersion != RecomputeAdmissionSchema || admission.CaseID != manifest.Binding.CaseID ||
+		admission.CaseBindingDigest != bindingDigest || admission.EvaluatedArtifactDigest != artifactDigest ||
+		len(admission.ParticipantArtifactDigests) != 2 ||
+		admission.ParticipantArtifactDigests[0] != artifact.ParticipantArtifactDigests[0] ||
+		admission.ParticipantArtifactDigests[1] != artifact.ParticipantArtifactDigests[1] || admission.AdmittedAtUnix <= 0 {
+		return ErrReleaseAmbiguous
+	}
+	return nil
+}
+
+func (d *GovernedDecryptor) loadVerifiedRecomputation(manifest FHECaseManifest, artifact EvaluatedConflictArtifact, artifactDigest Digest) ([]byte, recomputeVerified, error) {
+	var admission recomputeAdmission
+	if _, _, err := d.privateStore.readJSON(recomputeAdmissionObject, &admission); err != nil ||
+		validateRecomputeAdmission(admission, manifest, artifact, artifactDigest) != nil {
+		return nil, recomputeVerified{}, ErrReleaseAmbiguous
+	}
+	var verified recomputeVerified
+	if _, _, err := d.privateStore.readJSON(recomputeVerifiedObject, &verified); err != nil {
+		return nil, verified, ErrReleaseAmbiguous
+	}
+	bindingDigest, _ := manifest.Binding.Digest()
+	if verified.SchemaVersion != RecomputeVerifiedSchema || verified.CaseID != manifest.Binding.CaseID ||
+		verified.CaseBindingDigest != bindingDigest || verified.EvaluatedArtifactDigest != artifactDigest ||
+		verified.RecomputedResultCiphertext.validate(recomputedResultObject, 128<<20) != nil ||
+		!nonzero(verified.ResultCiphertextCommitment) || verified.VerifiedAtUnix <= 0 {
+		return nil, verified, ErrReleaseAmbiguous
+	}
+	recomputedBytes, err := d.privateStore.read(verified.RecomputedResultCiphertext, 128<<20)
+	if err != nil || DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), recomputedBytes...)) != verified.ResultCiphertextCommitment {
+		return nil, verified, ErrReleaseAmbiguous
+	}
+	return recomputedBytes, verified, nil
+}
+
+func (d *GovernedDecryptor) prepareVerifiedRecomputation(manifest FHECaseManifest, artifact EvaluatedConflictArtifact, evaluatorResultBytes []byte, artifactDigest Digest) ([]byte, recomputeVerified, error) {
+	if d.privateStore.exists(recomputeMismatchObject) {
+		return nil, recomputeVerified{}, ErrEvaluatorMismatch
+	}
+	if d.privateStore.exists(recomputeVerifiedObject) {
+		return d.loadVerifiedRecomputation(manifest, artifact, artifactDigest)
+	}
+	if d.privateStore.exists(recomputeAdmissionObject) {
+		return nil, recomputeVerified{}, ErrRecomputeAdmission
+	}
+	artifactA, digestA, err := loadParticipantArtifactMetadata(d.publicStore, manifest, RoleA, d.now)
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	artifactB, digestB, err := loadParticipantArtifactMetadata(d.publicStore, manifest, RoleB, d.now)
+	if err != nil || digestA != artifact.ParticipantArtifactDigests[0] || digestB != artifact.ParticipantArtifactDigests[1] ||
+		artifactA.SubmissionNonce == artifactB.SubmissionNonce || digestA == digestB {
+		return nil, recomputeVerified{}, ErrBinding
+	}
+	releaseResource, err := admitN15(manifest.Binding.CaseID, "recomputation")
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	defer releaseResource()
+	bindingDigest, _ := manifest.Binding.Digest()
+	admission := recomputeAdmission{
+		SchemaVersion: RecomputeAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		ParticipantArtifactDigests: []Digest{digestA, digestB}, EvaluatedArtifactDigest: artifactDigest, AdmittedAtUnix: d.now.Unix(),
+	}
+	if _, _, err := d.privateStore.createJSON(recomputeAdmissionObject, admission); err != nil {
+		return nil, recomputeVerified{}, fmt.Errorf("%w: %v", ErrRecomputeAdmission, err)
+	}
+	pledgeA, err := loadParticipantCiphertext(d.publicStore, manifest, artifactA)
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	pledgeB, err := loadParticipantCiphertext(d.publicStore, manifest, artifactB)
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	runtime, err := loadEvaluationRuntime(d.publicStore, manifest)
+	if err != nil || pledgeA.KeyID != runtime.KeyID() || pledgeB.KeyID != runtime.KeyID() {
+		return nil, recomputeVerified{}, ErrBinding
+	}
+	recomputationExecutionCount.Add(1)
+	outputs, err := runtime.RecomputeCircuitV5(fhe.CircuitInputsV5{
+		PolicyBitsA: pledgeA.PolicyBits, PolicyBitsB: pledgeB.PolicyBits,
+		CurrencyBitsA: pledgeA.CurrencyBits, CurrencyBitsB: pledgeB.CurrencyBits,
+		ReceivableIDsA: pledgeA.ReceivableIDBits, ReceivableIDsB: pledgeB.ReceivableIDBits,
+	})
+	if err != nil || outputs == nil || outputs.PolicyConflict == nil {
+		return nil, recomputeVerified{}, ErrReleaseAmbiguous
+	}
+	recomputedBytes, err := outputs.PolicyConflict.MarshalBinary()
+	if err != nil {
+		return nil, recomputeVerified{}, ErrReleaseAmbiguous
+	}
+	recomputedDigest := DigestBytes(recomputedBytes)
+	if !bytes.Equal(recomputedBytes, evaluatorResultBytes) {
+		mismatch := recomputeMismatch{
+			SchemaVersion: RecomputeMismatchSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+			EvaluatedArtifactDigest: artifactDigest, EvaluatorResultCiphertextDigest: artifact.ResultCiphertext.Digest,
+			RecomputedResultCiphertextDigest: recomputedDigest, ErrorCode: "EVALUATOR_RESULT_MISMATCH", DetectedAtUnix: d.now.Unix(),
+		}
+		if _, _, writeErr := d.privateStore.createJSON(recomputeMismatchObject, mismatch); writeErr != nil {
+			return nil, recomputeVerified{}, ErrReleaseAmbiguous
+		}
+		return nil, recomputeVerified{}, ErrEvaluatorMismatch
+	}
+	recomputedRef, err := d.privateStore.create(recomputedResultObject, recomputedBytes)
+	if err != nil {
+		return nil, recomputeVerified{}, ErrReleaseAmbiguous
+	}
+	commitment := DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), recomputedBytes...))
+	verified := recomputeVerified{
+		SchemaVersion: RecomputeVerifiedSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		EvaluatedArtifactDigest: artifactDigest, RecomputedResultCiphertext: recomputedRef,
+		ResultCiphertextCommitment: commitment, VerifiedAtUnix: d.now.Unix(),
+	}
+	if _, _, err := d.privateStore.createJSON(recomputeVerifiedObject, verified); err != nil {
+		return nil, recomputeVerified{}, ErrReleaseAmbiguous
+	}
+	return recomputedBytes, verified, nil
+}
+
 func (d *GovernedDecryptor) exactRetry(manifest FHECaseManifest, artifact EvaluatedConflictArtifact, artifactDigest Digest, authority ReleaseAuthorityManifest) (GovernedConflictResult, []byte, bool, error) {
 	if !d.privateStore.exists(retainedResultObject) {
 		return GovernedConflictResult{}, nil, false, nil
 	}
 	var result GovernedConflictResult
 	retainedBytes, _, err := d.privateStore.readJSON(retainedResultObject, &result)
-	if err != nil || verifyGovernedResult(result, manifest, artifact, authority) != nil {
+	recomputedBytes, verified, recomputeErr := d.loadVerifiedRecomputation(manifest, artifact, artifactDigest)
+	if err != nil || recomputeErr != nil || verifyGovernedResult(result, manifest, artifact, authority) != nil ||
+		result.ResultCiphertextDigest != verified.RecomputedResultCiphertext.Digest ||
+		result.ResultCiphertextCommitment != verified.ResultCiphertextCommitment || len(recomputedBytes) == 0 {
 		return result, nil, true, ErrReleaseAmbiguous
 	}
 	var admission releaseAdmission
@@ -192,11 +349,15 @@ func (d *GovernedDecryptor) release(expected EvaluatedConflictArtifact) (Governe
 		return GovernedConflictResult{}, nil, report, ErrBinding
 	}
 	if result, retained, found, err := d.exactRetry(manifest, artifact, artifactDigest, authority); found {
-		report.Duration, report.ResultBytes, report.ExactRetry = time.Since(started), int64(len(retained)), true
+		report.Duration, report.ResultBytes, report.ExactRetry, report.Pins = time.Since(started), int64(len(retained)), true, recoursePinsForResult(result)
 		return result, retained, report, err
 	}
 	if d.privateStore.exists(releaseAdmissionObject) || d.privateStore.exists(releaseConsumedObject) {
 		return GovernedConflictResult{}, nil, report, ErrReleaseAmbiguous
+	}
+	recomputedBytes, verified, err := d.prepareVerifiedRecomputation(manifest, artifact, resultBytes, artifactDigest)
+	if err != nil {
+		return GovernedConflictResult{}, nil, report, err
 	}
 	admission := releaseAdmission{
 		SchemaVersion: ReleaseAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: artifact.CaseBindingDigest,
@@ -228,7 +389,7 @@ func (d *GovernedDecryptor) release(expected EvaluatedConflictArtifact) (Governe
 		secretBytes[index] = 0
 	}
 	ciphertext := bgv.NewCiphertext(params, 1, 0)
-	if ciphertext.UnmarshalBinary(resultBytes) != nil || ciphertext.Degree() != 1 || ciphertext.Value[0].N() != params.N() {
+	if ciphertext.UnmarshalBinary(recomputedBytes) != nil || ciphertext.Degree() != 1 || ciphertext.Value[0].N() != params.N() {
 		return GovernedConflictResult{}, nil, report, ErrReleaseAmbiguous
 	}
 	plaintext := rlwe.NewDecryptor(params, secretKey).DecryptNew(ciphertext)
@@ -251,11 +412,13 @@ func (d *GovernedDecryptor) release(expected EvaluatedConflictArtifact) (Governe
 		AssetIdentity: manifest.Binding.AssetIdentity, ServiceID: ServiceID, ServiceVersion: ServiceVersion,
 		PolicyID: manifest.Binding.PolicyID, PolicyVersion: fhe.PolicyVersion, CircuitID: CircuitID, CircuitVersion: fhe.CircuitV5Version,
 		CircuitDigest: FixedCircuitDigest(), ParameterProfile: ParameterProfile, ParameterFingerprint: manifest.Binding.ParameterFingerprint,
-		ParticipantArtifactDigests: append([]Digest(nil), artifact.ParticipantArtifactDigests...), ResultCiphertextDigest: artifact.ResultCiphertext.Digest,
-		ResultCiphertextCommitment: artifact.ResultCiphertextCommitment, Conflict: decoded[0] == 1, ReleaseOrdinal: ReleaseOrdinal,
+		ParticipantArtifactDigests: append([]Digest(nil), artifact.ParticipantArtifactDigests...), EvaluatedArtifactDigest: artifactDigest,
+		ResultCiphertextDigest:     verified.RecomputedResultCiphertext.Digest,
+		ResultCiphertextCommitment: verified.ResultCiphertextCommitment, Conflict: decoded[0] == 1, ReleaseOrdinal: ReleaseOrdinal,
 		ReleaseMode: ReleaseModeGovernedDecryptor, ReleaseAuthorityID: authority.AuthorityID,
 		ReleaseAuthorityPublicKey: append([]byte(nil), authority.SigningPublicKey...), ReleasedAtUnix: d.now.Unix(), SourceProvenance: d.provenance,
 	}
+	releaseSignatureCount.Add(1)
 	result.Signature, err = signCanonical(signingKey, "MordantGovernedConflictResult/v1", result.signingValue())
 	for index := range signingBytes {
 		signingBytes[index] = 0
@@ -275,7 +438,7 @@ func (d *GovernedDecryptor) release(expected EvaluatedConflictArtifact) (Governe
 	if _, _, err := d.privateStore.createJSON(releaseConsumedObject, consumed); err != nil {
 		return GovernedConflictResult{}, nil, report, err
 	}
-	report.Duration, report.ResultBytes = time.Since(started), resultRef.Length
+	report.Duration, report.ResultBytes, report.Pins = time.Since(started), resultRef.Length, recoursePinsForResult(result)
 	return result, retainedBytes, report, nil
 }
 
@@ -296,6 +459,7 @@ func LoadGovernedConflictResult(publicRoot string) (GovernedConflictResult, []by
 	if err != nil {
 		return GovernedConflictResult{}, nil, err
 	}
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil {
 		return GovernedConflictResult{}, nil, err
@@ -324,6 +488,7 @@ func LoadReleaseAuthorityManifest(publicRoot string) (ReleaseAuthorityManifest, 
 	if err != nil {
 		return ReleaseAuthorityManifest{}, err
 	}
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil {
 		return ReleaseAuthorityManifest{}, err

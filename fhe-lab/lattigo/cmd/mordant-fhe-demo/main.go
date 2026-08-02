@@ -31,12 +31,13 @@ type processEvaluation struct {
 }
 
 type processRelease struct {
-	ResultDigest  governedfhe.Digest `json:"resultDigest"`
-	Conflict      bool               `json:"conflict"`
-	ReleaseMode   string             `json:"releaseMode"`
-	DurationNanos int64              `json:"durationNanos"`
-	ResultBytes   int64              `json:"resultBytes"`
-	ExactRetry    bool               `json:"exactRetry"`
+	ResultDigest  governedfhe.Digest              `json:"resultDigest"`
+	Conflict      bool                            `json:"conflict"`
+	ReleaseMode   string                          `json:"releaseMode"`
+	DurationNanos int64                           `json:"durationNanos"`
+	ResultBytes   int64                           `json:"resultBytes"`
+	ExactRetry    bool                            `json:"exactRetry"`
+	TrustedPins   governedfhe.TrustedRecoursePins `json:"trustedRecoursePins"`
 }
 
 type scenarioSummary struct {
@@ -110,7 +111,7 @@ func runScenario(workRoot, name string, conflicting bool, evaluatorPath, decrypt
 		ParticipantA: identityA, ParticipantB: identityB, CaseNonce: digestLabel(name + "/case-nonce"),
 		CreatedAtUnix: now.Unix(), ExpiresAtUnix: now.Add(2 * time.Hour).Unix(),
 	}
-	binding, keyReport, err := governedfhe.CreateCase(governedfhe.CreateCaseOptions{
+	_, keyReport, err := governedfhe.CreateCase(governedfhe.CreateCaseOptions{
 		PublicRoot: publicRoot, PrivateRoot: privateRoot, Spec: spec, SourceProvenance: provenance,
 	})
 	if err != nil {
@@ -131,7 +132,8 @@ func runScenario(workRoot, name string, conflicting bool, evaluatorPath, decrypt
 	if err != nil {
 		return scenarioSummary{}, fmt.Errorf("%s participant B: %w", name, err)
 	}
-	if _, err := governedfhe.FinalizeCase(publicRoot); err != nil {
+	manifest, err := governedfhe.FinalizeCase(publicRoot)
+	if err != nil {
 		return scenarioSummary{}, fmt.Errorf("%s finalize: %w", name, err)
 	}
 	_ = artifactA
@@ -170,21 +172,10 @@ func runScenario(workRoot, name string, conflicting bool, evaluatorPath, decrypt
 	if err != nil || governedResult.Conflict != conflicting {
 		return scenarioSummary{}, fmt.Errorf("%s signed result readback: %w", name, err)
 	}
-	bindingDigest, err := binding.Digest()
-	if err != nil {
-		return scenarioSummary{}, err
-	}
-	releaseAuthority, err := governedfhe.LoadReleaseAuthorityManifest(publicRoot)
-	if err != nil {
-		return scenarioSummary{}, err
-	}
 
 	recourseActivated := false
 	recourseConfig := governedfhe.RecourseAdapterConfig{
-		RecordRoot: publicRoot, ExpectedCaseID: binding.CaseID, ExpectedBindingDigest: bindingDigest,
-		ExpectedAssetIdentity: binding.AssetIdentity, ExpectedPolicyID: binding.PolicyID,
-		ExpectedReleaseMode: releaseAuthority.ReleaseMode, ExpectedReleaseAuthorityID: releaseAuthority.AuthorityID,
-		CaseCreatedAtUnix: binding.CreatedAtUnix, CaseExpiresAtUnix: binding.ExpiresAtUnix,
+		RecordRoot: publicRoot, CaseManifest: manifest, ExpectedPins: firstRelease.TrustedPins,
 		RecordDateUnix: spec.CreatedAtUnix - 3600, CurePeriod: 24 * time.Hour,
 		ReserveBasisPoints: governedfhe.MVPReserveBasisPoints, HolderAllocationDigest: digestLabel(name + "/holder-allocation"), Now: time.Now().UTC(),
 	}
@@ -204,10 +195,12 @@ func runScenario(workRoot, name string, conflicting bool, evaluatorPath, decrypt
 		Evaluation: governedfhe.EvaluationReport{
 			Duration: time.Duration(evaluation.DurationNanos), ResultCiphertextBytes: evaluation.ResultBytes, ArtifactBytes: evaluation.ArtifactBytes,
 		},
-		Release:          governedfhe.ReleaseReport{Duration: time.Duration(firstRelease.DurationNanos), ResultBytes: firstRelease.ResultBytes},
+		Release: governedfhe.ReleaseReport{
+			Duration: time.Duration(firstRelease.DurationNanos), ResultBytes: firstRelease.ResultBytes, Pins: firstRelease.TrustedPins,
+		},
 		CompleteDuration: time.Since(started), PeakRSSBytes: peakRSS,
 	}
-	evidence, err := governedfhe.ExportPublicEvidence(publicRoot, privateRoot, measurements, time.Now().UTC())
+	evidence, err := governedfhe.ExportPublicEvidence(publicRoot, measurements, time.Now().UTC())
 	if err != nil {
 		return scenarioSummary{}, fmt.Errorf("%s evidence: %w", name, err)
 	}

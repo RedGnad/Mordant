@@ -67,10 +67,12 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
+	defer publicStore.close()
 	privateStore, err := openObjectStore(options.PrivateRoot, PrivateCaseQuota, true)
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
+	defer privateStore.close()
 	if publicNames, _ := publicStore.names(); len(publicNames) != 0 {
 		return FHECaseBinding{}, report, ErrStore
 	}
@@ -151,6 +153,11 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
+	decryptorPublic, decryptorPrivate, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return FHECaseBinding{}, report, err
+	}
+	authorityID := releaseAuthorityIdentity(ReleaseModeGovernedDecryptor, decryptorPublic)
 	parameterFingerprint := Digest(sha256.Sum256(parameterBytes))
 	binding := FHECaseBinding{
 		SchemaVersion: CaseBindingSchema, CaseID: options.Spec.CaseID, AssetIdentity: options.Spec.AssetIdentity,
@@ -159,6 +166,7 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 		ParameterFingerprint: parameterFingerprint, PublicKeyDigest: publicRef.Digest, EvaluationKeyManifestDigest: evaluationDigest,
 		ParticipantA: options.Spec.ParticipantA, ParticipantB: options.Spec.ParticipantB,
 		ParticipantOrder: []Digest{options.Spec.ParticipantA.ID, options.Spec.ParticipantB.ID}, InputSchema: InputSchema, ResultSchema: ResultSchema,
+		ReleaseMode: ReleaseModeGovernedDecryptor, ReleaseAuthorityID: authorityID, ReleaseAuthorityPublicKey: decryptorPublic,
 		CaseNonce: options.Spec.CaseNonce, CreatedAtUnix: options.Spec.CreatedAtUnix, ExpiresAtUnix: options.Spec.ExpiresAtUnix,
 	}
 	if binding.validate() != nil {
@@ -176,15 +184,10 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 		return FHECaseBinding{}, report, err
 	}
 
-	decryptorPublic, decryptorPrivate, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return FHECaseBinding{}, report, err
-	}
 	signingRef, err := privateStore.create(decryptorSigningKeyObject, decryptorPrivate)
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
-	authorityID := releaseAuthorityIdentity(bindingDigest, ReleaseModeGovernedDecryptor, decryptorPublic)
 	authority := ReleaseAuthorityManifest{
 		SchemaVersion: ReleaseAuthoritySchema, CaseID: binding.CaseID, CaseBindingDigest: bindingDigest,
 		ReleaseMode: ReleaseModeGovernedDecryptor, AuthorityID: authorityID, SigningPublicKey: decryptorPublic,
@@ -274,6 +277,7 @@ func FinalizeCase(publicRoot string) (FHECaseManifest, error) {
 	if err != nil {
 		return FHECaseManifest{}, err
 	}
+	defer store.close()
 	binding, cryptoManifest, err := loadCaseFoundation(store)
 	if err != nil {
 		return FHECaseManifest{}, err

@@ -11,20 +11,14 @@ import (
 const MVPReserveBasisPoints = uint32(1000)
 
 type RecourseAdapterConfig struct {
-	RecordRoot                 string
-	ExpectedCaseID             Digest
-	ExpectedBindingDigest      Digest
-	ExpectedAssetIdentity      Digest
-	ExpectedPolicyID           Digest
-	ExpectedReleaseMode        string
-	ExpectedReleaseAuthorityID Digest
-	CaseCreatedAtUnix          int64
-	CaseExpiresAtUnix          int64
-	RecordDateUnix             int64
-	CurePeriod                 time.Duration
-	ReserveBasisPoints         uint32
-	HolderAllocationDigest     Digest
-	Now                        time.Time
+	RecordRoot             string
+	CaseManifest           FHECaseManifest
+	ExpectedPins           TrustedRecoursePins
+	RecordDateUnix         int64
+	CurePeriod             time.Duration
+	ReserveBasisPoints     uint32
+	HolderAllocationDigest Digest
+	Now                    time.Time
 }
 
 // AdaptSignedResultToRecourse is a local protocol-double for the existing V5
@@ -35,30 +29,44 @@ func AdaptSignedResultToRecourse(config RecourseAdapterConfig, signedResult []by
 	if config.Now.IsZero() {
 		config.Now = time.Now().UTC()
 	}
+	binding, bindingDigest, err := verifyRecourseCaseManifest(config.CaseManifest)
+	if err != nil {
+		return RecourseRecord{}, ErrRecourse
+	}
 	if config.CurePeriod <= 0 || config.ReserveBasisPoints != MVPReserveBasisPoints ||
-		!knownReleaseMode(config.ExpectedReleaseMode) ||
-		!nonzero(config.ExpectedCaseID, config.ExpectedBindingDigest, config.ExpectedAssetIdentity, config.ExpectedPolicyID,
-			config.ExpectedReleaseAuthorityID, config.HolderAllocationDigest) ||
-		config.CaseCreatedAtUnix <= 0 || config.CaseExpiresAtUnix <= config.CaseCreatedAtUnix {
+		!knownReleaseMode(config.ExpectedPins.ReleaseMode) ||
+		!nonzero(config.ExpectedPins.ParticipantArtifactDigestA, config.ExpectedPins.ParticipantArtifactDigestB,
+			config.ExpectedPins.EvaluatedArtifactDigest, config.ExpectedPins.RecomputedResultCiphertextDigest,
+			config.ExpectedPins.ResultCiphertextCommitment, config.ExpectedPins.DecryptorProvenance,
+			config.ExpectedPins.ReleaseAuthorityID, config.HolderAllocationDigest) ||
+		config.ExpectedPins.ReleaseMode != binding.ReleaseMode || config.ExpectedPins.ReleaseAuthorityID != binding.ReleaseAuthorityID {
 		return RecourseRecord{}, ErrRecourse
 	}
 	var result GovernedConflictResult
 	if decodeStrict(signedResult, &result) != nil || verifyRecourseResultEnvelope(result) != nil ||
-		result.CaseID != config.ExpectedCaseID || result.CaseBindingDigest != config.ExpectedBindingDigest ||
-		result.AssetIdentity != config.ExpectedAssetIdentity || result.PolicyID != config.ExpectedPolicyID ||
-		result.ReleaseMode != config.ExpectedReleaseMode || result.ReleaseAuthorityID != config.ExpectedReleaseAuthorityID {
+		result.CaseID != binding.CaseID || result.CaseBindingDigest != bindingDigest ||
+		result.AssetIdentity != binding.AssetIdentity || result.PolicyID != binding.PolicyID ||
+		len(result.ParticipantArtifactDigests) != 2 ||
+		result.ParticipantArtifactDigests[0] != config.ExpectedPins.ParticipantArtifactDigestA ||
+		result.ParticipantArtifactDigests[1] != config.ExpectedPins.ParticipantArtifactDigestB ||
+		result.EvaluatedArtifactDigest != config.ExpectedPins.EvaluatedArtifactDigest ||
+		result.ResultCiphertextDigest != config.ExpectedPins.RecomputedResultCiphertextDigest ||
+		result.ResultCiphertextCommitment != config.ExpectedPins.ResultCiphertextCommitment ||
+		result.SourceProvenance != config.ExpectedPins.DecryptorProvenance ||
+		result.ReleaseMode != config.ExpectedPins.ReleaseMode || result.ReleaseAuthorityID != config.ExpectedPins.ReleaseAuthorityID {
+		return RecourseRecord{}, ErrRecourse
+	}
+	if !result.Conflict {
 		return RecourseRecord{}, ErrRecourse
 	}
 	store, err := openObjectStore(config.RecordRoot, PublicCaseQuota, false)
 	if err != nil {
 		return RecourseRecord{}, err
 	}
-	if !result.Conflict {
-		return RecourseRecord{}, ErrRecourse
-	}
-	if config.RecordDateUnix <= 0 || config.RecordDateUnix > config.CaseCreatedAtUnix ||
-		result.ReleasedAtUnix < config.CaseCreatedAtUnix || result.ReleasedAtUnix > config.Now.Unix() ||
-		config.Now.Unix() > config.CaseExpiresAtUnix {
+	defer store.close()
+	if config.RecordDateUnix <= 0 || config.RecordDateUnix > binding.CreatedAtUnix ||
+		result.ReleasedAtUnix < binding.CreatedAtUnix || result.ReleasedAtUnix > config.Now.Unix() ||
+		config.Now.Unix() > binding.ExpiresAtUnix {
 		return RecourseRecord{}, ErrRecourse
 	}
 	resultDigest := DigestBytes(signedResult[:len(signedResult)-1])
@@ -85,6 +93,20 @@ func AdaptSignedResultToRecourse(config RecourseAdapterConfig, signedResult []by
 	return record, nil
 }
 
+func verifyRecourseCaseManifest(manifest FHECaseManifest) (FHECaseBinding, Digest, error) {
+	if manifest.SchemaVersion != CaseManifestSchema || manifest.Binding.validate() != nil ||
+		validateCryptoManifest(manifest.Binding, manifest.Crypto) != nil ||
+		verifyBindingSignature(manifest.Binding, manifest.SignatureA, manifest.Binding.ParticipantA) != nil ||
+		verifyBindingSignature(manifest.Binding, manifest.SignatureB, manifest.Binding.ParticipantB) != nil {
+		return FHECaseBinding{}, Digest{}, ErrRecourse
+	}
+	digest, err := manifest.Binding.Digest()
+	if err != nil {
+		return FHECaseBinding{}, Digest{}, ErrRecourse
+	}
+	return manifest.Binding, digest, nil
+}
+
 func verifyRecourseResultEnvelope(result GovernedConflictResult) error {
 	expectedFingerprint, err := ParameterFingerprint()
 	if err != nil || result.SchemaVersion != GovernedResultSchema || result.ServiceID != ServiceID || result.ServiceVersion != ServiceVersion ||
@@ -92,10 +114,10 @@ func verifyRecourseResultEnvelope(result GovernedConflictResult) error {
 		result.CircuitDigest != FixedCircuitDigest() || result.ParameterProfile != ParameterProfile || result.ParameterFingerprint != expectedFingerprint ||
 		assertDigestSlice(result.ParticipantArtifactDigests, 2) != nil ||
 		!nonzero(result.CaseID, result.CaseBindingDigest, result.AssetIdentity, result.PolicyID, result.ResultCiphertextDigest,
-			result.ResultCiphertextCommitment, result.ReleaseAuthorityID, result.SourceProvenance) ||
+			result.EvaluatedArtifactDigest, result.ResultCiphertextCommitment, result.ReleaseAuthorityID, result.SourceProvenance) ||
 		result.ReleaseOrdinal != ReleaseOrdinal || !knownReleaseMode(result.ReleaseMode) || result.ReleasedAtUnix <= 0 ||
 		len(result.ReleaseAuthorityPublicKey) != ed25519.PublicKeySize ||
-		releaseAuthorityIdentity(result.CaseBindingDigest, result.ReleaseMode, ed25519.PublicKey(result.ReleaseAuthorityPublicKey)) != result.ReleaseAuthorityID ||
+		releaseAuthorityIdentity(result.ReleaseMode, ed25519.PublicKey(result.ReleaseAuthorityPublicKey)) != result.ReleaseAuthorityID ||
 		verifyCanonical(ed25519.PublicKey(result.ReleaseAuthorityPublicKey), "MordantGovernedConflictResult/v1", result.signingValue(), result.Signature) != nil {
 		return ErrRecourse
 	}

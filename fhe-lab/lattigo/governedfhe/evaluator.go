@@ -21,19 +21,19 @@ type EvaluationReport struct {
 	ArtifactBytes         int64         `json:"artifactBytes"`
 }
 
-func loadParticipantArtifact(store *objectStore, manifest FHECaseManifest, role string, now time.Time) (EncryptedParticipantArtifact, *fhe.CipherPledge, Digest, error) {
+func loadParticipantArtifactMetadata(store *objectStore, manifest FHECaseManifest, role string, now time.Time) (EncryptedParticipantArtifact, Digest, error) {
 	identity, err := expectedParticipant(manifest.Binding, role)
 	if err != nil {
-		return EncryptedParticipantArtifact{}, nil, Digest{}, err
+		return EncryptedParticipantArtifact{}, Digest{}, err
 	}
 	_, expectedCiphertext, expectedManifest, err := participantFiles(role)
 	if err != nil {
-		return EncryptedParticipantArtifact{}, nil, Digest{}, err
+		return EncryptedParticipantArtifact{}, Digest{}, err
 	}
 	var artifact EncryptedParticipantArtifact
 	artifactBytes, _, err := store.readJSON(expectedManifest, &artifact)
 	if err != nil {
-		return artifact, nil, Digest{}, err
+		return artifact, Digest{}, err
 	}
 	bindingDigest, err := manifest.Binding.Digest()
 	if err != nil || artifact.SchemaVersion != ParticipantArtifactSchema || artifact.CaseBindingDigest != bindingDigest ||
@@ -41,30 +41,53 @@ func loadParticipantArtifact(store *objectStore, manifest FHECaseManifest, role 
 		artifact.ParticipantID != identity.ID || artifact.ParticipantRole != identity.Role || artifact.PublicKeyDigest != manifest.Binding.PublicKeyDigest ||
 		artifact.ParameterProfile != ParameterProfile || artifact.ParameterFingerprint != manifest.Binding.ParameterFingerprint ||
 		artifact.CircuitDigest != manifest.Binding.CircuitDigest || artifact.InputSchema != InputSchema || artifact.CiphertextObject.Path != expectedCiphertext ||
+		artifact.CiphertextObject.validate(expectedCiphertext, 192<<20) != nil || len(artifact.Components) != 5 ||
 		!nonzero(artifact.SubmissionNonce) || artifact.ExpiresAtUnix <= now.Unix() || artifact.ExpiresAtUnix > manifest.Binding.ExpiresAtUnix {
-		return artifact, nil, Digest{}, ErrBinding
+		return artifact, Digest{}, ErrBinding
 	}
 	if verifyCanonical(ed25519.PublicKey(identity.SigningPublicKey), "MordantEncryptedParticipantArtifact/v1", artifact.signingValue(), artifact.Signature) != nil {
-		return artifact, nil, Digest{}, ErrBinding
+		return artifact, Digest{}, ErrBinding
 	}
+	expectedNames := [...]string{"policyBits", "currencyBits", "amountBits", "obligationIdBits", "receivableIdBits"}
+	for index, component := range artifact.Components {
+		if component.Name != expectedNames[index] || !nonzero(component.Digest) || component.Length <= 0 || component.Length > 64<<20 {
+			return artifact, Digest{}, ErrArtifact
+		}
+	}
+	return artifact, DigestBytes(artifactBytes[:len(artifactBytes)-1]), nil
+}
+
+func loadParticipantCiphertext(store *objectStore, manifest FHECaseManifest, artifact EncryptedParticipantArtifact) (*fhe.CipherPledge, error) {
 	ciphertextBytes, err := store.read(artifact.CiphertextObject, 192<<20)
 	if err != nil {
-		return artifact, nil, Digest{}, err
+		return nil, fmt.Errorf("read %s: %w", artifact.CiphertextObject.Path, err)
 	}
 	pledge, err := fhe.UnmarshalCipherPledge(ciphertextBytes)
-	if err != nil || Digest(pledge.ParameterFingerprint) != manifest.Binding.ParameterFingerprint || pledge.ReceivableIDBits == nil || pledge.ReceivableCommitment != ([32]byte{}) {
-		return artifact, nil, Digest{}, ErrArtifact
+	if err != nil {
+		return nil, fmt.Errorf("decode %s: %w", artifact.CiphertextObject.Path, err)
+	}
+	if Digest(pledge.ParameterFingerprint) != manifest.Binding.ParameterFingerprint || pledge.ReceivableIDBits == nil || pledge.ReceivableCommitment != ([32]byte{}) {
+		return nil, ErrArtifact
 	}
 	expectedComponents, err := componentRefs(pledge)
 	if err != nil || len(expectedComponents) != len(artifact.Components) {
-		return artifact, nil, Digest{}, ErrArtifact
+		return nil, ErrArtifact
 	}
 	for index := range expectedComponents {
 		if expectedComponents[index] != artifact.Components[index] {
-			return artifact, nil, Digest{}, ErrArtifact
+			return nil, ErrArtifact
 		}
 	}
-	return artifact, pledge, DigestBytes(artifactBytes[:len(artifactBytes)-1]), nil
+	return pledge, nil
+}
+
+func loadParticipantArtifact(store *objectStore, manifest FHECaseManifest, role string, now time.Time) (EncryptedParticipantArtifact, *fhe.CipherPledge, Digest, error) {
+	artifact, digest, err := loadParticipantArtifactMetadata(store, manifest, role, now)
+	if err != nil {
+		return artifact, nil, Digest{}, err
+	}
+	pledge, err := loadParticipantCiphertext(store, manifest, artifact)
+	return artifact, pledge, digest, err
 }
 
 func loadEvaluationRuntime(store *objectStore, manifest FHECaseManifest) (*fhe.Runtime, error) {
@@ -121,25 +144,51 @@ func EvaluateFixedConflict(config EvaluatorConfig) (EvaluatedConflictArtifact, E
 	if err != nil {
 		return EvaluatedConflictArtifact{}, report, err
 	}
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil || config.Now.Unix() < manifest.Binding.CreatedAtUnix || config.Now.Unix() > manifest.Binding.ExpiresAtUnix {
 		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
-	artifactA, pledgeA, digestA, err := loadParticipantArtifact(store, manifest, RoleA, config.Now)
-	if err != nil {
-		return EvaluatedConflictArtifact{}, report, err
+	if store.exists(evaluationAdmissionObject) || store.exists(evaluationCompletedObject) || store.exists(resultCiphertextObject) || store.exists(evaluatedArtifactObject) {
+		return EvaluatedConflictArtifact{}, report, ErrEvaluationAdmission
 	}
-	artifactB, pledgeB, digestB, err := loadParticipantArtifact(store, manifest, RoleB, config.Now)
+	artifactA, digestA, err := loadParticipantArtifactMetadata(store, manifest, RoleA, config.Now)
+	if err != nil {
+		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant A metadata: %w", err)
+	}
+	artifactB, digestB, err := loadParticipantArtifactMetadata(store, manifest, RoleB, config.Now)
 	if err != nil || artifactA.SubmissionNonce == artifactB.SubmissionNonce || digestA == digestB {
 		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
-	runtime, err := loadEvaluationRuntime(store, manifest)
+	releaseResource, err := admitN15(manifest.Binding.CaseID, "evaluation")
 	if err != nil {
 		return EvaluatedConflictArtifact{}, report, err
+	}
+	defer releaseResource()
+	bindingDigest, _ := manifest.Binding.Digest()
+	admission := evaluationAdmission{
+		SchemaVersion: EvaluationAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		ParticipantArtifactDigests: []Digest{digestA, digestB}, EvaluatorProvenance: config.Provenance, AdmittedAtUnix: config.Now.Unix(),
+	}
+	if _, _, err := store.createJSON(evaluationAdmissionObject, admission); err != nil {
+		return EvaluatedConflictArtifact{}, report, fmt.Errorf("%w: %v", ErrEvaluationAdmission, err)
+	}
+	pledgeA, err := loadParticipantCiphertext(store, manifest, artifactA)
+	if err != nil {
+		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant A ciphertext: %w", err)
+	}
+	pledgeB, err := loadParticipantCiphertext(store, manifest, artifactB)
+	if err != nil {
+		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant B ciphertext: %w", err)
+	}
+	runtime, err := loadEvaluationRuntime(store, manifest)
+	if err != nil {
+		return EvaluatedConflictArtifact{}, report, fmt.Errorf("evaluation material: %w", err)
 	}
 	if pledgeA.KeyID != runtime.KeyID() || pledgeB.KeyID != runtime.KeyID() {
 		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
+	evaluationExecutionCount.Add(1)
 	outputs, err := runtime.RecomputeCircuitV5(fhe.CircuitInputsV5{
 		PolicyBitsA: pledgeA.PolicyBits, PolicyBitsB: pledgeB.PolicyBits,
 		CurrencyBitsA: pledgeA.CurrencyBits, CurrencyBitsB: pledgeB.CurrencyBits,
@@ -157,7 +206,6 @@ func EvaluateFixedConflict(config EvaluatorConfig) (EvaluatedConflictArtifact, E
 		return EvaluatedConflictArtifact{}, report, err
 	}
 	commitment := DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), resultBytes...))
-	bindingDigest, _ := manifest.Binding.Digest()
 	artifact := EvaluatedConflictArtifact{
 		SchemaVersion: EvaluatedArtifactSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
 		AssetIdentity: manifest.Binding.AssetIdentity, ParticipantArtifactDigests: []Digest{digestA, digestB},
@@ -168,6 +216,15 @@ func EvaluateFixedConflict(config EvaluatorConfig) (EvaluatedConflictArtifact, E
 	}
 	artifactRef, _, err := store.createJSON(evaluatedArtifactObject, artifact)
 	if err != nil {
+		return EvaluatedConflictArtifact{}, report, err
+	}
+	artifactDigest, _ := artifact.Digest()
+	completed := evaluationCompleted{
+		SchemaVersion: EvaluationCompletedSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		EvaluatedArtifactDigest: artifactDigest, ResultCiphertextDigest: resultRef.Digest,
+		ResultCiphertextCommitment: commitment, CompletedAtUnix: config.Now.Unix(),
+	}
+	if _, _, err := store.createJSON(evaluationCompletedObject, completed); err != nil {
 		return EvaluatedConflictArtifact{}, report, err
 	}
 	report.Duration = time.Since(started)
@@ -198,6 +255,24 @@ func validateEvaluatedArtifact(store *objectStore, manifest FHECaseManifest, art
 	if err != nil || DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), resultBytes...)) != artifact.ResultCiphertextCommitment {
 		return nil, ErrArtifact
 	}
+	var admission evaluationAdmission
+	if _, _, err := store.readJSON(evaluationAdmissionObject, &admission); err != nil ||
+		admission.SchemaVersion != EvaluationAdmissionSchema || admission.CaseID != manifest.Binding.CaseID ||
+		admission.CaseBindingDigest != bindingDigest || len(admission.ParticipantArtifactDigests) != 2 ||
+		admission.ParticipantArtifactDigests[0] != artifact.ParticipantArtifactDigests[0] ||
+		admission.ParticipantArtifactDigests[1] != artifact.ParticipantArtifactDigests[1] ||
+		admission.EvaluatorProvenance != artifact.EvaluatorProvenance || admission.AdmittedAtUnix <= 0 {
+		return nil, ErrArtifact
+	}
+	artifactDigest, _ := artifact.Digest()
+	var completed evaluationCompleted
+	if _, _, err := store.readJSON(evaluationCompletedObject, &completed); err != nil ||
+		completed.SchemaVersion != EvaluationCompletedSchema || completed.CaseID != manifest.Binding.CaseID ||
+		completed.CaseBindingDigest != bindingDigest || completed.EvaluatedArtifactDigest != artifactDigest ||
+		completed.ResultCiphertextDigest != artifact.ResultCiphertext.Digest ||
+		completed.ResultCiphertextCommitment != artifact.ResultCiphertextCommitment || completed.CompletedAtUnix <= 0 {
+		return nil, ErrArtifact
+	}
 	return resultBytes, nil
 }
 
@@ -206,6 +281,7 @@ func LoadEvaluatedConflictArtifact(publicRoot string) (EvaluatedConflictArtifact
 	if err != nil {
 		return EvaluatedConflictArtifact{}, err
 	}
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil {
 		return EvaluatedConflictArtifact{}, err

@@ -34,6 +34,11 @@ const (
 	GovernedResultSchema      = "mordant.governed-conflict-result/1"
 	ReleaseAuthoritySchema    = "mordant.fhe-release-authority/1"
 	PrivateCaseSchema         = "mordant.fhe-private-case/1"
+	EvaluationAdmissionSchema = "mordant.fhe-evaluation-admission/1"
+	EvaluationCompletedSchema = "mordant.fhe-evaluation-completed/1"
+	RecomputeAdmissionSchema  = "mordant.fhe-recompute-admission/1"
+	RecomputeVerifiedSchema   = "mordant.fhe-recompute-verified/1"
+	RecomputeMismatchSchema   = "mordant.fhe-recompute-mismatch/1"
 	ReleaseAdmissionSchema    = "mordant.fhe-release-admission/1"
 	ReleaseConsumedSchema     = "mordant.fhe-release-consumed/1"
 	RecourseRecordSchema      = "mordant.fhe-recourse-adapter-record/1"
@@ -44,12 +49,16 @@ const (
 )
 
 var (
-	ErrBinding          = errors.New("governed FHE binding rejected")
-	ErrArtifact         = errors.New("governed FHE artifact rejected")
-	ErrStore            = errors.New("governed FHE store rejected")
-	ErrReleaseConsumed  = errors.New("governed FHE release already consumed")
-	ErrReleaseAmbiguous = errors.New("governed FHE release is terminally ambiguous")
-	ErrRecourse         = errors.New("governed FHE recourse rejected")
+	ErrBinding             = errors.New("governed FHE binding rejected")
+	ErrArtifact            = errors.New("governed FHE artifact rejected")
+	ErrStore               = errors.New("governed FHE store rejected")
+	ErrReleaseConsumed     = errors.New("governed FHE release already consumed")
+	ErrReleaseAmbiguous    = errors.New("governed FHE release is terminally ambiguous")
+	ErrEvaluatorMismatch   = errors.New("governed FHE evaluator result mismatch")
+	ErrEvaluationAdmission = errors.New("governed FHE evaluation already admitted")
+	ErrRecomputeAdmission  = errors.New("governed FHE recomputation already admitted")
+	ErrResourceAdmission   = errors.New("governed FHE resource admission rejected")
+	ErrRecourse            = errors.New("governed FHE recourse rejected")
 )
 
 var rotationSteps = [...]int{1, 2, 4, 8, 16, 32, 64, -64, 128}

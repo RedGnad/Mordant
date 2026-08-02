@@ -33,6 +33,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	defer decryptor.Close()
 	result, encoded, report, err := decryptor.ReleaseWithReport(artifact)
 	if err != nil {
 		fail(err)
@@ -42,13 +43,14 @@ func main() {
 		fail(err)
 	}
 	output := struct {
-		ResultDigest  governedfhe.Digest `json:"resultDigest"`
-		Conflict      bool               `json:"conflict"`
-		ReleaseMode   string             `json:"releaseMode"`
-		DurationNanos int64              `json:"durationNanos"`
-		ResultBytes   int64              `json:"resultBytes"`
-		ExactRetry    bool               `json:"exactRetry"`
-	}{digest, result.Conflict, result.ReleaseMode, report.Duration.Nanoseconds(), int64(len(encoded)), report.ExactRetry}
+		ResultDigest  governedfhe.Digest              `json:"resultDigest"`
+		Conflict      bool                            `json:"conflict"`
+		ReleaseMode   string                          `json:"releaseMode"`
+		DurationNanos int64                           `json:"durationNanos"`
+		ResultBytes   int64                           `json:"resultBytes"`
+		ExactRetry    bool                            `json:"exactRetry"`
+		TrustedPins   governedfhe.TrustedRecoursePins `json:"trustedRecoursePins"`
+	}{digest, result.Conflict, result.ReleaseMode, report.Duration.Nanoseconds(), int64(len(encoded)), report.ExactRetry, report.Pins}
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
 		fail(err)
 	}

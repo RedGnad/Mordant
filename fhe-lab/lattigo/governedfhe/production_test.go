@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
 	fhe "mordant.dev/fhe-lab/lattigo"
 )
 
@@ -38,6 +39,7 @@ type productionFixture struct {
 	pledgeB      fhe.PlainPledge
 	artifactA    EncryptedParticipantArtifact
 	artifactB    EncryptedParticipantArtifact
+	manifest     FHECaseManifest
 	keyReport    KeyGenerationReport
 	reportA      SubmissionReport
 	reportB      SubmissionReport
@@ -53,12 +55,13 @@ type evaluatorProcessOutput struct {
 }
 
 type decryptorProcessOutput struct {
-	ResultDigest  Digest `json:"resultDigest"`
-	Conflict      bool   `json:"conflict"`
-	ReleaseMode   string `json:"releaseMode"`
-	DurationNanos int64  `json:"durationNanos"`
-	ResultBytes   int64  `json:"resultBytes"`
-	ExactRetry    bool   `json:"exactRetry"`
+	ResultDigest  Digest              `json:"resultDigest"`
+	Conflict      bool                `json:"conflict"`
+	ReleaseMode   string              `json:"releaseMode"`
+	DurationNanos int64               `json:"durationNanos"`
+	ResultBytes   int64               `json:"resultBytes"`
+	ExactRetry    bool                `json:"exactRetry"`
+	TrustedPins   TrustedRecoursePins `json:"trustedRecoursePins"`
 }
 
 func TestGovernedFHEProductionPaths(t *testing.T) {
@@ -69,9 +72,13 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		fixture := newProductionFixture(t, true)
 		assertFixedN15Material(t, fixture)
 		assertEvaluatorAndReleaseAPIsAreNarrow(t)
+		assertParticipantSignedReleaseAuthority(t, fixture)
+		assertSubstitutedReleaseAuthorityRejected(t, fixture)
+		assertForgedEvaluatorCannotDictate(t, fixture, false)
+		assertObjectCountExhaustionIsEarly(t, fixture)
 		assertParticipantAndCaseMutationsRejected(t, fixture)
 
-		evaluationOutput := runJSONProcess(t, evaluatorBinary, "-public-root", fixture.publicRoot)
+		evaluationOutput := runConcurrentEvaluatorProcesses(t, evaluatorBinary, fixture.publicRoot)
 		fixture.evaluatorLog = append([]byte(nil), evaluationOutput...)
 		var evaluation evaluatorProcessOutput
 		decodeProcessOutput(t, evaluationOutput, &evaluation)
@@ -90,7 +97,7 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		assertEvaluatorResultSubstitutionRejected(t, fixture, artifact)
 		assertArbitraryDecryptRequestRejected(t, fixture, artifact)
 
-		firstOutput := runJSONProcess(t, decryptorBinary, "-public-root", fixture.publicRoot, "-private-root", fixture.privateRoot)
+		firstOutput := runConcurrentDecryptorProcesses(t, decryptorBinary, fixture.publicRoot, fixture.privateRoot)
 		fixture.decryptorLog = append([]byte(nil), firstOutput...)
 		var first decryptorProcessOutput
 		decodeProcessOutput(t, firstOutput, &first)
@@ -116,34 +123,29 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 
 		holderAllocation := testDigest("conflict/holder-allocation")
 		adapterNow := time.Unix(result.ReleasedAtUnix, 0).UTC()
-		releaseAuthority, err := LoadReleaseAuthorityManifest(fixture.publicRoot)
-		if err != nil {
-			t.Fatalf("load pinned release authority: %v", err)
-		}
 		adapterConfig := RecourseAdapterConfig{
-			RecordRoot: fixture.publicRoot, ExpectedCaseID: fixture.spec.CaseID,
-			ExpectedBindingDigest: result.CaseBindingDigest, ExpectedAssetIdentity: fixture.spec.AssetIdentity,
-			ExpectedPolicyID: fixture.spec.PolicyID, CaseCreatedAtUnix: fixture.spec.CreatedAtUnix,
-			ExpectedReleaseMode: releaseAuthority.ReleaseMode, ExpectedReleaseAuthorityID: releaseAuthority.AuthorityID,
-			CaseExpiresAtUnix: fixture.spec.ExpiresAtUnix, RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
-			CurePeriod: 24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
+			RecordRoot: fixture.publicRoot, CaseManifest: fixture.manifest, ExpectedPins: first.TrustedPins,
+			RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
+			CurePeriod:     24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
 			HolderAllocationDigest: holderAllocation, Now: adapterNow,
 		}
 		wrongAsset := adapterConfig
-		wrongAsset.ExpectedAssetIdentity = testDigest("wrong/recourse-asset")
+		wrongAsset.CaseManifest.Binding.AssetIdentity = testDigest("wrong/recourse-asset")
 		if _, err := AdaptSignedResultToRecourse(wrongAsset, publicResultBytes); !errors.Is(err, ErrRecourse) {
 			t.Fatalf("signed result was reusable for another asset: %v", err)
 		}
 		wrongPolicy := adapterConfig
-		wrongPolicy.ExpectedPolicyID = testDigest("wrong/recourse-policy")
+		wrongPolicy.CaseManifest.Binding.PolicyID = testDigest("wrong/recourse-policy")
 		if _, err := AdaptSignedResultToRecourse(wrongPolicy, publicResultBytes); !errors.Is(err, ErrRecourse) {
 			t.Fatalf("signed result was reusable for another policy: %v", err)
 		}
 		wrongAuthority := adapterConfig
-		wrongAuthority.ExpectedReleaseAuthorityID = testDigest("wrong/recourse-release-authority")
+		wrongAuthority.ExpectedPins.ReleaseAuthorityID = testDigest("wrong/recourse-release-authority")
 		if _, err := AdaptSignedResultToRecourse(wrongAuthority, publicResultBytes); !errors.Is(err, ErrRecourse) {
 			t.Fatalf("signed result was reusable under another release authority: %v", err)
 		}
+		assertEveryRecoursePinIsRequired(t, adapterConfig, publicResultBytes)
+		assertThresholdModeRejected(t, fixture, result, adapterConfig)
 		record, err := AdaptSignedResultToRecourse(adapterConfig, publicResultBytes)
 		if err != nil {
 			t.Fatalf("adapt true result to recourse: %v", err)
@@ -159,13 +161,13 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		measurements := SmokeMeasurements{
 			KeyGeneration: fixture.keyReport, Submissions: []SubmissionReport{fixture.reportA, fixture.reportB},
 			Evaluation: EvaluationReport{Duration: time.Duration(evaluation.DurationNanos), ResultCiphertextBytes: evaluation.ResultBytes, ArtifactBytes: evaluation.ArtifactBytes},
-			Release:    ReleaseReport{Duration: time.Duration(first.DurationNanos), ResultBytes: first.ResultBytes},
+			Release:    ReleaseReport{Duration: time.Duration(first.DurationNanos), ResultBytes: first.ResultBytes, Pins: first.TrustedPins},
 		}
-		evidence, err := ExportPublicEvidence(fixture.publicRoot, fixture.privateRoot, measurements, adapterNow)
+		evidence, err := ExportPublicEvidence(fixture.publicRoot, measurements, adapterNow)
 		if err != nil {
 			t.Fatalf("export public evidence: %v", err)
 		}
-		if !evidence.SecretScanClean || evidence.ProductClaim != ProductClaim || evidence.ReleaseMode != ReleaseModeGovernedDecryptor ||
+		if !evidence.PublicStructureValidated || evidence.ProductionIsolationProven || evidence.ProductClaim != ProductClaim || evidence.ReleaseMode != ReleaseModeGovernedDecryptor ||
 			evidence.ReleaseAuthorityID != result.ReleaseAuthorityID || evidence.GovernedResultDigest != first.ResultDigest {
 			t.Fatalf("invalid public evidence: %+v", evidence)
 		}
@@ -174,6 +176,7 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 
 	t.Run("no_conflict_cannot_activate_recourse", func(t *testing.T) {
 		fixture := newProductionFixture(t, false)
+		assertForgedEvaluatorCannotDictate(t, fixture, true)
 		evaluationOutput := runJSONProcess(t, evaluatorBinary, "-public-root", fixture.publicRoot)
 		var evaluation evaluatorProcessOutput
 		decodeProcessOutput(t, evaluationOutput, &evaluation)
@@ -186,27 +189,313 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		if release.Conflict || release.ExactRetry || release.ReleaseMode != ReleaseModeGovernedDecryptor {
 			t.Fatalf("no-conflict release was not false: %+v", release)
 		}
-		result, signedResult, err := LoadGovernedConflictResult(fixture.publicRoot)
+		_, signedResult, err := LoadGovernedConflictResult(fixture.publicRoot)
 		if err != nil {
 			t.Fatalf("load no-conflict result: %v", err)
 		}
-		releaseAuthority, err := LoadReleaseAuthorityManifest(fixture.publicRoot)
-		if err != nil {
-			t.Fatalf("load no-conflict release authority: %v", err)
-		}
 		_, err = AdaptSignedResultToRecourse(RecourseAdapterConfig{
-			RecordRoot: fixture.publicRoot, ExpectedCaseID: fixture.spec.CaseID,
-			ExpectedBindingDigest: result.CaseBindingDigest, ExpectedAssetIdentity: fixture.spec.AssetIdentity,
-			ExpectedPolicyID: fixture.spec.PolicyID, CaseCreatedAtUnix: fixture.spec.CreatedAtUnix,
-			ExpectedReleaseMode: releaseAuthority.ReleaseMode, ExpectedReleaseAuthorityID: releaseAuthority.AuthorityID,
-			CaseExpiresAtUnix: fixture.spec.ExpiresAtUnix, RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
-			CurePeriod: 24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
+			RecordRoot: fixture.publicRoot, CaseManifest: fixture.manifest, ExpectedPins: release.TrustedPins,
+			RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
+			CurePeriod:     24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
 			HolderAllocationDigest: testDigest("no-conflict/holder-allocation"), Now: time.Now().UTC(),
 		}, signedResult)
 		if !errors.Is(err, ErrRecourse) {
 			t.Fatalf("false result activated recourse: %v", err)
 		}
+		offlinePrivateRoot := fixture.privateRoot + "-offline"
+		if err := os.Rename(fixture.privateRoot, offlinePrivateRoot); err != nil {
+			t.Fatalf("take private root offline before evidence export: %v", err)
+		}
+		measurements := SmokeMeasurements{
+			KeyGeneration: fixture.keyReport, Submissions: []SubmissionReport{fixture.reportA, fixture.reportB},
+			Evaluation: EvaluationReport{Duration: time.Duration(evaluation.DurationNanos), ResultCiphertextBytes: evaluation.ResultBytes, ArtifactBytes: evaluation.ArtifactBytes},
+			Release:    ReleaseReport{Duration: time.Duration(release.DurationNanos), ResultBytes: release.ResultBytes, Pins: release.TrustedPins},
+		}
+		evidence, err := ExportPublicEvidence(fixture.publicRoot, measurements, time.Now().UTC())
+		if err != nil || !evidence.PublicStructureValidated || evidence.ProductionIsolationProven ||
+			evidence.ExecutionClass != EvidenceExecutionClass || evidence.DeploymentClass != EvidenceDeploymentClass ||
+			evidence.ReleaseClass != EvidenceReleaseClass || evidence.RecourseClass != EvidenceRecourseClass {
+			t.Fatalf("public-only structural evidence failed with private root offline: %+v %v", evidence, err)
+		}
 	})
+}
+
+func TestPinnedStoreSurvivesRootReplacement(t *testing.T) {
+	parent := taskTempDir(t, "mordant-pinned-store-")
+	root := filepath.Join(parent, "active")
+	store, err := openObjectStore(root, 1<<20, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	ref, err := store.create("object.bin", []byte("original pinned object"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		used, err := store.usedBytes()
+		if err != nil || used != ref.Length {
+			t.Fatalf("repeated pinned quota inventory undercounted objects: %d %v", used, err)
+		}
+	}
+	for index := 1; index < maxPublicCaseObjects; index++ {
+		if _, err := store.create(fmt.Sprintf("quota-%02d.bin", index), []byte{byte(index)}); err != nil {
+			t.Fatalf("populate object-count boundary: %v", err)
+		}
+	}
+	if _, err := store.create("quota-overflow.bin", []byte("overflow")); !errors.Is(err, ErrResourceAdmission) {
+		t.Fatalf("incremental object-count limit was bypassed: %v", err)
+	}
+	moved := filepath.Join(parent, "original-pinned")
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "object.bin"), []byte("attacker replacement"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	data, err := store.read(ref, 1<<20)
+	if err != nil || string(data) != "original pinned object" {
+		t.Fatalf("store followed replaced root: %q %v", data, err)
+	}
+}
+
+func assertParticipantSignedReleaseAuthority(t *testing.T, fixture *productionFixture) {
+	t.Helper()
+	binding := fixture.manifest.Binding
+	if binding.ReleaseMode != ReleaseModeGovernedDecryptor || !nonzero(binding.ReleaseAuthorityID) ||
+		len(binding.ReleaseAuthorityPublicKey) != ed25519.PublicKeySize ||
+		releaseAuthorityIdentity(binding.ReleaseMode, ed25519.PublicKey(binding.ReleaseAuthorityPublicKey)) != binding.ReleaseAuthorityID {
+		t.Fatalf("case binding does not contain the exact governed release authority")
+	}
+	if verifyBindingSignature(binding, fixture.manifest.SignatureA, binding.ParticipantA) != nil ||
+		verifyBindingSignature(binding, fixture.manifest.SignatureB, binding.ParticipantB) != nil {
+		t.Fatalf("both participant signatures must bind release mode and authority")
+	}
+	mutated := fixture.manifest
+	mutated.Binding.ReleaseAuthorityID = testDigest("substituted/binding-authority")
+	if _, _, err := verifyRecourseCaseManifest(mutated); !errors.Is(err, ErrRecourse) {
+		t.Fatalf("participant-signed authority mutation was accepted: %v", err)
+	}
+}
+
+func assertSubstitutedReleaseAuthorityRejected(t *testing.T, fixture *productionFixture) {
+	t.Helper()
+	clone := cloneFlatRoot(t, fixture.publicRoot)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingDigest, _ := fixture.manifest.Binding.Digest()
+	substituted := ReleaseAuthorityManifest{
+		SchemaVersion: ReleaseAuthoritySchema, CaseID: fixture.spec.CaseID, CaseBindingDigest: bindingDigest,
+		ReleaseMode: ReleaseModeGovernedDecryptor, AuthorityID: releaseAuthorityIdentity(ReleaseModeGovernedDecryptor, publicKey),
+		SigningPublicKey: publicKey, SourceProvenance: testDigest("substituted/release-authority"),
+	}
+	substituted.Signature, err = signCanonical(privateKey, "MordantReleaseAuthority/v1", substituted.signingValue())
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaceCanonicalObject(t, clone, releaseAuthorityObject, substituted)
+	if _, err := LoadReleaseAuthorityManifest(clone); err == nil {
+		t.Fatalf("another valid self-signed release authority was accepted")
+	}
+}
+
+func assertForgedEvaluatorCannotDictate(t *testing.T, fixture *productionFixture, forgedConflict bool) {
+	t.Helper()
+	t.Run(fmt.Sprintf("forged_evaluator_%t_rejected", forgedConflict), func(t *testing.T) {
+		publicClone := cloneFlatRoot(t, fixture.publicRoot)
+		privateClone := copyFlatRoot(t, fixture.privateRoot, 0o700)
+		artifact := publishForgedEvaluatorArtifact(t, publicClone, fixture.manifest, fixture.artifactA, fixture.artifactB, forgedConflict, fixture.now)
+		if _, err := LoadEvaluatedConflictArtifact(publicClone); err != nil {
+			t.Fatalf("forged evaluator artifact was not structurally valid: %v", err)
+		}
+		if err := os.Rename(filepath.Join(privateClone, secretKeyObject), filepath.Join(privateClone, "secret-key.unavailable")); err != nil {
+			t.Fatal(err)
+		}
+		beforeRecompute := recomputationExecutionCount.Load()
+		beforeSignatures := releaseSignatureCount.Load()
+		decryptor, err := NewGovernedDecryptor(GovernedDecryptorConfig{
+			PublicRoot: publicClone, PrivateRoot: privateClone, Provenance: testDigest("exploit/decryptor"), Now: fixture.now,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer decryptor.Close()
+		if _, _, err := decryptor.ReleaseFixedConflict(artifact); !errors.Is(err, ErrEvaluatorMismatch) {
+			t.Fatalf("forged evaluator Boolean was not rejected before secret access: %v", err)
+		}
+		if recomputationExecutionCount.Load()-beforeRecompute != 1 || releaseSignatureCount.Load() != beforeSignatures {
+			t.Fatalf("forgery did not cause exactly one independent recomputation and zero signatures")
+		}
+		if fileExists(filepath.Join(privateClone, releaseAdmissionObject)) || fileExists(filepath.Join(privateClone, retainedResultObject)) ||
+			fileExists(filepath.Join(publicClone, publicResultObject)) || !fileExists(filepath.Join(privateClone, recomputeMismatchObject)) {
+			t.Fatalf("forgery crossed the release boundary")
+		}
+		if _, _, err := decryptor.ReleaseFixedConflict(artifact); !errors.Is(err, ErrEvaluatorMismatch) {
+			t.Fatalf("recorded evaluator mismatch was not deterministic: %v", err)
+		}
+		if recomputationExecutionCount.Load()-beforeRecompute != 1 || releaseSignatureCount.Load() != beforeSignatures {
+			t.Fatalf("mismatch retry repeated recomputation or signed a Boolean")
+		}
+	})
+}
+
+func publishForgedEvaluatorArtifact(t *testing.T, publicRoot string, manifest FHECaseManifest, artifactA, artifactB EncryptedParticipantArtifact, conflict bool, now time.Time) EvaluatedConflictArtifact {
+	t.Helper()
+	store, err := openObjectStore(publicRoot, PublicCaseQuota, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	params, publicKey, err := loadPublicEncryptionMaterial(store, manifest.Crypto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make([]uint64, params.MaxSlots())
+	if conflict {
+		values[0] = 1
+	}
+	plaintext := bgv.NewPlaintext(params, 0)
+	if err := bgv.NewEncoder(params).Encode(values, plaintext); err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := rlwe.NewEncryptor(params, publicKey).EncryptNew(plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultBytes, err := ciphertext.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	digestA, _ := artifactA.Digest()
+	digestB, _ := artifactB.Digest()
+	bindingDigest, _ := manifest.Binding.Digest()
+	provenance := testDigest(fmt.Sprintf("malicious-evaluator/%t", conflict))
+	admission := evaluationAdmission{
+		SchemaVersion: EvaluationAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		ParticipantArtifactDigests: []Digest{digestA, digestB}, EvaluatorProvenance: provenance, AdmittedAtUnix: now.Unix(),
+	}
+	if _, _, err := store.createJSON(evaluationAdmissionObject, admission); err != nil {
+		t.Fatal(err)
+	}
+	resultRef, err := store.create(resultCiphertextObject, resultBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitment := DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), resultBytes...))
+	artifact := EvaluatedConflictArtifact{
+		SchemaVersion: EvaluatedArtifactSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		AssetIdentity: manifest.Binding.AssetIdentity, ParticipantArtifactDigests: []Digest{digestA, digestB},
+		PublicKeyDigest: manifest.Binding.PublicKeyDigest, ParameterProfile: ParameterProfile,
+		ParameterFingerprint: manifest.Binding.ParameterFingerprint, CircuitID: CircuitID, CircuitVersion: fhe.CircuitV5Version,
+		CircuitDigest: FixedCircuitDigest(), ResultCiphertext: resultRef, ResultCiphertextCommitment: commitment,
+		OutputSchema: ResultSchema, OutputSlot: ResultSlot, EvaluatorProvenance: provenance, EvaluatedAtUnix: now.Unix(),
+	}
+	if _, _, err := store.createJSON(evaluatedArtifactObject, artifact); err != nil {
+		t.Fatal(err)
+	}
+	artifactDigest, _ := artifact.Digest()
+	completed := evaluationCompleted{
+		SchemaVersion: EvaluationCompletedSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
+		EvaluatedArtifactDigest: artifactDigest, ResultCiphertextDigest: resultRef.Digest,
+		ResultCiphertextCommitment: commitment, CompletedAtUnix: now.Unix(),
+	}
+	if _, _, err := store.createJSON(evaluationCompletedObject, completed); err != nil {
+		t.Fatal(err)
+	}
+	return artifact
+}
+
+func assertObjectCountExhaustionIsEarly(t *testing.T, fixture *productionFixture) {
+	t.Helper()
+	clone := cloneFlatRoot(t, fixture.publicRoot)
+	entries := mustReadDirectory(t, clone)
+	for index := len(entries); index <= maxPublicCaseObjects; index++ {
+		name := fmt.Sprintf("exhaustion-%02d.bin", index)
+		if err := os.WriteFile(filepath.Join(clone, name), []byte{byte(index + 1)}, 0o444); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := evaluationExecutionCount.Load()
+	if _, _, err := EvaluateFixedConflict(EvaluatorConfig{PublicRoot: clone, Provenance: testDigest("exhausted/evaluator"), Now: fixture.now}); !errors.Is(err, ErrResourceAdmission) {
+		t.Fatalf("object-count exhaustion was not rejected at admission: %v", err)
+	}
+	if evaluationExecutionCount.Load() != before {
+		t.Fatalf("object-count exhaustion reached N15 evaluation")
+	}
+}
+
+func assertEveryRecoursePinIsRequired(t *testing.T, config RecourseAdapterConfig, signedResult []byte) {
+	t.Helper()
+	tests := []struct {
+		name   string
+		mutate func(*TrustedRecoursePins)
+	}{
+		{"participant_a", func(p *TrustedRecoursePins) { p.ParticipantArtifactDigestA = testDigest("wrong/pin-a") }},
+		{"participant_b", func(p *TrustedRecoursePins) { p.ParticipantArtifactDigestB = testDigest("wrong/pin-b") }},
+		{"evaluated_artifact", func(p *TrustedRecoursePins) { p.EvaluatedArtifactDigest = testDigest("wrong/evaluated") }},
+		{"recomputed_result", func(p *TrustedRecoursePins) { p.RecomputedResultCiphertextDigest = testDigest("wrong/recomputed") }},
+		{"result_commitment", func(p *TrustedRecoursePins) { p.ResultCiphertextCommitment = testDigest("wrong/commitment") }},
+		{"decryptor_provenance", func(p *TrustedRecoursePins) { p.DecryptorProvenance = testDigest("wrong/decryptor") }},
+	}
+	for _, testCase := range tests {
+		t.Run("recourse_pin_"+testCase.name, func(t *testing.T) {
+			mutated := config
+			testCase.mutate(&mutated.ExpectedPins)
+			if _, err := AdaptSignedResultToRecourse(mutated, signedResult); !errors.Is(err, ErrRecourse) {
+				t.Fatalf("wrong %s pin was accepted: %v", testCase.name, err)
+			}
+		})
+	}
+}
+
+func assertThresholdModeRejected(t *testing.T, fixture *productionFixture, result GovernedConflictResult, config RecourseAdapterConfig) {
+	t.Helper()
+	signingKey := ed25519.PrivateKey(mustReadFile(t, filepath.Join(fixture.privateRoot, decryptorSigningKeyObject)))
+	thresholdResult := result
+	thresholdResult.ReleaseMode = ReleaseModeThreshold2Of3
+	thresholdResult.ReleaseAuthorityID = releaseAuthorityIdentity(ReleaseModeThreshold2Of3, ed25519.PublicKey(result.ReleaseAuthorityPublicKey))
+	var err error
+	thresholdResult.Signature, err = signCanonical(signingKey, "MordantGovernedConflictResult/v1", thresholdResult.signingValue())
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := marshalCanonical(thresholdResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	thresholdManifest := fixture.manifest
+	thresholdManifest.Binding.ReleaseMode = ReleaseModeThreshold2Of3
+	thresholdManifest.Binding.ReleaseAuthorityID = thresholdResult.ReleaseAuthorityID
+	bindingDigest, _ := thresholdManifest.Binding.Digest()
+	thresholdManifest.SignatureA = signBindingForTest(t, thresholdManifest.Binding.ParticipantA, fixture.privateA, bindingDigest)
+	thresholdManifest.SignatureB = signBindingForTest(t, thresholdManifest.Binding.ParticipantB, fixture.privateB, bindingDigest)
+	config.CaseManifest = thresholdManifest
+	config.ExpectedPins.ReleaseMode = ReleaseModeThreshold2Of3
+	config.ExpectedPins.ReleaseAuthorityID = thresholdResult.ReleaseAuthorityID
+	if _, err := AdaptSignedResultToRecourse(config, encoded); !errors.Is(err, ErrRecourse) {
+		t.Fatalf("unimplemented threshold mode was accepted with valid signatures: %v", err)
+	}
+}
+
+func signBindingForTest(t *testing.T, identity ParticipantIdentity, key ed25519.PrivateKey, bindingDigest Digest) ParticipantBindingSignature {
+	t.Helper()
+	signature := ParticipantBindingSignature{Role: identity.Role, ParticipantID: identity.ID, BindingDigest: bindingDigest}
+	value := struct {
+		Role          string `json:"role"`
+		ParticipantID Digest `json:"participantId"`
+		BindingDigest Digest `json:"bindingDigest"`
+	}{signature.Role, signature.ParticipantID, signature.BindingDigest}
+	var err error
+	signature.Signature, err = signCanonical(key, "MordantFHECaseBindingSignature/v1", value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signature
 }
 
 func TestAcceptedOneShotBoundariesAreNotImported(t *testing.T) {
@@ -275,12 +564,13 @@ func newProductionFixture(t *testing.T, conflict bool) *productionFixture {
 	if artifactA.CiphertextObject.Length <= 0 || artifactB.CiphertextObject.Length <= 0 || reportA.CiphertextBytes <= 0 || reportB.CiphertextBytes <= 0 {
 		t.Fatalf("real participant ciphertexts were not produced")
 	}
-	if _, err := FinalizeCase(publicRoot); err != nil {
+	manifest, err := FinalizeCase(publicRoot)
+	if err != nil {
 		t.Fatalf("finalize exact two-party case binding: %v", err)
 	}
 	return &productionFixture{
 		publicRoot: publicRoot, privateRoot: privateRoot, now: now, spec: spec, privateA: privateA, privateB: privateB,
-		pledgeA: pledgeA, pledgeB: pledgeB, artifactA: artifactA, artifactB: artifactB,
+		pledgeA: pledgeA, pledgeB: pledgeB, artifactA: artifactA, artifactB: artifactB, manifest: manifest,
 		keyReport: keyReport, reportA: reportA, reportB: reportB,
 	}
 }
@@ -291,6 +581,7 @@ func assertFixedN15Material(t *testing.T, fixture *productionFixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil {
 		t.Fatal(err)
@@ -313,7 +604,7 @@ func assertFixedN15Material(t *testing.T, fixture *productionFixture) {
 		}
 	}
 	privateInfo, err := os.Stat(filepath.Join(fixture.privateRoot, secretKeyObject))
-	if err != nil || privateInfo.Mode().Perm() != 0o600 {
+	if err != nil || privateInfo.Mode().Perm() != 0o400 {
 		t.Fatalf("secret key is not a restrictive private object: %v", err)
 	}
 	if rootsDisjoint(fixture.publicRoot, filepath.Join(fixture.publicRoot, "x")) || rootsDisjoint(filepath.Join(fixture.privateRoot, "x"), fixture.privateRoot) {
@@ -344,6 +635,10 @@ func assertEvaluatorAndReleaseAPIsAreNarrow(t *testing.T) {
 	if ReleaseModeGovernedDecryptor != "governed-decryptor-v1" || ReleaseModeThreshold2Of3 != "threshold-2of3-v1" {
 		t.Fatalf("release-mode identities changed")
 	}
+	evidenceType := reflect.TypeOf(ExportPublicEvidence)
+	if evidenceType.NumIn() != 3 || evidenceType.In(0).Kind() != reflect.String {
+		t.Fatalf("evidence exporter regained a private-root input: %v", evidenceType)
+	}
 }
 
 func assertParticipantAndCaseMutationsRejected(t *testing.T, fixture *productionFixture) {
@@ -373,6 +668,7 @@ func assertParticipantAndCaseMutationsRejected(t *testing.T, fixture *production
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer store.close()
 			_, _, manifestName, _ := participantFiles(testCase.role)
 			var artifact EncryptedParticipantArtifact
 			if _, _, err := store.readJSON(manifestName, &artifact); err != nil {
@@ -396,6 +692,7 @@ func assertParticipantAndCaseMutationsRejected(t *testing.T, fixture *production
 	t.Run("swapped_participant_order", func(t *testing.T) {
 		clone := cloneFlatRoot(t, fixture.publicRoot)
 		store, _ := openObjectStore(clone, PublicCaseQuota, false)
+		defer store.close()
 		var manifest FHECaseManifest
 		if _, _, err := store.readJSON(caseManifestObject, &manifest); err != nil {
 			t.Fatal(err)
@@ -434,6 +731,7 @@ func assertEvaluatorResultSubstitutionRejected(t *testing.T, fixture *production
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer decryptor.Close()
 	if _, _, err := decryptor.ReleaseFixedConflict(artifact); err == nil {
 		t.Fatalf("substituted evaluator result was accepted")
 	}
@@ -450,6 +748,7 @@ func assertArbitraryDecryptRequestRejected(t *testing.T, fixture *productionFixt
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer decryptor.Close()
 	mutated := artifact
 	mutated.ResultCiphertext.Path = submissionAObject
 	mutated.OutputSlot = 1
@@ -464,6 +763,7 @@ func assertArbitraryDecryptRequestRejected(t *testing.T, fixture *productionFixt
 func assertResultReleaseBinding(t *testing.T, fixture *productionFixture, artifact EvaluatedConflictArtifact, result GovernedConflictResult, decryptorBinary string) {
 	t.Helper()
 	store, _ := openObjectStore(fixture.publicRoot, PublicCaseQuota, false)
+	defer store.close()
 	manifest, err := loadCaseManifest(store)
 	if err != nil {
 		t.Fatal(err)
@@ -473,10 +773,12 @@ func assertResultReleaseBinding(t *testing.T, fixture *productionFixture, artifa
 		t.Fatal(err)
 	}
 	decryptorDigest := DigestBytes(mustReadFile(t, decryptorBinary))
+	artifactDigest, _ := artifact.Digest()
 	if result.ReleaseMode != ReleaseModeGovernedDecryptor || result.ReleaseOrdinal != ReleaseOrdinal ||
 		result.ReleaseAuthorityID != authority.AuthorityID || !bytes.Equal(result.ReleaseAuthorityPublicKey, authority.SigningPublicKey) ||
 		result.SourceProvenance != decryptorDigest || result.CaseID != fixture.spec.CaseID || result.AssetIdentity != fixture.spec.AssetIdentity ||
-		result.PolicyID != fixture.spec.PolicyID || result.ResultCiphertextDigest != artifact.ResultCiphertext.Digest ||
+		result.PolicyID != fixture.spec.PolicyID || result.EvaluatedArtifactDigest != artifactDigest ||
+		result.ResultCiphertextDigest != artifact.ResultCiphertext.Digest ||
 		result.ResultCiphertextCommitment != artifact.ResultCiphertextCommitment {
 		t.Fatalf("signed result omitted an exact release or case binding")
 	}
@@ -500,6 +802,7 @@ func assertSecondDistinctReleaseRejected(t *testing.T, fixture *productionFixtur
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer decryptor.Close()
 	mutated := artifact
 	mutated.ResultCiphertextCommitment = testDigest("second/distinct/result")
 	if _, _, err := decryptor.ReleaseFixedConflict(mutated); !errors.Is(err, ErrBinding) {
@@ -514,7 +817,8 @@ func assertNoPrivateOrPlaintextMaterialIsPublic(t *testing.T, fixture *productio
 	t.Helper()
 	secretKey := mustReadFile(t, filepath.Join(fixture.privateRoot, secretKeyObject))
 	signingKey := mustReadFile(t, filepath.Join(fixture.privateRoot, decryptorSigningKeyObject))
-	for _, name := range []string{secretKeyObject, decryptorSigningKeyObject, privateCaseObject, retainedResultObject, releaseAdmissionObject, releaseConsumedObject} {
+	for _, name := range []string{secretKeyObject, decryptorSigningKeyObject, privateCaseObject, recomputeAdmissionObject,
+		recomputedResultObject, recomputeVerifiedObject, recomputeMismatchObject, retainedResultObject, releaseAdmissionObject, releaseConsumedObject} {
 		if fileExists(filepath.Join(fixture.publicRoot, name)) {
 			t.Fatalf("private object %s is public", name)
 		}
@@ -598,6 +902,81 @@ func runJSONProcess(t *testing.T, binary string, arguments ...string) []byte {
 	return output
 }
 
+type processAttempt struct {
+	output []byte
+	err    error
+}
+
+func runConcurrentProcessAttempts(binary string, count int, arguments ...string) []processAttempt {
+	start := make(chan struct{})
+	results := make(chan processAttempt, count)
+	for index := 0; index < count; index++ {
+		go func() {
+			<-start
+			command := exec.Command(binary, arguments...)
+			var stderr bytes.Buffer
+			command.Stderr = &stderr
+			output, err := command.Output()
+			if err != nil {
+				err = fmt.Errorf("%w: %s", err, stderr.String())
+			}
+			results <- processAttempt{output: output, err: err}
+		}()
+	}
+	close(start)
+	attempts := make([]processAttempt, count)
+	for index := range attempts {
+		attempts[index] = <-results
+	}
+	return attempts
+}
+
+func runConcurrentEvaluatorProcesses(t *testing.T, binary, publicRoot string) []byte {
+	t.Helper()
+	attempts := runConcurrentProcessAttempts(binary, 2, "-public-root", publicRoot)
+	var successful [][]byte
+	for _, attempt := range attempts {
+		if attempt.err == nil {
+			successful = append(successful, attempt.output)
+		}
+	}
+	if len(successful) != 1 {
+		t.Fatalf("concurrent evaluators produced %d successful N15 evaluations: %+v", len(successful), attempts)
+	}
+	return successful[0]
+}
+
+func runConcurrentDecryptorProcesses(t *testing.T, binary, publicRoot, privateRoot string) []byte {
+	t.Helper()
+	attempts := runConcurrentProcessAttempts(binary, 2, "-public-root", publicRoot, "-private-root", privateRoot)
+	var selected []byte
+	var selectedOutput decryptorProcessOutput
+	successes := 0
+	uniqueReleases := 0
+	for _, attempt := range attempts {
+		if attempt.err != nil {
+			continue
+		}
+		successes++
+		var output decryptorProcessOutput
+		decodeProcessOutput(t, attempt.output, &output)
+		if !output.ExactRetry {
+			uniqueReleases++
+		}
+		if selected == nil || !output.ExactRetry {
+			selected, selectedOutput = attempt.output, output
+		}
+	}
+	if successes == 0 || selected == nil || selectedOutput.ExactRetry || uniqueReleases != 1 {
+		t.Fatalf("concurrent decryptors produced %d unique releases: %+v", uniqueReleases, attempts)
+	}
+	if !fileExists(filepath.Join(privateRoot, recomputeAdmissionObject)) || !fileExists(filepath.Join(privateRoot, recomputeVerifiedObject)) ||
+		!fileExists(filepath.Join(privateRoot, releaseConsumedObject)) || !fileExists(filepath.Join(privateRoot, retainedResultObject)) {
+		t.Fatalf("concurrent decryptor state machine did not reach one completed release")
+	}
+	return selected
+}
+
 func decodeProcessOutput(t *testing.T, data []byte, target any) {
 	t.Helper()
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -619,6 +998,45 @@ func cloneFlatRoot(t *testing.T, source string) string {
 		}
 		if err := os.Link(filepath.Join(source, entry.Name()), filepath.Join(clone, entry.Name())); err != nil {
 			t.Fatalf("hard-link test fixture %s: %v", entry.Name(), err)
+		}
+	}
+	return clone
+}
+
+func copyFlatRoot(t *testing.T, source string, directoryMode os.FileMode) string {
+	t.Helper()
+	clone := filepath.Join(taskTempDir(t, "mordant-governed-private-attack-"), "store")
+	if err := os.Mkdir(clone, directoryMode); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range mustReadDirectory(t, source) {
+		if entry.IsDir() {
+			t.Fatalf("unexpected directory in flat store: %s", entry.Name())
+		}
+		data := mustReadFile(t, filepath.Join(source, entry.Name()))
+		info, err := entry.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(clone, entry.Name())
+		file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.Write(data); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+		if err := file.Chmod(info.Mode().Perm()); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
 		}
 	}
 	return clone

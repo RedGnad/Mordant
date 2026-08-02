@@ -23,7 +23,7 @@ func NewEvaluationRuntime(
 	relinearizationKey *rlwe.RelinearizationKey,
 	galoisKeys []*rlwe.GaloisKey,
 ) (*Runtime, error) {
-	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, ceremonyKeyIDPrefix)
+	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, ceremonyKeyIDPrefix, false)
 }
 
 // NewGovernedEvaluationRuntime builds the evaluator for one case-specific
@@ -35,7 +35,7 @@ func NewGovernedEvaluationRuntime(
 	relinearizationKey *rlwe.RelinearizationKey,
 	galoisKeys []*rlwe.GaloisKey,
 ) (*Runtime, error) {
-	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, governedKeyIDPrefix)
+	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, governedKeyIDPrefix, true)
 }
 
 func newEvaluationRuntime(
@@ -44,6 +44,7 @@ func newEvaluationRuntime(
 	relinearizationKey *rlwe.RelinearizationKey,
 	galoisKeys []*rlwe.GaloisKey,
 	keyPrefix string,
+	deterministicPublicConstants bool,
 ) (*Runtime, error) {
 	if publicKey == nil || relinearizationKey == nil || len(galoisKeys) != len(rotationSteps) {
 		return nil, ErrCeremonyMaterial
@@ -67,9 +68,20 @@ func newEvaluationRuntime(
 	if err := encoder.Encode(ones, onePlaintext); err != nil {
 		return nil, fmt.Errorf("encode boolean one: %w", err)
 	}
-	oneCiphertext, err := encryptor.EncryptNew(onePlaintext)
-	if err != nil {
-		return nil, fmt.Errorf("encrypt boolean one: %w", err)
+	var oneCiphertext *rlwe.Ciphertext
+	if deterministicPublicConstants {
+		// One is a public circuit constant, not private data. Representing it as
+		// a degree-zero RLWE element makes governed evaluation byte-deterministic
+		// for identical inputs and keys, so the decryptor can compare an
+		// independent recomputation before it ever opens the secret key.
+		oneCiphertext = rlwe.NewCiphertext(params, 0, params.MaxLevel())
+		oneCiphertext.Value[0].Copy(onePlaintext.Value)
+		oneCiphertext.MetaData = onePlaintext.MetaData.CopyNew()
+	} else {
+		oneCiphertext, err = encryptor.EncryptNew(onePlaintext)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt boolean one: %w", err)
+		}
 	}
 	keyDigest := sha256.Sum256(publicKeyBytes)
 	return &Runtime{

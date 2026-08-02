@@ -1,6 +1,7 @@
 package governedfhe
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -9,43 +10,59 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
-	parametersObject         = "parameters.bin"
-	publicKeyObject          = "public-key.bin"
-	relinearizationKeyObject = "relinearization-key.bin"
-	caseCryptoObject         = "case-crypto.json"
-	caseBindingObject        = "case-binding.json"
-	caseManifestObject       = "case-manifest.json"
-	bindingSignatureAObject  = "binding-signature-a.json"
-	bindingSignatureBObject  = "binding-signature-b.json"
-	submissionAObject        = "submission-a.bin"
-	submissionBObject        = "submission-b.bin"
-	submissionAManifest      = "submission-a.json"
-	submissionBManifest      = "submission-b.json"
-	resultCiphertextObject   = "result-conflict.bin"
-	evaluatedArtifactObject  = "evaluated-conflict.json"
-	releaseAuthorityObject   = "release-authority.json"
-	publicResultObject       = "governed-conflict-result.json"
-	recourseRecordObject     = "recourse-record.json"
-	evidenceObject           = "evidence.json"
+	parametersObject          = "parameters.bin"
+	publicKeyObject           = "public-key.bin"
+	relinearizationKeyObject  = "relinearization-key.bin"
+	caseCryptoObject          = "case-crypto.json"
+	caseBindingObject         = "case-binding.json"
+	caseManifestObject        = "case-manifest.json"
+	bindingSignatureAObject   = "binding-signature-a.json"
+	bindingSignatureBObject   = "binding-signature-b.json"
+	submissionAObject         = "submission-a.bin"
+	submissionBObject         = "submission-b.bin"
+	submissionAManifest       = "submission-a.json"
+	submissionBManifest       = "submission-b.json"
+	evaluationAdmissionObject = "evaluation-admitted.json"
+	evaluationCompletedObject = "evaluation-completed.json"
+	resultCiphertextObject    = "result-conflict.bin"
+	evaluatedArtifactObject   = "evaluated-conflict.json"
+	releaseAuthorityObject    = "release-authority.json"
+	publicResultObject        = "governed-conflict-result.json"
+	recourseRecordObject      = "recourse-record.json"
+	evidenceObject            = "evidence.json"
 
 	secretKeyObject           = "secret-key.bin"
 	decryptorSigningKeyObject = "decryptor-signing-key.bin"
 	privateCaseObject         = "private-case.json"
+	recomputeAdmissionObject  = "recompute-admitted.json"
+	recomputedResultObject    = "recomputed-conflict.bin"
+	recomputeVerifiedObject   = "recompute-verified.json"
+	recomputeMismatchObject   = "recompute-mismatch.json"
 	releaseAdmissionObject    = "release-admitted.json"
 	releaseConsumedObject     = "release-consumed.json"
 	retainedResultObject      = "retained-governed-result.json"
+	maxPublicCaseObjects      = 32
+	maxPrivateCaseObjects     = 16
+	maximumTemporaryNameTries = 16
 )
 
 func galoisObject(index int) string { return fmt.Sprintf("galois-key-%02d.bin", index) }
 
 type objectStore struct {
-	root      string
-	quota     int64
-	fileMode  os.FileMode
-	directory os.FileMode
+	root       string
+	fd         int
+	device     uint64
+	inode      uint64
+	quota      int64
+	maxObjects int
+	fileMode   os.FileMode
+	directory  os.FileMode
+	private    bool
 }
 
 func openObjectStore(root string, quota int64, private bool) (*objectStore, error) {
@@ -53,27 +70,71 @@ func openObjectStore(root string, quota int64, private bool) (*objectStore, erro
 		return nil, ErrStore
 	}
 	clean := filepath.Clean(root)
-	directoryMode, fileMode := os.FileMode(0o755), os.FileMode(0o644)
+	directoryMode, fileMode, maxObjects := os.FileMode(0o755), os.FileMode(0o444), maxPublicCaseObjects
 	if private {
-		directoryMode, fileMode = 0o700, 0o600
+		directoryMode, fileMode, maxObjects = 0o700, 0o400, maxPrivateCaseObjects
 	}
 	if err := os.MkdirAll(clean, directoryMode); err != nil {
 		return nil, fmt.Errorf("%w: create root: %v", ErrStore, err)
-	}
-	info, err := os.Lstat(clean)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, ErrStore
 	}
 	resolved, err := filepath.EvalSymlinks(clean)
 	if err != nil || resolved != clean {
 		return nil, ErrStore
 	}
+	fd, err := unix.Open(clean, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, fmt.Errorf("%w: pin root: %v", ErrStore, err)
+	}
+	closeOnError := true
+	defer func() {
+		if closeOnError {
+			_ = unix.Close(fd)
+		}
+	}()
+	var descriptorStat, pathStat unix.Stat_t
+	if unix.Fstat(fd, &descriptorStat) != nil || unix.Stat(clean, &pathStat) != nil ||
+		descriptorStat.Mode&unix.S_IFMT != unix.S_IFDIR || pathStat.Mode&unix.S_IFMT != unix.S_IFDIR ||
+		uint64(descriptorStat.Dev) != uint64(pathStat.Dev) || uint64(descriptorStat.Ino) != uint64(pathStat.Ino) {
+		return nil, ErrStore
+	}
 	if private {
-		if err := os.Chmod(clean, directoryMode); err != nil {
+		if err := unix.Fchmod(fd, uint32(directoryMode.Perm())); err != nil {
 			return nil, ErrStore
 		}
 	}
-	return &objectStore{root: clean, quota: quota, fileMode: fileMode, directory: directoryMode}, nil
+	store := &objectStore{
+		root: clean, fd: fd, device: uint64(descriptorStat.Dev), inode: uint64(descriptorStat.Ino),
+		quota: quota, maxObjects: maxObjects, fileMode: fileMode, directory: directoryMode, private: private,
+	}
+	if _, err := store.usedBytes(); err != nil {
+		return nil, err
+	}
+	closeOnError = false
+	return store, nil
+}
+
+func (s *objectStore) close() error {
+	if s == nil || s.fd < 0 {
+		return nil
+	}
+	fd := s.fd
+	s.fd = -1
+	if err := unix.Close(fd); err != nil {
+		return ErrStore
+	}
+	return nil
+}
+
+func (s *objectStore) verifyPinned() error {
+	if s == nil || s.fd < 0 {
+		return ErrStore
+	}
+	var stat unix.Stat_t
+	if unix.Fstat(s.fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR ||
+		uint64(stat.Dev) != s.device || uint64(stat.Ino) != s.inode {
+		return ErrStore
+	}
+	return nil
 }
 
 func validateObjectName(name string) error {
@@ -84,90 +145,163 @@ func validateObjectName(name string) error {
 	return nil
 }
 
-func (s *objectStore) path(name string) (string, error) {
-	if s == nil || validateObjectName(name) != nil {
-		return "", ErrStore
+func (s *objectStore) directoryEntries() ([]os.DirEntry, error) {
+	if s.verifyPinned() != nil {
+		return nil, ErrStore
 	}
-	return filepath.Join(s.root, name), nil
+	// dup(2) would share the directory stream offset with the pinned
+	// descriptor. Repeated quota checks could then observe an empty suffix and
+	// undercount both objects and bytes. Opening "." relative to the capability
+	// keeps the same pinned directory identity with an independent offset.
+	directoryFD, err := unix.Openat(s.fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, ErrStore
+	}
+	var stat unix.Stat_t
+	if unix.Fstat(directoryFD, &stat) != nil || uint64(stat.Dev) != s.device || uint64(stat.Ino) != s.inode {
+		_ = unix.Close(directoryFD)
+		return nil, ErrStore
+	}
+	directory := os.NewFile(uintptr(directoryFD), "mordant-pinned-store")
+	if directory == nil {
+		_ = unix.Close(directoryFD)
+		return nil, ErrStore
+	}
+	entries, readErr := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if readErr != nil || closeErr != nil {
+		return nil, ErrStore
+	}
+	return entries, nil
 }
 
 func (s *objectStore) usedBytes() (int64, error) {
-	entries, err := os.ReadDir(s.root)
-	if err != nil {
-		return 0, ErrStore
+	entries, err := s.directoryEntries()
+	if err != nil || len(entries) > s.maxObjects {
+		return 0, ErrResourceAdmission
 	}
 	var total int64
 	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() {
+		if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || strings.HasPrefix(entry.Name(), ".mordant-create-") {
 			return 0, ErrStore
 		}
-		info, err := entry.Info()
-		if err != nil || !info.Mode().IsRegular() {
-			return 0, ErrStore
+		fd, stat, err := s.openRegular(entry.Name())
+		if err != nil {
+			return 0, err
 		}
-		total += info.Size()
+		_ = unix.Close(fd)
+		total += stat.Size
 		if total > s.quota {
-			return 0, ErrStore
+			return 0, ErrResourceAdmission
 		}
 	}
 	return total, nil
 }
 
+func (s *objectStore) openRegular(name string) (int, unix.Stat_t, error) {
+	var stat unix.Stat_t
+	if s.verifyPinned() != nil || validateObjectName(name) != nil {
+		return -1, stat, ErrStore
+	}
+	fd, err := unix.Openat(s.fd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return -1, stat, err
+	}
+	if unix.Fstat(fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG || (s.private && uint64(stat.Nlink) != 1) {
+		_ = unix.Close(fd)
+		return -1, stat, ErrStore
+	}
+	return fd, stat, nil
+}
+
+func temporaryObjectName() (string, error) {
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(".mordant-create-%x", nonce[:]), nil
+}
+
 func (s *objectStore) create(name string, data []byte) (ObjectRef, error) {
 	var ref ObjectRef
-	target, err := s.path(name)
-	if err != nil || len(data) == 0 || int64(len(data)) > s.quota {
+	if s == nil || validateObjectName(name) != nil || len(data) == 0 || int64(len(data)) > s.quota || s.verifyPinned() != nil {
 		return ref, ErrStore
 	}
+	if err := unix.Flock(s.fd, unix.LOCK_EX); err != nil {
+		return ref, ErrStore
+	}
+	defer func() { _ = unix.Flock(s.fd, unix.LOCK_UN) }()
 	used, err := s.usedBytes()
 	if err != nil || used+int64(len(data)) > s.quota {
+		return ref, ErrResourceAdmission
+	}
+	entries, err := s.directoryEntries()
+	if err != nil || len(entries) >= s.maxObjects {
+		return ref, ErrResourceAdmission
+	}
+	if existing, _, openErr := s.openRegular(name); openErr == nil {
+		_ = unix.Close(existing)
+		return ref, ErrStore
+	} else if !errors.Is(openErr, unix.ENOENT) {
 		return ref, ErrStore
 	}
-	if _, err := os.Lstat(target); !errors.Is(err, os.ErrNotExist) {
+
+	var tempName string
+	tempFD := -1
+	for attempt := 0; attempt < maximumTemporaryNameTries; attempt++ {
+		tempName, err = temporaryObjectName()
+		if err != nil {
+			return ref, ErrStore
+		}
+		tempFD, err = unix.Openat(s.fd, tempName, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EEXIST) {
+			return ref, ErrStore
+		}
+	}
+	if tempFD < 0 {
 		return ref, ErrStore
 	}
-	temp, err := os.CreateTemp(s.root, ".mordant-create-")
-	if err != nil {
-		return ref, ErrStore
-	}
-	tempName := temp.Name()
+	var temporary *os.File
 	committed := false
 	defer func() {
-		_ = temp.Close()
+		if temporary != nil {
+			_ = temporary.Close()
+		} else {
+			_ = unix.Close(tempFD)
+		}
 		if !committed {
-			_ = os.Remove(tempName)
+			_ = unix.Unlinkat(s.fd, tempName, 0)
 		}
 	}()
-	if err := temp.Chmod(s.fileMode); err != nil {
-		return ref, fmt.Errorf("%w: chmod temporary object: %v", ErrStore, err)
+	temporary = os.NewFile(uintptr(tempFD), tempName)
+	if temporary == nil {
+		return ref, ErrStore
 	}
-	if _, err := temp.Write(data); err != nil {
+	if _, err := temporary.Write(data); err != nil {
 		return ref, fmt.Errorf("%w: write temporary object: %v", ErrStore, err)
 	}
-	if err := temp.Sync(); err != nil {
+	if err := temporary.Sync(); err != nil {
 		return ref, fmt.Errorf("%w: sync temporary object: %v", ErrStore, err)
 	}
-	if err := temp.Close(); err != nil {
-		return ref, fmt.Errorf("%w: close temporary object: %v", ErrStore, err)
+	if err := unix.Fchmod(tempFD, uint32(s.fileMode.Perm())); err != nil {
+		return ref, ErrStore
 	}
-	// A hard-link publication is atomic and, unlike rename on Unix, refuses to
-	// replace an existing target.
-	if err := os.Link(tempName, target); err != nil {
+	if err := temporary.Sync(); err != nil {
+		return ref, ErrStore
+	}
+	if err := unix.Linkat(s.fd, tempName, s.fd, name, 0); err != nil {
 		return ref, fmt.Errorf("%w: publish object: %v", ErrStore, err)
 	}
-	if err := os.Remove(tempName); err != nil {
+	if err := unix.Unlinkat(s.fd, tempName, 0); err != nil {
 		return ref, ErrStore
 	}
 	committed = true
-	directory, err := os.Open(s.root)
-	if err != nil {
+	if err := unix.Fsync(s.fd); err != nil {
 		return ref, ErrStore
 	}
-	if err := directory.Sync(); err != nil {
-		_ = directory.Close()
-		return ref, ErrStore
-	}
-	_ = directory.Close()
 	return ObjectRef{Path: name, Digest: DigestBytes(data), Length: int64(len(data))}, nil
 }
 
@@ -184,39 +318,55 @@ func (s *objectStore) read(ref ObjectRef, maximum int64) ([]byte, error) {
 	if ref.validate(ref.Path, maximum) != nil {
 		return nil, ErrArtifact
 	}
-	path, err := s.path(ref.Path)
+	data, actual, err := s.readNamed(ref.Path, maximum)
 	if err != nil {
-		return nil, ErrStore
+		return nil, fmt.Errorf("%w: pinned read %s: %v", ErrArtifact, ref.Path, err)
 	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != ref.Length {
-		return nil, ErrArtifact
+	if actual.Length != ref.Length {
+		return nil, fmt.Errorf("%w: length mismatch for %s", ErrArtifact, ref.Path)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil || int64(len(data)) != ref.Length || DigestBytes(data) != ref.Digest {
-		return nil, ErrArtifact
+	if actual.Digest != ref.Digest {
+		return nil, fmt.Errorf("%w: digest mismatch for %s", ErrArtifact, ref.Path)
 	}
 	return data, nil
 }
 
 func (s *objectStore) readNamed(name string, maximum int64) ([]byte, ObjectRef, error) {
-	path, err := s.path(name)
-	if err != nil {
-		return nil, ObjectRef{}, err
+	var ref ObjectRef
+	if maximum <= 0 {
+		return nil, ref, ErrArtifact
 	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() <= 0 || info.Size() > maximum {
-		return nil, ObjectRef{}, ErrArtifact
-	}
-	file, err := os.Open(path)
+	fd, stat, err := s.openRegular(name)
 	if err != nil {
-		return nil, ObjectRef{}, ErrArtifact
+		if fd >= 0 {
+			_ = unix.Close(fd)
+		}
+		return nil, ref, fmt.Errorf("%w: open pinned object %s: %v", ErrArtifact, name, err)
+	}
+	if stat.Size <= 0 || stat.Size > maximum {
+		if fd >= 0 {
+			_ = unix.Close(fd)
+		}
+		return nil, ref, fmt.Errorf("%w: size for %s", ErrArtifact, name)
+	}
+	file := os.NewFile(uintptr(fd), name)
+	if file == nil {
+		_ = unix.Close(fd)
+		return nil, ref, ErrArtifact
 	}
 	hash := sha256.New()
-	data, err := io.ReadAll(io.TeeReader(io.LimitReader(file, maximum+1), hash))
-	_ = file.Close()
-	if err != nil || int64(len(data)) != info.Size() || int64(len(data)) > maximum {
-		return nil, ObjectRef{}, ErrArtifact
+	data, readErr := io.ReadAll(io.TeeReader(io.LimitReader(file, maximum+1), hash))
+	var after unix.Stat_t
+	statErr := unix.Fstat(fd, &after)
+	closeErr := file.Close()
+	if readErr != nil || statErr != nil || closeErr != nil {
+		return nil, ref, fmt.Errorf("%w: read pinned object %s (read=%v stat=%v close=%v)", ErrArtifact, name, readErr, statErr, closeErr)
+	}
+	if int64(len(data)) != stat.Size || int64(len(data)) > maximum || after.Size != stat.Size {
+		return nil, ref, fmt.Errorf("%w: unstable size for %s (%d/%d/%d)", ErrArtifact, name, len(data), stat.Size, after.Size)
+	}
+	if uint64(after.Dev) != uint64(stat.Dev) || uint64(after.Ino) != uint64(stat.Ino) {
+		return nil, ref, fmt.Errorf("%w: unstable identity for %s", ErrArtifact, name)
 	}
 	var digest Digest
 	copy(digest[:], hash.Sum(nil))
@@ -232,22 +382,22 @@ func (s *objectStore) readJSON(name string, target any) ([]byte, ObjectRef, erro
 }
 
 func (s *objectStore) exists(name string) bool {
-	path, err := s.path(name)
+	fd, _, err := s.openRegular(name)
 	if err != nil {
 		return false
 	}
-	info, err := os.Lstat(path)
-	return err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0
+	_ = unix.Close(fd)
+	return true
 }
 
 func (s *objectStore) names() ([]string, error) {
-	entries, err := os.ReadDir(s.root)
-	if err != nil {
-		return nil, ErrStore
+	entries, err := s.directoryEntries()
+	if err != nil || len(entries) > s.maxObjects {
+		return nil, ErrResourceAdmission
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || strings.HasPrefix(entry.Name(), ".mordant-create-") {
+		if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || strings.HasPrefix(entry.Name(), ".mordant-create-") || validateObjectName(entry.Name()) != nil {
 			return nil, ErrStore
 		}
 		names = append(names, entry.Name())
