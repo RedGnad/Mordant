@@ -25,10 +25,10 @@ type AttemptReservation struct {
 	Signature                [ed25519.SignatureSize]byte
 }
 
-func newAttemptReservation(context Context, point uint64, processInstance, bootSession string, previous [32]byte,
+func newAttemptReservation(context Context, point uint64, processInstance, bootSession [32]byte, previous [32]byte,
 	startup ExecutableProvenance, storageBinding [32]byte, key ed25519.PrivateKey,
 ) (AttemptReservation, error) {
-	if processInstance == "" || bootSession == "" || len(key) != ed25519.PrivateKeySize {
+	if isZero32(processInstance) || isZero32(bootSession) || len(key) != ed25519.PrivateKeySize {
 		return AttemptReservation{}, ErrBinding
 	}
 	if _, err := startup.MarshalBinary(); err != nil || isZero32(storageBinding) {
@@ -47,8 +47,8 @@ func newAttemptReservation(context Context, point uint64, processInstance, bootS
 		ScopeOrdinalDigest:       context.ScopeOrdinalDigest(),
 		ContextSnapshot:          contextSnapshot,
 		OperatorPoint:            point,
-		ProcessInstanceDigest:    hashDomain("MordantOneShotProcessInstance/v1", []byte(processInstance)),
-		BootSessionDigest:        hashDomain("MordantOneShotBootSession/v1", []byte(bootSession)),
+		ProcessInstanceDigest:    processInstance,
+		BootSessionDigest:        bootSession,
 		PreviousLocalWitnessHead: previous,
 		StartupProvenance:        startup,
 		StorageBindingDigest:     storageBinding,

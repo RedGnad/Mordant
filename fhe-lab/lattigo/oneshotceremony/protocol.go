@@ -127,22 +127,27 @@ func (p *Participant) Records() []WitnessRecord { return cloneWitnessChain(p.rec
 
 func (p *Participant) ContextSnapshot() Context { return cloneContext(p.context) }
 
-func (p *Participant) Reserve(processInstance, bootSession string, heads []ReplicaHeadAttestation) error {
+func (p *Participant) Reserve(heads []ReplicaHeadAttestation) error {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
 	if p.phase != PhaseNotStarted || p.reserved || p.poisoned {
 		return ErrReplay
 	}
 	if err := VerifyReplicaHeadAttestations(p.context, p.records, heads); err != nil {
-		_ = p.store.ConsumeSession(p.context, p.Point())
+		return p.poison(err)
+	}
+	// This is the one-way authority boundary. It is reached only after all
+	// three authenticated heads agree, and it uses only the participant's
+	// immutable local context and operator identity. Every later error leaves
+	// this SessionBindingDigest durably consumed.
+	if err := p.store.ConsumeSession(p.context, p.Point()); err != nil {
 		return p.poison(err)
 	}
 	previous, err := p.store.PublicHead()
 	if err != nil {
-		_ = p.store.ConsumeSession(p.context, p.Point())
 		return p.poison(err)
 	}
-	reservation, err := newAttemptReservation(p.context, p.Point(), processInstance, bootSession, previous,
+	reservation, err := newAttemptReservation(p.context, p.Point(), p.storage.process, p.storage.boot, previous,
 		p.storage.startup, p.identity.StorageBindingDigest, p.signingKey)
 	if err != nil {
 		return p.poison(err)

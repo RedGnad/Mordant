@@ -21,6 +21,8 @@ type OperatorLocalStorageConfig struct {
 	StateRoot       string
 	StorageIdentity [32]byte
 	Identity        OperatorIdentity
+	ProcessInstance string
+	BootSession     string
 }
 
 // OperatorStorageCapability is the only storage object accepted by a
@@ -32,6 +34,8 @@ type OperatorStorageCapability struct {
 	identity      OperatorIdentity
 	storageID     [32]byte
 	startup       ExecutableProvenance
+	process       [32]byte
+	boot          [32]byte
 	completedRoot string
 }
 
@@ -60,6 +64,9 @@ func DeriveOperatorStorageBinding(stateRoot string, storageIdentity [32]byte, id
 }
 
 func OpenOperatorStorageCapability(config OperatorLocalStorageConfig) (*OperatorStorageCapability, error) {
+	if config.ProcessInstance == "" || config.BootSession == "" {
+		return nil, ErrBinding
+	}
 	expected, err := DeriveOperatorStorageBinding(config.StateRoot, config.StorageIdentity, config.Identity)
 	if err != nil || expected != config.Identity.StorageBindingDigest {
 		return nil, ErrBinding
@@ -86,6 +93,8 @@ func OpenOperatorStorageCapability(config OperatorLocalStorageConfig) (*Operator
 		identity:      config.Identity,
 		storageID:     config.StorageIdentity,
 		startup:       startup,
+		process:       hashDomain("MordantOneShotProcessInstance/v1", []byte(config.ProcessInstance)),
+		boot:          hashDomain("MordantOneShotBootSession/v1", []byte(config.BootSession)),
 		completedRoot: completedRoot,
 	}, nil
 }
@@ -176,11 +185,9 @@ func (s *WitnessStore) Reserve(reservation AttemptReservation) error {
 	if err != nil || context.CeremonyID() != reservation.CeremonyID || context.SessionBindingDigest() != reservation.SessionBindingDigest {
 		return ErrBinding
 	}
-	// The session marker is written first. A crash after this point consumes the
-	// bilateral session permanently rather than leaving it eligible for retry.
-	if err := s.registry.consume(context, reservation.OperatorPoint); err != nil {
-		return err
-	}
+	// Participant.Reserve has already consumed the session registry marker.
+	// From this point this method only persists the completed reservation and
+	// its ceremony/scope markers.
 	name := "used-" + hex.EncodeToString(reservation.CeremonyID[:]) + ".marker"
 	if err := s.writeNoReplace(name, encoded); err != nil {
 		return fmt.Errorf("%w: ceremony identifier already used", ErrReplay)

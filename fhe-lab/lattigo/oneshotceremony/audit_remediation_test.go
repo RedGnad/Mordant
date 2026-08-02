@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,7 +106,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		if participant.ContextSnapshot().ContextDigest() != before.ContextDigest() {
 			t.Fatal("context accessor returned mutable backing storage")
 		}
-		if err := participant.Reserve("f03-process", "f03-boot", fixture.heads()); err != nil {
+		if err := participant.Reserve(fixture.heads()); err != nil {
 			t.Fatal(err)
 		}
 		reservation, err := participant.Reservation()
@@ -138,6 +137,8 @@ func TestAuditFailRemediations(t *testing.T) {
 			StateRoot:       strictTempPath(t, "f04-coordinator-selected-alternate-root"),
 			StorageIdentity: base.storage[0].storageID,
 			Identity:        base.context.Operators[0],
+			ProcessInstance: base.storageConfigs[0].ProcessInstance,
+			BootSession:     base.storageConfigs[0].BootSession,
 		}
 		if _, err := OpenOperatorStorageCapability(alternate); !errors.Is(err, ErrBinding) {
 			t.Fatalf("same identity reopened through caller-selected paths: %v", err)
@@ -158,7 +159,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		}
 		heads := attestHeads(t, participants)
 		for index, participant := range participants {
-			if err := participant.Reserve(fmt.Sprintf("replay-process-%d", index), fmt.Sprintf("replay-boot-%d", index), heads); !errors.Is(err, ErrReplay) {
+			if err := participant.Reserve(heads); !errors.Is(err, ErrReplay) {
 				t.Fatalf("operator %d replayed consumed session through a new ceremony id: %v", index+1, err)
 			}
 		}
@@ -408,11 +409,77 @@ func TestAuditFailRemediations(t *testing.T) {
 			StateRoot:       strictTempPath(t, "f10-restored-caller-path"),
 			StorageIdentity: fixture.storage[0].storageID,
 			Identity:        fixture.context.Operators[0],
+			ProcessInstance: fixture.storageConfigs[0].ProcessInstance,
+			BootSession:     fixture.storageConfigs[0].BootSession,
 		}
 		if _, err := OpenOperatorStorageCapability(alternate); !errors.Is(err, ErrBinding) {
 			t.Fatalf("caller-selected witness/registry paths recreated generation authority: %v", err)
 		}
 	})
+}
+
+func TestF04F10SessionConsumptionPrecedesReservationCompletion(t *testing.T) {
+	fixture := newFixture(t, "final-f04-f10-session-boundary")
+	originalCeremonyID := fixture.context.CeremonyID()
+	sessionBinding := fixture.context.SessionBindingDigest()
+	heads := fixture.heads()
+
+	for index, participant := range fixture.participants {
+		if err := VerifyReplicaHeadAttestations(fixture.context, participant.Records(), heads); err != nil {
+			t.Fatalf("operator %d heads were not valid: %v", index+1, err)
+		}
+		failurePath := filepath.Join(fixture.stores[index].root, "forced-pre-reservation-failure")
+		if err := os.Mkdir(failurePath, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := participant.Reserve(heads); !errors.Is(err, ErrPersistence) {
+			t.Fatalf("operator %d did not fail after authenticated head validation: %v", index+1, err)
+		}
+		if participant.reserved || participant.secretKey != nil || participant.wasGenerated("begin-secrets") {
+			t.Fatalf("operator %d completed reservation or generated secret material", index+1)
+		}
+		if err := os.Remove(failurePath); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	restartedStorage := make([]*OperatorStorageCapability, PartyCount)
+	for index, config := range fixture.storageConfigs {
+		var err error
+		restartedStorage[index], err = OpenOperatorStorageCapability(config)
+		if err != nil {
+			t.Fatalf("operator %d ordinary storage restart: %v", index+1, err)
+		}
+	}
+	restartedContextInput := fixture.context
+	restartedContextInput.Nonce = digestLabel("final-f04-f10-new-nonce")
+	restartedContext, err := NewContext(fixture.params, restartedContextInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restartedContext.CeremonyID() == originalCeremonyID || restartedContext.SessionBindingDigest() != sessionBinding {
+		t.Fatal("regression did not preserve the session while changing CeremonyID")
+	}
+
+	restarted := make([]*Participant, PartyCount)
+	for index := range restarted {
+		restarted[index], err = NewParticipant(fixture.params, restartedContext, fixture.signingKeys[index], fixture.encryptionKey[index], restartedStorage[index], nil)
+		if err != nil {
+			t.Fatalf("operator %d ordinary participant restart: %v", index+1, err)
+		}
+	}
+	restartedHeads := attestHeads(t, restarted)
+	for index, participant := range restarted {
+		if err := participant.Reserve(restartedHeads); !errors.Is(err, ErrReplay) {
+			t.Fatalf("operator %d recreated reservation authority for consumed session: %v", index+1, err)
+		}
+		if err := participant.BeginSecrets(restartedHeads); !errors.Is(err, ErrState) {
+			t.Fatalf("operator %d generated after rejected restart: %v", index+1, err)
+		}
+		if participant.secretKey != nil || participant.wasGenerated("begin-secrets") {
+			t.Fatalf("operator %d retained generation authority after rejected restart", index+1)
+		}
+	}
 }
 
 func auditReplicas(fixture *ceremonyFixture) [][]WitnessRecord {

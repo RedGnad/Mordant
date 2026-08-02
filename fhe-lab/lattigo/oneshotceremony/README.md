@@ -50,8 +50,9 @@ resume API, regenerated randomized action, reusable key epoch, or legacy bundle 
 
 Before secrets exist, every operator atomically consumes the bilateral session in a durable registry
 separate from its witness files, creates immutable CeremonyID and fixed-scope markers, signs an exact
-deep-copied context snapshot with its process/boot reservation, verifies the canonical ordered set of
-all three reservations, and stores all three. A conflict or partial persistence poisons the session.
+deep-copied context snapshot with process/boot digests fixed by its already-open local capability,
+verifies the canonical ordered set of all three reservations, and stores all three. A conflict or
+partial persistence poisons the session.
 The MVP attempt ordinal is always `1`; changing a nonce, ordinal or CeremonyID cannot authorize a
 second key. An abort or poison requires a completely new bilateral application session with a new
 session identity and commitment, fresh CRS, RLWE keys, Shamir polynomials and protocol shares.

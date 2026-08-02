@@ -29,6 +29,7 @@ type ceremonyFixture struct {
 	encryptionKey     []*ecdh.PrivateKey
 	stores            []*WitnessStore
 	storage           []*OperatorStorageCapability
+	storageConfigs    []OperatorLocalStorageConfig
 	abortAfterStaging bool
 }
 
@@ -105,6 +106,8 @@ func newFixture(t *testing.T, seed string) *ceremonyFixture {
 			StateRoot:       strictTempPath(t, fmt.Sprintf("operator-%d-state", index+1)),
 			StorageIdentity: digestLabel(fmt.Sprintf("%s/storage/%d", seed, index)),
 			Identity:        operators[index],
+			ProcessInstance: fmt.Sprintf("%s/operator-%d-process", seed, index+1),
+			BootSession:     fmt.Sprintf("%s/operator-%d-boot", seed, index+1),
 		}
 		operators[index].StorageBindingDigest, err = DeriveOperatorStorageBinding(
 			storageConfigs[index].StateRoot, storageConfigs[index].StorageIdentity, operators[index])
@@ -145,10 +148,10 @@ func newFixture(t *testing.T, seed string) *ceremonyFixture {
 			t.Fatalf("operator storage %d: %v", index+1, err)
 		}
 	}
-	return newFixtureForContext(t, params, context, signingKeys, encryptionKeys, storage)
+	return newFixtureForContext(t, params, context, signingKeys, encryptionKeys, storage, storageConfigs)
 }
 
-func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, signingKeys []ed25519.PrivateKey, encryptionKeys []*ecdh.PrivateKey, storage []*OperatorStorageCapability) *ceremonyFixture {
+func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, signingKeys []ed25519.PrivateKey, encryptionKeys []*ecdh.PrivateKey, storage []*OperatorStorageCapability, storageConfigs []OperatorLocalStorageConfig) *ceremonyFixture {
 	t.Helper()
 	participants := make([]*Participant, PartyCount)
 	if len(storage) != PartyCount {
@@ -162,14 +165,15 @@ func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, 
 		participants[index] = participant
 	}
 	return &ceremonyFixture{
-		t:             t,
-		params:        params,
-		context:       context,
-		participants:  participants,
-		signingKeys:   signingKeys,
-		encryptionKey: encryptionKeys,
-		stores:        []*WitnessStore{storage[0].witness, storage[1].witness, storage[2].witness},
-		storage:       storage,
+		t:              t,
+		params:         params,
+		context:        context,
+		participants:   participants,
+		signingKeys:    signingKeys,
+		encryptionKey:  encryptionKeys,
+		stores:         []*WitnessStore{storage[0].witness, storage[1].witness, storage[2].witness},
+		storage:        storage,
+		storageConfigs: storageConfigs,
 	}
 }
 
@@ -199,7 +203,7 @@ func (f *ceremonyFixture) reserveAndStart() {
 func (f *ceremonyFixture) reserveAndWitnessStart() {
 	heads := f.heads()
 	for index, participant := range f.participants {
-		if err := participant.Reserve(fmt.Sprintf("process-%d", index+1), fmt.Sprintf("boot-%d", index+1), heads); err != nil {
+		if err := participant.Reserve(heads); err != nil {
 			f.t.Fatalf("reserve %d: %v", index+1, err)
 		}
 	}
@@ -526,7 +530,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := participant.Reserve("new-process", "new-boot", nil); err == nil {
+		if err := participant.Reserve(nil); err == nil {
 			t.Fatalf("scope ordinal reopened: %v", err)
 		}
 	})
@@ -622,8 +626,8 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 	t.Run("10 conflicting signatures are rejected", func(t *testing.T) {
 		f := newFixture(t, "conflicting-signatures")
 		heads := f.heads()
-		for index, participant := range f.participants {
-			if err := participant.Reserve(fmt.Sprintf("p-%d", index), fmt.Sprintf("b-%d", index), heads); err != nil {
+		for _, participant := range f.participants {
+			if err := participant.Reserve(heads); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -762,7 +766,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		retry := newFixtureForContext(t, old.params, context, old.signingKeys, old.encryptionKey, old.storage)
+		retry := newFixtureForContext(t, old.params, context, old.signingKeys, old.encryptionKey, old.storage, old.storageConfigs)
 		retryResult := retry.runSuccess()
 		if context.CeremonyID() == old.context.CeremonyID() || retryResult.bundle.Unsigned.KeyID == result.bundle.Unsigned.KeyID ||
 			slices.Equal(retryResult.bundle.Unsigned.PublicKey, result.bundle.Unsigned.PublicKey) {
