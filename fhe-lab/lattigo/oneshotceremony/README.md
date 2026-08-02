@@ -16,6 +16,12 @@ Local tests use three directories on one host. They are functional, test-only ma
 explicitly not three-host acceptance evidence or evidence of independent custody or separate
 organizations.
 
+Each operator opens its witness, monotone session registry and completed-private storage once from
+an immutable local configuration bound to that operator identity. Ceremony/coordinator calls cannot
+supply or replace those paths. Complete rollback of an operator host together with all of its
+administrative storage, including its monotone registry, remains outside this threat model; that
+residual risk is deferred to three-host acceptance and is not claimed solved by this package.
+
 ## Terminal protocol
 
 The public witness state sequence is:
@@ -49,6 +55,9 @@ all three reservations, and stores all three. A conflict or partial persistence 
 The MVP attempt ordinal is always `1`; changing a nonce, ordinal or CeremonyID cannot authorize a
 second key. An abort or poison requires a completely new bilateral application session with a new
 session identity and commitment, fresh CRS, RLWE keys, Shamir polynomials and protocol shares.
+Before every operation that generates or emits cryptographic material, each participant verifies
+one current signed witness-head attestation from each fixed roster operator. A missing, stale,
+divergent or duplicated head poisons the attempt before that operation produces material.
 
 ## Canonical binding and publication
 
@@ -56,23 +65,26 @@ The deterministic length-delimited big-endian encoding binds protocol/context/en
 versions, Lattigo module version and checksum, privacy domain, session identity and commitment,
 attempt ordinal and nonce, chain/policy/circuit/release values, query budget, exact parameters,
 ordered Galois elements, immutable lifecycle, exact source commit, three ordered operator points,
-distinct administrator identifiers, signing/encryption/transport identities, runtime binary and
-Go/OS/architecture fingerprints. Every envelope additionally binds CeremonyID, context and roster
+distinct administrator identifiers, signing/encryption/transport identities, operator-local storage
+binding, runtime binary and Go/OS/architecture fingerprints. Every envelope additionally binds CeremonyID, context and roster
 digests, one-shot scope/epoch, signer derived from Ed25519 verification, recipient where private,
 operation/round/Galois element, predecessor transcript, input and payload digest.
 
 All participants independently reconstruct the concrete public, relinearization and ordered Galois
 keys from the authenticated transcript. `KeyID` commits to those exact bytes and the full context.
 The all-operator manifest attestations sign the digest of the exact canonical unsigned bundle. The
-pre-manifest witness head, three private-ready sealed-bundle digests and terminal replicated witness
-heads prevent signing one bundle and publishing another. Public and private publication uses
-restricted directories, no-replace files, file/directory fsync and exact-byte readback; no cross-host
-atomicity claim is made.
+pre-manifest witness head, three private-readiness attestations bound to operator share commitments,
+and terminal replicated witness heads prevent signing one bundle and publishing another. Public
+publication uses restricted directories, no-replace files, file/directory fsync and exact-byte
+readback. A final private bundle does not exist at this point.
 
 Activation occurs only after the all-three manifest and private-ready attestations, exact
-publication readback and three matching `COMPLETED` witnesses. Exact executable provenance may be
-verified against retained binary bytes, but it does not by itself prove independent hosts or an
-acceptance topology. Expiry is immutable in the manifest;
+publication readback and three matching `COMPLETED` witnesses. Only then does each operator generate
+its sealing key internally and atomically retain its final encrypted private artifact; neither key
+nor plaintext share is accepted from or returned to a caller. Every reservation signs the
+operator's own startup measurement of its running executable, and the evidence manifest consumes
+those retained measurements rather than post-run paths. Exact executable provenance does not by
+itself prove independent hosts or an acceptance topology. Expiry is immutable in the manifest;
 an already expired ceremony is refused. Session termination may shorten operational use but cannot
 extend the manifest expiry. There is no RC2 rotation: a retry is a fresh attempt and post-MVP
 positive reusable epochs remain absent. Emergency `REVOKED` or `EXPIRED` status is a separate
@@ -104,10 +116,8 @@ AES-GCM; the retained operator bundle is AES-GCM sealed and mode `0600` in a mod
 - On completion, the live participant drops its additive key, polynomial, aggregate in-memory
   share, CRS reveal/seed, relinearization ephemeral, signing-key copy and transport-key handle. The
   aggregate share remains only in the owning operator's sealed private bundle.
-- On abort or poison, live secret references are dropped and an authoritative terminal tombstone
-  makes any previously staged sealed private bytes unacceptable to every supported consumer. Such
-  bytes may remain on storage or backups; they must not enter another session and no physical or
-  secure erasure is claimed.
+- On abort or poison, live secret references are dropped and no final private bundle or sealing key
+  has been created. The authoritative terminal tombstone prevents later finalization.
 - After terminal revocation/expiry and closure of every authorized release window, the owning
   administrator destroys its bundle-sealing key and deletes its private bundle.
 - Reservations, signing decisions, signed witness/status chains, canonical public bundle,

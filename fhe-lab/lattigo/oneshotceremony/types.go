@@ -93,6 +93,7 @@ type OperatorIdentity struct {
 	SigningPublicKey         [ed25519.PublicKeySize]byte
 	EncryptionPublicKey      [32]byte
 	TransportCertFingerprint [32]byte
+	StorageBindingDigest     [32]byte
 	RuntimeBinaryDigest      [32]byte
 	GoVersion                string
 	OperatingSystem          string
@@ -187,7 +188,7 @@ func (c Context) Validate() error {
 	for index, operator := range c.Operators {
 		if operator.Point != canonicalShamirPoint(index) ||
 			operator.AdministratorID == "" || isZero32(operator.EncryptionPublicKey) ||
-			isZero32(operator.TransportCertFingerprint) || isZero32(operator.RuntimeBinaryDigest) ||
+			isZero32(operator.TransportCertFingerprint) || isZero32(operator.StorageBindingDigest) || isZero32(operator.RuntimeBinaryDigest) ||
 			operator.SigningPublicKey == ([ed25519.PublicKeySize]byte{}) {
 			return fmt.Errorf("%w: operator %d", ErrBinding, index)
 		}
@@ -274,6 +275,7 @@ func (c Context) MarshalBinary() ([]byte, error) {
 		e.fixed(operator.SigningPublicKey[:])
 		e.fixed(operator.EncryptionPublicKey[:])
 		e.fixed(operator.TransportCertFingerprint[:])
+		e.fixed(operator.StorageBindingDigest[:])
 		e.fixed(operator.RuntimeBinaryDigest[:])
 		e.text(operator.GoVersion)
 		e.text(operator.OperatingSystem)
@@ -392,7 +394,7 @@ func ParseContext(data []byte) (Context, error) {
 		if op.AdministratorID, err = d.text(); err != nil {
 			return c, err
 		}
-		for _, target := range [][]byte{op.SigningPublicKey[:], op.EncryptionPublicKey[:], op.TransportCertFingerprint[:], op.RuntimeBinaryDigest[:]} {
+		for _, target := range [][]byte{op.SigningPublicKey[:], op.EncryptionPublicKey[:], op.TransportCertFingerprint[:], op.StorageBindingDigest[:], op.RuntimeBinaryDigest[:]} {
 			v, readErr := d.fixed(len(target))
 			if readErr != nil {
 				return c, readErr
@@ -450,6 +452,7 @@ func (c Context) RosterDigest() [32]byte {
 		e.fixed(operator.SigningPublicKey[:])
 		e.fixed(operator.EncryptionPublicKey[:])
 		e.fixed(operator.TransportCertFingerprint[:])
+		e.fixed(operator.StorageBindingDigest[:])
 		e.fixed(operator.RuntimeBinaryDigest[:])
 		e.text(operator.GoVersion)
 		e.text(operator.OperatingSystem)

@@ -28,6 +28,10 @@ type ExecutableProvenance struct {
 
 func InspectExecutable(path string) (ExecutableProvenance, error) {
 	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ExecutableProvenance{}, ErrPersistence
+	}
+	abs, err = filepath.EvalSymlinks(abs)
 	if err != nil || ensureNoSymlinkPath(abs) != nil {
 		return ExecutableProvenance{}, ErrPersistence
 	}
@@ -48,12 +52,15 @@ func InspectExecutable(path string) (ExecutableProvenance, error) {
 		settings[setting.Key] = setting.Value
 	}
 	revision := settings["vcs.revision"]
-	if !validCommit(revision) {
-		return ExecutableProvenance{}, fmt.Errorf("%w: executable VCS revision", ErrBinding)
-	}
-	modified, err := strconv.ParseBool(settings["vcs.modified"])
-	if err != nil {
-		return ExecutableProvenance{}, fmt.Errorf("%w: executable VCS dirty state", ErrBinding)
+	modified, modifiedErr := strconv.ParseBool(settings["vcs.modified"])
+	if !validCommit(revision) || modifiedErr != nil {
+		// `go test` executables do not carry VCS settings. They still measure
+		// their exact bytes, but receive a deterministic non-acceptance source
+		// identifier and are always classified modified. Release executables
+		// retain the build-stamped VCS revision above.
+		executableDigest := sha256.Sum256(data)
+		revision = hex.EncodeToString(executableDigest[:20])
+		modified = true
 	}
 	goos, goarch := settings["GOOS"], settings["GOARCH"]
 	if goos == "" {
@@ -102,6 +109,48 @@ func (p ExecutableProvenance) MarshalBinary() ([]byte, error) {
 	return e.Bytes(), nil
 }
 
+func ParseExecutableProvenance(data []byte) (ExecutableProvenance, error) {
+	var provenance ExecutableProvenance
+	d := newDecoder(data)
+	var err error
+	if provenance.SchemaVersion, err = d.text(); err != nil || provenance.SchemaVersion != "mordant.fhe-executable-provenance/oneshot-v2" {
+		return provenance, errCanonical
+	}
+	if provenance.ExecutablePath, err = d.text(); err != nil {
+		return provenance, errCanonical
+	}
+	value, err := d.fixed(32)
+	if err != nil || copy32(&provenance.ExecutableSHA256, value) != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	if provenance.SourceRevision, err = d.text(); err != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	modified, err := d.u8()
+	if err != nil || modified > 1 {
+		return ExecutableProvenance{}, errCanonical
+	}
+	provenance.SourceModified = modified == 1
+	if provenance.GoVersion, err = d.text(); err != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	if provenance.OperatingSystem, err = d.text(); err != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	if provenance.Architecture, err = d.text(); err != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	value, err = d.fixed(32)
+	if err != nil || copy32(&provenance.DependencyDigest, value) != nil || d.done() != nil {
+		return ExecutableProvenance{}, errCanonical
+	}
+	reencoded, err := provenance.MarshalBinary()
+	if err != nil || !slices.Equal(reencoded, data) {
+		return ExecutableProvenance{}, errCanonical
+	}
+	return provenance, nil
+}
+
 func (p ExecutableProvenance) Digest() [32]byte {
 	encoded, err := p.MarshalBinary()
 	if err != nil {
@@ -133,9 +182,12 @@ type EvidenceManifest struct {
 	ProvenanceVerified  bool
 }
 
-func BuildEvidenceManifest(context Context, bundle PublicBundle, receipt PublicationReceipt, replicas [][]WitnessRecord, executablePaths []string) (EvidenceManifest, error) {
+func BuildEvidenceManifest(context Context, bundle PublicBundle, receipt PublicationReceipt, replicas [][]WitnessRecord, reservations []AttemptReservation) (EvidenceManifest, error) {
 	var manifest EvidenceManifest
-	if len(replicas) != PartyCount || len(executablePaths) != PartyCount || VerifyPublishedCeremony(context, bundle, receipt, replicas...) != nil {
+	if len(replicas) != PartyCount || len(reservations) != PartyCount || VerifyPublishedCeremony(context, bundle, receipt, replicas...) != nil {
+		return manifest, ErrBinding
+	}
+	if _, err := reservationSetDigest(context, reservations); err != nil {
 		return manifest, ErrBinding
 	}
 	bundleBytes, err := bundle.MarshalBinary()
@@ -160,10 +212,7 @@ func BuildEvidenceManifest(context Context, bundle PublicBundle, receipt Publica
 		last := replicas[index][len(replicas[index])-1]
 		manifest.WitnessEventHeads[index] = last.EventDigest()
 		manifest.WitnessArtifactHash[index] = last.AttestationDigest()
-		provenance, inspectErr := InspectExecutable(executablePaths[index])
-		if inspectErr != nil {
-			return EvidenceManifest{}, inspectErr
-		}
+		provenance := reservations[index].StartupProvenance
 		manifest.Executables[index] = provenance
 		operator := context.Operators[index]
 		eligible = eligible && !provenance.SourceModified && provenance.SourceRevision == context.SourceCommit &&

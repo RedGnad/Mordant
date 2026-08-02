@@ -31,6 +31,78 @@ type WitnessRecord struct {
 	Signatures []WitnessSignature
 }
 
+// ReplicaHeadAttestation is one operator's signed statement of its own
+// durable canonical event head. A generation authorization requires exactly
+// one current attestation from each fixed roster point.
+type ReplicaHeadAttestation struct {
+	SchemaVersion string
+	CeremonyID    [32]byte
+	ContextDigest [32]byte
+	OperatorPoint uint64
+	Sequence      uint64
+	EventDigest   [32]byte
+	Signature     [ed25519.SignatureSize]byte
+}
+
+func (a ReplicaHeadAttestation) signingBytes() ([]byte, error) {
+	if a.SchemaVersion != "mordant.fhe-replica-head/oneshot-v3" || isZero32(a.CeremonyID) || isZero32(a.ContextDigest) || a.OperatorPoint == 0 ||
+		(a.Sequence == 0 && !isZero32(a.EventDigest)) || (a.Sequence > 0 && isZero32(a.EventDigest)) {
+		return nil, ErrBinding
+	}
+	var e encoder
+	e.text("MordantOneShotReplicaHeadSignature/v3")
+	e.text(a.SchemaVersion)
+	e.fixed(a.CeremonyID[:])
+	e.fixed(a.ContextDigest[:])
+	e.u64(a.OperatorPoint)
+	e.u64(a.Sequence)
+	e.fixed(a.EventDigest[:])
+	return e.Bytes(), nil
+}
+
+func (p *Participant) AttestReplicaHead() (ReplicaHeadAttestation, error) {
+	if p == nil || p.poisoned || len(p.signingKey) != ed25519.PrivateKeySize || VerifyWitnessChain(p.context, p.records) != nil {
+		return ReplicaHeadAttestation{}, ErrTerminal
+	}
+	attestation := ReplicaHeadAttestation{
+		SchemaVersion: "mordant.fhe-replica-head/oneshot-v3",
+		CeremonyID:    p.context.CeremonyID(),
+		ContextDigest: p.context.ContextDigest(),
+		OperatorPoint: p.Point(),
+		Sequence:      uint64(len(p.records)),
+	}
+	if len(p.records) > 0 {
+		attestation.EventDigest = p.records[len(p.records)-1].EventDigest()
+	}
+	message, err := attestation.signingBytes()
+	if err != nil {
+		return ReplicaHeadAttestation{}, err
+	}
+	copy(attestation.Signature[:], ed25519.Sign(p.signingKey, message))
+	return attestation, nil
+}
+
+func VerifyReplicaHeadAttestations(context Context, local []WitnessRecord, attestations []ReplicaHeadAttestation) error {
+	if len(attestations) != PartyCount || VerifyWitnessChain(context, local) != nil {
+		return fmt.Errorf("%w: three signed replica heads required", ErrPersistence)
+	}
+	sequence := uint64(len(local))
+	var event [32]byte
+	if len(local) > 0 {
+		event = local[len(local)-1].EventDigest()
+	}
+	for index, attestation := range attestations {
+		expected := context.Operators[index]
+		message, err := attestation.signingBytes()
+		if err != nil || attestation.CeremonyID != context.CeremonyID() || attestation.ContextDigest != context.ContextDigest() ||
+			attestation.OperatorPoint != expected.Point || attestation.Sequence != sequence || attestation.EventDigest != event ||
+			!ed25519.Verify(expected.SigningPublicKey[:], message, attestation.Signature[:]) {
+			return fmt.Errorf("%w: missing, stale or divergent signed replica head", ErrPersistence)
+		}
+	}
+	return nil
+}
+
 func NewWitnessStatement(context Context, records []WitnessRecord, to Phase, step uint32, transcript, material, reason [32]byte) (WitnessStatement, error) {
 	if err := VerifyWitnessChain(context, records); err != nil {
 		return WitnessStatement{}, err

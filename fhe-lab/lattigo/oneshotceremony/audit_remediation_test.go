@@ -107,7 +107,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		if participant.ContextSnapshot().ContextDigest() != before.ContextDigest() {
 			t.Fatal("context accessor returned mutable backing storage")
 		}
-		if err := participant.Reserve("f03-process", "f03-boot"); err != nil {
+		if err := participant.Reserve("f03-process", "f03-boot", fixture.heads()); err != nil {
 			t.Fatal(err)
 		}
 		reservation, err := participant.Reservation()
@@ -122,7 +122,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		}
 	})
 
-	t.Run("F-04 one durable reservation consumes one bilateral service session", func(t *testing.T) {
+	t.Run("F-04 operator-local storage capability fixes paths and consumes the session", func(t *testing.T) {
 		if result.fixture.context.AttemptOrdinal != MVPAttemptOrdinal {
 			t.Fatal("MVP ordinal drift")
 		}
@@ -132,54 +132,35 @@ func TestAuditFailRemediations(t *testing.T) {
 			t.Fatalf("second MVP ordinal accepted: %v", err)
 		}
 
-		base := newFixture(t, "audit-f04-concurrent")
-		registryRoot := base.stores[0].registry.root
-		const competitors = 12
-		participants := make([]*Participant, competitors)
-		for index := range participants {
-			candidate := base.context
-			candidate.Nonce = digestLabel(fmt.Sprintf("f04-concurrent-nonce-%d", index))
-			context, err := NewContext(base.params, candidate)
-			if err != nil {
-				t.Fatal(err)
-			}
-			store, err := OpenWitnessStore(strictTempPath(t, fmt.Sprintf("f04-witness-%d", index)), registryRoot)
-			if err != nil {
-				t.Fatal(err)
-			}
-			participants[index], err = NewParticipant(base.params, context, 1, base.signingKeys[0], base.encryptionKey[0], store, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+		base := newFixture(t, "audit-f04-local-capability")
+		base.reserveAndWitnessStart()
+		alternate := OperatorLocalStorageConfig{
+			StateRoot:       strictTempPath(t, "f04-coordinator-selected-alternate-root"),
+			StorageIdentity: base.storage[0].storageID,
+			Identity:        base.context.Operators[0],
 		}
-		var accepted atomic.Int32
-		var wait sync.WaitGroup
-		for index, participant := range participants {
-			wait.Add(1)
-			go func(index int, participant *Participant) {
-				defer wait.Done()
-				if participant.Reserve(fmt.Sprintf("process-%d", index), fmt.Sprintf("boot-%d", index)) == nil {
-					accepted.Add(1)
-				}
-			}(index, participant)
+		if _, err := OpenOperatorStorageCapability(alternate); !errors.Is(err, ErrBinding) {
+			t.Fatalf("same identity reopened through caller-selected paths: %v", err)
 		}
-		wait.Wait()
-		if accepted.Load() != 1 {
-			t.Fatalf("concurrent reservations accepted %d winners", accepted.Load())
-		}
+
 		candidate := base.context
-		candidate.Nonce = digestLabel("f04-restart-nonce")
-		context, _ := NewContext(base.params, candidate)
-		restored, err := OpenWitnessStore(strictTempPath(t, "f04-restored-witness-snapshot"), registryRoot)
+		candidate.Nonce = digestLabel("f04-same-session-new-ceremony-id")
+		context, err := NewContext(base.params, candidate)
 		if err != nil {
 			t.Fatal(err)
 		}
-		restarted, err := NewParticipant(base.params, context, 1, base.signingKeys[0], base.encryptionKey[0], restored, nil)
-		if err != nil {
-			t.Fatal(err)
+		participants := make([]*Participant, PartyCount)
+		for index := range participants {
+			participants[index], err = NewParticipant(base.params, context, base.signingKeys[index], base.encryptionKey[index], base.storage[index], nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		if err := restarted.Reserve("restart", "restored-snapshot"); !errors.Is(err, ErrReplay) {
-			t.Fatalf("restart/restored witness snapshot reopened consumed session: %v", err)
+		heads := attestHeads(t, participants)
+		for index, participant := range participants {
+			if err := participant.Reserve(fmt.Sprintf("replay-process-%d", index), fmt.Sprintf("replay-boot-%d", index), heads); !errors.Is(err, ErrReplay) {
+				t.Fatalf("operator %d replayed consumed session through a new ceremony id: %v", index+1, err)
+			}
 		}
 	})
 
@@ -221,7 +202,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		if err := VerifyCompatibleReplicaHeads(context, replicas[0], replicas...); err != nil {
 			t.Fatalf("selective valid quorum views forked one event: %v", err)
 		}
-		store, err := OpenWitnessStore(strictTempPath(t, "f05-decisions"), strictTempPath(t, "f05-registry"))
+		store, err := openWitnessStore(strictTempPath(t, "f05-decisions"), strictTempPath(t, "f05-registry"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,69 +217,72 @@ func TestAuditFailRemediations(t *testing.T) {
 		}
 	})
 
-	t.Run("F-06 every stale or partial replica head poisons continuation", func(t *testing.T) {
-		records := result.fixture.participants[0].Records()
-		for length := 1; length <= len(records); length++ {
-			local := cloneWitnessChain(records[:length])
-			replicas := [][]WitnessRecord{cloneWitnessChain(local), cloneWitnessChain(local), cloneWitnessChain(local[:length-1])}
-			if err := VerifyCompatibleReplicaHeads(result.fixture.context, local, replicas...); err == nil {
-				t.Fatalf("stale replica accepted at transition boundary %d", length)
+	t.Run("F-06 three operator-signed current heads gate every cryptographic generation", func(t *testing.T) {
+		fixture := newFixture(t, "audit-f06-partial-replication")
+		fixture.reserveAndStart()
+		heads := fixture.heads()
+		commits := envelopes(t, fixture.participants, func(p *Participant) (SignedEnvelope, error) {
+			return p.CRSCommitEnvelope(heads)
+		})
+		for _, participant := range fixture.participants {
+			if err := participant.AcceptCRSCommitStage(commits); err != nil {
+				t.Fatal(err)
 			}
 		}
-		store, err := OpenWitnessStore(strictTempPath(t, "f06-atomic-witness"), strictTempPath(t, "f06-registry"))
+		statement, err := fixture.participants[0].ProposedTransition(PhaseCRSCommitted, [32]byte{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		first := result.fixture.participants[0].Records()[0]
-		abortStatement, err := NewWitnessStatement(result.fixture.context, nil, PhaseAborted, 0, result.fixture.context.ContextDigest(), digestLabel("f06-abort-material"), digestLabel("f06-abort"))
+		heads = fixture.heads()
+		signatures := make([]WitnessSignature, PartyCount)
+		for index, participant := range fixture.participants {
+			signatures[index], err = participant.SignTransition(statement, heads)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		record, err := AssembleWitnessRecord(fixture.context, statement, signatures)
 		if err != nil {
 			t.Fatal(err)
 		}
-		abortSignatures := make([]WitnessSignature, Threshold)
-		for index := range abortSignatures {
-			abortSignatures[index], _ = SignWitnessStatement(abortStatement, uint64(index+1), result.fixture.signingKeys[index])
-		}
-		abortRecord, err := AssembleWitnessRecord(result.fixture.context, abortStatement, abortSignatures)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var wins atomic.Int32
-		var wait sync.WaitGroup
-		for _, record := range []WitnessRecord{first, abortRecord} {
-			wait.Add(1)
-			go func(record WitnessRecord) {
-				defer wait.Done()
-				if store.Append(record) == nil {
-					wins.Add(1)
-				}
-			}(record)
-		}
-		wait.Wait()
-		if wins.Load() != 1 {
-			t.Fatalf("compare-and-append accepted %d concurrent successors", wins.Load())
+		for _, participant := range fixture.participants[:Threshold] {
+			if err := participant.CommitTransition(record); err != nil {
+				t.Fatal(err)
+			}
 		}
 
-		restart := newFixture(t, "audit-f06-restart-ambiguity")
-		restart.reserveAndWitnessStart()
-		if _, err := NewParticipant(restart.params, restart.context, 1, restart.signingKeys[0], restart.encryptionKey[0], restart.stores[0], nil); !errors.Is(err, ErrReplay) {
-			t.Fatalf("ambiguous restart constructor accepted: %v", err)
+		divergent := attestHeads(t, fixture.participants)
+		if divergent[0].Sequence != divergent[1].Sequence || divergent[2].Sequence == divergent[0].Sequence {
+			t.Fatal("test did not persist the valid transition at exactly two operators")
 		}
-		tombstone, err := restart.stores[0].TerminalTombstone(restart.context.CeremonyID())
+		copies := []ReplicaHeadAttestation{divergent[0], divergent[0], divergent[0]}
+		if VerifyReplicaHeadAttestations(fixture.context, fixture.participants[0].Records(), copies) == nil {
+			t.Fatal("three caller-supplied copies of one signed head were accepted")
+		}
+		if VerifyReplicaHeadAttestations(fixture.context, fixture.participants[0].Records(), divergent[:2]) == nil {
+			t.Fatal("missing operator head was accepted")
+		}
+		envelope, err := fixture.participants[0].CRSRevealEnvelope(divergent)
+		if err == nil || len(envelope.Payload) != 0 || fixture.participants[0].wasGenerated("crs-reveal") || !isZero32(fixture.participants[0].crsReveal) {
+			t.Fatalf("divergent head produced cryptographic material: %v", err)
+		}
+		tombstone, err := fixture.stores[0].TerminalTombstone(fixture.context.CeremonyID())
 		if err != nil || tombstone.Disposition != DispositionPoisoned {
-			t.Fatalf("ambiguous restart was not durably poisoned: %v", err)
+			t.Fatalf("divergent generation did not poison durably: %v", err)
 		}
 	})
 
-	t.Run("F-07 staged private bytes are unusable after terminal abort", func(t *testing.T) {
+	t.Run("F-07 exact publication plus ABORTED still creates no private bundle authority", func(t *testing.T) {
 		fixture := newFixture(t, "audit-f07-staged-abort")
 		fixture.abortAfterStaging = true
 		aborted := fixture.runSuccess()
-		if len(aborted.sealed) != PartyCount {
-			t.Fatal("test did not reach private staging")
+		if len(aborted.sealed) != 0 || VerifyPublicationReceipt(aborted.receipt, aborted.bundle) != nil {
+			t.Fatal("test did not reach an otherwise valid exact public publication without a private bundle")
 		}
-		for _, store := range fixture.stores[:Threshold] {
+		for index, store := range fixture.stores {
 			tombstone, err := store.TerminalTombstone(fixture.context.CeremonyID())
-			if err != nil || tombstone.Disposition != DispositionAborted {
+			entries, readErr := os.ReadDir(fixture.storage[index].completedRoot)
+			if err != nil || tombstone.Disposition != DispositionAborted || readErr != nil || len(entries) != 0 || fixture.participants[index].hasThreshold {
 				t.Fatalf("abort tombstone missing: %v", err)
 			}
 		}
@@ -331,7 +315,7 @@ func TestAuditFailRemediations(t *testing.T) {
 		}
 	})
 
-	t.Run("F-09 retained provenance identifies the concrete binary and live VCS revision", func(t *testing.T) {
+	t.Run("F-09 startup-signed executable A cannot be replaced by clean binary B", func(t *testing.T) {
 		moduleRoot := filepath.Clean("..")
 		binary := filepath.Join(strictTempPath(t, "provenance-binary"), "oneshot-provenance")
 		if err := os.Mkdir(filepath.Dir(binary), 0o700); err != nil {
@@ -364,25 +348,51 @@ func TestAuditFailRemediations(t *testing.T) {
 		if VerifyExecutableProvenance(tampered) == nil {
 			t.Fatal("synthetic executable digest qualified as verified provenance")
 		}
-		manifest, err := BuildEvidenceManifest(result.fixture.context, result.bundle, result.receipt, auditReplicas(result.fixture), []string{binary, binary, binary})
+		reservations := auditReservations(t, result.fixture)
+		startupA := reservations[0].StartupProvenance
+		if startupA.ExecutableSHA256 == emitted.ExecutableSHA256 {
+			t.Fatal("substitution test did not produce distinct executables A and B")
+		}
+		manifest, err := BuildEvidenceManifest(result.fixture.context, result.bundle, result.receipt, auditReplicas(result.fixture), reservations)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if manifest.ProvenanceVerified || manifest.BundleDigest != result.bundle.Digest() || manifest.PublicationReceipt != result.receipt.Digest() {
-			t.Fatal("synthetic fixture provenance qualified or lost artifact bindings")
+		for _, retained := range manifest.Executables {
+			if retained.Digest() != startupA.Digest() || retained.ExecutableSHA256 == emitted.ExecutableSHA256 {
+				t.Fatal("evidence manifest did not consume the signed startup measurement from executable A")
+			}
+		}
+		if manifest.BundleDigest != result.bundle.Digest() || manifest.PublicationReceipt != result.receipt.Digest() {
+			t.Fatal("startup provenance manifest lost artifact bindings")
+		}
+
+		substitutedReservations := slices.Clone(reservations)
+		substitutedReservations[0].StartupProvenance = emitted
+		if _, err := BuildEvidenceManifest(result.fixture.context, result.bundle, result.receipt, auditReplicas(result.fixture), substitutedReservations); err == nil {
+			t.Fatal("post-run evidence path substituted executable B for startup-measured executable A")
+		}
+		substitutedRoster := result.fixture.context
+		substitutedRoster.Operators = slices.Clone(substitutedRoster.Operators)
+		substitutedRoster.Operators[0].RuntimeBinaryDigest = emitted.ExecutableSHA256
+		substitutedRoster.Operators[0].GoVersion = emitted.GoVersion
+		substitutedRoster.Operators[0].OperatingSystem = emitted.OperatingSystem
+		substitutedRoster.Operators[0].Architecture = emitted.Architecture
+		if _, err := reservationSetDigest(substitutedRoster, reservations); err == nil {
+			t.Fatal("roster substituted executable B after executable A signed its reservation")
 		}
 	})
 
-	t.Run("F-10 one-time randomness marker survives concurrency restart and witness snapshot restoration", func(t *testing.T) {
+	t.Run("F-10 one-time generation cannot be replayed with caller-selected storage paths", func(t *testing.T) {
 		fixture := newFixture(t, "audit-f10-generation")
 		fixture.reserveAndWitnessStart()
+		heads := fixture.heads()
 		var successes atomic.Int32
 		var wait sync.WaitGroup
 		for range 8 {
 			wait.Add(1)
 			go func() {
 				defer wait.Done()
-				if fixture.participants[0].BeginSecrets() == nil {
+				if fixture.participants[0].BeginSecrets(heads) == nil {
 					successes.Add(1)
 				}
 			}()
@@ -394,25 +404,45 @@ func TestAuditFailRemediations(t *testing.T) {
 		if err := fixture.stores[0].MarkGeneration(fixture.context, "begin-secrets"); !errors.Is(err, ErrReplay) {
 			t.Fatalf("generation marker was reusable: %v", err)
 		}
-		candidate := fixture.context
-		candidate.Nonce = digestLabel("f10-restored-nonce")
-		context, _ := NewContext(fixture.params, candidate)
-		restoredStore, err := OpenWitnessStore(strictTempPath(t, "f10-restored-witness"), fixture.stores[0].registry.root)
-		if err != nil {
-			t.Fatal(err)
+		alternate := OperatorLocalStorageConfig{
+			StateRoot:       strictTempPath(t, "f10-restored-caller-path"),
+			StorageIdentity: fixture.storage[0].storageID,
+			Identity:        fixture.context.Operators[0],
 		}
-		restarted, err := NewParticipant(fixture.params, context, 1, fixture.signingKeys[0], fixture.encryptionKey[0], restoredStore, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := restarted.Reserve("restored-process", "restored-boot"); !errors.Is(err, ErrReplay) {
-			t.Fatalf("restored snapshot regenerated session material: %v", err)
+		if _, err := OpenOperatorStorageCapability(alternate); !errors.Is(err, ErrBinding) {
+			t.Fatalf("caller-selected witness/registry paths recreated generation authority: %v", err)
 		}
 	})
 }
 
 func auditReplicas(fixture *ceremonyFixture) [][]WitnessRecord {
 	return [][]WitnessRecord{fixture.participants[0].Records(), fixture.participants[1].Records(), fixture.participants[2].Records()}
+}
+
+func auditReservations(t *testing.T, fixture *ceremonyFixture) []AttemptReservation {
+	t.Helper()
+	reservations := make([]AttemptReservation, PartyCount)
+	for index, participant := range fixture.participants {
+		var err error
+		reservations[index], err = participant.Reservation()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return reservations
+}
+
+func attestHeads(t *testing.T, participants []*Participant) []ReplicaHeadAttestation {
+	t.Helper()
+	heads := make([]ReplicaHeadAttestation, len(participants))
+	for index, participant := range participants {
+		var err error
+		heads[index], err = participant.AttestReplicaHead()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return heads
 }
 
 func auditCommand(t *testing.T, directory, name string, arguments ...string) string {

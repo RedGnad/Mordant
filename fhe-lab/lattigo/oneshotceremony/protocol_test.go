@@ -28,6 +28,7 @@ type ceremonyFixture struct {
 	signingKeys       []ed25519.PrivateKey
 	encryptionKey     []*ecdh.PrivateKey
 	stores            []*WitnessStore
+	storage           []*OperatorStorageCapability
 	abortAfterStaging bool
 }
 
@@ -37,7 +38,6 @@ type ceremonyResult struct {
 	sealed       []SealedOperatorBundle
 	shareNeedles [][]byte
 	receipt      PublicationReceipt
-	sealingKeys  [][32]byte
 }
 
 type failingReader struct{}
@@ -72,9 +72,14 @@ func strictTempPath(t *testing.T, name string) string {
 func newFixture(t *testing.T, seed string) *ceremonyFixture {
 	t.Helper()
 	params := testParameters(t)
+	startup, err := CurrentExecutableProvenance()
+	if err != nil {
+		t.Fatalf("measure test operator executable: %v", err)
+	}
 	signingKeys := make([]ed25519.PrivateKey, PartyCount)
 	encryptionKeys := make([]*ecdh.PrivateKey, PartyCount)
 	operators := make([]OperatorIdentity, PartyCount)
+	storageConfigs := make([]OperatorLocalStorageConfig, PartyCount)
 	curve := ecdh.X25519()
 	for index := 0; index < PartyCount; index++ {
 		edSeed := digestLabel(fmt.Sprintf("%s/signing/%d", seed, index))
@@ -89,13 +94,24 @@ func newFixture(t *testing.T, seed string) *ceremonyFixture {
 			Point:                    uint64(index + 1),
 			AdministratorID:          fmt.Sprintf("administrator-%d", index+1),
 			TransportCertFingerprint: digestLabel(fmt.Sprintf("%s/transport/%d", seed, index)),
-			RuntimeBinaryDigest:      digestLabel(fmt.Sprintf("%s/runtime/%d", seed, index)),
-			GoVersion:                runtime.Version(),
-			OperatingSystem:          runtime.GOOS,
-			Architecture:             runtime.GOARCH,
+			RuntimeBinaryDigest:      startup.ExecutableSHA256,
+			GoVersion:                startup.GoVersion,
+			OperatingSystem:          startup.OperatingSystem,
+			Architecture:             startup.Architecture,
 		}
 		copy(operators[index].SigningPublicKey[:], signingKeys[index].Public().(ed25519.PublicKey))
 		copy(operators[index].EncryptionPublicKey[:], key.PublicKey().Bytes())
+		storageConfigs[index] = OperatorLocalStorageConfig{
+			StateRoot:       strictTempPath(t, fmt.Sprintf("operator-%d-state", index+1)),
+			StorageIdentity: digestLabel(fmt.Sprintf("%s/storage/%d", seed, index)),
+			Identity:        operators[index],
+		}
+		operators[index].StorageBindingDigest, err = DeriveOperatorStorageBinding(
+			storageConfigs[index].StateRoot, storageConfigs[index].StorageIdentity, operators[index])
+		if err != nil {
+			t.Fatalf("storage binding %d: %v", index+1, err)
+		}
+		storageConfigs[index].Identity = operators[index]
 	}
 	galois := params.GaloisElementForColRotation(1)
 	context, err := NewContext(params, Context{
@@ -116,32 +132,30 @@ func newFixture(t *testing.T, seed string) *ceremonyFixture {
 		GaloisElements:        []uint64{galois},
 		ActivatesAtUnix:       1_800_000_000,
 		ExpiresAtUnix:         1_800_003_600,
-		SourceCommit:          "61aa52a62096953ca1bb8ed624957815f22bc48f",
+		SourceCommit:          startup.SourceRevision,
 		Operators:             operators,
 	})
 	if err != nil {
 		t.Fatalf("context: %v", err)
 	}
-	return newFixtureForContext(t, params, context, signingKeys, encryptionKeys, nil)
-}
-
-func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, signingKeys []ed25519.PrivateKey, encryptionKeys []*ecdh.PrivateKey, stores []*WitnessStore) *ceremonyFixture {
-	t.Helper()
-	participants := make([]*Participant, PartyCount)
-	if stores == nil {
-		stores = make([]*WitnessStore, PartyCount)
-		for index := range stores {
-			root := strictTempPath(t, fmt.Sprintf("operator-%d-witness", index+1))
-			registryRoot := strictTempPath(t, fmt.Sprintf("operator-%d-session-registry", index+1))
-			var err error
-			stores[index], err = OpenWitnessStore(root, registryRoot)
-			if err != nil {
-				t.Fatalf("open witness store: %v", err)
-			}
+	storage := make([]*OperatorStorageCapability, PartyCount)
+	for index := range storage {
+		storage[index], err = OpenOperatorStorageCapability(storageConfigs[index])
+		if err != nil {
+			t.Fatalf("operator storage %d: %v", index+1, err)
 		}
 	}
+	return newFixtureForContext(t, params, context, signingKeys, encryptionKeys, storage)
+}
+
+func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, signingKeys []ed25519.PrivateKey, encryptionKeys []*ecdh.PrivateKey, storage []*OperatorStorageCapability) *ceremonyFixture {
+	t.Helper()
+	participants := make([]*Participant, PartyCount)
+	if len(storage) != PartyCount {
+		t.Fatal("three operator storage capabilities required")
+	}
 	for index := range participants {
-		participant, err := NewParticipant(params, context, uint64(index+1), signingKeys[index], encryptionKeys[index], stores[index], cryptorand.Reader)
+		participant, err := NewParticipant(params, context, signingKeys[index], encryptionKeys[index], storage[index], cryptorand.Reader)
 		if err != nil {
 			t.Fatalf("participant %d: %v", index+1, err)
 		}
@@ -154,22 +168,38 @@ func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, 
 		participants:  participants,
 		signingKeys:   signingKeys,
 		encryptionKey: encryptionKeys,
-		stores:        stores,
+		stores:        []*WitnessStore{storage[0].witness, storage[1].witness, storage[2].witness},
+		storage:       storage,
 	}
+}
+
+func (f *ceremonyFixture) heads() []ReplicaHeadAttestation {
+	f.t.Helper()
+	heads := make([]ReplicaHeadAttestation, PartyCount)
+	for index, participant := range f.participants {
+		var err error
+		heads[index], err = participant.AttestReplicaHead()
+		if err != nil {
+			f.t.Fatalf("attest replica head %d: %v", index+1, err)
+		}
+	}
+	return heads
 }
 
 func (f *ceremonyFixture) reserveAndStart() {
 	f.reserveAndWitnessStart()
+	heads := f.heads()
 	for _, participant := range f.participants {
-		if err := participant.BeginSecrets(); err != nil {
+		if err := participant.BeginSecrets(heads); err != nil {
 			f.t.Fatalf("begin secrets: %v", err)
 		}
 	}
 }
 
 func (f *ceremonyFixture) reserveAndWitnessStart() {
+	heads := f.heads()
 	for index, participant := range f.participants {
-		if err := participant.Reserve(fmt.Sprintf("process-%d", index+1), fmt.Sprintf("boot-%d", index+1)); err != nil {
+		if err := participant.Reserve(fmt.Sprintf("process-%d", index+1), fmt.Sprintf("boot-%d", index+1), heads); err != nil {
 			f.t.Fatalf("reserve %d: %v", index+1, err)
 		}
 	}
@@ -197,12 +227,9 @@ func (f *ceremonyFixture) transition(to Phase, reason [32]byte, participants []*
 		f.t.Fatalf("propose phase %d: %v", to, err)
 	}
 	signatures := make([]WitnessSignature, len(participants))
-	replicas := make([][]WitnessRecord, PartyCount)
-	for index := range f.participants {
-		replicas[index] = f.participants[index].Records()
-	}
+	heads := f.heads()
 	for index, participant := range participants {
-		if signatures[index], err = participant.SignTransition(statement, replicas...); err != nil {
+		if signatures[index], err = participant.SignTransition(statement, heads); err != nil {
 			f.t.Fatalf("sign phase %d operator %d: %v", to, participant.Point(), err)
 		}
 	}
@@ -276,7 +303,8 @@ func verifyThresholdShareCorrespondence(t *testing.T, fixture *ceremonyFixture, 
 
 func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	f.reserveAndStart()
-	commits := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSCommitEnvelope() })
+	heads := f.heads()
+	commits := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSCommitEnvelope(heads) })
 	for _, participant := range f.participants {
 		if err := participant.AcceptCRSCommitStage(commits); err != nil {
 			f.t.Fatal(err)
@@ -284,25 +312,28 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	}
 	f.transition(PhaseCRSCommitted, [32]byte{}, f.participants)
 
-	reveals := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSRevealEnvelope() })
+	heads = f.heads()
+	reveals := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSRevealEnvelope(heads) })
 	for _, participant := range f.participants {
-		if err := participant.AcceptCRSRevealStage(reveals); err != nil {
+		if err := participant.AcceptCRSRevealStage(reveals, heads); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhaseCRSRevealed, [32]byte{}, f.participants)
 
 	privateMessages := make([]SealedPrivateMessage, 0, PartyCount*PartyCount)
+	heads = f.heads()
 	for _, participant := range f.participants {
-		messages, err := participant.PrivateMessages()
+		messages, err := participant.PrivateMessages(heads)
 		if err != nil {
 			f.t.Fatal(err)
 		}
 		privateMessages = append(privateMessages, messages...)
 	}
 	receiptByPair := make(map[[2]uint64]SignedEnvelope, PartyCount*PartyCount)
+	heads = f.heads()
 	for _, participant := range f.participants {
-		receipts, err := participant.ReceivePrivateMessages(privateMessages)
+		receipts, err := participant.ReceivePrivateMessages(privateMessages, heads)
 		if err != nil {
 			f.t.Fatal(err)
 		}
@@ -327,46 +358,51 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	}
 	f.transition(PhasePrivateShares, [32]byte{}, f.participants)
 
-	pkShares := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.PublicKeyShareEnvelope() })
+	heads = f.heads()
+	pkShares := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.PublicKeyShareEnvelope(heads) })
 	for _, participant := range f.participants {
-		if err := participant.AcceptPublicKeyStage(pkShares); err != nil {
+		if err := participant.AcceptPublicKeyStage(pkShares, heads); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhasePublicKey, [32]byte{}, f.participants)
 
-	relinOne := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.RelinRoundOneEnvelope() })
+	heads = f.heads()
+	relinOne := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.RelinRoundOneEnvelope(heads) })
 	for _, participant := range f.participants {
-		if err := participant.AcceptRelinRoundOneStage(relinOne); err != nil {
+		if err := participant.AcceptRelinRoundOneStage(relinOne, heads); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhaseRelinOne, [32]byte{}, f.participants)
 
-	relinTwo := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.RelinRoundTwoEnvelope() })
+	heads = f.heads()
+	relinTwo := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.RelinRoundTwoEnvelope(heads) })
 	for _, participant := range f.participants {
-		if err := participant.AcceptRelinRoundTwoStage(relinTwo); err != nil {
+		if err := participant.AcceptRelinRoundTwoStage(relinTwo, heads); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhaseRelinTwo, [32]byte{}, f.participants)
 
 	for index := range f.context.GaloisElements {
-		shares := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.GaloisShareEnvelope(index) })
+		heads = f.heads()
+		shares := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.GaloisShareEnvelope(index, heads) })
 		for _, participant := range f.participants {
-			if err := participant.AcceptGaloisStage(index, shares); err != nil {
+			if err := participant.AcceptGaloisStage(index, shares, heads); err != nil {
 				f.t.Fatal(err)
 			}
 		}
 		f.transition(PhaseGalois, [32]byte{}, f.participants)
 	}
 
-	material, err := f.participants[0].PublicMaterial()
+	heads = f.heads()
+	material, err := f.participants[0].PublicMaterial(heads)
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	for _, participant := range f.participants[1:] {
-		other, materialErr := participant.PublicMaterial()
+		other, materialErr := participant.PublicMaterial(heads)
 		if materialErr != nil || !publicMaterialEqual(material, other) {
 			f.t.Fatalf("independent public reconstruction mismatch: %v", materialErr)
 		}
@@ -384,38 +420,23 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	}
 	f.transition(PhaseManifest, [32]byte{}, f.participants)
 
-	attestations := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.AttestUnsignedBundle(unsigned) })
-	sealed := make([]SealedOperatorBundle, PartyCount)
+	heads = f.heads()
+	attestations := envelopes(f.t, f.participants, func(p *Participant) (SignedEnvelope, error) { return p.AttestUnsignedBundle(unsigned, heads) })
 	ready := make([]SignedEnvelope, PartyCount)
 	needles := make([][]byte, PartyCount)
-	sealingKeys := make([][32]byte, PartyCount)
+	heads = f.heads()
 	for index, participant := range f.participants {
 		needles[index], err = participant.thresholdShareBytes()
 		if err != nil {
 			f.t.Fatal(err)
 		}
-		sealingKeys[index] = digestLabel(fmt.Sprintf("operator-%d/sealing-key", index+1))
-		if sealed[index], ready[index], err = participant.SealOperatorBundle(unsigned, sealingKeys[index][:]); err != nil {
+		if ready[index], err = participant.AttestPrivateReadiness(unsigned, heads); err != nil {
 			f.t.Fatal(err)
-		}
-		root := strictTempPath(f.t, fmt.Sprintf("operator-%d-private", index+1))
-		if err := PublishSealedOperatorBundle(root, sealed[index]); err != nil {
-			f.t.Fatalf("publish private: %v", err)
 		}
 	}
 	bundle, err := BuildPublicBundle(unsigned, attestations, ready)
 	if err != nil {
 		f.t.Fatalf("public bundle: %v", err)
-	}
-	if f.abortAfterStaging {
-		f.transition(PhaseAborted, digestLabel("audit-f07-abort-after-private-staging"), f.participants[:Threshold])
-		replicas := [][]WitnessRecord{f.participants[0].Records(), f.participants[1].Records(), f.participants[2].Records()}
-		for index := range sealed {
-			if _, openErr := OpenCompletedOperatorBundle(sealed[index], sealingKeys[index][:], f.context, bundle, PublicationReceipt{}, f.stores[index], replicas...); !errors.Is(openErr, ErrSecretAccess) {
-				f.t.Fatalf("aborted staged bundle became usable: %v", openErr)
-			}
-		}
-		return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles, sealingKeys: sealingKeys}
 	}
 	publicRoot := strictTempPath(f.t, "public-publication")
 	receipt, err := PublishPublicBundle(publicRoot, bundle)
@@ -428,6 +449,24 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 		}
 	}
 	f.transition(PhasePublished, [32]byte{}, f.participants)
+	if f.abortAfterStaging {
+		preAbortHeads := f.heads()
+		abortRecord := f.transition(PhaseAborted, digestLabel("audit-f07-abort-after-valid-publication"), f.participants[:Threshold])
+		if err := f.participants[2].CommitTransition(abortRecord); err != nil {
+			f.t.Fatalf("third operator accept terminal abort: %v", err)
+		}
+		replicas := [][]WitnessRecord{f.participants[0].Records(), f.participants[1].Records(), f.participants[2].Records()}
+		for index, participant := range f.participants {
+			if _, finalErr := participant.FinalizeCompletedOperatorBundle(bundle, receipt, preAbortHeads, replicas...); !errors.Is(finalErr, ErrSecretAccess) {
+				f.t.Fatalf("aborted ceremony created private authority: %v", finalErr)
+			}
+			entries, readErr := os.ReadDir(f.storage[index].completedRoot)
+			if readErr != nil || len(entries) != 0 {
+				f.t.Fatalf("aborted operator retained completed-private artifact: %v", readErr)
+			}
+		}
+		return ceremonyResult{fixture: f, bundle: bundle, shareNeedles: needles, receipt: receipt}
+	}
 	for _, participant := range f.participants {
 		if err := participant.SetCompletedPending(bundle, receipt); err != nil {
 			f.t.Fatal(err)
@@ -438,13 +477,19 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	if err := VerifyPublishedCeremony(f.context, bundle, receipt, replicas...); err != nil {
 		f.t.Fatalf("published ceremony: %v", err)
 	}
+	sealed := make([]SealedOperatorBundle, PartyCount)
+	heads = f.heads()
 	for index, participant := range f.participants {
-		opened, openErr := OpenCompletedOperatorBundle(sealed[index], sealingKeys[index][:], f.context, bundle, receipt, f.stores[index], replicas...)
-		if openErr != nil || !slices.Equal(opened.ThresholdShare, needles[index]) || opened.OperatorPoint != participant.Point() {
+		sealed[index], err = participant.FinalizeCompletedOperatorBundle(bundle, receipt, heads, replicas...)
+		if err != nil {
+			f.t.Fatalf("finalize completed private bundle: %v", err)
+		}
+		opened, openErr := participant.openCompletedOperatorBundle(bundle, receipt, replicas...)
+		if openErr != nil || !slices.Equal(opened.thresholdShare, needles[index]) || opened.OperatorPoint != participant.Point() {
 			f.t.Fatalf("completed private bundle readback: %v", openErr)
 		}
 	}
-	return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles, receipt: receipt, sealingKeys: sealingKeys}
+	return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles, receipt: receipt}
 }
 
 func TestOneShotCeremonyRequirements(t *testing.T) {
@@ -468,7 +513,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 
 	t.Run("03 identifier and scope ordinal reuse are rejected", func(t *testing.T) {
 		f := result.fixture
-		if _, err := NewParticipant(f.params, f.context, 1, f.signingKeys[0], f.encryptionKey[0], f.stores[0], cryptorand.Reader); !errors.Is(err, ErrReplay) {
+		if _, err := NewParticipant(f.params, f.context, f.signingKeys[0], f.encryptionKey[0], f.storage[0], cryptorand.Reader); !errors.Is(err, ErrReplay) {
 			t.Fatalf("completed identifier reopened: %v", err)
 		}
 		changed := f.context
@@ -477,11 +522,11 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		participant, err := NewParticipant(f.params, context, 1, f.signingKeys[0], f.encryptionKey[0], f.stores[0], cryptorand.Reader)
+		participant, err := NewParticipant(f.params, context, f.signingKeys[0], f.encryptionKey[0], f.storage[0], cryptorand.Reader)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := participant.Reserve("new-process", "new-boot"); !errors.Is(err, ErrReplay) {
+		if err := participant.Reserve("new-process", "new-boot", nil); err == nil {
 			t.Fatalf("scope ordinal reopened: %v", err)
 		}
 	})
@@ -490,7 +535,8 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		left, right := newFixture(t, "cross-left"), newFixture(t, "cross-right")
 		left.reserveAndStart()
 		right.reserveAndStart()
-		foreign := envelopes(t, left.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSCommitEnvelope() })
+		leftHeads := left.heads()
+		foreign := envelopes(t, left.participants, func(p *Participant) (SignedEnvelope, error) { return p.CRSCommitEnvelope(leftHeads) })
 		if err := right.participants[0].AcceptCRSCommitStage(foreign); err == nil {
 			t.Fatal("foreign contribution accepted")
 		}
@@ -527,7 +573,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 			t.Fatal(err)
 		}
 		f := result.fixture
-		if _, err := NewParticipant(other, f.context, 1, f.signingKeys[0], f.encryptionKey[0], f.stores[0], cryptorand.Reader); !errors.Is(err, ErrBinding) {
+		if _, err := NewParticipant(other, f.context, f.signingKeys[0], f.encryptionKey[0], f.storage[0], cryptorand.Reader); !errors.Is(err, ErrBinding) {
 			t.Fatalf("mixed parameters accepted: %v", err)
 		}
 	})
@@ -543,13 +589,13 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 
 	t.Run("09 repeated phase execution is rejected", func(t *testing.T) {
 		participant := result.fixture.participants[0]
-		if _, err := participant.GaloisShareEnvelope(0); !errors.Is(err, ErrState) {
+		if _, err := participant.GaloisShareEnvelope(0, nil); !errors.Is(err, ErrState) {
 			t.Fatalf("completed phase repeated: %v", err)
 		}
 		f := newFixture(t, "expired")
 		f.context.ActivatesAtUnix = 1
 		f.context.ExpiresAtUnix = 2
-		if _, err := NewParticipant(f.params, f.context, 1, f.signingKeys[0], f.encryptionKey[0], f.stores[0], cryptorand.Reader); !errors.Is(err, ErrTerminal) {
+		if _, err := NewParticipant(f.params, f.context, f.signingKeys[0], f.encryptionKey[0], f.storage[0], cryptorand.Reader); !errors.Is(err, ErrTerminal) {
 			t.Fatalf("expired ceremony reopened: %v", err)
 		}
 	})
@@ -558,10 +604,11 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		f := newFixture(t, "random-failure")
 		f.reserveAndWitnessStart()
 		f.participants[0].random = failingReader{}
-		if err := f.participants[0].BeginSecrets(); !errors.Is(err, ErrMaterial) {
+		heads := f.heads()
+		if err := f.participants[0].BeginSecrets(heads); !errors.Is(err, ErrMaterial) {
 			t.Fatalf("random failure was not rejected: %v", err)
 		}
-		if err := f.participants[0].BeginSecrets(); !errors.Is(err, ErrState) {
+		if err := f.participants[0].BeginSecrets(heads); !errors.Is(err, ErrState) {
 			t.Fatalf("randomized action regenerated: %v", err)
 		}
 		if _, err := f.participants[0].ProposedTransition(PhaseRunning, [32]byte{}); !errors.Is(err, ErrTerminal) {
@@ -574,8 +621,9 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 
 	t.Run("10 conflicting signatures are rejected", func(t *testing.T) {
 		f := newFixture(t, "conflicting-signatures")
+		heads := f.heads()
 		for index, participant := range f.participants {
-			if err := participant.Reserve(fmt.Sprintf("p-%d", index), fmt.Sprintf("b-%d", index)); err != nil {
+			if err := participant.Reserve(fmt.Sprintf("p-%d", index), fmt.Sprintf("b-%d", index), heads); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -592,15 +640,15 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		emptyReplicas := make([][]WitnessRecord, PartyCount)
-		if _, err := f.participants[0].SignTransition(reserved, emptyReplicas...); err != nil {
+		heads = f.heads()
+		if _, err := f.participants[0].SignTransition(reserved, heads); err != nil {
 			t.Fatal(err)
 		}
 		abort, err := f.participants[0].ProposedTransition(PhaseAborted, digestLabel("conflict"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.participants[0].SignTransition(abort, emptyReplicas...); !errors.Is(err, ErrReplay) {
+		if _, err := f.participants[0].SignTransition(abort, heads); !errors.Is(err, ErrReplay) {
 			t.Fatalf("second decision signed: %v", err)
 		}
 	})
@@ -686,7 +734,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		f := newFixture(t, "aborted-no-resume")
 		f.reserveAndStart()
 		f.transition(PhaseAborted, digestLabel("terminal"), f.participants[:2])
-		if err := f.participants[0].BeginSecrets(); !errors.Is(err, ErrState) {
+		if err := f.participants[0].BeginSecrets(nil); !errors.Is(err, ErrState) {
 			t.Fatalf("aborted attempt resumed: %v", err)
 		}
 		if _, err := f.participants[0].ProposedTransition(PhaseRunning, [32]byte{}); !errors.Is(err, ErrTerminal) {
@@ -714,7 +762,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		retry := newFixtureForContext(t, old.params, context, old.signingKeys, old.encryptionKey, old.stores)
+		retry := newFixtureForContext(t, old.params, context, old.signingKeys, old.encryptionKey, old.storage)
 		retryResult := retry.runSuccess()
 		if context.CeremonyID() == old.context.CeremonyID() || retryResult.bundle.Unsigned.KeyID == result.bundle.Unsigned.KeyID ||
 			slices.Equal(retryResult.bundle.Unsigned.PublicKey, result.bundle.Unsigned.PublicKey) {
@@ -741,7 +789,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 
 	t.Run("20 corrupt or incomplete persisted state fails closed", func(t *testing.T) {
 		root := strictTempPath(t, "corrupt-store")
-		store, err := OpenWitnessStore(root, strictTempPath(t, "corrupt-session-registry"))
+		store, err := openWitnessStore(root, strictTempPath(t, "corrupt-session-registry"))
 		if err != nil {
 			t.Fatal(err)
 		}

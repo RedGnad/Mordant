@@ -76,7 +76,7 @@ func TestLegacyRecoveryAndBundleMagicIsUnconditionallyRejected(t *testing.T) {
 		if _, err := ParseContext(data); err == nil {
 			t.Fatalf("legacy context magic accepted: %s", magic)
 		}
-		if _, err := ParsePrivateBundle(data); err == nil {
+		if _, err := parsePrivateBundle(data); err == nil {
 			t.Fatalf("legacy private bundle magic accepted: %s", magic)
 		}
 		if _, err := ParseSealedOperatorBundle(data); err == nil {

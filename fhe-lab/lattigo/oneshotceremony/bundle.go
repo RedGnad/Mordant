@@ -53,7 +53,10 @@ type PublicBundle struct {
 	PrivateReady  []SignedEnvelope
 }
 
-type PrivateBundle struct {
+// privateBundle and its thresholdShare field deliberately remain internal to
+// the completed operator boundary. Public callers can neither parse nor hold
+// a usable threshold share.
+type privateBundle struct {
 	SchemaVersion         string
 	SourceCommit          string
 	LattigoModuleChecksum string
@@ -84,7 +87,7 @@ type PrivateBundle struct {
 	StatusDigest          [32]byte
 	ActivatesAtUnix       int64
 	ExpiresAtUnix         int64
-	ThresholdShare        []byte
+	thresholdShare        []byte
 }
 
 type SealedOperatorBundle struct {
@@ -377,9 +380,12 @@ func VerifyUnsignedPublicBundle(bundle UnsignedPublicBundle) (bgv.Parameters, er
 	return params, nil
 }
 
-func (p *Participant) AttestUnsignedBundle(bundle UnsignedPublicBundle) (SignedEnvelope, error) {
+func (p *Participant) AttestUnsignedBundle(bundle UnsignedPublicBundle, heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhaseManifest || p.poisoned || p.wasGenerated("manifest-attestation") {
 		return SignedEnvelope{}, ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
 	}
 	if _, err := VerifyUnsignedPublicBundle(bundle); err != nil || bundle.Context.CeremonyID() != p.context.CeremonyID() ||
 		!participantMaterialMatches(p, bundle) {
@@ -393,77 +399,23 @@ func (p *Participant) AttestUnsignedBundle(bundle UnsignedPublicBundle) (SignedE
 		p.transcript.Root(p.context), bundle.KeyID, digest[:])
 }
 
-func (p *Participant) SealOperatorBundle(bundle UnsignedPublicBundle, sealingKey []byte) (SealedOperatorBundle, SignedEnvelope, error) {
-	if p.phase != PhaseManifest || p.poisoned || p.wasGenerated("private-bundle") || len(sealingKey) != 32 || !p.hasThreshold || !participantMaterialMatches(p, bundle) {
-		return SealedOperatorBundle{}, SignedEnvelope{}, ErrState
+func (p *Participant) AttestPrivateReadiness(bundle UnsignedPublicBundle, heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
+	if p.phase != PhaseManifest || p.poisoned || p.wasGenerated("private-readiness") || !p.hasThreshold || !participantMaterialMatches(p, bundle) {
+		return SignedEnvelope{}, ErrState
 	}
-	if err := p.markGenerated("private-bundle"); err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(err)
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
 	}
 	share, err := p.thresholdShare.MarshalBinary()
 	if err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(ErrMaterial)
+		return SignedEnvelope{}, p.poison(ErrMaterial)
 	}
-	private := PrivateBundle{
-		SchemaVersion:         PrivateBundleSchema,
-		SourceCommit:          p.context.SourceCommit,
-		LattigoModuleChecksum: p.context.LattigoModuleChecksum,
-		CeremonyID:            p.context.CeremonyID(),
-		ContextDigest:         p.context.ContextDigest(),
-		RosterDigest:          p.context.RosterDigest(),
-		ScopeOrdinalDigest:    p.context.ScopeOrdinalDigest(),
-		SessionCommitment:     p.context.SessionCommitment,
-		AttemptOrdinal:        p.context.AttemptOrdinal,
-		OperatorPoint:         p.Point(),
-		OperatorRuntimeDigest: p.identity.RuntimeBinaryDigest,
-		GoVersion:             p.identity.GoVersion,
-		OperatingSystem:       p.identity.OperatingSystem,
-		Architecture:          p.identity.Architecture,
-		SigningKeyReference:   hashDomain("MordantOneShotSigningKeyReference/v1", p.identity.SigningPublicKey[:]),
-		TransportKeyReference: hashDomain("MordantOneShotTransportKeyReference/v1", p.identity.EncryptionPublicKey[:]),
-		ParameterFingerprint:  p.context.ParameterFingerprint,
-		CircuitVersion:        p.context.CircuitVersion,
-		CircuitDigest:         p.context.CircuitDigest,
-		ReleaseLayout:         p.context.ReleaseLayout,
-		MaximumReleaseQueries: p.context.MaximumReleaseQueries,
-		KeyID:                 bundle.KeyID,
-		UnsignedBundleDigest:  bundle.Digest(),
-		TranscriptDigest:      p.transcript.Root(p.context),
-		PublicKeyDigest:       sha256.Sum256(p.publicKeyBytes),
-		EvaluationKeyDigest:   evaluationKeyDigest(p.relinKeyBytes, p.galoisKeyBytes, p.context.GaloisElements),
-		WitnessHeadDigest:     bundle.PreManifestWitnessDigest,
-		StatusDigest:          bundle.InitialStatus.Digest(),
-		ActivatesAtUnix:       p.context.ActivatesAtUnix,
-		ExpiresAtUnix:         p.context.ExpiresAtUnix,
-		ThresholdShare:        share,
+	shareDigest := hashDomain("MordantOneShotThresholdShareCommitment/v2", share)
+	if err := p.markGenerated("private-readiness"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
 	}
-	plaintext, err := private.MarshalBinary()
-	if err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(err)
-	}
-	sealed := SealedOperatorBundle{
-		SchemaVersion:        PrivateBundleSchema,
-		CeremonyID:           private.CeremonyID,
-		OperatorPoint:        p.Point(),
-		KeyID:                private.KeyID,
-		UnsignedBundleDigest: private.UnsignedBundleDigest,
-	}
-	if _, err := io.ReadFull(p.random, sealed.Nonce[:]); err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(ErrMaterial)
-	}
-	aead, err := operatorBundleAEAD(sealingKey)
-	if err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(err)
-	}
-	sealed.Ciphertext = aead.Seal(nil, sealed.Nonce[:], plaintext, sealed.additionalData())
-	digest := sealed.Digest()
-	readyPayload := privateReadyPayload(bundle.Digest(), digest)
-	ready, err := NewSignedEnvelope(p.context, p.signingKey, p.Point(), 0, OperationPrivateReady, 0, 0,
-		p.transcript.Root(p.context), bundle.KeyID, readyPayload)
-	if err != nil {
-		return SealedOperatorBundle{}, SignedEnvelope{}, p.poison(err)
-	}
-	return sealed, ready, nil
+	return NewSignedEnvelope(p.context, p.signingKey, p.Point(), 0, OperationPrivateReady, 0, 0,
+		p.transcript.Root(p.context), bundle.KeyID, privateReadyPayload(bundle.Digest(), shareDigest))
 }
 
 func BuildPublicBundle(unsigned UnsignedPublicBundle, attestations, privateReady []SignedEnvelope) (PublicBundle, error) {
@@ -573,8 +525,8 @@ func VerifyPublicBundle(bundle PublicBundle) error {
 			ready.Header.InputDigest != bundle.Unsigned.KeyID {
 			return ErrSignature
 		}
-		readyUnsigned, sealedDigest, err := parsePrivateReady(ready.Payload)
-		if err != nil || readyUnsigned != unsignedDigest || isZero32(sealedDigest) {
+		readyUnsigned, shareDigest, err := parsePrivateReady(ready.Payload)
+		if err != nil || readyUnsigned != unsignedDigest || isZero32(shareDigest) {
 			return ErrBinding
 		}
 	}
@@ -687,7 +639,7 @@ func mustPublicBundleBytes(bundle PublicBundle) []byte {
 	return encoded
 }
 
-func (b PrivateBundle) MarshalBinary() ([]byte, error) {
+func (b privateBundle) MarshalBinary() ([]byte, error) {
 	if b.SchemaVersion != PrivateBundleSchema || !validCommit(b.SourceCommit) || b.LattigoModuleChecksum != LattigoModuleChecksum ||
 		isZero32(b.CeremonyID) || isZero32(b.ContextDigest) || isZero32(b.RosterDigest) || isZero32(b.ScopeOrdinalDigest) ||
 		isZero32(b.SessionCommitment) || b.AttemptOrdinal == 0 || b.OperatorPoint == 0 || isZero32(b.OperatorRuntimeDigest) ||
@@ -695,7 +647,7 @@ func (b PrivateBundle) MarshalBinary() ([]byte, error) {
 		isZero32(b.TransportKeyReference) || isZero32(b.ParameterFingerprint) || b.CircuitVersion == 0 || isZero32(b.CircuitDigest) ||
 		b.ReleaseLayout == 0 || b.MaximumReleaseQueries == 0 || isZero32(b.KeyID) || isZero32(b.UnsignedBundleDigest) || isZero32(b.TranscriptDigest) ||
 		isZero32(b.PublicKeyDigest) || isZero32(b.EvaluationKeyDigest) || isZero32(b.WitnessHeadDigest) || isZero32(b.StatusDigest) ||
-		b.ActivatesAtUnix <= 0 || b.ExpiresAtUnix <= b.ActivatesAtUnix || len(b.ThresholdShare) == 0 {
+		b.ActivatesAtUnix <= 0 || b.ExpiresAtUnix <= b.ActivatesAtUnix || len(b.thresholdShare) == 0 {
 		return nil, ErrBinding
 	}
 	var e encoder
@@ -737,12 +689,12 @@ func (b PrivateBundle) MarshalBinary() ([]byte, error) {
 	e.fixed(b.StatusDigest[:])
 	e.i64(b.ActivatesAtUnix)
 	e.i64(b.ExpiresAtUnix)
-	e.field(b.ThresholdShare)
+	e.field(b.thresholdShare)
 	return e.Bytes(), nil
 }
 
-func ParsePrivateBundle(data []byte) (PrivateBundle, error) {
-	var bundle PrivateBundle
+func parsePrivateBundle(data []byte) (privateBundle, error) {
+	var bundle privateBundle
 	d := newDecoder(data)
 	magic, err := d.text()
 	if err != nil || magic != PrivateBundleSchema {
@@ -765,12 +717,12 @@ func ParsePrivateBundle(data []byte) (PrivateBundle, error) {
 	threshold, _ := d.u16()
 	parties, _ := d.u16()
 	if serialization != SerializationVersion || lattigo != LattigoVersion || scope != KeyScope || epoch != 0 || maximum != MaximumSessions || threshold != Threshold || parties != PartyCount {
-		return PrivateBundle{}, errCanonical
+		return privateBundle{}, errCanonical
 	}
 	for _, target := range []*[32]byte{&bundle.CeremonyID, &bundle.ContextDigest, &bundle.RosterDigest, &bundle.ScopeOrdinalDigest, &bundle.SessionCommitment} {
 		value, readErr := d.fixed(32)
 		if readErr != nil || copy32(target, value) != nil {
-			return PrivateBundle{}, errCanonical
+			return privateBundle{}, errCanonical
 		}
 	}
 	if bundle.AttemptOrdinal, err = d.u64(); err != nil {
@@ -795,7 +747,7 @@ func ParsePrivateBundle(data []byte) (PrivateBundle, error) {
 	for _, target := range []*[32]byte{&bundle.SigningKeyReference, &bundle.TransportKeyReference, &bundle.ParameterFingerprint} {
 		value, readErr := d.fixed(32)
 		if readErr != nil || copy32(target, value) != nil {
-			return PrivateBundle{}, errCanonical
+			return privateBundle{}, errCanonical
 		}
 	}
 	if bundle.CircuitVersion, err = d.u32(); err != nil {
@@ -814,7 +766,7 @@ func ParsePrivateBundle(data []byte) (PrivateBundle, error) {
 	for _, target := range []*[32]byte{&bundle.KeyID, &bundle.UnsignedBundleDigest, &bundle.TranscriptDigest, &bundle.PublicKeyDigest, &bundle.EvaluationKeyDigest, &bundle.WitnessHeadDigest, &bundle.StatusDigest} {
 		value, readErr := d.fixed(32)
 		if readErr != nil || copy32(target, value) != nil {
-			return PrivateBundle{}, errCanonical
+			return privateBundle{}, errCanonical
 		}
 	}
 	if bundle.ActivatesAtUnix, err = d.i64(); err != nil {
@@ -823,12 +775,12 @@ func ParsePrivateBundle(data []byte) (PrivateBundle, error) {
 	if bundle.ExpiresAtUnix, err = d.i64(); err != nil {
 		return bundle, err
 	}
-	if bundle.ThresholdShare, err = d.field(); err != nil || len(bundle.ThresholdShare) == 0 || d.done() != nil {
-		return PrivateBundle{}, errCanonical
+	if bundle.thresholdShare, err = d.field(); err != nil || len(bundle.thresholdShare) == 0 || d.done() != nil {
+		return privateBundle{}, errCanonical
 	}
 	reencoded, err := bundle.MarshalBinary()
 	if err != nil || !slices.Equal(reencoded, data) {
-		return PrivateBundle{}, errCanonical
+		return privateBundle{}, errCanonical
 	}
 	return bundle, nil
 }
@@ -905,80 +857,148 @@ func (s SealedOperatorBundle) additionalData() []byte {
 	return e.Bytes()
 }
 
-func OpenCompletedOperatorBundle(
-	sealed SealedOperatorBundle,
-	sealingKey []byte,
-	context Context,
-	bundle PublicBundle,
-	receipt PublicationReceipt,
-	store *WitnessStore,
-	replicas ...[]WitnessRecord,
-) (PrivateBundle, error) {
-	if len(sealingKey) != 32 || store == nil || sealed.CeremonyID != context.CeremonyID() ||
-		sealed.UnsignedBundleDigest != bundle.Unsigned.Digest() || sealed.KeyID != bundle.Unsigned.KeyID {
-		return PrivateBundle{}, ErrSecretAccess
+// FinalizeCompletedOperatorBundle creates the first final private artifact.
+// It accepts no sealing key or output path: both key generation and durable
+// storage remain inside the operator-local capability and happen only after
+// exact publication and COMPLETED witness readback.
+func (p *Participant) FinalizeCompletedOperatorBundle(bundle PublicBundle, receipt PublicationReceipt,
+	heads []ReplicaHeadAttestation, replicas ...[]WitnessRecord,
+) (SealedOperatorBundle, error) {
+	if p.phase != PhaseCompleted || p.poisoned || !p.hasThreshold || p.storage == nil || p.wasGenerated("completed-private-bundle") {
+		return SealedOperatorBundle{}, ErrSecretAccess
 	}
-	if err := VerifyPublishedCeremony(context, bundle, receipt, replicas...); err != nil {
-		return PrivateBundle{}, ErrSecretAccess
+	if err := VerifyReplicaHeadAttestations(p.context, p.records, heads); err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
 	}
-	sealedDigest := sealed.Digest()
+	if err := VerifyPublishedCeremony(p.context, bundle, receipt, replicas...); err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	tombstone, err := p.store.TerminalTombstone(p.context.CeremonyID())
+	lastEvent := replicas[0][len(replicas[0])-1].EventDigest()
+	if err != nil || tombstone.Disposition != DispositionCompleted || tombstone.SessionBindingDigest != p.context.SessionBindingDigest() ||
+		tombstone.WitnessEventDigest != lastEvent || tombstone.KeyID != bundle.Unsigned.KeyID ||
+		tombstone.PublishedBundleDigest != bundle.Digest() || tombstone.PublicationReceiptDigest != receipt.Digest() {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	share, err := p.thresholdShare.MarshalBinary()
+	if err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	shareDigest := hashDomain("MordantOneShotThresholdShareCommitment/v2", share)
 	readyBound := false
 	for _, ready := range bundle.PrivateReady {
-		unsigned, candidate, err := parsePrivateReady(ready.Payload)
-		if err == nil && ready.Header.SenderPoint == sealed.OperatorPoint && unsigned == bundle.Unsigned.Digest() && candidate == sealedDigest {
+		unsigned, candidate, parseErr := parsePrivateReady(ready.Payload)
+		if parseErr == nil && ready.Header.SenderPoint == p.Point() && unsigned == bundle.Unsigned.Digest() && candidate == shareDigest {
 			readyBound = true
 			break
 		}
 	}
 	if !readyBound {
-		return PrivateBundle{}, ErrSecretAccess
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
 	}
-	tombstone, err := store.TerminalTombstone(context.CeremonyID())
-	lastEvent := replicas[0][len(replicas[0])-1].EventDigest()
-	if err != nil || tombstone.Disposition != DispositionCompleted || tombstone.SessionBindingDigest != context.SessionBindingDigest() ||
-		tombstone.WitnessEventDigest != lastEvent || tombstone.KeyID != sealed.KeyID ||
-		tombstone.PublishedBundleDigest != bundle.Digest() || tombstone.PublicationReceiptDigest != receipt.Digest() {
-		return PrivateBundle{}, ErrSecretAccess
+	if err := p.markGenerated("completed-private-bundle"); err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
 	}
-	aead, err := operatorBundleAEAD(sealingKey)
+	private := privateBundle{
+		SchemaVersion:         PrivateBundleSchema,
+		SourceCommit:          p.context.SourceCommit,
+		LattigoModuleChecksum: p.context.LattigoModuleChecksum,
+		CeremonyID:            p.context.CeremonyID(),
+		ContextDigest:         p.context.ContextDigest(),
+		RosterDigest:          p.context.RosterDigest(),
+		ScopeOrdinalDigest:    p.context.ScopeOrdinalDigest(),
+		SessionCommitment:     p.context.SessionCommitment,
+		AttemptOrdinal:        p.context.AttemptOrdinal,
+		OperatorPoint:         p.Point(),
+		OperatorRuntimeDigest: p.identity.RuntimeBinaryDigest,
+		GoVersion:             p.identity.GoVersion,
+		OperatingSystem:       p.identity.OperatingSystem,
+		Architecture:          p.identity.Architecture,
+		SigningKeyReference:   hashDomain("MordantOneShotSigningKeyReference/v1", p.identity.SigningPublicKey[:]),
+		TransportKeyReference: hashDomain("MordantOneShotTransportKeyReference/v1", p.identity.EncryptionPublicKey[:]),
+		ParameterFingerprint:  p.context.ParameterFingerprint,
+		CircuitVersion:        p.context.CircuitVersion,
+		CircuitDigest:         p.context.CircuitDigest,
+		ReleaseLayout:         p.context.ReleaseLayout,
+		MaximumReleaseQueries: p.context.MaximumReleaseQueries,
+		KeyID:                 bundle.Unsigned.KeyID,
+		UnsignedBundleDigest:  bundle.Unsigned.Digest(),
+		TranscriptDigest:      p.transcript.Root(p.context),
+		PublicKeyDigest:       sha256.Sum256(p.publicKeyBytes),
+		EvaluationKeyDigest:   evaluationKeyDigest(p.relinKeyBytes, p.galoisKeyBytes, p.context.GaloisElements),
+		WitnessHeadDigest:     bundle.Unsigned.PreManifestWitnessDigest,
+		StatusDigest:          bundle.Unsigned.InitialStatus.Digest(),
+		ActivatesAtUnix:       p.context.ActivatesAtUnix,
+		ExpiresAtUnix:         p.context.ExpiresAtUnix,
+		thresholdShare:        share,
+	}
+	plaintext, err := private.MarshalBinary()
 	if err != nil {
-		return PrivateBundle{}, err
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	var sealingKey [32]byte
+	sealed := SealedOperatorBundle{
+		SchemaVersion:        PrivateBundleSchema,
+		CeremonyID:           private.CeremonyID,
+		OperatorPoint:        p.Point(),
+		KeyID:                private.KeyID,
+		UnsignedBundleDigest: private.UnsignedBundleDigest,
+	}
+	if _, err := io.ReadFull(p.random, sealingKey[:]); err != nil || isZero32(sealingKey) {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	if _, err := io.ReadFull(p.random, sealed.Nonce[:]); err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	aead, err := operatorBundleAEAD(sealingKey[:])
+	if err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	sealed.Ciphertext = aead.Seal(nil, sealed.Nonce[:], plaintext, sealed.additionalData())
+	if err := p.storage.storeCompletedPrivate(sealingKey, sealed); err != nil {
+		p.clearAttemptSecrets()
+		return SealedOperatorBundle{}, ErrSecretAccess
+	}
+	p.clearAttemptSecrets()
+	return sealed, nil
+}
+
+func (p *Participant) openCompletedOperatorBundle(bundle PublicBundle, receipt PublicationReceipt,
+	replicas ...[]WitnessRecord,
+) (privateBundle, error) {
+	if p == nil || p.phase != PhaseCompleted || p.storage == nil || VerifyPublishedCeremony(p.context, bundle, receipt, replicas...) != nil {
+		return privateBundle{}, ErrSecretAccess
+	}
+	key, sealed, err := p.storage.readCompletedPrivate(p.context.CeremonyID())
+	if err != nil || sealed.KeyID != bundle.Unsigned.KeyID || sealed.UnsignedBundleDigest != bundle.Unsigned.Digest() {
+		return privateBundle{}, ErrSecretAccess
+	}
+	aead, err := operatorBundleAEAD(key[:])
+	if err != nil {
+		return privateBundle{}, ErrSecretAccess
 	}
 	plaintext, err := aead.Open(nil, sealed.Nonce[:], sealed.Ciphertext, sealed.additionalData())
 	if err != nil {
-		return PrivateBundle{}, ErrSecretAccess
+		return privateBundle{}, ErrSecretAccess
 	}
-	privateBundle, err := ParsePrivateBundle(plaintext)
-	if err != nil || privateBundle.CeremonyID != context.CeremonyID() || privateBundle.ContextDigest != context.ContextDigest() ||
-		privateBundle.RosterDigest != context.RosterDigest() || privateBundle.ScopeOrdinalDigest != context.ScopeOrdinalDigest() ||
-		privateBundle.SessionCommitment != context.SessionCommitment || privateBundle.AttemptOrdinal != context.AttemptOrdinal ||
-		privateBundle.OperatorPoint != sealed.OperatorPoint || privateBundle.KeyID != sealed.KeyID ||
-		privateBundle.UnsignedBundleDigest != sealed.UnsignedBundleDigest {
-		return PrivateBundle{}, ErrBinding
+	private, err := parsePrivateBundle(plaintext)
+	if err != nil || private.CeremonyID != p.context.CeremonyID() || private.ContextDigest != p.context.ContextDigest() ||
+		private.RosterDigest != p.context.RosterDigest() || private.ScopeOrdinalDigest != p.context.ScopeOrdinalDigest() ||
+		private.SessionCommitment != p.context.SessionCommitment || private.AttemptOrdinal != p.context.AttemptOrdinal ||
+		private.OperatorPoint != p.Point() || private.KeyID != sealed.KeyID || private.UnsignedBundleDigest != sealed.UnsignedBundleDigest {
+		return privateBundle{}, ErrBinding
 	}
-	return privateBundle, nil
-}
-
-func PublishSealedOperatorBundle(root string, sealed SealedOperatorBundle) error {
-	if !filepath.IsAbs(root) {
-		return ErrPersistence
-	}
-	if err := ensureNoSymlinkPath(root); err != nil {
-		return err
-	}
-	if err := os.Mkdir(root, 0o700); err != nil && !os.IsExist(err) {
-		return ErrPersistence
-	}
-	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
-		return ErrPersistence
-	}
-	encoded, err := sealed.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	store := &WitnessStore{root: root}
-	return store.writeNoReplace("operator.bundle", encoded)
+	return private, nil
 }
 
 func (s KeyStatusStatement) MarshalBinary() ([]byte, error) {
@@ -1162,11 +1182,11 @@ func participantMaterialMatches(participant *Participant, bundle UnsignedPublicB
 	return publicMaterialEqual(material, PublicMaterial{bundle.PublicKey, bundle.RelinearizationKey, bundle.GaloisKeys})
 }
 
-func privateReadyPayload(unsigned, sealed [32]byte) []byte {
+func privateReadyPayload(unsigned, share [32]byte) []byte {
 	var e encoder
-	e.text("MordantOneShotPrivateReady/v1")
+	e.text("MordantOneShotPrivateReady/v2")
 	e.fixed(unsigned[:])
-	e.fixed(sealed[:])
+	e.fixed(share[:])
 	return e.Bytes()
 }
 
@@ -1174,7 +1194,7 @@ func parsePrivateReady(data []byte) ([32]byte, [32]byte, error) {
 	var unsigned, sealed [32]byte
 	d := newDecoder(data)
 	magic, err := d.text()
-	if err != nil || magic != "MordantOneShotPrivateReady/v1" {
+	if err != nil || magic != "MordantOneShotPrivateReady/v2" {
 		return unsigned, sealed, errCanonical
 	}
 	for _, target := range []*[32]byte{&unsigned, &sealed} {

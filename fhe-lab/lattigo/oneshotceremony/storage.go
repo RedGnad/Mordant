@@ -1,6 +1,7 @@
 package oneshotceremony
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,14 +13,144 @@ import (
 	"strings"
 )
 
-// WitnessStore is one operator's private administrative replica. Stores must
-// never be shared between operators or administrators.
+// OperatorLocalStorageConfig is provisioned by one operator outside the
+// ceremony request path. StateRoot and StorageIdentity are immutable for that
+// operator identity; a coordinator must never construct or replace this
+// configuration.
+type OperatorLocalStorageConfig struct {
+	StateRoot       string
+	StorageIdentity [32]byte
+	Identity        OperatorIdentity
+}
+
+// OperatorStorageCapability is the only storage object accepted by a
+// Participant. Its witness, monotone session registry and completed-private
+// roots are derived once from the operator-local configuration rather than
+// supplied by a ceremony caller.
+type OperatorStorageCapability struct {
+	witness       *WitnessStore
+	identity      OperatorIdentity
+	storageID     [32]byte
+	startup       ExecutableProvenance
+	completedRoot string
+}
+
+func DeriveOperatorStorageBinding(stateRoot string, storageIdentity [32]byte, identity OperatorIdentity) ([32]byte, error) {
+	if !filepath.IsAbs(stateRoot) || isZero32(storageIdentity) || identity.Point == 0 || identity.AdministratorID == "" ||
+		identity.SigningPublicKey == ([ed25519.PublicKeySize]byte{}) || isZero32(identity.EncryptionPublicKey) ||
+		isZero32(identity.TransportCertFingerprint) || isZero32(identity.RuntimeBinaryDigest) || identity.GoVersion == "" ||
+		identity.OperatingSystem == "" || identity.Architecture == "" {
+		return [32]byte{}, ErrBinding
+	}
+	root := filepath.Clean(stateRoot)
+	var e encoder
+	e.text("MordantOneShotOperatorStorageBinding/v3")
+	e.text(root)
+	e.fixed(storageIdentity[:])
+	e.u64(identity.Point)
+	e.text(identity.AdministratorID)
+	e.fixed(identity.SigningPublicKey[:])
+	e.fixed(identity.EncryptionPublicKey[:])
+	e.fixed(identity.TransportCertFingerprint[:])
+	e.fixed(identity.RuntimeBinaryDigest[:])
+	e.text(identity.GoVersion)
+	e.text(identity.OperatingSystem)
+	e.text(identity.Architecture)
+	return hashDomain("MordantOneShotOperatorStorageBindingDigest/v3", e.Bytes()), nil
+}
+
+func OpenOperatorStorageCapability(config OperatorLocalStorageConfig) (*OperatorStorageCapability, error) {
+	expected, err := DeriveOperatorStorageBinding(config.StateRoot, config.StorageIdentity, config.Identity)
+	if err != nil || expected != config.Identity.StorageBindingDigest {
+		return nil, ErrBinding
+	}
+	startup, err := CurrentExecutableProvenance()
+	if err != nil || startup.ExecutableSHA256 != config.Identity.RuntimeBinaryDigest || startup.GoVersion != config.Identity.GoVersion ||
+		startup.OperatingSystem != config.Identity.OperatingSystem || startup.Architecture != config.Identity.Architecture {
+		return nil, fmt.Errorf("%w: operator startup executable", ErrBinding)
+	}
+	root := filepath.Clean(config.StateRoot)
+	if err := openRestrictedDirectory(root); err != nil {
+		return nil, err
+	}
+	witness, err := openWitnessStore(filepath.Join(root, "witness"), filepath.Join(root, "session-registry"))
+	if err != nil {
+		return nil, err
+	}
+	completedRoot := filepath.Join(root, "completed-private")
+	if err := openRestrictedDirectory(completedRoot); err != nil {
+		return nil, err
+	}
+	return &OperatorStorageCapability{
+		witness:       witness,
+		identity:      config.Identity,
+		storageID:     config.StorageIdentity,
+		startup:       startup,
+		completedRoot: completedRoot,
+	}, nil
+}
+
+func (c *OperatorStorageCapability) StartupProvenance() ExecutableProvenance {
+	if c == nil {
+		return ExecutableProvenance{}
+	}
+	return c.startup
+}
+
+func (c *OperatorStorageCapability) storeCompletedPrivate(key [32]byte, sealed SealedOperatorBundle) error {
+	if c == nil || isZero32(key) || sealed.OperatorPoint != c.identity.Point || sealed.CeremonyID == ([32]byte{}) {
+		return ErrPersistence
+	}
+	sealedBytes, err := sealed.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	var e encoder
+	e.text("MordantOneShotCompletedPrivateArtifact/v3")
+	e.fixed(key[:])
+	e.field(sealedBytes)
+	name := "completed-" + hex.EncodeToString(sealed.CeremonyID[:]) + ".bin"
+	return (&WitnessStore{root: c.completedRoot}).writeNoReplace(name, e.Bytes())
+}
+
+func (c *OperatorStorageCapability) readCompletedPrivate(ceremonyID [32]byte) ([32]byte, SealedOperatorBundle, error) {
+	var key [32]byte
+	if c == nil || isZero32(ceremonyID) {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	name := "completed-" + hex.EncodeToString(ceremonyID[:]) + ".bin"
+	data, err := readNoSymlinkFile(filepath.Join(c.completedRoot, name))
+	if err != nil {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	d := newDecoder(data)
+	magic, err := d.text()
+	if err != nil || magic != "MordantOneShotCompletedPrivateArtifact/v3" {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	value, err := d.fixed(32)
+	if err != nil || copy32(&key, value) != nil || isZero32(key) {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	sealedBytes, err := d.field()
+	if err != nil || d.done() != nil {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	sealed, err := ParseSealedOperatorBundle(sealedBytes)
+	if err != nil || sealed.CeremonyID != ceremonyID || sealed.OperatorPoint != c.identity.Point {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	return key, sealed, nil
+}
+
+// WitnessStore is the internal witness replica reached only through an
+// OperatorStorageCapability.
 type WitnessStore struct {
 	root     string
 	registry *sessionRegistry
 }
 
-func OpenWitnessStore(root, sessionRegistryRoot string) (*WitnessStore, error) {
+func openWitnessStore(root, sessionRegistryRoot string) (*WitnessStore, error) {
 	if sameOrNestedPath(root, sessionRegistryRoot) {
 		return nil, fmt.Errorf("%w: witness and session registry roots must be separate", ErrPersistence)
 	}
