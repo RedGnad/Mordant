@@ -42,11 +42,13 @@ so two surviving operators can witness abandonment by the third. A process that 
 value for a sequence cannot sign another. There is no checkpoint parser, recovery constructor,
 resume API, regenerated randomized action, reusable key epoch, or legacy bundle parser.
 
-Before secrets exist, every operator creates an immutable local CeremonyID marker and a separate
-scope/attempt-ordinal marker, signs its process/boot reservation, verifies the canonical ordered set
-of all three reservations, and stores all three. A conflict or partial persistence poisons that
-identity. Retry changes the attempt ordinal and nonce, producing a new CeremonyID and fresh CRS,
-RLWE keys, Shamir polynomials and protocol shares.
+Before secrets exist, every operator atomically consumes the bilateral session in a durable registry
+separate from its witness files, creates immutable CeremonyID and fixed-scope markers, signs an exact
+deep-copied context snapshot with its process/boot reservation, verifies the canonical ordered set of
+all three reservations, and stores all three. A conflict or partial persistence poisons the session.
+The MVP attempt ordinal is always `1`; changing a nonce, ordinal or CeremonyID cannot authorize a
+second key. An abort or poison requires a completely new bilateral application session with a new
+session identity and commitment, fresh CRS, RLWE keys, Shamir polynomials and protocol shares.
 
 ## Canonical binding and publication
 
@@ -68,7 +70,9 @@ restricted directories, no-replace files, file/directory fsync and exact-byte re
 atomicity claim is made.
 
 Activation occurs only after the all-three manifest and private-ready attestations, exact
-publication readback and three matching `COMPLETED` witnesses. Expiry is immutable in the manifest;
+publication readback and three matching `COMPLETED` witnesses. Exact executable provenance may be
+verified against retained binary bytes, but it does not by itself prove independent hosts or an
+acceptance topology. Expiry is immutable in the manifest;
 an already expired ceremony is refused. Session termination may shorten operational use but cannot
 extend the manifest expiry. There is no RC2 rotation: a retry is a fresh attempt and post-MVP
 positive reusable epochs remain absent. Emergency `REVOKED` or `EXPIRED` status is a separate
@@ -100,8 +104,10 @@ AES-GCM; the retained operator bundle is AES-GCM sealed and mode `0600` in a mod
 - On completion, the live participant drops its additive key, polynomial, aggregate in-memory
   share, CRS reveal/seed, relinearization ephemeral, signing-key copy and transport-key handle. The
   aggregate share remains only in the owning operator's sealed private bundle.
-- On abort, no private bundle is created and the same live material is dropped; no failed-attempt
-  bytes enter a retry.
+- On abort or poison, live secret references are dropped and an authoritative terminal tombstone
+  makes any previously staged sealed private bytes unacceptable to every supported consumer. Such
+  bytes may remain on storage or backups; they must not enter another session and no physical or
+  secure erasure is claimed.
 - After terminal revocation/expiry and closure of every authorized release window, the owning
   administrator destroys its bundle-sealing key and deletes its private bundle.
 - Reservations, signing decisions, signed witness/status chains, canonical public bundle,
@@ -115,8 +121,9 @@ erasure claim.
 
 ## Obsolete boundary
 
-The earlier recoverable implementation and its evidence remain in place for history. The three
-setup/recovery executables `ceremony-operator`, `ceremony-coordinator` and `ceremony-lab` are
+The earlier recoverable implementation and its evidence remain in place for history. The five
+historical ceremony executables `ceremony-client`, `ceremony-coordinator`, `ceremony-evaluator`,
+`ceremony-lab` and `ceremony-operator`, plus their recovery implementation files, are
 build-constrained behind the explicit
 `obsolete_recoverable_ceremony` tag, have no default production alias, and are not imported by this
 package. That tag is for reproducing rejected historical evidence only; it is not a compatibility,

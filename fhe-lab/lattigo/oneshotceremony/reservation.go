@@ -13,7 +13,9 @@ type AttemptReservation struct {
 	CeremonyID               [32]byte
 	ContextDigest            [32]byte
 	RosterDigest             [32]byte
+	SessionBindingDigest     [32]byte
 	ScopeOrdinalDigest       [32]byte
+	ContextSnapshot          []byte
 	OperatorPoint            uint64
 	ProcessInstanceDigest    [32]byte
 	BootSessionDigest        [32]byte
@@ -25,12 +27,18 @@ func newAttemptReservation(context Context, point uint64, processInstance, bootS
 	if processInstance == "" || bootSession == "" || len(key) != ed25519.PrivateKeySize {
 		return AttemptReservation{}, ErrBinding
 	}
+	contextSnapshot, err := context.MarshalBinary()
+	if err != nil {
+		return AttemptReservation{}, err
+	}
 	reservation := AttemptReservation{
-		SchemaVersion:            "mordant.fhe-attempt-reservation/oneshot-v1",
+		SchemaVersion:            "mordant.fhe-attempt-reservation/oneshot-v2",
 		CeremonyID:               context.CeremonyID(),
 		ContextDigest:            context.ContextDigest(),
 		RosterDigest:             context.RosterDigest(),
+		SessionBindingDigest:     context.SessionBindingDigest(),
 		ScopeOrdinalDigest:       context.ScopeOrdinalDigest(),
+		ContextSnapshot:          contextSnapshot,
 		OperatorPoint:            point,
 		ProcessInstanceDigest:    hashDomain("MordantOneShotProcessInstance/v1", []byte(processInstance)),
 		BootSessionDigest:        hashDomain("MordantOneShotBootSession/v1", []byte(bootSession)),
@@ -51,7 +59,9 @@ func (r AttemptReservation) signingBytes() []byte {
 	e.fixed(r.CeremonyID[:])
 	e.fixed(r.ContextDigest[:])
 	e.fixed(r.RosterDigest[:])
+	e.fixed(r.SessionBindingDigest[:])
 	e.fixed(r.ScopeOrdinalDigest[:])
+	e.field(r.ContextSnapshot)
 	e.u64(r.OperatorPoint)
 	e.fixed(r.ProcessInstanceDigest[:])
 	e.fixed(r.BootSessionDigest[:])
@@ -60,8 +70,8 @@ func (r AttemptReservation) signingBytes() []byte {
 }
 
 func (r AttemptReservation) MarshalBinary() ([]byte, error) {
-	if r.SchemaVersion != "mordant.fhe-attempt-reservation/oneshot-v1" || isZero32(r.CeremonyID) ||
-		isZero32(r.ContextDigest) || isZero32(r.RosterDigest) || isZero32(r.ScopeOrdinalDigest) ||
+	if r.SchemaVersion != "mordant.fhe-attempt-reservation/oneshot-v2" || isZero32(r.CeremonyID) ||
+		isZero32(r.ContextDigest) || isZero32(r.RosterDigest) || isZero32(r.SessionBindingDigest) || isZero32(r.ScopeOrdinalDigest) || len(r.ContextSnapshot) == 0 ||
 		r.OperatorPoint == 0 || isZero32(r.ProcessInstanceDigest) || isZero32(r.BootSessionDigest) {
 		return nil, ErrBinding
 	}
@@ -76,7 +86,7 @@ func ParseAttemptReservation(data []byte) (AttemptReservation, error) {
 	var reservation AttemptReservation
 	d := newDecoder(data)
 	magic, err := d.text()
-	if err != nil || magic != "mordant.fhe-attempt-reservation/oneshot-v1" {
+	if err != nil || magic != "mordant.fhe-attempt-reservation/oneshot-v2" {
 		return reservation, errCanonical
 	}
 	body, err := d.field()
@@ -91,11 +101,14 @@ func ParseAttemptReservation(data []byte) (AttemptReservation, error) {
 	if reservation.SchemaVersion, err = bd.text(); err != nil || reservation.SchemaVersion != magic {
 		return reservation, errCanonical
 	}
-	for _, target := range []*[32]byte{&reservation.CeremonyID, &reservation.ContextDigest, &reservation.RosterDigest, &reservation.ScopeOrdinalDigest} {
+	for _, target := range []*[32]byte{&reservation.CeremonyID, &reservation.ContextDigest, &reservation.RosterDigest, &reservation.SessionBindingDigest, &reservation.ScopeOrdinalDigest} {
 		value, readErr := bd.fixed(32)
 		if readErr != nil || copy32(target, value) != nil {
 			return AttemptReservation{}, errCanonical
 		}
+	}
+	if reservation.ContextSnapshot, err = bd.field(); err != nil || len(reservation.ContextSnapshot) == 0 {
+		return AttemptReservation{}, errCanonical
 	}
 	if reservation.OperatorPoint, err = bd.u64(); err != nil {
 		return reservation, err
@@ -123,13 +136,21 @@ func ParseAttemptReservation(data []byte) (AttemptReservation, error) {
 
 func VerifyAttemptReservation(context Context, reservation AttemptReservation) error {
 	identity, ok := context.Operator(reservation.OperatorPoint)
-	if !ok || reservation.SchemaVersion != "mordant.fhe-attempt-reservation/oneshot-v1" ||
+	parsed, parseErr := ParseContext(reservation.ContextSnapshot)
+	if !ok || parseErr != nil || reservation.SchemaVersion != "mordant.fhe-attempt-reservation/oneshot-v2" ||
 		reservation.CeremonyID != context.CeremonyID() || reservation.ContextDigest != context.ContextDigest() ||
-		reservation.RosterDigest != context.RosterDigest() || reservation.ScopeOrdinalDigest != context.ScopeOrdinalDigest() ||
+		parsed.ContextDigest() != context.ContextDigest() || reservation.RosterDigest != context.RosterDigest() ||
+		reservation.SessionBindingDigest != context.SessionBindingDigest() || reservation.ScopeOrdinalDigest != context.ScopeOrdinalDigest() ||
 		!ed25519.Verify(identity.SigningPublicKey[:], reservation.signingBytes(), reservation.Signature[:]) {
 		return ErrSignature
 	}
 	return nil
+}
+
+func cloneAttemptReservation(input AttemptReservation) AttemptReservation {
+	output := input
+	output.ContextSnapshot = slices.Clone(input.ContextSnapshot)
+	return output
 }
 
 func reservationSetDigest(context Context, reservations []AttemptReservation) ([32]byte, error) {

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"slices"
 	"strings"
 
@@ -16,16 +17,16 @@ import (
 )
 
 const (
-	ProtocolVersion       = "mordant.fhe-ceremony/oneshot-v1"
-	ContextSchema         = "mordant.fhe-ceremony-context/oneshot-v1"
-	EnvelopeSchema        = "mordant.fhe-ceremony-envelope/oneshot-v1"
-	WitnessSchema         = "mordant.fhe-ceremony-witness/oneshot-v1"
-	ManifestSchema        = "mordant.fhe-key-manifest/oneshot-v1"
-	PublicBundleSchema    = "mordant.fhe-public-bundle/oneshot-v1"
-	PrivateBundleSchema   = "mordant.fhe-private-bundle/oneshot-v1"
-	StatusSchema          = "mordant.fhe-key-status/oneshot-v1"
-	CRSSchema             = "mordant.fhe-crs/oneshot-v1"
-	SignatureDomain       = "MordantOneShotEnvelopeSignature/v1"
+	ProtocolVersion       = "mordant.fhe-ceremony/oneshot-v2"
+	ContextSchema         = "mordant.fhe-ceremony-context/oneshot-v2"
+	EnvelopeSchema        = "mordant.fhe-ceremony-envelope/oneshot-v2"
+	WitnessSchema         = "mordant.fhe-ceremony-witness/oneshot-v2"
+	ManifestSchema        = "mordant.fhe-key-manifest/oneshot-v2"
+	PublicBundleSchema    = "mordant.fhe-public-bundle/oneshot-v2"
+	PrivateBundleSchema   = "mordant.fhe-private-bundle/oneshot-v2"
+	StatusSchema          = "mordant.fhe-key-status/oneshot-v2"
+	CRSSchema             = "mordant.fhe-crs/oneshot-v2"
+	SignatureDomain       = "MordantOneShotEnvelopeSignature/v2"
 	SignatureAlgorithm    = "Ed25519"
 	SerializationVersion  = uint32(1)
 	LattigoVersion        = "github.com/tuneinsight/lattigo/v6 v6.2.0"
@@ -35,6 +36,7 @@ const (
 	Threshold             = 2
 	MaximumSessions       = 1
 	EphemeralKeyEpoch     = uint64(0)
+	MVPAttemptOrdinal     = uint64(1)
 )
 
 var (
@@ -104,6 +106,8 @@ type Context struct {
 	LattigoVersion        string
 	KeyScope              string
 	PrivacyDomain         [32]byte
+	ServiceID             [32]byte
+	ServiceVersion        uint32
 	SessionIdentity       [32]byte
 	SessionCommitment     [32]byte
 	Nonce                 [32]byte
@@ -151,9 +155,10 @@ func NewContext(params bgv.Parameters, input Context) (Context, error) {
 	if err := input.Validate(); err != nil {
 		return Context{}, err
 	}
-	input.Operators = slices.Clone(input.Operators)
-	input.GaloisElements = slices.Clone(input.GaloisElements)
-	return input, nil
+	if err := validateShamirCoordinates(params, operatorPoints(input.Operators)); err != nil {
+		return Context{}, err
+	}
+	return cloneContext(input), nil
 }
 
 func (c Context) Validate() error {
@@ -162,10 +167,10 @@ func (c Context) Validate() error {
 		c.KeyScope != KeyScope {
 		return fmt.Errorf("%w: schema or version", ErrBinding)
 	}
-	if isZero32(c.PrivacyDomain) || isZero32(c.SessionIdentity) ||
+	if isZero32(c.PrivacyDomain) || isZero32(c.ServiceID) || c.ServiceVersion == 0 || isZero32(c.SessionIdentity) ||
 		isZero32(c.SessionCommitment) || isZero32(c.Nonce) || isZero32(c.PolicyID) ||
 		isZero32(c.CircuitDigest) || isZero32(c.ParameterFingerprint) || c.ChainID == 0 ||
-		c.AttemptOrdinal == 0 || c.PolicyVersion == 0 || c.CircuitVersion == 0 || c.ReleaseLayout == 0 || c.MaximumReleaseQueries == 0 ||
+		c.AttemptOrdinal != MVPAttemptOrdinal || c.PolicyVersion == 0 || c.CircuitVersion == 0 || c.ReleaseLayout == 0 || c.MaximumReleaseQueries == 0 ||
 		c.ActivatesAtUnix <= 0 || c.ExpiresAtUnix <= c.ActivatesAtUnix {
 		return fmt.Errorf("%w: empty context field", ErrBinding)
 	}
@@ -179,9 +184,8 @@ func (c Context) Validate() error {
 	signing := map[[ed25519.PublicKeySize]byte]struct{}{}
 	encryption := map[[32]byte]struct{}{}
 	transport := map[[32]byte]struct{}{}
-	var previous uint64
 	for index, operator := range c.Operators {
-		if operator.Point == 0 || (index > 0 && operator.Point <= previous) ||
+		if operator.Point != canonicalShamirPoint(index) ||
 			operator.AdministratorID == "" || isZero32(operator.EncryptionPublicKey) ||
 			isZero32(operator.TransportCertFingerprint) || isZero32(operator.RuntimeBinaryDigest) ||
 			operator.SigningPublicKey == ([ed25519.PublicKeySize]byte{}) {
@@ -206,7 +210,6 @@ func (c Context) Validate() error {
 		signing[operator.SigningPublicKey] = struct{}{}
 		encryption[operator.EncryptionPublicKey] = struct{}{}
 		transport[operator.TransportCertFingerprint] = struct{}{}
-		previous = operator.Point
 	}
 	if len(c.GaloisElements) == 0 || len(c.GaloisElements) > 64 {
 		return fmt.Errorf("%w: galois elements", ErrBinding)
@@ -242,6 +245,8 @@ func (c Context) MarshalBinary() ([]byte, error) {
 	e.u64(EphemeralKeyEpoch)
 	e.u32(MaximumSessions)
 	e.fixed(c.PrivacyDomain[:])
+	e.fixed(c.ServiceID[:])
+	e.u32(c.ServiceVersion)
 	e.fixed(c.SessionIdentity[:])
 	e.fixed(c.SessionCommitment[:])
 	e.fixed(c.Nonce[:])
@@ -307,7 +312,16 @@ func ParseContext(data []byte) (Context, error) {
 	if err != nil || maximum != MaximumSessions {
 		return c, errCanonical
 	}
-	for _, target := range []*[32]byte{&c.PrivacyDomain, &c.SessionIdentity, &c.SessionCommitment, &c.Nonce} {
+	for _, target := range []*[32]byte{&c.PrivacyDomain, &c.ServiceID} {
+		value, readErr := d.fixed(32)
+		if readErr != nil || copy32(target, value) != nil {
+			return c, errCanonical
+		}
+	}
+	if c.ServiceVersion, err = d.u32(); err != nil {
+		return c, err
+	}
+	for _, target := range []*[32]byte{&c.SessionIdentity, &c.SessionCommitment, &c.Nonce} {
 		value, readErr := d.fixed(32)
 		if readErr != nil || copy32(target, value) != nil {
 			return c, errCanonical
@@ -444,16 +458,88 @@ func (c Context) RosterDigest() [32]byte {
 	return sha256.Sum256(e.Bytes())
 }
 
-func (c Context) ScopeOrdinalDigest() [32]byte {
+// SessionBindingDigest is the durable one-reservation key for the MVP. It
+// deliberately excludes the ceremony nonce and CeremonyID: changing either
+// cannot create a second key for one bilateral application session.
+func (c Context) SessionBindingDigest() [32]byte {
 	var e encoder
-	e.text("MordantOneShotScopeOrdinal/v1")
+	e.text("MordantOneShotBilateralSession/v2")
 	e.text(c.KeyScope)
+	e.fixed(c.ServiceID[:])
+	e.u32(c.ServiceVersion)
 	e.fixed(c.PrivacyDomain[:])
 	e.fixed(c.SessionIdentity[:])
 	e.fixed(c.SessionCommitment[:])
+	e.u64(c.ChainID)
+	e.fixed(c.PolicyID[:])
+	e.u32(c.PolicyVersion)
+	e.u32(c.CircuitVersion)
+	e.fixed(c.CircuitDigest[:])
+	e.fixed(c.ParameterFingerprint[:])
+	e.u32(c.ReleaseLayout)
+	e.u32(c.MaximumReleaseQueries)
+	return sha256.Sum256(e.Bytes())
+}
+
+func (c Context) ScopeOrdinalDigest() [32]byte {
+	var e encoder
+	e.text("MordantOneShotScopeOrdinal/v2")
+	session := c.SessionBindingDigest()
+	e.fixed(session[:])
 	e.u64(c.AttemptOrdinal)
 	e.u64(EphemeralKeyEpoch)
 	return sha256.Sum256(e.Bytes())
+}
+
+func cloneContext(input Context) Context {
+	output := input
+	output.Operators = slices.Clone(input.Operators)
+	output.GaloisElements = slices.Clone(input.GaloisElements)
+	return output
+}
+
+func canonicalShamirPoint(index int) uint64 { return uint64(index + 1) }
+
+func operatorPoints(operators []OperatorIdentity) []uint64 {
+	points := make([]uint64, len(operators))
+	for index := range operators {
+		points[index] = operators[index].Point
+	}
+	return points
+}
+
+// validateShamirCoordinates rejects coordinates whose pairwise interpolation
+// denominators are not invertible in any active RNS modulus. Production callers
+// cannot select coordinates: the only accepted vector is [1, 2, 3].
+func validateShamirCoordinates(params bgv.Parameters, points []uint64) error {
+	if len(points) != PartyCount {
+		return fmt.Errorf("%w: exactly three Shamir coordinates required", ErrBinding)
+	}
+	for index, point := range points {
+		if point != canonicalShamirPoint(index) {
+			return fmt.Errorf("%w: non-protocol Shamir coordinate", ErrBinding)
+		}
+	}
+	moduli := append(slices.Clone(params.Q()), params.P()...)
+	if len(moduli) == 0 {
+		return fmt.Errorf("%w: empty RNS modulus set", ErrBinding)
+	}
+	for _, modulus := range moduli {
+		if modulus < 3 {
+			return fmt.Errorf("%w: invalid RNS modulus", ErrBinding)
+		}
+		m := new(big.Int).SetUint64(modulus)
+		for left := range points {
+			for right := left + 1; right < len(points); right++ {
+				difference := new(big.Int).Sub(new(big.Int).SetUint64(points[right]), new(big.Int).SetUint64(points[left]))
+				difference.Mod(difference, m)
+				if difference.Sign() == 0 || new(big.Int).GCD(nil, nil, difference, m).Cmp(big.NewInt(1)) != 0 {
+					return fmt.Errorf("%w: non-invertible Shamir denominator", ErrBinding)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func ParameterFingerprint(params bgv.Parameters) ([32]byte, error) {
