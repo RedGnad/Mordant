@@ -23,6 +23,28 @@ func NewEvaluationRuntime(
 	relinearizationKey *rlwe.RelinearizationKey,
 	galoisKeys []*rlwe.GaloisKey,
 ) (*Runtime, error) {
+	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, ceremonyKeyIDPrefix)
+}
+
+// NewGovernedEvaluationRuntime builds the evaluator for one case-specific
+// governed-decryptor key. Like NewEvaluationRuntime it holds no secret key and
+// no threshold party; the distinct key-id domain prevents custody relabeling.
+func NewGovernedEvaluationRuntime(
+	params bgv.Parameters,
+	publicKey *rlwe.PublicKey,
+	relinearizationKey *rlwe.RelinearizationKey,
+	galoisKeys []*rlwe.GaloisKey,
+) (*Runtime, error) {
+	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, governedKeyIDPrefix)
+}
+
+func newEvaluationRuntime(
+	params bgv.Parameters,
+	publicKey *rlwe.PublicKey,
+	relinearizationKey *rlwe.RelinearizationKey,
+	galoisKeys []*rlwe.GaloisKey,
+	keyPrefix string,
+) (*Runtime, error) {
 	if publicKey == nil || relinearizationKey == nil || len(galoisKeys) != len(rotationSteps) {
 		return nil, ErrCeremonyMaterial
 	}
@@ -60,7 +82,7 @@ func NewEvaluationRuntime(
 		one:                  oneCiphertext,
 		parties:              nil,
 		threshold:            defaultThreshold,
-		keyID:                fmt.Sprintf("ceremony-sha256:%x", keyDigest[:]),
+		keyID:                fmt.Sprintf("%s%x", keyPrefix, keyDigest[:]),
 		keyIDBytes:           keyDigest,
 		parameterFingerprint: sha256.Sum256(parameterBytes),
 		usedNonce:            make(map[[32]byte]struct{}),

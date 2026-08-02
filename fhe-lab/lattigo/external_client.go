@@ -35,11 +35,16 @@ const (
 	// CustodyDealerlessCeremony marks a key produced by the V4 ceremony in
 	// which every operator sampled its own secret locally.
 	CustodyDealerlessCeremony CustodyModel = "dealerless-ceremony"
+	// CustodyGovernedEphemeral marks the case-specific public key generated for
+	// the governed-decryptor MVP. The corresponding secret key is held only by
+	// the case decryptor and is terminal after its one permitted release.
+	CustodyGovernedEphemeral CustodyModel = "governed-ephemeral-case"
 )
 
 const (
 	dealerKeyIDPrefix   = "internal-sha256:"
 	ceremonyKeyIDPrefix = "ceremony-sha256:"
+	governedKeyIDPrefix = "governed-case-sha256:"
 )
 
 func custodyModelForKeyID(keyID string, digest [32]byte) (CustodyModel, bool) {
@@ -48,9 +53,38 @@ func custodyModelForKeyID(keyID string, digest [32]byte) (CustodyModel, bool) {
 		return CustodyTrustedDealer, true
 	case fmt.Sprintf("%s%x", ceremonyKeyIDPrefix, digest[:]):
 		return CustodyDealerlessCeremony, true
+	case fmt.Sprintf("%s%x", governedKeyIDPrefix, digest[:]):
+		return CustodyGovernedEphemeral, true
 	default:
 		return "", false
 	}
+}
+
+// NewGovernedExternalClient constructs the public-only encryption boundary for
+// one governed-decryptor case. It receives no evaluation key and no secret
+// material. The key identifier is the digest of the exact canonical public key.
+func NewGovernedExternalClient(params bgv.Parameters, publicKey *rlwe.PublicKey) (*ExternalClient, error) {
+	if publicKey == nil {
+		return nil, ErrWrongKeyID
+	}
+	parameterBytes, err := params.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid public parameters", ErrWrongKeyID)
+	}
+	publicKeyBytes, err := publicKey.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid collective public key", ErrWrongKeyID)
+	}
+	keyDigest := sha256.Sum256(publicKeyBytes)
+	return &ExternalClient{custody: CustodyGovernedEphemeral, engine: clientEncryptionEngine{
+		params:               params,
+		encoder:              bgv.NewEncoder(params),
+		encryptor:            rlwe.NewEncryptor(params, publicKey),
+		keyID:                fmt.Sprintf("%s%x", governedKeyIDPrefix, keyDigest[:]),
+		keyIDBytes:           keyDigest,
+		parameterFingerprint: sha256.Sum256(parameterBytes),
+		publicKeyBytes:       publicKeyBytes,
+	}}, nil
 }
 
 // CustodyModel reports how the imported key was produced.
