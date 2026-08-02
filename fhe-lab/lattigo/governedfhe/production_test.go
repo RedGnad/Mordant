@@ -220,6 +220,159 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 	})
 }
 
+func TestFreshParticipantCiphertextValidationBeforeAdmission(t *testing.T) {
+	fixture := newProductionFixture(t, true)
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, bgv.Parameters, *rlwe.PublicKey, *fhe.CipherPledge)
+	}{
+		{
+			name: "insufficient_level",
+			mutate: func(t *testing.T, params bgv.Parameters, publicKey *rlwe.PublicKey, pledge *fhe.CipherPledge) {
+				values := make([]uint64, params.MaxSlots())
+				plaintext := bgv.NewPlaintext(params, 0)
+				if err := bgv.NewEncoder(params).Encode(values, plaintext); err != nil {
+					t.Fatal(err)
+				}
+				ciphertext, err := rlwe.NewEncryptor(params, publicKey).EncryptNew(plaintext)
+				if err != nil || ciphertext.Degree() != 1 || ciphertext.Level() != 0 {
+					t.Fatalf("construct genuine level-zero N15 ciphertext: %v", err)
+				}
+				pledge.PolicyBits = ciphertext
+			},
+		},
+		{
+			name: "incorrect_scale",
+			mutate: func(t *testing.T, params bgv.Parameters, _ *rlwe.PublicKey, pledge *fhe.CipherPledge) {
+				pledge.PolicyBits = pledge.PolicyBits.CopyNew()
+				pledge.PolicyBits.Scale = rlwe.NewScaleModT(params.DefaultScale().Uint64()+1, params.PlaintextModulus())
+				if pledge.PolicyBits.Scale.Equal(params.DefaultScale()) {
+					t.Fatal("test scale mutation did not change the fresh metadata")
+				}
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			publicRoot := cloneFlatRoot(t, fixture.publicRoot)
+			privateRoot := copyFlatRoot(t, fixture.privateRoot, 0o700)
+			mutatedA := replaceAuthorizedParticipantCiphertext(t, publicRoot, fixture.manifest, fixture.privateA, testCase.mutate)
+
+			store, err := openObjectStore(publicRoot, PublicCaseQuota, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			loadedA, _, err := loadParticipantArtifactMetadata(store, fixture.manifest, RoleA, fixture.now)
+			if err != nil {
+				_ = store.close()
+				t.Fatalf("mutated participant signature or artifact binding is invalid: %v", err)
+			}
+			if _, err := loadParticipantCiphertext(store, fixture.manifest, loadedA); err != nil {
+				_ = store.close()
+				t.Fatalf("mutated ciphertext digest, length, or canonical encoding is stale: %v", err)
+			}
+			if err := store.close(); err != nil {
+				t.Fatal(err)
+			}
+
+			beforeEvaluation := evaluationExecutionCount.Load()
+			if _, _, err := EvaluateFixedConflict(EvaluatorConfig{
+				PublicRoot: publicRoot, Provenance: testDigest("gfhe-07r/evaluator/" + testCase.name), Now: fixture.now,
+			}); !errors.Is(err, ErrCiphertextValidation) {
+				t.Fatalf("evaluator rejected for the wrong reason: %v", err)
+			}
+			if evaluationExecutionCount.Load() != beforeEvaluation || fileExists(filepath.Join(publicRoot, evaluationAdmissionObject)) ||
+				fileExists(filepath.Join(publicRoot, evaluationCompletedObject)) || fileExists(filepath.Join(publicRoot, resultCiphertextObject)) ||
+				fileExists(filepath.Join(publicRoot, evaluatedArtifactObject)) {
+				t.Fatalf("invalid participant input crossed the evaluator admission boundary")
+			}
+
+			forgedArtifact := publishForgedEvaluatorArtifact(t, publicRoot, fixture.manifest, mutatedA, fixture.artifactB, false, fixture.now)
+			if err := os.Rename(filepath.Join(privateRoot, secretKeyObject), filepath.Join(privateRoot, "secret-key.unavailable")); err != nil {
+				t.Fatal(err)
+			}
+			beforeRecomputation := recomputationExecutionCount.Load()
+			beforeSignatures := releaseSignatureCount.Load()
+			decryptor, err := NewGovernedDecryptor(GovernedDecryptorConfig{
+				PublicRoot: publicRoot, PrivateRoot: privateRoot,
+				Provenance: testDigest("gfhe-07r/decryptor/" + testCase.name), Now: fixture.now,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, releaseErr := decryptor.ReleaseFixedConflict(forgedArtifact)
+			if closeErr := decryptor.Close(); closeErr != nil {
+				t.Fatal(closeErr)
+			}
+			if !errors.Is(releaseErr, ErrCiphertextValidation) {
+				t.Fatalf("decryptor rejected for the wrong reason: %v", releaseErr)
+			}
+			if recomputationExecutionCount.Load() != beforeRecomputation || releaseSignatureCount.Load() != beforeSignatures ||
+				fileExists(filepath.Join(privateRoot, recomputeAdmissionObject)) || fileExists(filepath.Join(privateRoot, recomputeMismatchObject)) ||
+				fileExists(filepath.Join(privateRoot, releaseAdmissionObject)) || fileExists(filepath.Join(privateRoot, releaseConsumedObject)) ||
+				fileExists(filepath.Join(privateRoot, retainedResultObject)) || fileExists(filepath.Join(publicRoot, publicResultObject)) {
+				t.Fatalf("invalid participant input crossed the decryptor admission or release boundary")
+			}
+		})
+	}
+}
+
+func replaceAuthorizedParticipantCiphertext(
+	t *testing.T,
+	publicRoot string,
+	manifest FHECaseManifest,
+	signingKey ed25519.PrivateKey,
+	mutate func(*testing.T, bgv.Parameters, *rlwe.PublicKey, *fhe.CipherPledge),
+) EncryptedParticipantArtifact {
+	t.Helper()
+	store, err := openObjectStore(publicRoot, PublicCaseQuota, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params, publicKey, err := loadPublicEncryptionMaterial(store, manifest.Crypto)
+	if err != nil {
+		_ = store.close()
+		t.Fatal(err)
+	}
+	var artifact EncryptedParticipantArtifact
+	if _, _, err := store.readJSON(submissionAManifest, &artifact); err != nil {
+		_ = store.close()
+		t.Fatal(err)
+	}
+	pledge, err := loadParticipantCiphertext(store, manifest, artifact)
+	if err != nil {
+		_ = store.close()
+		t.Fatal(err)
+	}
+	if err := store.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	mutate(t, params, publicKey, pledge)
+	encoded, err := pledge.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact.CiphertextObject = ObjectRef{Path: submissionAObject, Digest: DigestBytes(encoded), Length: int64(len(encoded))}
+	artifact.Components, err = componentRefs(pledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact.Signature, err = signCanonical(signingKey, "MordantEncryptedParticipantArtifact/v1", artifact.signingValue())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(publicRoot, submissionAObject)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(publicRoot, submissionAObject), encoded, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	replaceCanonicalObject(t, publicRoot, submissionAManifest, artifact)
+	return artifact
+}
+
 func TestPinnedStoreSurvivesRootReplacement(t *testing.T) {
 	parent := taskTempDir(t, "mordant-pinned-store-")
 	root := filepath.Join(parent, "active")

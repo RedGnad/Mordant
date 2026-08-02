@@ -49,16 +49,17 @@ const (
 )
 
 var (
-	ErrBinding             = errors.New("governed FHE binding rejected")
-	ErrArtifact            = errors.New("governed FHE artifact rejected")
-	ErrStore               = errors.New("governed FHE store rejected")
-	ErrReleaseConsumed     = errors.New("governed FHE release already consumed")
-	ErrReleaseAmbiguous    = errors.New("governed FHE release is terminally ambiguous")
-	ErrEvaluatorMismatch   = errors.New("governed FHE evaluator result mismatch")
-	ErrEvaluationAdmission = errors.New("governed FHE evaluation already admitted")
-	ErrRecomputeAdmission  = errors.New("governed FHE recomputation already admitted")
-	ErrResourceAdmission   = errors.New("governed FHE resource admission rejected")
-	ErrRecourse            = errors.New("governed FHE recourse rejected")
+	ErrBinding              = errors.New("governed FHE binding rejected")
+	ErrArtifact             = errors.New("governed FHE artifact rejected")
+	ErrStore                = errors.New("governed FHE store rejected")
+	ErrReleaseConsumed      = errors.New("governed FHE release already consumed")
+	ErrReleaseAmbiguous     = errors.New("governed FHE release is terminally ambiguous")
+	ErrEvaluatorMismatch    = errors.New("governed FHE evaluator result mismatch")
+	ErrCiphertextValidation = errors.New("governed FHE fresh participant ciphertext rejected")
+	ErrEvaluationAdmission  = errors.New("governed FHE evaluation already admitted")
+	ErrRecomputeAdmission   = errors.New("governed FHE recomputation already admitted")
+	ErrResourceAdmission    = errors.New("governed FHE resource admission rejected")
+	ErrRecourse             = errors.New("governed FHE recourse rejected")
 )
 
 var rotationSteps = [...]int{1, 2, 4, 8, 16, 32, 64, -64, 128}

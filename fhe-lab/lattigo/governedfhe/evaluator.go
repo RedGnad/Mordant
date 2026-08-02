@@ -1,6 +1,7 @@
 package governedfhe
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"fmt"
 	"time"
@@ -48,9 +49,8 @@ func loadParticipantArtifactMetadata(store *objectStore, manifest FHECaseManifes
 	if verifyCanonical(ed25519.PublicKey(identity.SigningPublicKey), "MordantEncryptedParticipantArtifact/v1", artifact.signingValue(), artifact.Signature) != nil {
 		return artifact, Digest{}, ErrBinding
 	}
-	expectedNames := [...]string{"policyBits", "currencyBits", "amountBits", "obligationIdBits", "receivableIdBits"}
 	for index, component := range artifact.Components {
-		if component.Name != expectedNames[index] || !nonzero(component.Digest) || component.Length <= 0 || component.Length > 64<<20 {
+		if component.Name != participantCiphertextComponentNames[index] || !nonzero(component.Digest) || component.Length <= 0 || component.Length > 64<<20 {
 			return artifact, Digest{}, ErrArtifact
 		}
 	}
@@ -64,10 +64,14 @@ func loadParticipantCiphertext(store *objectStore, manifest FHECaseManifest, art
 	}
 	pledge, err := fhe.UnmarshalCipherPledge(ciphertextBytes)
 	if err != nil {
-		return nil, fmt.Errorf("decode %s: %w", artifact.CiphertextObject.Path, err)
+		return nil, fmt.Errorf("%w: decode %s", ErrCiphertextValidation, artifact.CiphertextObject.Path)
+	}
+	canonicalBytes, err := pledge.MarshalBinary()
+	if err != nil || !bytes.Equal(canonicalBytes, ciphertextBytes) {
+		return nil, fmt.Errorf("%w: noncanonical %s", ErrCiphertextValidation, artifact.CiphertextObject.Path)
 	}
 	if Digest(pledge.ParameterFingerprint) != manifest.Binding.ParameterFingerprint || pledge.ReceivableIDBits == nil || pledge.ReceivableCommitment != ([32]byte{}) {
-		return nil, ErrArtifact
+		return nil, ErrCiphertextValidation
 	}
 	expectedComponents, err := componentRefs(pledge)
 	if err != nil || len(expectedComponents) != len(artifact.Components) {
@@ -75,7 +79,7 @@ func loadParticipantCiphertext(store *objectStore, manifest FHECaseManifest, art
 	}
 	for index := range expectedComponents {
 		if expectedComponents[index] != artifact.Components[index] {
-			return nil, ErrArtifact
+			return nil, ErrCiphertextValidation
 		}
 	}
 	return pledge, nil
@@ -149,50 +153,41 @@ func EvaluateFixedConflict(config EvaluatorConfig) (EvaluatedConflictArtifact, E
 	if err != nil || config.Now.Unix() < manifest.Binding.CreatedAtUnix || config.Now.Unix() > manifest.Binding.ExpiresAtUnix {
 		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
+	participants, err := loadAndValidateFreshParticipants(store, manifest, config.Now)
+	if err != nil {
+		return EvaluatedConflictArtifact{}, report, err
+	}
 	if store.exists(evaluationAdmissionObject) || store.exists(evaluationCompletedObject) || store.exists(resultCiphertextObject) || store.exists(evaluatedArtifactObject) {
 		return EvaluatedConflictArtifact{}, report, ErrEvaluationAdmission
-	}
-	artifactA, digestA, err := loadParticipantArtifactMetadata(store, manifest, RoleA, config.Now)
-	if err != nil {
-		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant A metadata: %w", err)
-	}
-	artifactB, digestB, err := loadParticipantArtifactMetadata(store, manifest, RoleB, config.Now)
-	if err != nil || artifactA.SubmissionNonce == artifactB.SubmissionNonce || digestA == digestB {
-		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
 	releaseResource, err := admitN15(manifest.Binding.CaseID, "evaluation")
 	if err != nil {
 		return EvaluatedConflictArtifact{}, report, err
 	}
 	defer releaseResource()
+	if store.exists(evaluationAdmissionObject) || store.exists(evaluationCompletedObject) || store.exists(resultCiphertextObject) || store.exists(evaluatedArtifactObject) {
+		return EvaluatedConflictArtifact{}, report, ErrEvaluationAdmission
+	}
 	bindingDigest, _ := manifest.Binding.Digest()
 	admission := evaluationAdmission{
 		SchemaVersion: EvaluationAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
-		ParticipantArtifactDigests: []Digest{digestA, digestB}, EvaluatorProvenance: config.Provenance, AdmittedAtUnix: config.Now.Unix(),
+		ParticipantArtifactDigests: []Digest{participants.digestA, participants.digestB}, EvaluatorProvenance: config.Provenance, AdmittedAtUnix: config.Now.Unix(),
 	}
 	if _, _, err := store.createJSON(evaluationAdmissionObject, admission); err != nil {
 		return EvaluatedConflictArtifact{}, report, fmt.Errorf("%w: %v", ErrEvaluationAdmission, err)
-	}
-	pledgeA, err := loadParticipantCiphertext(store, manifest, artifactA)
-	if err != nil {
-		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant A ciphertext: %w", err)
-	}
-	pledgeB, err := loadParticipantCiphertext(store, manifest, artifactB)
-	if err != nil {
-		return EvaluatedConflictArtifact{}, report, fmt.Errorf("participant B ciphertext: %w", err)
 	}
 	runtime, err := loadEvaluationRuntime(store, manifest)
 	if err != nil {
 		return EvaluatedConflictArtifact{}, report, fmt.Errorf("evaluation material: %w", err)
 	}
-	if pledgeA.KeyID != runtime.KeyID() || pledgeB.KeyID != runtime.KeyID() {
+	if participants.pledgeA.KeyID != runtime.KeyID() || participants.pledgeB.KeyID != runtime.KeyID() {
 		return EvaluatedConflictArtifact{}, report, ErrBinding
 	}
 	evaluationExecutionCount.Add(1)
 	outputs, err := runtime.RecomputeCircuitV5(fhe.CircuitInputsV5{
-		PolicyBitsA: pledgeA.PolicyBits, PolicyBitsB: pledgeB.PolicyBits,
-		CurrencyBitsA: pledgeA.CurrencyBits, CurrencyBitsB: pledgeB.CurrencyBits,
-		ReceivableIDsA: pledgeA.ReceivableIDBits, ReceivableIDsB: pledgeB.ReceivableIDBits,
+		PolicyBitsA: participants.pledgeA.PolicyBits, PolicyBitsB: participants.pledgeB.PolicyBits,
+		CurrencyBitsA: participants.pledgeA.CurrencyBits, CurrencyBitsB: participants.pledgeB.CurrencyBits,
+		ReceivableIDsA: participants.pledgeA.ReceivableIDBits, ReceivableIDsB: participants.pledgeB.ReceivableIDBits,
 	})
 	if err != nil || outputs == nil || outputs.PolicyConflict == nil {
 		return EvaluatedConflictArtifact{}, report, fmt.Errorf("fixed circuit: %w", err)
@@ -208,7 +203,7 @@ func EvaluateFixedConflict(config EvaluatorConfig) (EvaluatedConflictArtifact, E
 	commitment := DigestBytes(append([]byte("MordantFixedConflictCiphertext/v1\x00"), resultBytes...))
 	artifact := EvaluatedConflictArtifact{
 		SchemaVersion: EvaluatedArtifactSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
-		AssetIdentity: manifest.Binding.AssetIdentity, ParticipantArtifactDigests: []Digest{digestA, digestB},
+		AssetIdentity: manifest.Binding.AssetIdentity, ParticipantArtifactDigests: []Digest{participants.digestA, participants.digestB},
 		PublicKeyDigest: manifest.Binding.PublicKeyDigest, ParameterProfile: ParameterProfile,
 		ParameterFingerprint: manifest.Binding.ParameterFingerprint, CircuitID: CircuitID, CircuitVersion: fhe.CircuitV5Version,
 		CircuitDigest: FixedCircuitDigest(), ResultCiphertext: resultRef, ResultCiphertextCommitment: commitment,

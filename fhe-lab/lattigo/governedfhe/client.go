@@ -158,22 +158,13 @@ func componentRefs(pledge *fhe.CipherPledge) ([]CiphertextComponentRef, error) {
 	if pledge == nil || pledge.ReceivableIDBits == nil {
 		return nil, ErrArtifact
 	}
-	components := []struct {
-		name string
-		ct   *rlwe.Ciphertext
-	}{
-		{"policyBits", pledge.PolicyBits},
-		{"currencyBits", pledge.CurrencyBits},
-		{"amountBits", pledge.AmountBits},
-		{"obligationIdBits", pledge.ObligationIDBits},
-		{"receivableIdBits", pledge.ReceivableIDBits},
-	}
+	components := participantCiphertextComponents(pledge)
 	result := make([]CiphertextComponentRef, len(components))
 	for index, component := range components {
-		if component.ct == nil {
+		if component.ciphertext == nil {
 			return nil, ErrArtifact
 		}
-		encoded, err := component.ct.MarshalBinary()
+		encoded, err := component.ciphertext.MarshalBinary()
 		if err != nil {
 			return nil, err
 		}

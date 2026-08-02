@@ -187,6 +187,13 @@ func (d *GovernedDecryptor) loadVerifiedRecomputation(manifest FHECaseManifest, 
 }
 
 func (d *GovernedDecryptor) prepareVerifiedRecomputation(manifest FHECaseManifest, artifact EvaluatedConflictArtifact, evaluatorResultBytes []byte, artifactDigest Digest) ([]byte, recomputeVerified, error) {
+	participants, err := loadAndValidateFreshParticipants(d.publicStore, manifest, d.now)
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	if participants.digestA != artifact.ParticipantArtifactDigests[0] || participants.digestB != artifact.ParticipantArtifactDigests[1] {
+		return nil, recomputeVerified{}, ErrBinding
+	}
 	if d.privateStore.exists(recomputeMismatchObject) {
 		return nil, recomputeVerified{}, ErrEvaluatorMismatch
 	}
@@ -196,45 +203,31 @@ func (d *GovernedDecryptor) prepareVerifiedRecomputation(manifest FHECaseManifes
 	if d.privateStore.exists(recomputeAdmissionObject) {
 		return nil, recomputeVerified{}, ErrRecomputeAdmission
 	}
-	artifactA, digestA, err := loadParticipantArtifactMetadata(d.publicStore, manifest, RoleA, d.now)
-	if err != nil {
-		return nil, recomputeVerified{}, err
-	}
-	artifactB, digestB, err := loadParticipantArtifactMetadata(d.publicStore, manifest, RoleB, d.now)
-	if err != nil || digestA != artifact.ParticipantArtifactDigests[0] || digestB != artifact.ParticipantArtifactDigests[1] ||
-		artifactA.SubmissionNonce == artifactB.SubmissionNonce || digestA == digestB {
-		return nil, recomputeVerified{}, ErrBinding
-	}
 	releaseResource, err := admitN15(manifest.Binding.CaseID, "recomputation")
 	if err != nil {
 		return nil, recomputeVerified{}, err
 	}
 	defer releaseResource()
+	if d.privateStore.exists(recomputeMismatchObject) || d.privateStore.exists(recomputeVerifiedObject) || d.privateStore.exists(recomputeAdmissionObject) {
+		return nil, recomputeVerified{}, ErrRecomputeAdmission
+	}
 	bindingDigest, _ := manifest.Binding.Digest()
 	admission := recomputeAdmission{
 		SchemaVersion: RecomputeAdmissionSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: bindingDigest,
-		ParticipantArtifactDigests: []Digest{digestA, digestB}, EvaluatedArtifactDigest: artifactDigest, AdmittedAtUnix: d.now.Unix(),
+		ParticipantArtifactDigests: []Digest{participants.digestA, participants.digestB}, EvaluatedArtifactDigest: artifactDigest, AdmittedAtUnix: d.now.Unix(),
 	}
 	if _, _, err := d.privateStore.createJSON(recomputeAdmissionObject, admission); err != nil {
 		return nil, recomputeVerified{}, fmt.Errorf("%w: %v", ErrRecomputeAdmission, err)
 	}
-	pledgeA, err := loadParticipantCiphertext(d.publicStore, manifest, artifactA)
-	if err != nil {
-		return nil, recomputeVerified{}, err
-	}
-	pledgeB, err := loadParticipantCiphertext(d.publicStore, manifest, artifactB)
-	if err != nil {
-		return nil, recomputeVerified{}, err
-	}
 	runtime, err := loadEvaluationRuntime(d.publicStore, manifest)
-	if err != nil || pledgeA.KeyID != runtime.KeyID() || pledgeB.KeyID != runtime.KeyID() {
+	if err != nil || participants.pledgeA.KeyID != runtime.KeyID() || participants.pledgeB.KeyID != runtime.KeyID() {
 		return nil, recomputeVerified{}, ErrBinding
 	}
 	recomputationExecutionCount.Add(1)
 	outputs, err := runtime.RecomputeCircuitV5(fhe.CircuitInputsV5{
-		PolicyBitsA: pledgeA.PolicyBits, PolicyBitsB: pledgeB.PolicyBits,
-		CurrencyBitsA: pledgeA.CurrencyBits, CurrencyBitsB: pledgeB.CurrencyBits,
-		ReceivableIDsA: pledgeA.ReceivableIDBits, ReceivableIDsB: pledgeB.ReceivableIDBits,
+		PolicyBitsA: participants.pledgeA.PolicyBits, PolicyBitsB: participants.pledgeB.PolicyBits,
+		CurrencyBitsA: participants.pledgeA.CurrencyBits, CurrencyBitsB: participants.pledgeB.CurrencyBits,
+		ReceivableIDsA: participants.pledgeA.ReceivableIDBits, ReceivableIDsB: participants.pledgeB.ReceivableIDBits,
 	})
 	if err != nil || outputs == nil || outputs.PolicyConflict == nil {
 		return nil, recomputeVerified{}, ErrReleaseAmbiguous
