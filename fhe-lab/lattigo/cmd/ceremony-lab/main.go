@@ -1,7 +1,8 @@
 //go:build obsolete_recoverable_ceremony
 
-// Command ceremony-lab is the parent orchestrator for the dealerless custody
-// gate. It builds the binaries, issues the lab PKI, launches every process,
+// Command ceremony-lab reproduces obsolete rejected recoverable evidence and
+// cannot produce V5 one-shot acceptance evidence. It builds the historical
+// binaries, issues the lab PKI, launches every process,
 // drives the run, then verifies the outcome and writes a commit-bound evidence
 // bundle.
 //

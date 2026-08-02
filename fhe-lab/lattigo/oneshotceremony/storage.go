@@ -1,53 +1,193 @@
 package oneshotceremony
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
 
-// WitnessStore is one operator's private administrative replica. Stores must
-// never be shared between operators or administrators.
-type WitnessStore struct {
-	root string
+// OperatorLocalStorageConfig is provisioned by one operator outside the
+// ceremony request path. StateRoot and StorageIdentity are immutable for that
+// operator identity; a coordinator must never construct or replace this
+// configuration.
+type OperatorLocalStorageConfig struct {
+	StateRoot       string
+	StorageIdentity [32]byte
+	Identity        OperatorIdentity
+	ProcessInstance string
+	BootSession     string
 }
 
-func OpenWitnessStore(root string) (*WitnessStore, error) {
-	if !filepath.IsAbs(root) {
-		return nil, fmt.Errorf("%w: store path must be absolute", ErrPersistence)
+// OperatorStorageCapability is the only storage object accepted by a
+// Participant. Its witness, monotone session registry and completed-private
+// roots are derived once from the operator-local configuration rather than
+// supplied by a ceremony caller.
+type OperatorStorageCapability struct {
+	witness       *WitnessStore
+	identity      OperatorIdentity
+	storageID     [32]byte
+	startup       ExecutableProvenance
+	process       [32]byte
+	boot          [32]byte
+	completedRoot string
+}
+
+func DeriveOperatorStorageBinding(stateRoot string, storageIdentity [32]byte, identity OperatorIdentity) ([32]byte, error) {
+	if !filepath.IsAbs(stateRoot) || isZero32(storageIdentity) || identity.Point == 0 || identity.AdministratorID == "" ||
+		identity.SigningPublicKey == ([ed25519.PublicKeySize]byte{}) || isZero32(identity.EncryptionPublicKey) ||
+		isZero32(identity.TransportCertFingerprint) || isZero32(identity.RuntimeBinaryDigest) || identity.GoVersion == "" ||
+		identity.OperatingSystem == "" || identity.Architecture == "" {
+		return [32]byte{}, ErrBinding
 	}
-	if err := ensureNoSymlinkPath(root); err != nil {
+	root := filepath.Clean(stateRoot)
+	var e encoder
+	e.text("MordantOneShotOperatorStorageBinding/v3")
+	e.text(root)
+	e.fixed(storageIdentity[:])
+	e.u64(identity.Point)
+	e.text(identity.AdministratorID)
+	e.fixed(identity.SigningPublicKey[:])
+	e.fixed(identity.EncryptionPublicKey[:])
+	e.fixed(identity.TransportCertFingerprint[:])
+	e.fixed(identity.RuntimeBinaryDigest[:])
+	e.text(identity.GoVersion)
+	e.text(identity.OperatingSystem)
+	e.text(identity.Architecture)
+	return hashDomain("MordantOneShotOperatorStorageBindingDigest/v3", e.Bytes()), nil
+}
+
+func OpenOperatorStorageCapability(config OperatorLocalStorageConfig) (*OperatorStorageCapability, error) {
+	if config.ProcessInstance == "" || config.BootSession == "" {
+		return nil, ErrBinding
+	}
+	expected, err := DeriveOperatorStorageBinding(config.StateRoot, config.StorageIdentity, config.Identity)
+	if err != nil || expected != config.Identity.StorageBindingDigest {
+		return nil, ErrBinding
+	}
+	startup, err := CurrentExecutableProvenance()
+	if err != nil || startup.ExecutableSHA256 != config.Identity.RuntimeBinaryDigest || startup.GoVersion != config.Identity.GoVersion ||
+		startup.OperatingSystem != config.Identity.OperatingSystem || startup.Architecture != config.Identity.Architecture {
+		return nil, fmt.Errorf("%w: operator startup executable", ErrBinding)
+	}
+	root := filepath.Clean(config.StateRoot)
+	if err := openRestrictedDirectory(root); err != nil {
 		return nil, err
 	}
-	info, err := os.Lstat(root)
-	if errorsIsNotExist(err) {
-		if err := os.Mkdir(root, 0o700); err != nil {
-			return nil, fmt.Errorf("%w: create store", ErrPersistence)
-		}
-		if err := syncDirectory(filepath.Dir(root)); err != nil {
-			return nil, err
-		}
-		info, err = os.Lstat(root)
+	witness, err := openWitnessStore(filepath.Join(root, "witness"), filepath.Join(root, "session-registry"))
+	if err != nil {
+		return nil, err
 	}
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("%w: unsafe store root", ErrPersistence)
+	completedRoot := filepath.Join(root, "completed-private")
+	if err := openRestrictedDirectory(completedRoot); err != nil {
+		return nil, err
 	}
-	return &WitnessStore{root: root}, nil
+	return &OperatorStorageCapability{
+		witness:       witness,
+		identity:      config.Identity,
+		storageID:     config.StorageIdentity,
+		startup:       startup,
+		process:       hashDomain("MordantOneShotProcessInstance/v1", []byte(config.ProcessInstance)),
+		boot:          hashDomain("MordantOneShotBootSession/v1", []byte(config.BootSession)),
+		completedRoot: completedRoot,
+	}, nil
+}
+
+func (c *OperatorStorageCapability) StartupProvenance() ExecutableProvenance {
+	if c == nil {
+		return ExecutableProvenance{}
+	}
+	return c.startup
+}
+
+func (c *OperatorStorageCapability) storeCompletedPrivate(key [32]byte, sealed SealedOperatorBundle) error {
+	if c == nil || isZero32(key) || sealed.OperatorPoint != c.identity.Point || sealed.CeremonyID == ([32]byte{}) {
+		return ErrPersistence
+	}
+	sealedBytes, err := sealed.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	var e encoder
+	e.text("MordantOneShotCompletedPrivateArtifact/v3")
+	e.fixed(key[:])
+	e.field(sealedBytes)
+	name := "completed-" + hex.EncodeToString(sealed.CeremonyID[:]) + ".bin"
+	return (&WitnessStore{root: c.completedRoot}).writeNoReplace(name, e.Bytes())
+}
+
+func (c *OperatorStorageCapability) readCompletedPrivate(ceremonyID [32]byte) ([32]byte, SealedOperatorBundle, error) {
+	var key [32]byte
+	if c == nil || isZero32(ceremonyID) {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	name := "completed-" + hex.EncodeToString(ceremonyID[:]) + ".bin"
+	data, err := readNoSymlinkFile(filepath.Join(c.completedRoot, name))
+	if err != nil {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	d := newDecoder(data)
+	magic, err := d.text()
+	if err != nil || magic != "MordantOneShotCompletedPrivateArtifact/v3" {
+		return key, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	value, err := d.fixed(32)
+	if err != nil || copy32(&key, value) != nil || isZero32(key) {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	sealedBytes, err := d.field()
+	if err != nil || d.done() != nil {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	sealed, err := ParseSealedOperatorBundle(sealedBytes)
+	if err != nil || sealed.CeremonyID != ceremonyID || sealed.OperatorPoint != c.identity.Point {
+		return [32]byte{}, SealedOperatorBundle{}, ErrSecretAccess
+	}
+	return key, sealed, nil
+}
+
+// WitnessStore is the internal witness replica reached only through an
+// OperatorStorageCapability.
+type WitnessStore struct {
+	root     string
+	registry *sessionRegistry
+}
+
+func openWitnessStore(root, sessionRegistryRoot string) (*WitnessStore, error) {
+	if sameOrNestedPath(root, sessionRegistryRoot) {
+		return nil, fmt.Errorf("%w: witness and session registry roots must be separate", ErrPersistence)
+	}
+	if err := openRestrictedDirectory(root); err != nil {
+		return nil, err
+	}
+	registry, err := openSessionRegistry(sessionRegistryRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &WitnessStore{root: root, registry: registry}, nil
 }
 
 func (s *WitnessStore) Reserve(reservation AttemptReservation) error {
-	if s == nil || reservation.OperatorPoint == 0 {
+	if s == nil || s.registry == nil || reservation.OperatorPoint == 0 {
 		return fmt.Errorf("%w: reservation", ErrPersistence)
 	}
 	encoded, err := reservation.MarshalBinary()
 	if err != nil {
 		return err
 	}
+	context, err := ParseContext(reservation.ContextSnapshot)
+	if err != nil || context.CeremonyID() != reservation.CeremonyID || context.SessionBindingDigest() != reservation.SessionBindingDigest {
+		return ErrBinding
+	}
+	// Participant.Reserve has already consumed the session registry marker.
+	// From this point this method only persists the completed reservation and
+	// its ceremony/scope markers.
 	name := "used-" + hex.EncodeToString(reservation.CeremonyID[:]) + ".marker"
 	if err := s.writeNoReplace(name, encoded); err != nil {
 		return fmt.Errorf("%w: ceremony identifier already used", ErrReplay)
@@ -57,6 +197,13 @@ func (s *WitnessStore) Reserve(reservation AttemptReservation) error {
 		return fmt.Errorf("%w: scope ordinal already used", ErrReplay)
 	}
 	return nil
+}
+
+func (s *WitnessStore) ConsumeSession(context Context, point uint64) error {
+	if s == nil || s.registry == nil {
+		return ErrPersistence
+	}
+	return s.registry.consume(context, point)
 }
 
 func (s *WitnessStore) StoreReservation(reservation AttemptReservation) error {
@@ -113,6 +260,58 @@ func (s *WitnessStore) WriteDecision(ceremonyID [32]byte, sequence uint64, state
 	return nil
 }
 
+func (s *WitnessStore) MarkGeneration(context Context, label string) error {
+	if s == nil || label == "" || strings.ContainsAny(label, `/\\`) {
+		return ErrPersistence
+	}
+	ceremonyID := context.CeremonyID()
+	session := context.SessionBindingDigest()
+	var e encoder
+	e.text("MordantOneShotGenerationMarker/v2")
+	e.fixed(ceremonyID[:])
+	e.fixed(session[:])
+	e.text(label)
+	name := fmt.Sprintf("generation-%s-%s.marker", hex.EncodeToString(ceremonyID[:]), label)
+	if err := s.writeNoReplace(name, e.Bytes()); err != nil {
+		return fmt.Errorf("%w: generation already marked", ErrReplay)
+	}
+	return nil
+}
+
+func (s *WitnessStore) WriteTerminalTombstone(tombstone TerminalTombstone) error {
+	if s == nil {
+		return ErrPersistence
+	}
+	encoded, err := tombstone.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	name := "terminal-" + hex.EncodeToString(tombstone.CeremonyID[:]) + ".bin"
+	if err := s.writeNoReplace(name, encoded); err != nil {
+		existing, readErr := readNoSymlinkFile(filepath.Join(s.root, name))
+		if readErr != nil || !slices.Equal(existing, encoded) {
+			return fmt.Errorf("%w: terminal tombstone conflict", ErrReplay)
+		}
+	}
+	return nil
+}
+
+func (s *WitnessStore) TerminalTombstone(ceremonyID [32]byte) (TerminalTombstone, error) {
+	if s == nil || isZero32(ceremonyID) {
+		return TerminalTombstone{}, ErrPersistence
+	}
+	name := "terminal-" + hex.EncodeToString(ceremonyID[:]) + ".bin"
+	data, err := readNoSymlinkFile(filepath.Join(s.root, name))
+	if err != nil {
+		return TerminalTombstone{}, err
+	}
+	tombstone, err := ParseTerminalTombstone(data)
+	if err != nil || tombstone.CeremonyID != ceremonyID {
+		return TerminalTombstone{}, ErrPersistence
+	}
+	return tombstone, nil
+}
+
 func (s *WitnessStore) writeStatusDecision(keyID [32]byte, sequence uint64, statementDigest [32]byte, signature []byte) error {
 	var e encoder
 	e.text("MordantOneShotStatusSigningDecision/v1")
@@ -132,10 +331,29 @@ func (s *WitnessStore) Append(record WitnessRecord) error {
 	if err != nil {
 		return err
 	}
-	digest := sha256Record(encoded)
-	name := fmt.Sprintf("record-%s-%020d-%s.bin", hex.EncodeToString(record.Statement.CeremonyID[:]), record.Statement.Sequence, hex.EncodeToString(digest[:]))
+	records, err := s.Records(record.Statement.CeremonyID)
+	if err != nil {
+		return err
+	}
+	if record.Statement.Sequence != uint64(len(records)+1) {
+		return fmt.Errorf("%w: witness sequence drift", ErrPersistence)
+	}
+	var expectedPrevious [32]byte
+	if len(records) > 0 {
+		expectedPrevious = records[len(records)-1].EventDigest()
+	}
+	if record.Statement.PreviousDigest != expectedPrevious {
+		return fmt.Errorf("%w: witness predecessor drift", ErrPersistence)
+	}
+	// The stable sequence slot makes concurrent conflicting appends race for
+	// the same create-only filename. At most one can become authoritative.
+	name := fmt.Sprintf("record-%s-%020d.bin", hex.EncodeToString(record.Statement.CeremonyID[:]), record.Statement.Sequence)
 	if err := s.writeNoReplace(name, encoded); err != nil {
 		return fmt.Errorf("%w: witness record already exists", ErrReplay)
+	}
+	readback, err := readNoSymlinkFile(filepath.Join(s.root, name))
+	if err != nil || !slices.Equal(readback, encoded) {
+		return fmt.Errorf("%w: witness readback", ErrPersistence)
 	}
 	return nil
 }
@@ -156,7 +374,7 @@ func (s *WitnessStore) Records(ceremonyID [32]byte) ([]WitnessRecord, error) {
 			names = append(names, name)
 			continue
 		}
-		if !strings.HasPrefix(name, "record-") && !strings.HasPrefix(name, "used-") && !strings.HasPrefix(name, "scope-") && !strings.HasPrefix(name, "decision-") && !strings.HasPrefix(name, "reservation-") && !strings.HasPrefix(name, "status-") {
+		if !strings.HasPrefix(name, "record-") && !strings.HasPrefix(name, "used-") && !strings.HasPrefix(name, "scope-") && !strings.HasPrefix(name, "decision-") && !strings.HasPrefix(name, "reservation-") && !strings.HasPrefix(name, "status-") && !strings.HasPrefix(name, "generation-") && !strings.HasPrefix(name, "terminal-") {
 			return nil, fmt.Errorf("%w: unknown store entry", ErrPersistence)
 		}
 	}
@@ -171,11 +389,12 @@ func (s *WitnessStore) Records(ceremonyID [32]byte) ([]WitnessRecord, error) {
 		if parseErr != nil || record.Statement.CeremonyID != ceremonyID {
 			return nil, fmt.Errorf("%w: corrupt witness", ErrPersistence)
 		}
-		expected := sha256Record(data)
-		if !strings.HasSuffix(name, hex.EncodeToString(expected[:])+".bin") {
-			return nil, fmt.Errorf("%w: witness filename mismatch", ErrPersistence)
-		}
 		records = append(records, record)
+	}
+	for index, record := range records {
+		if record.Statement.Sequence != uint64(index+1) {
+			return nil, fmt.Errorf("%w: witness sequence gap", ErrPersistence)
+		}
 	}
 	return records, nil
 }

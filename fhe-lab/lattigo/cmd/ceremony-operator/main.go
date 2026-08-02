@@ -1,6 +1,7 @@
 //go:build obsolete_recoverable_ceremony
 
-// Command ceremony-operator runs exactly one dealerless threshold operator.
+// Command ceremony-operator reproduces one obsolete rejected recoverable
+// threshold operator and cannot produce V5 one-shot acceptance evidence.
 //
 // It has two modes. `identity` generates the operator's own long-lived signing
 // key inside its own storage directory and publishes only the public half, so

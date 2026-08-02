@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
@@ -23,11 +24,13 @@ type PublicMaterial struct {
 }
 
 type Participant struct {
+	lifecycleMu       sync.Mutex
 	params            bgv.Parameters
 	context           Context
 	identity          OperatorIdentity
 	signingKey        ed25519.PrivateKey
 	encryptionKey     *ecdh.PrivateKey
+	storage           *OperatorStorageCapability
 	store             *WitnessStore
 	random            io.Reader
 	records           []WitnessRecord
@@ -42,6 +45,9 @@ type Participant struct {
 	pendingPhase      Phase
 	pendingStep       uint32
 	pendingMaterial   [32]byte
+	pendingKeyID      [32]byte
+	pendingBundle     [32]byte
+	pendingReceipt    [32]byte
 
 	secretKey        *rlwe.SecretKey
 	shamirPolynomial multiparty.ShamirPolynomial
@@ -61,27 +67,40 @@ type Participant struct {
 	generated map[string]struct{}
 }
 
-func NewParticipant(params bgv.Parameters, context Context, point uint64, signingKey ed25519.PrivateKey, encryptionKey *ecdh.PrivateKey, store *WitnessStore, random io.Reader) (*Participant, error) {
-	if err := context.Validate(); err != nil || store == nil || encryptionKey == nil || len(signingKey) != ed25519.PrivateKeySize {
+func NewParticipant(params bgv.Parameters, context Context, signingKey ed25519.PrivateKey, encryptionKey *ecdh.PrivateKey, storage *OperatorStorageCapability, random io.Reader) (*Participant, error) {
+	if err := context.Validate(); err != nil || storage == nil || storage.witness == nil || encryptionKey == nil || len(signingKey) != ed25519.PrivateKeySize {
 		return nil, ErrBinding
 	}
 	if time.Now().Unix() >= context.ExpiresAtUnix {
 		return nil, ErrTerminal
 	}
 	fingerprint, err := ParameterFingerprint(params)
-	if err != nil || fingerprint != context.ParameterFingerprint {
+	if err != nil || fingerprint != context.ParameterFingerprint || validateShamirCoordinates(params, operatorPoints(context.Operators)) != nil {
 		return nil, ErrBinding
 	}
-	identity, ok := context.Operator(point)
-	if !ok || !slices.Equal(signingKey.Public().(ed25519.PublicKey), identity.SigningPublicKey[:]) ||
+	identity := storage.identity
+	registered, ok := context.Operator(identity.Point)
+	if !ok || registered != identity || storage.startup.SourceRevision != context.SourceCommit ||
+		!slices.Equal(signingKey.Public().(ed25519.PublicKey), identity.SigningPublicKey[:]) ||
 		!slices.Equal(encryptionKey.PublicKey().Bytes(), identity.EncryptionPublicKey[:]) {
 		return nil, ErrSignature
 	}
+	store := storage.witness
 	records, err := store.Records(context.CeremonyID())
 	if err != nil {
 		return nil, err
 	}
 	if len(records) != 0 {
+		// There is deliberately no restart constructor. Discovering an
+		// incomplete prior history through the normal constructor terminalizes
+		// that local session instead of attempting reconstruction.
+		_ = store.WriteTerminalTombstone(TerminalTombstone{
+			SchemaVersion:        terminalTombstoneSchema,
+			CeremonyID:           context.CeremonyID(),
+			SessionBindingDigest: context.SessionBindingDigest(),
+			Disposition:          DispositionPoisoned,
+			WitnessEventDigest:   records[len(records)-1].EventDigest(),
+		})
 		return nil, ErrReplay
 	}
 	if random == nil {
@@ -89,10 +108,11 @@ func NewParticipant(params bgv.Parameters, context Context, point uint64, signin
 	}
 	return &Participant{
 		params:        params,
-		context:       context,
+		context:       cloneContext(context),
 		identity:      identity,
 		signingKey:    slices.Clone(signingKey),
 		encryptionKey: encryptionKey,
+		storage:       storage,
 		store:         store,
 		random:        random,
 		phase:         PhaseNotStarted,
@@ -103,25 +123,37 @@ func NewParticipant(params bgv.Parameters, context Context, point uint64, signin
 func (p *Participant) Point() uint64 { return p.identity.Point }
 func (p *Participant) Phase() Phase  { return p.phase }
 
-func (p *Participant) Records() []WitnessRecord { return slices.Clone(p.records) }
+func (p *Participant) Records() []WitnessRecord { return cloneWitnessChain(p.records) }
 
-func (p *Participant) Reserve(processInstance, bootSession string) error {
+func (p *Participant) ContextSnapshot() Context { return cloneContext(p.context) }
+
+func (p *Participant) Reserve(heads []ReplicaHeadAttestation) error {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
 	if p.phase != PhaseNotStarted || p.reserved || p.poisoned {
 		return ErrReplay
 	}
+	if err := VerifyReplicaHeadAttestations(p.context, p.records, heads); err != nil {
+		return p.poison(err)
+	}
+	// This is the one-way authority boundary. It is reached only after all
+	// three authenticated heads agree, and it uses only the participant's
+	// immutable local context and operator identity. Every later error leaves
+	// this SessionBindingDigest durably consumed.
+	if err := p.store.ConsumeSession(p.context, p.Point()); err != nil {
+		return p.poison(err)
+	}
 	previous, err := p.store.PublicHead()
 	if err != nil {
-		p.poisoned = true
-		return err
+		return p.poison(err)
 	}
-	reservation, err := newAttemptReservation(p.context, p.Point(), processInstance, bootSession, previous, p.signingKey)
+	reservation, err := newAttemptReservation(p.context, p.Point(), p.storage.process, p.storage.boot, previous,
+		p.storage.startup, p.identity.StorageBindingDigest, p.signingKey)
 	if err != nil {
-		p.poisoned = true
-		return err
+		return p.poison(err)
 	}
 	if err := p.store.Reserve(reservation); err != nil {
-		p.poisoned = true
-		return err
+		return p.poison(err)
 	}
 	p.reservation = reservation
 	p.reserved = true
@@ -132,7 +164,7 @@ func (p *Participant) Reservation() (AttemptReservation, error) {
 	if !p.reserved {
 		return AttemptReservation{}, ErrState
 	}
-	return p.reservation, nil
+	return cloneAttemptReservation(p.reservation), nil
 }
 
 func (p *Participant) AcceptReservations(reservations []AttemptReservation) error {
@@ -192,7 +224,10 @@ func (p *Participant) ProposedTransition(to Phase, reason [32]byte) (WitnessStat
 	return NewWitnessStatement(p.context, p.records, to, step, transcript, material, reason)
 }
 
-func (p *Participant) SignTransition(statement WitnessStatement) (WitnessSignature, error) {
+func (p *Participant) SignTransition(statement WitnessStatement, heads []ReplicaHeadAttestation) (WitnessSignature, error) {
+	if err := VerifyReplicaHeadAttestations(p.context, p.records, heads); err != nil {
+		return WitnessSignature{}, p.poison(err)
+	}
 	proposed, err := p.ProposedTransition(statement.ToPhase, statement.ReasonDigest)
 	if err != nil || proposed.Digest() != statement.Digest() {
 		return WitnessSignature{}, p.poison(ErrState)
@@ -232,16 +267,54 @@ func (p *Participant) CommitTransition(record WitnessRecord) error {
 		p.pendingMaterial = [32]byte{}
 	}
 	if p.phase.Terminal() {
-		p.clearAttemptSecrets()
+		if p.phase == PhaseCompleted {
+			// The threshold share and the operator signing key remain only inside
+			// this completed operator boundary until the completed private
+			// artifact has been sealed. No caller obtains either capability.
+			p.clearCryptographicSecretsExceptThreshold()
+			p.encryptionKey = nil
+		} else {
+			p.clearAttemptSecrets()
+		}
+		disposition := DispositionAborted
+		if p.phase == PhaseCompleted {
+			disposition = DispositionCompleted
+		}
+		tombstone := TerminalTombstone{
+			SchemaVersion:            terminalTombstoneSchema,
+			CeremonyID:               p.context.CeremonyID(),
+			SessionBindingDigest:     p.context.SessionBindingDigest(),
+			Disposition:              disposition,
+			WitnessEventDigest:       record.EventDigest(),
+			KeyID:                    p.pendingKeyID,
+			PublishedBundleDigest:    p.pendingBundle,
+			PublicationReceiptDigest: p.pendingReceipt,
+		}
+		if disposition != DispositionCompleted {
+			tombstone.KeyID = [32]byte{}
+			tombstone.PublishedBundleDigest = [32]byte{}
+			tombstone.PublicationReceiptDigest = [32]byte{}
+		}
+		if err := p.store.WriteTerminalTombstone(tombstone); err != nil {
+			p.poisoned = true
+			return err
+		}
 	}
 	return nil
 }
 
-func (p *Participant) BeginSecrets() error {
+func (p *Participant) BeginSecrets(heads []ReplicaHeadAttestation) error {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
 	if p.phase != PhaseRunning || p.secretKey != nil || p.poisoned || p.wasGenerated("begin-secrets") {
 		return ErrState
 	}
-	p.markGenerated("begin-secrets")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
+	}
+	if err := p.markGenerated("begin-secrets"); err != nil {
+		return p.poison(err)
+	}
 	if _, err := io.ReadFull(p.random, p.crsReveal[:]); err != nil || isZero32(p.crsReveal) {
 		return p.poison(ErrMaterial)
 	}
@@ -254,12 +327,17 @@ func (p *Participant) BeginSecrets() error {
 	return nil
 }
 
-func (p *Participant) CRSCommitEnvelope() (SignedEnvelope, error) {
+func (p *Participant) CRSCommitEnvelope(heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhaseRunning || p.secretKey == nil || p.poisoned || p.wasGenerated("crs-commit") {
 		return SignedEnvelope{}, ErrState
 	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
 	commitment := crsContributionCommitment(p.context, p.Point(), p.crsReveal)
-	p.markGenerated("crs-commit")
+	if err := p.markGenerated("crs-commit"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	envelope, err := NewSignedEnvelope(p.context, p.signingKey, p.Point(), 0, OperationCRSCommit, 0, 0,
 		p.transcript.Root(p.context), p.context.ContextDigest(), commitment[:])
 	if err != nil {
@@ -276,11 +354,16 @@ func (p *Participant) AcceptCRSCommitStage(envelopes []SignedEnvelope) error {
 	return p.stageTransition(stage, PhaseCRSCommitted, 0, stageMaterialDigest(stage))
 }
 
-func (p *Participant) CRSRevealEnvelope() (SignedEnvelope, error) {
+func (p *Participant) CRSRevealEnvelope(heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhaseCRSCommitted || p.poisoned || p.wasGenerated("crs-reveal") {
 		return SignedEnvelope{}, ErrState
 	}
-	p.markGenerated("crs-reveal")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
+	if err := p.markGenerated("crs-reveal"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	envelope, err := NewSignedEnvelope(p.context, p.signingKey, p.Point(), 0, OperationCRSReveal, 0, 0,
 		p.transcript.Root(p.context), p.transcript.Root(p.context), p.crsReveal[:])
 	if err != nil {
@@ -289,9 +372,12 @@ func (p *Participant) CRSRevealEnvelope() (SignedEnvelope, error) {
 	return envelope, nil
 }
 
-func (p *Participant) AcceptCRSRevealStage(envelopes []SignedEnvelope) error {
+func (p *Participant) AcceptCRSRevealStage(envelopes []SignedEnvelope, heads []ReplicaHeadAttestation) error {
 	if p.phase != PhaseCRSCommitted {
 		return ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
 	}
 	commits := p.transcript.Stages[0].Envelopes
 	if len(commits) != PartyCount || len(envelopes) != PartyCount {
@@ -315,11 +401,16 @@ func (p *Participant) AcceptCRSRevealStage(envelopes []SignedEnvelope) error {
 	return p.stageTransition(stage, PhaseCRSRevealed, 0, p.crsCommitment)
 }
 
-func (p *Participant) PrivateMessages() ([]SealedPrivateMessage, error) {
+func (p *Participant) PrivateMessages(heads []ReplicaHeadAttestation) ([]SealedPrivateMessage, error) {
 	if p.phase != PhaseCRSRevealed || p.secretKey == nil || p.poisoned || len(p.shamirPolynomial.Value) == 0 || p.wasGenerated("private-shares") {
 		return nil, ErrState
 	}
-	p.markGenerated("private-shares")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return nil, err
+	}
+	if err := p.markGenerated("private-shares"); err != nil {
+		return nil, p.poison(err)
+	}
 	thresholdizer := multiparty.NewThresholdizer(p.params)
 	messages := make([]SealedPrivateMessage, 0, PartyCount)
 	previous := p.transcript.Root(p.context)
@@ -345,11 +436,16 @@ func (p *Participant) PrivateMessages() ([]SealedPrivateMessage, error) {
 	return messages, nil
 }
 
-func (p *Participant) ReceivePrivateMessages(all []SealedPrivateMessage) ([]SignedEnvelope, error) {
+func (p *Participant) ReceivePrivateMessages(all []SealedPrivateMessage, heads []ReplicaHeadAttestation) ([]SignedEnvelope, error) {
 	if p.phase != PhaseCRSRevealed || p.poisoned || p.wasGenerated("private-receipts") || len(all) != PartyCount*PartyCount {
 		return nil, ErrState
 	}
-	p.markGenerated("private-receipts")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return nil, err
+	}
+	if err := p.markGenerated("private-receipts"); err != nil {
+		return nil, p.poison(err)
+	}
 	thresholdizer := multiparty.NewThresholdizer(p.params)
 	aggregate := thresholdizer.AllocateThresholdSecretShare()
 	receipts := make([]SignedEnvelope, 0, PartyCount)
@@ -392,11 +488,16 @@ func (p *Participant) AcceptPrivateStage(messages []SealedPrivateMessage, receip
 	return p.stageTransition(stage, PhasePrivateShares, 0, stageMaterialDigest(stage))
 }
 
-func (p *Participant) PublicKeyShareEnvelope() (SignedEnvelope, error) {
+func (p *Participant) PublicKeyShareEnvelope(heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhasePrivateShares || p.secretKey == nil || p.poisoned || p.wasGenerated("public-key") {
 		return SignedEnvelope{}, ErrState
 	}
-	p.markGenerated("public-key")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
+	if err := p.markGenerated("public-key"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	protocol := multiparty.NewPublicKeyGenProtocol(p.params)
 	crs, digest, err := p.stageCRS("public-key", 0)
 	if err != nil {
@@ -416,9 +517,12 @@ func (p *Participant) PublicKeyShareEnvelope() (SignedEnvelope, error) {
 	return envelope, nil
 }
 
-func (p *Participant) AcceptPublicKeyStage(envelopes []SignedEnvelope) error {
+func (p *Participant) AcceptPublicKeyStage(envelopes []SignedEnvelope, heads []ReplicaHeadAttestation) error {
 	if p.phase != PhasePrivateShares {
 		return ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
 	}
 	stage := TranscriptStage{Operation: OperationPublicKeyShare, Envelopes: envelopes}
 	transcript, err := p.withStage(stage)
@@ -437,11 +541,16 @@ func (p *Participant) AcceptPublicKeyStage(envelopes []SignedEnvelope) error {
 	return nil
 }
 
-func (p *Participant) RelinRoundOneEnvelope() (SignedEnvelope, error) {
+func (p *Participant) RelinRoundOneEnvelope(heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhasePublicKey || p.secretKey == nil || p.poisoned || p.wasGenerated("relin-1") {
 		return SignedEnvelope{}, ErrState
 	}
-	p.markGenerated("relin-1")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
+	if err := p.markGenerated("relin-1"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	protocol := multiparty.NewRelinearizationKeyGenProtocol(p.params)
 	crs, digest, err := p.stageCRS("relin", 0)
 	if err != nil {
@@ -462,9 +571,12 @@ func (p *Participant) RelinRoundOneEnvelope() (SignedEnvelope, error) {
 	return envelope, nil
 }
 
-func (p *Participant) AcceptRelinRoundOneStage(envelopes []SignedEnvelope) error {
+func (p *Participant) AcceptRelinRoundOneStage(envelopes []SignedEnvelope, heads []ReplicaHeadAttestation) error {
 	if p.phase != PhasePublicKey {
 		return ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
 	}
 	stage := TranscriptStage{Operation: OperationRelinShare, Round: 1, Envelopes: envelopes}
 	transcript, err := p.withStage(stage)
@@ -483,11 +595,16 @@ func (p *Participant) AcceptRelinRoundOneStage(envelopes []SignedEnvelope) error
 	return nil
 }
 
-func (p *Participant) RelinRoundTwoEnvelope() (SignedEnvelope, error) {
+func (p *Participant) RelinRoundTwoEnvelope(heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if p.phase != PhaseRelinOne || p.secretKey == nil || p.poisoned || p.relinProtocol == nil || p.relinEphemeral == nil || p.wasGenerated("relin-2") {
 		return SignedEnvelope{}, ErrState
 	}
-	p.markGenerated("relin-2")
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
+	if err := p.markGenerated("relin-2"); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	_, roundOne, roundTwo := p.relinProtocol.AllocateShare()
 	if err := roundOne.UnmarshalBinary(p.relinOneBytes); err != nil {
 		return SignedEnvelope{}, p.poison(ErrMaterial)
@@ -506,9 +623,12 @@ func (p *Participant) RelinRoundTwoEnvelope() (SignedEnvelope, error) {
 	return envelope, nil
 }
 
-func (p *Participant) AcceptRelinRoundTwoStage(envelopes []SignedEnvelope) error {
+func (p *Participant) AcceptRelinRoundTwoStage(envelopes []SignedEnvelope, heads []ReplicaHeadAttestation) error {
 	if p.phase != PhaseRelinOne {
 		return ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
 	}
 	input := sha256.Sum256(p.relinOneBytes)
 	for _, envelope := range envelopes {
@@ -541,14 +661,19 @@ func (p *Participant) AcceptRelinRoundTwoStage(envelopes []SignedEnvelope) error
 	return nil
 }
 
-func (p *Participant) GaloisShareEnvelope(index int) (SignedEnvelope, error) {
+func (p *Participant) GaloisShareEnvelope(index int, heads []ReplicaHeadAttestation) (SignedEnvelope, error) {
 	if index < 0 || index >= len(p.context.GaloisElements) || p.secretKey == nil || p.poisoned {
 		return SignedEnvelope{}, ErrState
 	}
 	if (index == 0 && p.phase != PhaseRelinTwo) || (index > 0 && (p.phase != PhaseGalois || p.step != uint32(index-1))) || p.wasGenerated(fmt.Sprintf("galois-%d", index)) {
 		return SignedEnvelope{}, ErrState
 	}
-	p.markGenerated(fmt.Sprintf("galois-%d", index))
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return SignedEnvelope{}, err
+	}
+	if err := p.markGenerated(fmt.Sprintf("galois-%d", index)); err != nil {
+		return SignedEnvelope{}, p.poison(err)
+	}
 	element := p.context.GaloisElements[index]
 	protocol := multiparty.NewGaloisKeyGenProtocol(p.params)
 	crs, digest, err := p.stageCRS("galois", element)
@@ -571,10 +696,13 @@ func (p *Participant) GaloisShareEnvelope(index int) (SignedEnvelope, error) {
 	return envelope, nil
 }
 
-func (p *Participant) AcceptGaloisStage(index int, envelopes []SignedEnvelope) error {
+func (p *Participant) AcceptGaloisStage(index int, envelopes []SignedEnvelope, heads []ReplicaHeadAttestation) error {
 	if index < 0 || index >= len(p.context.GaloisElements) || (index == 0 && p.phase != PhaseRelinTwo) ||
 		(index > 0 && (p.phase != PhaseGalois || p.step != uint32(index-1))) {
 		return ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return err
 	}
 	element := p.context.GaloisElements[index]
 	stage := TranscriptStage{Operation: OperationGaloisShare, Round: 1, GaloisElement: element, Envelopes: envelopes}
@@ -595,9 +723,12 @@ func (p *Participant) AcceptGaloisStage(index int, envelopes []SignedEnvelope) e
 	return nil
 }
 
-func (p *Participant) PublicMaterial() (PublicMaterial, error) {
+func (p *Participant) PublicMaterial(heads []ReplicaHeadAttestation) (PublicMaterial, error) {
 	if p.phase != PhaseGalois || p.step != uint32(len(p.context.GaloisElements)-1) || len(p.galoisKeyBytes) != len(p.context.GaloisElements) {
 		return PublicMaterial{}, ErrState
+	}
+	if err := p.requireCryptographicHeads(heads); err != nil {
+		return PublicMaterial{}, err
 	}
 	return PublicMaterial{
 		PublicKeyBytes:       slices.Clone(p.publicKeyBytes),
@@ -637,21 +768,24 @@ func (p *Participant) SetManifestPending(unsignedDigest [32]byte) error {
 	return nil
 }
 
-func (p *Participant) SetPublishedPending(bundleDigest [32]byte) error {
-	if p.phase != PhaseManifest || isZero32(bundleDigest) {
+func (p *Participant) SetPublishedPending(bundle PublicBundle, receipt PublicationReceipt) error {
+	if p.phase != PhaseManifest || bundle.Unsigned.Context.CeremonyID() != p.context.CeremonyID() || VerifyPublicationReceipt(receipt, bundle) != nil {
 		return ErrState
 	}
 	transcript := cloneTranscript(p.transcript)
-	p.setPending(transcript, PhasePublished, p.step, bundleDigest)
+	p.setPending(transcript, PhasePublished, p.step, receipt.Digest())
 	return nil
 }
 
-func (p *Participant) SetCompletedPending(bundleDigest [32]byte) error {
-	if p.phase != PhasePublished || isZero32(bundleDigest) {
+func (p *Participant) SetCompletedPending(bundle PublicBundle, receipt PublicationReceipt) error {
+	if p.phase != PhasePublished || bundle.Unsigned.Context.CeremonyID() != p.context.CeremonyID() || VerifyPublicationReceipt(receipt, bundle) != nil {
 		return ErrState
 	}
 	transcript := cloneTranscript(p.transcript)
-	p.setPending(transcript, PhaseCompleted, p.step, bundleDigest)
+	p.pendingKeyID = bundle.Unsigned.KeyID
+	p.pendingBundle = bundle.Digest()
+	p.pendingReceipt = receipt.Digest()
+	p.setPending(transcript, PhaseCompleted, p.step, completionMaterialDigest(bundle, receipt))
 	return nil
 }
 
@@ -812,11 +946,35 @@ func (p *Participant) wasGenerated(label string) bool {
 	return ok
 }
 
-func (p *Participant) markGenerated(label string) { p.generated[label] = struct{}{} }
+func (p *Participant) markGenerated(label string) error {
+	if err := p.store.MarkGeneration(p.context, label); err != nil {
+		return err
+	}
+	p.generated[label] = struct{}{}
+	return nil
+}
+
+func (p *Participant) requireCryptographicHeads(heads []ReplicaHeadAttestation) error {
+	if err := VerifyReplicaHeadAttestations(p.context, p.records, heads); err != nil {
+		return p.poison(err)
+	}
+	return nil
+}
 
 func (p *Participant) poison(err error) error {
 	p.poisoned = true
 	p.clearCryptographicSecrets()
+	var event [32]byte
+	if len(p.records) > 0 {
+		event = p.records[len(p.records)-1].EventDigest()
+	}
+	_ = p.store.WriteTerminalTombstone(TerminalTombstone{
+		SchemaVersion:        terminalTombstoneSchema,
+		CeremonyID:           p.context.CeremonyID(),
+		SessionBindingDigest: p.context.SessionBindingDigest(),
+		Disposition:          DispositionPoisoned,
+		WitnessEventDigest:   event,
+	})
 	return err
 }
 
@@ -825,6 +983,14 @@ func (p *Participant) clearCryptographicSecrets() {
 	p.shamirPolynomial = multiparty.ShamirPolynomial{}
 	p.thresholdShare = multiparty.ShamirSecretShare{}
 	p.hasThreshold = false
+	p.relinEphemeral = nil
+	p.crsReveal = [32]byte{}
+	p.crsSeed = [32]byte{}
+}
+
+func (p *Participant) clearCryptographicSecretsExceptThreshold() {
+	p.secretKey = nil
+	p.shamirPolynomial = multiparty.ShamirPolynomial{}
 	p.relinEphemeral = nil
 	p.crsReveal = [32]byte{}
 	p.crsSeed = [32]byte{}

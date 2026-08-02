@@ -1,3 +1,5 @@
+//go:build obsolete_recoverable_ceremony
+
 package thresholdnet
 
 // The ceremony ledger is private to one operator process.  It stores immutable

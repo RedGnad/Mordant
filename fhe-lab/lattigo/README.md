@@ -13,11 +13,12 @@ non-acceptance tooling; acceptance still requires three hosts under three genuin
 administrators.
 
 The older root `ceremony*.go`, `internal/thresholdnet/ceremony*.go` and the
-`ceremony-operator`/`ceremony-coordinator`/`ceremony-lab` setup path belong to the rejected
-recoverable laboratory design. Their sources and historical evidence are retained, but those three
-executables are excluded from default builds behind the `obsolete_recoverable_ceremony`
+`ceremony-client`/`ceremony-coordinator`/`ceremony-evaluator`/`ceremony-lab`/`ceremony-operator`
+path belong to the rejected recoverable laboratory design. Their sources and historical evidence
+are retained, but those five executables are excluded from default builds behind the
+`obsolete_recoverable_ceremony`
 historical-evidence tag. They are not production aliases, fallbacks, compatibility modes or inputs
-to `oneshotceremony`. The old client and evaluator sources are unchanged.
+to `oneshotceremony`.
 
 ## Pinned implementation
 

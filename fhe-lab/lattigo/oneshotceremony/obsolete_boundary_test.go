@@ -9,7 +9,9 @@ import (
 
 func TestObsoleteRecoverableCommandsAreBuildConstrained(t *testing.T) {
 	directories := []string{
+		"ceremony-client",
 		"ceremony-coordinator",
+		"ceremony-evaluator",
 		"ceremony-lab",
 		"ceremony-operator",
 	}
@@ -41,6 +43,31 @@ func TestObsoleteRecoverableCommandsAreBuildConstrained(t *testing.T) {
 			}
 		}
 	}
+
+	implementationFiles := []string{
+		"ceremony_recovery.go",
+		filepath.Join("internal", "thresholdnet", "ceremony.go"),
+		filepath.Join("internal", "thresholdnet", "ceremony_ledger.go"),
+	}
+	for _, relative := range implementationFiles {
+		path := filepath.Join("..", relative)
+		file, err := os.Open(path)
+		if err != nil {
+			t.Fatalf("open %s: %v", path, err)
+		}
+		scanner := bufio.NewScanner(file)
+		first := ""
+		if scanner.Scan() {
+			first = scanner.Text()
+		}
+		closeErr := file.Close()
+		if scanner.Err() != nil || closeErr != nil {
+			t.Fatalf("read %s: scan=%v close=%v", path, scanner.Err(), closeErr)
+		}
+		if first != "//go:build obsolete_recoverable_ceremony" {
+			t.Fatalf("recoverable implementation is reachable without its historical tag: %s", path)
+		}
+	}
 }
 
 func TestLegacyRecoveryAndBundleMagicIsUnconditionallyRejected(t *testing.T) {
@@ -49,7 +76,7 @@ func TestLegacyRecoveryAndBundleMagicIsUnconditionallyRejected(t *testing.T) {
 		if _, err := ParseContext(data); err == nil {
 			t.Fatalf("legacy context magic accepted: %s", magic)
 		}
-		if _, err := ParsePrivateBundle(data); err == nil {
+		if _, err := parsePrivateBundle(data); err == nil {
 			t.Fatalf("legacy private bundle magic accepted: %s", magic)
 		}
 		if _, err := ParseSealedOperatorBundle(data); err == nil {

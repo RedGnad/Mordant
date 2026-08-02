@@ -1,5 +1,11 @@
 # Private Matching V5 one-shot ceremony implementation evidence
 
+> **FAILED BASELINE — DO NOT USE AS ACCEPTANCE EVIDENCE.** Independent audit rejected the
+> implementation at `8d8150209f067c9be78896653536c4b0e7ba108e` with findings F-01 through
+> F-10. In particular, its retry and abort/private-bundle claims are invalid. This document is
+> retained for provenance and is superseded on the remediation branch by
+> `one-shot-ceremony-audit-fail-remediation-2026-08-02.md`.
+
 Date: 2026-08-02
 
 Evidence classification: **IMPLEMENTATION EVIDENCE — NOT AN ACCEPTANCE VERDICT**
