@@ -133,9 +133,23 @@ terminal and consumed-session state persists.
 
 ## Evidence and cleanup
 
-Each operator's bounded durable request journal is stored below its fixed state root. It retains at
-most 4096 completed request records and 1 GiB of exact response artifacts; corruption, orphaned
-artifacts or capacity exhaustion fail closed. It is retained and cleaned up with that state root.
+Each operator's bounded append-only request journal is stored below its fixed state root. Before a
+protected operation runs, the exact authorization, ceremony, bilateral session, operation, request
+ID, sequence and payload digest enter a durably fsynced `PENDING` record. Exact response bytes are
+then stored before an append-only `COMPLETED` marker. A completed retry returns those retained bytes,
+not a reconstructed response. An unresolved `PENDING` found at startup becomes a durable
+`INDETERMINATE_TERMINAL` result for both the request and its nonce-independent bilateral
+`SessionBindingDigest`; the operation is never retried and a new nonce cannot restore authority.
+Partial artifacts and corruption fail startup closed, while capacity is reserved before mutation.
+The journal retains at most 4096 requests and 1 GiB including response artifacts, and is retained
+and cleaned up with that state root.
+
+Request sequences are intentionally runner-process-local in this MVP. If a runner restarts and
+sends a new request ID at an already used or lower sequence for the same authorization and
+ceremony, the operator durably terminalizes that bilateral session. Continuing requires a newly
+authorized application session with fresh bilateral session identity and commitment; changing only
+the authorization, nonce or CeremonyID is insufficient. This is a terminal-abort policy, not
+general ceremony recovery.
 
 The evidence directory contains only the source tag/runtime commit, binary and configuration
 digests, public identities, canonical context identifiers, public bundle and receipt when present,

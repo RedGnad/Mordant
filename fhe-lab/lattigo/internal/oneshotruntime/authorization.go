@@ -430,6 +430,13 @@ func VerifySessionAuthorization(authority ed25519.PublicKey, contextValue ceremo
 	if expected != authorization {
 		return ErrAuthorization
 	}
+	return verifySessionAuthorizationSignature(authority, authorization, now)
+}
+
+func verifySessionAuthorizationSignature(authority ed25519.PublicKey, authorization SessionAuthorization, now time.Time) error {
+	if len(authority) != ed25519.PublicKeySize || now.Unix() < authorization.NotBeforeUnix || now.Unix() > authorization.ExpiresAtUnix {
+		return ErrAuthorization
+	}
 	unsigned, err := authorization.signingBytes()
 	if err != nil || !ed25519.Verify(authority, authorizationSigningMessage(unsigned), authorization.Signature[:]) {
 		return ErrAuthorization

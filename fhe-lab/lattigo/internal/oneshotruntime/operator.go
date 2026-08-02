@@ -27,6 +27,7 @@ type OperatorService struct {
 	encryptionKey *ecdh.PrivateKey
 	storage       *ceremony.OperatorStorageCapability
 	journal       *requestJournal
+	journalFailed bool
 	authority     ed25519.PublicKey
 	participant   *ceremony.Participant
 	context       ceremony.Context
@@ -54,7 +55,7 @@ func NewOperatorService(config OperatorConfig, params bgv.Parameters) (*Operator
 	if err != nil {
 		return nil, err
 	}
-	journal, err := openRequestJournal(config.StateRoot)
+	journal, err := openRequestJournal(config.StateRoot, identity.Point)
 	if err != nil {
 		return nil, err
 	}
@@ -157,35 +158,82 @@ func (s *OperatorService) withRequest(response http.ResponseWriter, request *htt
 		authorization, authorizationErr := ParseSessionAuthorization(envelope.Authorization)
 		authorizedRequest, requestErr := ParseAuthorizedRequest(envelope.Request)
 		now := time.Now().UTC()
-		if authorizationErr != nil || requestErr != nil || VerifySessionAuthorization(s.authority, contextValue, authorization, now) != nil ||
+		if authorizationErr != nil || requestErr != nil || verifySessionAuthorizationSignature(s.authority, authorization, now) != nil ||
 			VerifyAuthorizedRequest(authorization, authorizedRequest, request.URL.Path, envelope.Payload, now) != nil {
 			writeWireError(response, http.StatusUnauthorized, "AUTHORIZATION_REJECTED")
 			return
 		}
-		prior, found, journalErr := s.journal.lookup(authorizedRequest)
+		binding := journalBinding(authorization, authorizedRequest, s.identity.Point)
+		prior, journalErr := s.journal.lookupExact(binding)
 		if journalErr != nil {
+			if errors.Is(journalErr, ErrRequestPending) {
+				writeWireError(response, http.StatusConflict, "REQUEST_PENDING")
+				return
+			}
 			writeWireError(response, http.StatusConflict, publicErrorCode(journalErr))
 			return
 		}
-		if found {
-			writeWireBytes(response, prior)
+		if prior.Found {
+			writeWireBytesStatus(response, prior.HTTPStatus, prior.Response)
 			return
 		}
-		result, operationErr := operation()
-		if operationErr != nil {
-			writeWireError(response, http.StatusConflict, publicErrorCode(operationErr))
+		if VerifySessionAuthorization(s.authority, contextValue, authorization, now) != nil {
+			writeWireError(response, http.StatusUnauthorized, "AUTHORIZATION_REJECTED")
 			return
 		}
-		encoded, encodeErr := marshalWireSuccess(result, limits.Response)
-		if encodeErr != nil {
-			writeWireError(response, http.StatusInternalServerError, "RESPONSE_REJECTED")
+		s.runtimeFault(runtimeFaultAfterAuthorization, request.URL.Path)
+		prior, journalErr = s.journal.lookup(binding, now)
+		if journalErr != nil {
+			if errors.Is(journalErr, ErrRequestPending) {
+				writeWireError(response, http.StatusConflict, "REQUEST_PENDING")
+				return
+			}
+			writeWireError(response, http.StatusConflict, publicErrorCode(journalErr))
 			return
 		}
-		if s.journal.complete(authorizedRequest, encoded, now) != nil {
+		if prior.Found {
+			writeWireBytesStatus(response, prior.HTTPStatus, prior.Response)
+			return
+		}
+		if s.journalFailed {
 			writeWireError(response, http.StatusInternalServerError, "JOURNAL_REJECTED")
 			return
 		}
-		writeWireBytes(response, encoded)
+		if journalErr := s.journal.admit(binding, limits.Response, now); journalErr != nil {
+			writeWireError(response, http.StatusConflict, publicErrorCode(journalErr))
+			return
+		}
+		s.runtimeFault(runtimeFaultAfterPending, request.URL.Path)
+		result, operationErr := operation()
+		s.runtimeFault(runtimeFaultAfterOperation, request.URL.Path)
+		status := http.StatusOK
+		var encoded []byte
+		var encodeErr error
+		if operationErr != nil {
+			status = http.StatusConflict
+			encoded, encodeErr = marshalWireError(publicErrorCode(operationErr), limits.Response)
+		} else {
+			encoded, encodeErr = marshalWireSuccess(result, limits.Response)
+		}
+		if encodeErr != nil {
+			s.journalFailed = true
+			writeWireError(response, http.StatusInternalServerError, "JOURNAL_REJECTED")
+			return
+		}
+		s.runtimeFault(runtimeFaultAfterResponseCreation, request.URL.Path)
+		if s.journal.persistResponse(binding, encoded) != nil {
+			s.journalFailed = true
+			writeWireError(response, http.StatusInternalServerError, "JOURNAL_REJECTED")
+			return
+		}
+		s.runtimeFault(runtimeFaultAfterResponseArtifact, request.URL.Path)
+		if s.journal.complete(binding, encoded, status, now) != nil {
+			s.journalFailed = true
+			writeWireError(response, http.StatusInternalServerError, "JOURNAL_REJECTED")
+			return
+		}
+		s.runtimeFault(runtimeFaultAfterCompleted, request.URL.Path)
+		writeWireBytesStatus(response, status, encoded)
 		return
 	}
 	if len(envelope.Authorization) != 0 || len(envelope.Request) != 0 {
@@ -848,6 +896,17 @@ func marshalWireSuccess(value any, maximum int64) ([]byte, error) {
 	return append(encoded, '\n'), nil
 }
 
+func marshalWireError(code string, maximum int64) ([]byte, error) {
+	if code == "" {
+		return nil, ErrTransport
+	}
+	encoded, err := json.Marshal(wireResponse{SchemaVersion: RuntimeWireSchema, OK: false, ErrorCode: code})
+	if err != nil || len(encoded) == 0 || int64(len(encoded)+1) > maximum {
+		return nil, ErrTransport
+	}
+	return append(encoded, '\n'), nil
+}
+
 func writeWireError(response http.ResponseWriter, status int, code string) {
 	encoded, err := json.Marshal(wireResponse{SchemaVersion: RuntimeWireSchema, OK: false, ErrorCode: code})
 	if err != nil || int64(len(encoded)+1) > maxResponseBytes {
@@ -859,7 +918,11 @@ func writeWireError(response http.ResponseWriter, status int, code string) {
 }
 
 func writeWireBytes(response http.ResponseWriter, encoded []byte) {
-	response.WriteHeader(http.StatusOK)
+	writeWireBytesStatus(response, http.StatusOK, encoded)
+}
+
+func writeWireBytesStatus(response http.ResponseWriter, status int, encoded []byte) {
+	response.WriteHeader(status)
 	_, _ = response.Write(encoded)
 }
 
@@ -885,6 +948,10 @@ func publicErrorCode(err error) string {
 		return "SECRET_ACCESS_REJECTED"
 	case errors.Is(err, ErrAuthorization):
 		return "AUTHORIZATION_REJECTED"
+	case errors.Is(err, ErrJournalExhausted):
+		return "JOURNAL_EXHAUSTED"
+	case errors.Is(err, ErrSessionIndeterminate):
+		return indeterminateCode
 	case errors.Is(err, ErrJournal):
 		return "JOURNAL_REJECTED"
 	default:

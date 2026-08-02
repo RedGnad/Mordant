@@ -20,7 +20,10 @@ import (
 	ceremony "mordant.dev/fhe-lab/lattigo/oneshotceremony"
 )
 
-var testOperatorBinary string
+var (
+	testOperatorBinary      string
+	testFaultOperatorBinary string
+)
 
 func TestMain(m *testing.M) {
 	root, err := os.MkdirTemp("", "mordant-oneshot-runtime-tests-")
@@ -39,25 +42,40 @@ func TestMain(m *testing.M) {
 		_ = os.RemoveAll(root)
 		os.Exit(1)
 	}
+	testFaultOperatorBinary = filepath.Join(root, "oneshot-operator-faulttest")
+	build = exec.Command("go", "build", "-tags", "oneshot_runtime_faulttest", "-o", testFaultOperatorBinary, "./cmd/oneshot-operator")
+	build.Dir = module
+	if output, buildErr := build.CombinedOutput(); buildErr != nil {
+		_, _ = os.Stderr.Write(output)
+		_ = os.RemoveAll(root)
+		os.Exit(1)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(root)
 	os.Exit(code)
 }
 
 type testCluster struct {
-	t            *testing.T
-	root         string
-	publication  string
-	evidence     string
-	export       string
-	authorityKey string
-	configs      []OperatorConfig
-	runnerConfig RunnerConfig
-	processes    []*exec.Cmd
-	secretPaths  []string
+	t             *testing.T
+	root          string
+	publication   string
+	evidence      string
+	export        string
+	authorityKey  string
+	configs       []OperatorConfig
+	runnerConfig  RunnerConfig
+	processes     []*exec.Cmd
+	processStderr []*bytes.Buffer
+	secretPaths   []string
+	binary        string
+	serveEnv      map[int][]string
 }
 
 func newTestCluster(t *testing.T) *testCluster {
+	return newTestClusterWithBinary(t, testOperatorBinary)
+}
+
+func newTestClusterWithBinary(t *testing.T, binary string) *testCluster {
 	t.Helper()
 	root := strictTestRoot(t)
 	publication := filepath.Join(root, "canonical-publication")
@@ -78,7 +96,7 @@ func newTestCluster(t *testing.T) *testCluster {
 		directory := filepath.Join(root, fmt.Sprintf("operator-%d-config", index+1))
 		stateRoot := filepath.Join(root, fmt.Sprintf("operator-%d-state", index+1))
 		arguments := []string{"init", "--dir", directory, "--point", fmt.Sprint(index + 1), "--administrator-id", fmt.Sprintf("demo-admin/operator-%d", index+1), "--listen", fmt.Sprintf("127.0.0.1:%d", ports[index]), "--state-root", stateRoot, "--publication-root", publication, "--session-authority-public", authorityPublicPath}
-		runTestCommand(t, testOperatorBinary, arguments...)
+		runTestCommand(t, binary, arguments...)
 		identity, err := LoadPublicIdentity(filepath.Join(directory, "public-identity.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -95,7 +113,7 @@ func newTestCluster(t *testing.T) *testCluster {
 	runnerOperators := make([]RunnerOperator, ceremony.PartyCount)
 	for index := 0; index < ceremony.PartyCount; index++ {
 		configPath := filepath.Join(filepath.Dir(bootstrapPaths[index]), "operator.json")
-		runTestCommand(t, testOperatorBinary, "configure", "--bootstrap", bootstrapPaths[index], "--roster", rosterPath, "--out", configPath)
+		runTestCommand(t, binary, "configure", "--bootstrap", bootstrapPaths[index], "--roster", rosterPath, "--out", configPath)
 		config, err := LoadOperatorConfig(configPath)
 		if err != nil {
 			t.Fatal(err)
@@ -105,7 +123,8 @@ func newTestCluster(t *testing.T) *testCluster {
 	}
 	return &testCluster{
 		t: t, root: root, publication: publication, evidence: evidence, export: export, configs: configs,
-		authorityKey: filepath.Join(authorityDirectory, "session-authority.key"), secretPaths: secretPaths,
+		authorityKey: filepath.Join(authorityDirectory, "session-authority.key"), secretPaths: secretPaths, binary: binary,
+		serveEnv:     make(map[int][]string),
 		runnerConfig: RunnerConfig{SchemaVersion: RunnerConfigSchema, ProtocolVersion: ceremony.ProtocolVersion, ContextSchema: ceremony.ContextSchema, ParameterProfile: ParameterProfile, SessionAuthorityPublicKey: authority.PublicKey, PublicationRoot: publication, EvidenceRoot: evidence, ExportRoot: export, Operators: runnerOperators, Context: DefaultContextTemplate()},
 	}
 }
@@ -116,18 +135,59 @@ func (c *testCluster) start() {
 		c.t.Fatal("cluster already started")
 	}
 	c.processes = make([]*exec.Cmd, ceremony.PartyCount)
-	for index, config := range c.configs {
-		configPath := filepath.Join(filepath.Dir(config.SigningKeyPath), "operator.json")
-		command := exec.Command(testOperatorBinary, "serve", "--config", configPath)
-		command.Stdout = io.Discard
-		var stderr bytes.Buffer
-		command.Stderr = &stderr
-		if err := command.Start(); err != nil {
-			c.t.Fatal(err)
-		}
-		c.processes[index] = command
-		waitForPort(c.t, config.ListenAddress, command, &stderr)
+	c.processStderr = make([]*bytes.Buffer, ceremony.PartyCount)
+	for index := range c.configs {
+		c.startOperator(index)
 	}
+}
+
+func (c *testCluster) startOperator(index int) {
+	c.t.Helper()
+	if index < 0 || index >= len(c.configs) || c.processes[index] != nil {
+		c.t.Fatal("invalid operator start")
+	}
+	config := c.configs[index]
+	configPath := filepath.Join(filepath.Dir(config.SigningKeyPath), "operator.json")
+	command := exec.Command(c.binary, "serve", "--config", configPath)
+	command.Stdout = io.Discard
+	command.Env = append(os.Environ(), c.serveEnv[index]...)
+	stderr := &bytes.Buffer{}
+	command.Stderr = stderr
+	if err := command.Start(); err != nil {
+		c.t.Fatal(err)
+	}
+	c.processes[index] = command
+	c.processStderr[index] = stderr
+	waitForPort(c.t, config.ListenAddress, command, stderr)
+}
+
+func (c *testCluster) restartOperator(index int) {
+	c.t.Helper()
+	process := c.processes[index]
+	if process != nil {
+		if err := process.Wait(); err != nil {
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 86 {
+				c.t.Fatalf("operator restart wait: %v: %s", err, c.processStderr[index].String())
+			}
+		}
+	}
+	c.processes[index] = nil
+	c.processStderr[index] = nil
+	c.startOperator(index)
+}
+
+func (c *testCluster) injectFault(index int, point, operation string) {
+	c.t.Helper()
+	c.serveEnv[index] = append(c.serveEnv[index],
+		"MORDANT_ONESHOT_FAULT="+point+":"+operation,
+		"MORDANT_ONESHOT_FAULT_POINT="+fmt.Sprint(index+1),
+	)
+}
+
+func (c *testCluster) setJournalLimit(index int, maximumBytes int64) {
+	c.t.Helper()
+	c.serveEnv[index] = append(c.serveEnv[index], "MORDANT_ONESHOT_TEST_JOURNAL_MAX_BYTES="+fmt.Sprint(maximumBytes))
 }
 
 func (c *testCluster) stop() {
@@ -144,7 +204,7 @@ func (c *testCluster) stop() {
 		}
 		if err := process.Wait(); err != nil {
 			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() != -1 {
+			if !errors.As(err, &exit) || exit.ExitCode() != -1 && exit.ExitCode() != 86 {
 				c.t.Errorf("operator stop: %v", err)
 			}
 		}
@@ -232,7 +292,7 @@ func TestRunnerWireHasNoStorageStartupOrSecretAccessor(t *testing.T) {
 }
 
 func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
-	cluster := newTestCluster(t)
+	cluster := newTestClusterWithBinary(t, testFaultOperatorBinary)
 	cluster.start()
 	defer cluster.stop()
 	runner := cluster.runner(t)
@@ -277,7 +337,7 @@ func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
 		operationCounts := make(map[string]int)
 		finalizedConfirmed := false
 		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".meta.json") {
+			if !strings.HasSuffix(entry.Name(), ".completed.json") {
 				continue
 			}
 			var record requestJournalRecord
@@ -335,6 +395,36 @@ func TestSuccessfulThreeProcessCeremonyAndPublicReadback(t *testing.T) {
 	if _, err := ExportCompletedEvidence(cluster.runnerConfig, "../"+filepath.Base(result.EvidencePath)); err == nil {
 		t.Fatal("non-child evidence path accepted")
 	}
+
+	// Keep the acceptance smoke on the real three-process path through one
+	// post-PENDING process death, ordinary restart, and deterministic terminal replay.
+	cluster.stop()
+	cluster.injectFault(0, runtimeFaultAfterPending, "/v1/prepare")
+	cluster.start()
+	crashSession := cluster.authorizedSession(t)
+	crashClient, err := NewOperatorClient(cluster.runnerConfig.Operators[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer crashClient.Close()
+	crashCall, err := crashClient.prepareAuthorized(crashSession, "/v1/prepare", PrepareRequest{Context: crashSession.ContextBytes}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crashClient.send(ctx, crashCall, &PhaseResponse{}, false); !errors.Is(err, ErrTransport) {
+		t.Fatalf("smoke crash did not lose transport: %v", err)
+	}
+	crashClient.Close()
+	cluster.restartOperator(0)
+	firstCrashResponse, err := crashClient.send(ctx, crashCall, &PhaseResponse{}, false)
+	if remoteCode(err) != indeterminateCode {
+		t.Fatalf("smoke restart result = %q", remoteCode(err))
+	}
+	secondCrashResponse, err := crashClient.send(ctx, crashCall, &PhaseResponse{}, false)
+	if remoteCode(err) != indeterminateCode || !bytes.Equal(firstCrashResponse, secondCrashResponse) {
+		t.Fatal("smoke restart result was not deterministic")
+	}
+
 	privateArtifact := filepath.Join(result.EvidencePath, "operator-1", "private.bundle")
 	if err := writeNoReplace(privateArtifact, []byte("completed-private-test-artifact"), 0o600); err != nil {
 		t.Fatal(err)

@@ -6,25 +6,29 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 func decodeStrictJSON(data []byte, target any) error {
-	if len(data) == 0 || target == nil || rejectDuplicateJSONKeys(data) != nil {
+	if len(data) == 0 || target == nil || !utf8.Valid(data) {
 		return ErrTransport
 	}
-	var fields map[string]json.RawMessage
 	value := reflect.ValueOf(target)
-	if value.Kind() != reflect.Pointer || value.IsNil() {
+	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
 		return ErrTransport
 	}
-	if value.Elem().Kind() == reflect.Struct {
-		if err := json.Unmarshal(data, &fields); err != nil {
-			return ErrTransport
-		}
-		if err := validateRequiredJSONFields(value.Elem().Type(), fields); err != nil {
-			return ErrTransport
-		}
+
+	// encoding/json deliberately accepts case-insensitive field aliases. Validate
+	// the complete token stream against the exact schema before invoking it.
+	schemaDecoder := json.NewDecoder(bytes.NewReader(data))
+	schemaDecoder.UseNumber()
+	if err := scanTypedJSONValue(schemaDecoder, value.Elem().Type()); err != nil {
+		return ErrTransport
 	}
+	if _, err := schemaDecoder.Token(); err != io.EOF {
+		return ErrTransport
+	}
+
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -50,45 +54,48 @@ func decodeCanonicalPayload(data []byte, target any) error {
 	return nil
 }
 
-func rejectDuplicateJSONKeys(data []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := scanJSONValue(decoder); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return ErrTransport
-	}
-	return nil
+type exactJSONField struct {
+	typeValue reflect.Type
+	required  bool
 }
 
-func scanJSONValue(decoder *json.Decoder) error {
+func scanTypedJSONValue(decoder *json.Decoder, valueType reflect.Type) error {
+	for valueType.Kind() == reflect.Pointer {
+		valueType = valueType.Elem()
+	}
 	token, err := decoder.Token()
-	if err != nil {
+	if err != nil || token == nil { // Explicit null is outside the runtime profile.
 		return ErrTransport
 	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		seen := make(map[string]struct{})
+
+	switch valueType.Kind() {
+	case reflect.Struct:
+		if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+			return ErrTransport
+		}
+		fields, err := exactJSONFields(valueType)
+		if err != nil {
+			return err
+		}
+		seen := make(map[string]struct{}, len(fields))
 		for decoder.More() {
 			keyToken, err := decoder.Token()
 			if err != nil {
 				return ErrTransport
 			}
 			key, ok := keyToken.(string)
-			if !ok {
+			if !ok || !canonicalJSONMemberName(key) {
 				return ErrTransport
 			}
-			folded := strings.ToLower(key)
-			if _, duplicate := seen[folded]; duplicate {
+			field, known := fields[key]
+			if !known {
 				return ErrTransport
 			}
-			seen[folded] = struct{}{}
-			if err := scanJSONValue(decoder); err != nil {
+			if _, duplicate := seen[key]; duplicate {
+				return ErrTransport
+			}
+			seen[key] = struct{}{}
+			if err := scanTypedJSONValue(decoder, field.typeValue); err != nil {
 				return err
 			}
 		}
@@ -96,9 +103,27 @@ func scanJSONValue(decoder *json.Decoder) error {
 		if err != nil || end != json.Delim('}') {
 			return ErrTransport
 		}
-	case '[':
+		for name, field := range fields {
+			if _, present := seen[name]; field.required && !present {
+				return ErrTransport
+			}
+		}
+		return nil
+
+	case reflect.Slice:
+		if valueType.Elem().Kind() == reflect.Uint8 {
+			if _, ok := token.(string); !ok {
+				return ErrTransport
+			}
+			return nil
+		}
+		fallthrough
+	case reflect.Array:
+		if delimiter, ok := token.(json.Delim); !ok || delimiter != '[' {
+			return ErrTransport
+		}
 		for decoder.More() {
-			if err := scanJSONValue(decoder); err != nil {
+			if err := scanTypedJSONValue(decoder, valueType.Elem()); err != nil {
 				return err
 			}
 		}
@@ -106,70 +131,85 @@ func scanJSONValue(decoder *json.Decoder) error {
 		if err != nil || end != json.Delim(']') {
 			return ErrTransport
 		}
+		return nil
+
+	case reflect.String:
+		if _, ok := token.(string); !ok {
+			return ErrTransport
+		}
+		return nil
+	case reflect.Bool:
+		if _, ok := token.(bool); !ok {
+			return ErrTransport
+		}
+		return nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		if _, ok := token.(json.Number); !ok {
+			return ErrTransport
+		}
+		return nil
 	default:
 		return ErrTransport
 	}
-	return nil
 }
 
-func validateRequiredJSONFields(structType reflect.Type, fields map[string]json.RawMessage) error {
+func exactJSONFields(structType reflect.Type) (map[string]exactJSONField, error) {
+	fields := make(map[string]exactJSONField, structType.NumField())
 	for index := 0; index < structType.NumField(); index++ {
 		field := structType.Field(index)
 		if field.PkgPath != "" {
 			continue
 		}
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
-		if name == "" || name == "-" {
-			name = field.Name
-		}
-		raw, ok := fields[name]
-		if field.Tag.Get("required") == "true" && (!ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null"))) {
-			return ErrTransport
-		}
-		if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		if name == "-" {
 			continue
 		}
-		if err := validateNestedRequiredJSON(field.Type, raw); err != nil {
-			return err
+		if name == "" {
+			name = field.Name
 		}
+		if !canonicalJSONMemberName(name) {
+			return nil, ErrTransport
+		}
+		if _, duplicate := fields[name]; duplicate {
+			return nil, ErrTransport
+		}
+		fields[name] = exactJSONField{typeValue: field.Type, required: field.Tag.Get("required") == "true"}
 	}
-	return nil
+	return fields, nil
 }
 
-func validateNestedRequiredJSON(valueType reflect.Type, raw json.RawMessage) error {
-	switch valueType.Kind() {
-	case reflect.Struct:
-		var nested map[string]json.RawMessage
-		if json.Unmarshal(raw, &nested) != nil {
-			return ErrTransport
-		}
-		return validateRequiredJSONFields(valueType, nested)
-	case reflect.Slice, reflect.Array:
-		element := valueType.Elem()
-		if element.Kind() != reflect.Struct {
-			return nil
-		}
-		var values []json.RawMessage
-		if json.Unmarshal(raw, &values) != nil {
-			return ErrTransport
-		}
-		for _, value := range values {
-			if err := validateNestedRequiredJSON(element, value); err != nil {
-				return err
-			}
+// Runtime schema names are deliberately confined to printable ASCII identifiers.
+// This rejects Unicode case-fold and confusable aliases after JSON escape decoding.
+func canonicalJSONMemberName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index := 0; index < len(name); index++ {
+		character := name[index]
+		if character >= utf8.RuneSelf || !(character >= 'a' && character <= 'z' ||
+			character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '_') {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 func validateRequiredValues(value reflect.Value) error {
+	for value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return ErrTransport
+		}
+		value = value.Elem()
+	}
 	if value.Kind() != reflect.Struct {
 		return nil
 	}
 	typeValue := value.Type()
 	for index := 0; index < value.NumField(); index++ {
 		fieldType := typeValue.Field(index)
-		if fieldType.PkgPath != "" || fieldType.Tag.Get("required") != "true" || fieldType.Tag.Get("allowzero") == "true" {
+		if fieldType.PkgPath != "" || strings.Split(fieldType.Tag.Get("json"), ",")[0] == "-" {
 			continue
 		}
 		field := value.Field(index)
