@@ -21,13 +21,14 @@ import (
 )
 
 type ceremonyFixture struct {
-	t             *testing.T
-	params        bgv.Parameters
-	context       Context
-	participants  []*Participant
-	signingKeys   []ed25519.PrivateKey
-	encryptionKey []*ecdh.PrivateKey
-	stores        []*WitnessStore
+	t                 *testing.T
+	params            bgv.Parameters
+	context           Context
+	participants      []*Participant
+	signingKeys       []ed25519.PrivateKey
+	encryptionKey     []*ecdh.PrivateKey
+	stores            []*WitnessStore
+	abortAfterStaging bool
 }
 
 type ceremonyResult struct {
@@ -35,6 +36,8 @@ type ceremonyResult struct {
 	bundle       PublicBundle
 	sealed       []SealedOperatorBundle
 	shareNeedles [][]byte
+	receipt      PublicationReceipt
+	sealingKeys  [][32]byte
 }
 
 type failingReader struct{}
@@ -97,6 +100,8 @@ func newFixture(t *testing.T, seed string) *ceremonyFixture {
 	galois := params.GaloisElementForColRotation(1)
 	context, err := NewContext(params, Context{
 		PrivacyDomain:         digestLabel(seed + "/privacy-domain"),
+		ServiceID:             digestLabel("private-conflict-checking"),
+		ServiceVersion:        1,
 		SessionIdentity:       digestLabel(seed + "/session-identity"),
 		SessionCommitment:     digestLabel(seed + "/session-commitment"),
 		Nonce:                 digestLabel(seed + "/nonce"),
@@ -127,8 +132,9 @@ func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, 
 		stores = make([]*WitnessStore, PartyCount)
 		for index := range stores {
 			root := strictTempPath(t, fmt.Sprintf("operator-%d-witness", index+1))
+			registryRoot := strictTempPath(t, fmt.Sprintf("operator-%d-session-registry", index+1))
 			var err error
-			stores[index], err = OpenWitnessStore(root)
+			stores[index], err = OpenWitnessStore(root, registryRoot)
 			if err != nil {
 				t.Fatalf("open witness store: %v", err)
 			}
@@ -141,7 +147,15 @@ func newFixtureForContext(t *testing.T, params bgv.Parameters, context Context, 
 		}
 		participants[index] = participant
 	}
-	return &ceremonyFixture{t, params, context, participants, signingKeys, encryptionKeys, stores}
+	return &ceremonyFixture{
+		t:             t,
+		params:        params,
+		context:       context,
+		participants:  participants,
+		signingKeys:   signingKeys,
+		encryptionKey: encryptionKeys,
+		stores:        stores,
+	}
 }
 
 func (f *ceremonyFixture) reserveAndStart() {
@@ -183,8 +197,12 @@ func (f *ceremonyFixture) transition(to Phase, reason [32]byte, participants []*
 		f.t.Fatalf("propose phase %d: %v", to, err)
 	}
 	signatures := make([]WitnessSignature, len(participants))
+	replicas := make([][]WitnessRecord, PartyCount)
+	for index := range f.participants {
+		replicas[index] = f.participants[index].Records()
+	}
 	for index, participant := range participants {
-		if signatures[index], err = participant.SignTransition(statement); err != nil {
+		if signatures[index], err = participant.SignTransition(statement, replicas...); err != nil {
 			f.t.Fatalf("sign phase %d operator %d: %v", to, participant.Point(), err)
 		}
 	}
@@ -370,48 +388,63 @@ func (f *ceremonyFixture) runSuccess() ceremonyResult {
 	sealed := make([]SealedOperatorBundle, PartyCount)
 	ready := make([]SignedEnvelope, PartyCount)
 	needles := make([][]byte, PartyCount)
+	sealingKeys := make([][32]byte, PartyCount)
 	for index, participant := range f.participants {
 		needles[index], err = participant.thresholdShareBytes()
 		if err != nil {
 			f.t.Fatal(err)
 		}
-		sealingKey := digestLabel(fmt.Sprintf("operator-%d/sealing-key", index+1))
-		if sealed[index], ready[index], err = participant.SealOperatorBundle(unsigned, sealingKey[:]); err != nil {
+		sealingKeys[index] = digestLabel(fmt.Sprintf("operator-%d/sealing-key", index+1))
+		if sealed[index], ready[index], err = participant.SealOperatorBundle(unsigned, sealingKeys[index][:]); err != nil {
 			f.t.Fatal(err)
 		}
 		root := strictTempPath(f.t, fmt.Sprintf("operator-%d-private", index+1))
 		if err := PublishSealedOperatorBundle(root, sealed[index]); err != nil {
 			f.t.Fatalf("publish private: %v", err)
 		}
-		opened, openErr := OpenSealedOperatorBundle(sealed[index], sealingKey[:], f.context, unsigned.Digest())
-		if openErr != nil || !slices.Equal(opened.ThresholdShare, needles[index]) || opened.OperatorPoint != participant.Point() {
-			f.t.Fatalf("private bundle readback: %v", openErr)
-		}
 	}
 	bundle, err := BuildPublicBundle(unsigned, attestations, ready)
 	if err != nil {
 		f.t.Fatalf("public bundle: %v", err)
 	}
+	if f.abortAfterStaging {
+		f.transition(PhaseAborted, digestLabel("audit-f07-abort-after-private-staging"), f.participants[:Threshold])
+		replicas := [][]WitnessRecord{f.participants[0].Records(), f.participants[1].Records(), f.participants[2].Records()}
+		for index := range sealed {
+			if _, openErr := OpenCompletedOperatorBundle(sealed[index], sealingKeys[index][:], f.context, bundle, PublicationReceipt{}, f.stores[index], replicas...); !errors.Is(openErr, ErrSecretAccess) {
+				f.t.Fatalf("aborted staged bundle became usable: %v", openErr)
+			}
+		}
+		return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles, sealingKeys: sealingKeys}
+	}
 	publicRoot := strictTempPath(f.t, "public-publication")
-	if err := PublishPublicBundle(publicRoot, bundle); err != nil {
+	receipt, err := PublishPublicBundle(publicRoot, bundle)
+	if err != nil {
 		f.t.Fatalf("publish public: %v", err)
 	}
 	for _, participant := range f.participants {
-		if err := participant.SetPublishedPending(bundle.Digest()); err != nil {
+		if err := participant.SetPublishedPending(bundle, receipt); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhasePublished, [32]byte{}, f.participants)
 	for _, participant := range f.participants {
-		if err := participant.SetCompletedPending(bundle.Digest()); err != nil {
+		if err := participant.SetCompletedPending(bundle, receipt); err != nil {
 			f.t.Fatal(err)
 		}
 	}
 	f.transition(PhaseCompleted, [32]byte{}, f.participants)
-	if err := VerifyPublishedCeremony(f.context, bundle, f.participants[0].Records(), f.participants[1].Records(), f.participants[2].Records()); err != nil {
+	replicas := [][]WitnessRecord{f.participants[0].Records(), f.participants[1].Records(), f.participants[2].Records()}
+	if err := VerifyPublishedCeremony(f.context, bundle, receipt, replicas...); err != nil {
 		f.t.Fatalf("published ceremony: %v", err)
 	}
-	return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles}
+	for index, participant := range f.participants {
+		opened, openErr := OpenCompletedOperatorBundle(sealed[index], sealingKeys[index][:], f.context, bundle, receipt, f.stores[index], replicas...)
+		if openErr != nil || !slices.Equal(opened.ThresholdShare, needles[index]) || opened.OperatorPoint != participant.Point() {
+			f.t.Fatalf("completed private bundle readback: %v", openErr)
+		}
+	}
+	return ceremonyResult{fixture: f, bundle: bundle, sealed: sealed, shareNeedles: needles, receipt: receipt, sealingKeys: sealingKeys}
 }
 
 func TestOneShotCeremonyRequirements(t *testing.T) {
@@ -559,14 +592,15 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.participants[0].SignTransition(reserved); err != nil {
+		emptyReplicas := make([][]WitnessRecord, PartyCount)
+		if _, err := f.participants[0].SignTransition(reserved, emptyReplicas...); err != nil {
 			t.Fatal(err)
 		}
 		abort, err := f.participants[0].ProposedTransition(PhaseAborted, digestLabel("conflict"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.participants[0].SignTransition(abort); !errors.Is(err, ErrReplay) {
+		if _, err := f.participants[0].SignTransition(abort, emptyReplicas...); !errors.Is(err, ErrReplay) {
 			t.Fatalf("second decision signed: %v", err)
 		}
 	})
@@ -674,7 +708,8 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 		old := result.fixture
 		contextInput := old.context
 		contextInput.Nonce = digestLabel("retry-fresh-nonce")
-		contextInput.AttemptOrdinal++
+		contextInput.SessionIdentity = digestLabel("retry-new-bilateral-session")
+		contextInput.SessionCommitment = digestLabel("retry-new-bilateral-commitment")
 		context, err := NewContext(old.params, contextInput)
 		if err != nil {
 			t.Fatal(err)
@@ -706,7 +741,7 @@ func TestOneShotCeremonyRequirements(t *testing.T) {
 
 	t.Run("20 corrupt or incomplete persisted state fails closed", func(t *testing.T) {
 		root := strictTempPath(t, "corrupt-store")
-		store, err := OpenWitnessStore(root)
+		store, err := OpenWitnessStore(root, strictTempPath(t, "corrupt-session-registry"))
 		if err != nil {
 			t.Fatal(err)
 		}
