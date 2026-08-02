@@ -1,4 +1,7 @@
-// Command ceremony-evaluator is the V4 evaluator.
+//go:build obsolete_recoverable_ceremony
+
+// Command ceremony-evaluator is obsolete historical V4 evidence and cannot
+// produce V5 one-shot acceptance evidence.
 //
 // It loads only public artifacts written by the ceremony: the collective public
 // material and the collective evaluation keys. It has no flag, no file format

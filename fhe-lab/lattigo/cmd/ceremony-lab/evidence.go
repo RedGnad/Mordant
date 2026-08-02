@@ -69,7 +69,7 @@ func (l *lab) writeEvidence() error {
 	rosterDigest := l.roster.Digest()
 	report := evidence{
 		SchemaVersion:  "mordant.dealerless-custody-evidence/4",
-		Classification: "DEALERLESS PROCESS-SEPARATED CONTROLLED LAB",
+		Classification: "OBSOLETE_REJECTED_RECOVERABLE_LAB_NON_ACCEPTANCE",
 		LattigoVersion: fhe.LattigoVersion,
 		CustodyModel:   string(fhe.CustodyDealerlessCeremony),
 		Source:         binding,
@@ -83,6 +83,7 @@ func (l *lab) writeEvidence() error {
 		ShareIsolation: isolation,
 		Negatives:      negatives,
 		Limitations: []string{
+			"This historical recoverable run is rejected and cannot qualify as V5 one-shot acceptance evidence.",
 			"Lattigo multiparty is secure against passive adversaries only; no operator proves its share was honestly computed.",
 			"No proof of correct FHE execution; the release authenticates who endorsed a commitment.",
 			"The CRS contributions are revealed in one round without commit-then-reveal; an active adversary revealing last could bias the seed.",

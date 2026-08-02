@@ -1,6 +1,7 @@
 //go:build obsolete_recoverable_ceremony
 
-// Command ceremony-coordinator drives the dealerless key ceremony.
+// Command ceremony-coordinator reproduces the obsolete rejected recoverable
+// ceremony and cannot produce V5 one-shot acceptance evidence.
 //
 // It aggregates public protocol shares and writes public artifacts. It holds no
 // RLWE secret, no Shamir share and no operator identity key. The private
@@ -67,6 +68,7 @@ type rosterFile struct {
 // it is an operator-authored statement rather than a coordinator constant.
 type ceremonyEvidence struct {
 	SchemaVersion       string            `json:"schemaVersion"`
+	Classification      string            `json:"classification"`
 	LattigoVersion      string            `json:"lattigoVersion"`
 	CustodyModel        string            `json:"custodyModel"`
 	CeremonyID          string            `json:"ceremonyId"`
@@ -499,6 +501,7 @@ func conduct(settings options) error {
 	rosterDigest := roster.Digest()
 	evidence := ceremonyEvidence{
 		SchemaVersion:  "mordant.dealerless-ceremony-evidence/4",
+		Classification: "OBSOLETE_REJECTED_RECOVERABLE_LAB_NON_ACCEPTANCE",
 		LattigoVersion: fhe.LattigoVersion,
 		CustodyModel:   string(fhe.CustodyDealerlessCeremony),
 		CeremonyID:     hex.EncodeToString(roster.CeremonyID[:]),

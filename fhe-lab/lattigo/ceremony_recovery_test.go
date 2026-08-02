@@ -1,3 +1,5 @@
+//go:build obsolete_recoverable_ceremony
+
 package lattigospike
 
 import (

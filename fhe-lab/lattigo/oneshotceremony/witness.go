@@ -207,13 +207,24 @@ func ParseWitnessRecord(data []byte) (WitnessRecord, error) {
 	return record, nil
 }
 
-func (r WitnessRecord) Digest() [32]byte {
+// EventDigest commits only to canonical event semantics. It is deliberately
+// independent of the valid quorum subset and signature presentation order.
+func (r WitnessRecord) EventDigest() [32]byte {
+	return r.Statement.Digest()
+}
+
+// AttestationDigest commits to the exact canonical signature collection. It is
+// an artifact digest, never a witness-chain predecessor.
+func (r WitnessRecord) AttestationDigest() [32]byte {
 	encoded, err := r.MarshalBinary()
 	if err != nil {
 		return [32]byte{}
 	}
 	return sha256Record(encoded)
 }
+
+// Digest is retained as the canonical event identity used by existing callers.
+func (r WitnessRecord) Digest() [32]byte { return r.EventDigest() }
 
 func sha256Record(encoded []byte) [32]byte {
 	return hashDomain("MordantOneShotWitnessRecordDigest/v1", encoded)
@@ -281,8 +292,32 @@ func VerifyReplicaAgreement(context Context, replicas ...[]WitnessRecord) error 
 			return fmt.Errorf("%w: rollback or deletion", ErrPersistence)
 		}
 		for j := range replicas[0] {
-			if replicas[i][j].Digest() != replicas[0][j].Digest() {
+			if replicas[i][j].EventDigest() != replicas[0][j].EventDigest() {
 				return fmt.Errorf("%w: fork or equivocation", ErrPersistence)
+			}
+		}
+	}
+	return nil
+}
+
+// VerifyCompatibleReplicaHeads is required before every signing decision. It
+// accepts empty chains only for the first RESERVED event and otherwise requires
+// three valid replicas with identical canonical event histories. Signature
+// subsets may differ without creating different event heads.
+func VerifyCompatibleReplicaHeads(context Context, local []WitnessRecord, replicas ...[]WitnessRecord) error {
+	if len(replicas) != PartyCount {
+		return fmt.Errorf("%w: three witness replicas required", ErrPersistence)
+	}
+	if err := VerifyWitnessChain(context, local); err != nil {
+		return err
+	}
+	for _, replica := range replicas {
+		if err := VerifyWitnessChain(context, replica); err != nil || len(replica) != len(local) {
+			return fmt.Errorf("%w: stale or invalid replica head", ErrPersistence)
+		}
+		for index := range local {
+			if replica[index].EventDigest() != local[index].EventDigest() {
+				return fmt.Errorf("%w: divergent replica head", ErrPersistence)
 			}
 		}
 	}
@@ -371,4 +406,18 @@ func sortedWitnessSignatures(signatures []WitnessSignature) []WitnessSignature {
 		}
 	})
 	return out
+}
+
+func cloneWitnessRecord(input WitnessRecord) WitnessRecord {
+	output := input
+	output.Signatures = slices.Clone(input.Signatures)
+	return output
+}
+
+func cloneWitnessChain(input []WitnessRecord) []WitnessRecord {
+	output := make([]WitnessRecord, len(input))
+	for index := range input {
+		output[index] = cloneWitnessRecord(input[index])
+	}
+	return output
 }

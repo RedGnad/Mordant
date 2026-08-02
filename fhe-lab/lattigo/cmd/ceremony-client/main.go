@@ -1,4 +1,7 @@
-// Command ceremony-client materializes exactly one synthetic pledge in its own
+//go:build obsolete_recoverable_ceremony
+
+// Command ceremony-client is obsolete historical evidence and cannot produce
+// V5 one-shot acceptance evidence. It materializes exactly one synthetic pledge in its own
 // process and encrypts it under the collective ceremony key.
 //
 // Unlike the V3 client it refuses to encrypt until it has verified the key
