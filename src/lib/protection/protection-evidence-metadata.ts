@@ -8,6 +8,7 @@ const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const ISO_SECOND_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const DOCUMENTED_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/u;
+const SECOND_CLOCK_PRECISION_ALLOWANCE_MILLIS = 999;
 
 const RETAINED_CASE_MANIFEST_DIGEST_BY_CASE_ID: Readonly<Record<string, string>> = Object.freeze({
   "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e":
@@ -397,7 +398,7 @@ function validateDatesAndTerminalMetadata(evidence: MordantProtectionEvidence): 
     || signedAtUnix < releasedAtUnix || signedAtUnix > expiresAtUnix
     || governedGeneratedAtUnix < signedAtUnix || governedGeneratedAtUnix > expiresAtUnix
     || generatedAt < createdAtUnix * 1000 || generatedAt > expiresAtUnix * 1000
-    || Math.abs(generatedAt - governedGeneratedAtUnix * 1000) > 1_000
+    || generatedAt + SECOND_CLOCK_PRECISION_ALLOWANCE_MILLIS < governedGeneratedAtUnix * 1000
   ) reject("TERMINAL_TIMESTAMP_RELATION");
 
   const exactRetry = evidence.governedFheEvidence.measurements.release.exactRetry;

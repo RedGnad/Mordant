@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./governed-fhe-product-server";
 import type { Sha256Digest } from "./cleanverse-asset";
 import {
+  assertPublicProtectionEvidence,
   protectionBindingDigest,
   protectionEvidenceDigest,
   type MordantProtectionEvidence,
@@ -567,7 +568,7 @@ artifactTest("retention rejects a symlink destination without reading or replaci
   assert.equal(readFileSync(target, "utf8"), "outside\n");
 });
 
-artifactTest("published evidence reconciles after crash without a second create-only export", async () => {
+artifactTest("terminal envelope uses post-generation time and reconciles without a second export", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-evidence-reconcile-"));
   const retainedEvidence = retainedNoConflict();
   const runRoot = join(root, "runs");
@@ -625,6 +626,10 @@ artifactTest("published evidence reconciles after crash without a second create-
   let attestationExists = false;
   let publicEvidenceExists = false;
   let exports = 0;
+  const governedGeneratedAt = evidence.governedFheEvidence.generatedAtUnix * 1_000;
+  const operationAdmissionAt = new Date(governedGeneratedAt - 2_250);
+  const envelopeConstructionAt = new Date(governedGeneratedAt + 1_750);
+  let currentTime = operationAdmissionAt;
   const inspection = {
     foundation: { bindingDigest: evidence.fhe.caseBindingDigest, report: {} },
     submissionA: { artifactDigest: evidence.fhe.participantArtifactDigests[0], ciphertextBytes: 1, artifactBytes: 1 },
@@ -647,7 +652,7 @@ artifactTest("published evidence reconciles after crash without a second create-
     binRoot: join(root, "bin"),
     importedEvidenceRoot: join(root, "retained"),
     expectedSourceCommit: evidence.sourceCommit,
-    now: () => new Date(evidence.generatedAt),
+    now: () => new Date(currentTime),
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {
@@ -673,6 +678,7 @@ artifactTest("published evidence reconciles after crash without a second create-
       assert.equal(attestationExists, true);
       exports += 1;
       publicEvidenceExists = true;
+      currentTime = envelopeConstructionAt;
       return evidence.governedFheEvidence as T;
     },
   };
@@ -681,9 +687,42 @@ artifactTest("published evidence reconciles after crash without a second create-
   try {
     const first = crashing(base, "after-evidence-publication-before-state-save");
     await assert.rejects(first.exportProtectionEvidence(evidence.runId), /INJECTED_CRASH/);
+    const journal = readOperationJournal(runRoot, evidence.runId);
+    const exportOperation = journal.records.find((record) => record.operation === "exportProtectionEvidence");
+    assert.ok(exportOperation);
+    assert.equal(exportOperation.createdAt, operationAdmissionAt.toISOString());
+    assert.ok(envelopeConstructionAt.valueOf() - operationAdmissionAt.valueOf() > 1_000);
+
+    const published = JSON.parse(readFileSync(join(caseRoot, "protection-evidence.json"), "utf8")) as MordantProtectionEvidence;
+    assert.equal(published.generatedAt, envelopeConstructionAt.toISOString());
+    assert.notEqual(published.generatedAt, exportOperation.createdAt);
+    assert.ok(new Date(published.generatedAt).valueOf() >= governedGeneratedAt);
+    assert.ok(new Date(published.generatedAt).valueOf() <= evidence.caseAuthorization.binding.expiresAtUnix * 1_000);
+    assert.doesNotThrow(() => assertPublicProtectionEvidence(
+      published,
+      evidence.sourceCommit,
+      evidence.governedFheEvidence.caseManifestDigest,
+    ));
+
+    const { manifestDigest: _manifestDigest, ...substitutedBody } = published;
+    const substitutedBodyWithAdmission = { ...substitutedBody, generatedAt: exportOperation.createdAt };
+    const substituted = {
+      ...substitutedBodyWithAdmission,
+      manifestDigest: protectionEvidenceDigest(substitutedBodyWithAdmission),
+    };
+    assert.throws(() => assertPublicProtectionEvidence(
+      substituted,
+      evidence.sourceCommit,
+      evidence.governedFheEvidence.caseManifestDigest,
+    ));
+
     const recovered = await createProtectionOrchestrator(base).readProtectionCase(evidence.runId);
     assert.equal(recovered.stage, "COMPLETE");
     assert.equal(recovered.evidence?.runId, evidence.runId);
+    assert.equal(
+      (JSON.parse(readFileSync(join(caseRoot, "protection-evidence.json"), "utf8")) as MordantProtectionEvidence).generatedAt,
+      envelopeConstructionAt.toISOString(),
+    );
     assert.equal(exports, 1);
   } finally {
     if (previousSource === undefined) delete process.env.MORDANT_PROTECTION_SOURCE_COMMIT;

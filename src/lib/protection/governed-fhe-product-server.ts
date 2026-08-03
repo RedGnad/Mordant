@@ -659,7 +659,12 @@ function reconcileProtectionProjection(
     case "EXPORTING": {
       const productEvidencePath = join(state.paths.root, "protection-evidence.json");
       if (!existsSync(productEvidencePath) && inspection.evidence !== undefined) {
-        const recovered = buildProtectionEvidence(runtime, state, inspection.evidence, pending.createdAt);
+        const recovered = buildProtectionEvidence(
+          runtime,
+          state,
+          inspection.evidence,
+          runtime.now().toISOString(),
+        );
         writeJsonAtomic(productEvidencePath, recovered, 0o644);
       }
       if (!existsSync(productEvidencePath)) return null;
@@ -1559,7 +1564,13 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       "-request", measurementsPath,
     ]);
     if (existsSync(measurementsPath)) rmSync(measurementsPath);
-    const evidence = buildProtectionEvidence(runtime, state, governedFheEvidence, operation.createdAt, attestation.chronology);
+    const evidence = buildProtectionEvidence(
+      runtime,
+      state,
+      governedFheEvidence,
+      runtime.now().toISOString(),
+      attestation.chronology,
+    );
     writeJsonAtomic(join(state.paths.root, "protection-evidence.json"), evidence, 0o644);
     runtime.failpoint("after-evidence-publication-before-state-save");
     state = saveState(runtime, { ...state, stage: "COMPLETE", evidence });

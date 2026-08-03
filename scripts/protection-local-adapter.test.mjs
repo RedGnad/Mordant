@@ -149,6 +149,12 @@ test("origin, unknown operations and every additional private field are refused 
       { intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID, privateKey: CAPABILITY },
       { intent: "execute", runId: "11111111-1111-4111-8111-111111111111", operation: "arbitrary", path: "/tmp/private" },
       { intent: "execute", runId: "11111111-1111-4111-8111-111111111111", operation: "retainProtectionEvidence", destination: "/tmp/private" },
+      {
+        intent: "execute",
+        runId: "11111111-1111-4111-8111-111111111111",
+        operation: "exportProtectionEvidence",
+        generatedAt: "2026-08-03T14:50:45.846Z",
+      },
     ]) {
       const response = await browserFetch(url, {
         method: "POST",
@@ -157,7 +163,10 @@ test("origin, unknown operations and every additional private field are refused 
       });
       assert.equal(response.status, 400);
       const refusal = await response.json();
-      if (body.intent === "execute" && body.operation === "retainProtectionEvidence") {
+      if (
+        body.intent === "execute"
+        && (body.operation === "retainProtectionEvidence" || body.operation === "exportProtectionEvidence")
+      ) {
         assert.deepEqual(refusal, {
           schemaVersion: "mordant.local-mutation-error/1",
           mutationAdmission: "NOT_ADMITTED",

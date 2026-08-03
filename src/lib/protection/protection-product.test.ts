@@ -591,6 +591,7 @@ artifactTest("A4-01-R2 caseManifestDigest is pinned by CaseID or a derived local
 });
 
 artifactTest("A4-01-R2 canonical dates, timestamp semantics and exactRetry types are enforced", () => {
+  const conflict = mutableEvidence("conflict");
   const dateMutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
     ["normalized impossible generatedAt", ["generatedAt"], "2026-02-30T14:50:45.846Z"],
     ["generatedAt without milliseconds", ["generatedAt"], "2026-08-03T14:50:45Z"],
@@ -600,7 +601,16 @@ artifactTest("A4-01-R2 canonical dates, timestamp semantics and exactRetry types
     ["issuedAt normalized overflow", ["cleanverseAsset", "issuance", "value", "issuedAtRaw"], "2026-07-32 03:22:22"],
     ["negative Unix", ["governedFheEvidence", "generatedAtUnix"], -1],
     ["fractional Unix", ["chronology", "signedAtUnix"], 1.5],
-    ["export timestamp drift", ["generatedAt"], "2026-08-03T14:40:45.846Z"],
+    [
+      "envelope generatedAt before governed generation",
+      ["generatedAt"],
+      new Date((conflict.governedFheEvidence.generatedAtUnix - 2) * 1_000).toISOString(),
+    ],
+    [
+      "envelope generatedAt after case expiry",
+      ["generatedAt"],
+      new Date((conflict.caseAuthorization.binding.expiresAtUnix + 1) * 1_000).toISOString(),
+    ],
   ];
   for (const [name, path, replacement] of dateMutations) {
     const evidence = mutableEvidence("conflict");
