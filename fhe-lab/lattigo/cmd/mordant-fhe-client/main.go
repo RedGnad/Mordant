@@ -72,7 +72,8 @@ func main() {
 		ArtifactDigest  governedfhe.Digest `json:"artifactDigest"`
 		DurationNanos   int64              `json:"durationNanos"`
 		CiphertextBytes int64              `json:"ciphertextBytes"`
-	}{digest, report.Duration.Nanoseconds(), report.CiphertextBytes}); err != nil {
+		ArtifactBytes   int64              `json:"artifactBytes"`
+	}{digest, report.Duration.Nanoseconds(), report.CiphertextBytes, report.ArtifactBytes}); err != nil {
 		fail(err)
 	}
 	for index := range key {

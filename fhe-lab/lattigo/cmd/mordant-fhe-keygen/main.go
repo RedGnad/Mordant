@@ -46,9 +46,10 @@ func main() {
 		}
 		digest, _ := binding.Digest()
 		writeJSON(struct {
-			BindingDigest governedfhe.Digest `json:"bindingDigest"`
-			DurationNanos int64              `json:"durationNanos"`
-		}{digest, report.Duration.Nanoseconds()})
+			BindingDigest governedfhe.Digest              `json:"bindingDigest"`
+			DurationNanos int64                           `json:"durationNanos"`
+			Report        governedfhe.KeyGenerationReport `json:"report"`
+		}{digest, report.Duration.Nanoseconds(), report})
 	case "finalize":
 		manifest, err := governedfhe.FinalizeCase(*publicRoot)
 		if err != nil {

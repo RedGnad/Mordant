@@ -5,6 +5,8 @@
 !.env.example
 .next/
 .cleanverse-test-dist/
+.product-test-dist/
+.mordant/
 node_modules/
 coverage/
 playwright-report/
