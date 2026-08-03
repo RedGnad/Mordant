@@ -50,10 +50,11 @@ export function createProtectionPostHandler(environment: NodeJS.ProcessEnv = pro
       const body = parsed as Record<string, unknown>;
       if (
         body.intent === "create"
-        && exactKeys(body, ["intent", "scenario"])
+        && exactKeys(body, ["intent", "scenario", "creationRequestId"])
         && (body.scenario === "conflict" || body.scenario === "no-conflict")
+        && typeof body.creationRequestId === "string"
       ) {
-        return response(await createProtectionCase(body.scenario));
+        return response(await createProtectionCase(body.scenario, body.creationRequestId));
       }
       if (
         body.intent !== "execute"

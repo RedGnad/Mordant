@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   ProtectionProductError,
   loadImportedProtectionEvidence,
+  readProtectionCreation,
   readRetainedProtectionEvidenceInConfiguredRoot,
   readProtectionCase,
 } from "../../../../lib/protection/governed-fhe-product-server";
@@ -37,8 +38,29 @@ export async function GET(request: Request) {
       }
       const view = await readProtectionCase(runId);
       if (view.stage !== "COMPLETE") return response(view);
-      const retained = readRetainedProtectionEvidenceInConfiguredRoot(runId);
-      return response({ ...view, evidence: retained.evidence });
+      try {
+        const retained = readRetainedProtectionEvidenceInConfiguredRoot(runId);
+        return response({ ...view, evidence: retained.evidence });
+      } catch (error) {
+        if (!(error instanceof ProtectionProductError) || error.status !== 423) throw error;
+        return response({
+          schemaVersion: "mordant.protection-retention-required/1",
+          status: "RETENTION_REQUIRED",
+          runId: view.runId,
+          scenario: view.protectionCase.productScenario,
+          recoveryOperation: "retainProtectionEvidence",
+        });
+      }
+    }
+    const creationRequestId = url.searchParams.get("creationRequestId");
+    if (creationRequestId !== null) {
+      if (
+        url.searchParams.getAll("creationRequestId").length !== 1
+        || [...url.searchParams.keys()].some((key) => key !== "creationRequestId")
+      ) {
+        return response({ error: "Only an exact creationRequestId may be read." }, 400);
+      }
+      return response(await readProtectionCreation(creationRequestId));
     }
     const requestedScenario = url.searchParams.get("scenario") ?? "conflict";
     if (

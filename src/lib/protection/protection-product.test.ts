@@ -43,6 +43,13 @@ import { evaluateDiskSpace, PRODUCT_STORAGE } from "./governed-fhe-product-serve
 import type { ProtectionCaseView } from "./governed-fhe-product-server";
 import { protectionMutationGate } from "./protection-api-gate";
 import {
+  PROTECTION_RECOVERY_TTL_MS,
+  parseProtectionBrowserRecovery,
+  pendingCreationRecovery,
+  pendingMutationRecovery,
+  retentionRequiredRecovery,
+} from "./protection-browser-recovery";
+import {
   PRODUCT_EXECUTION_LABELS,
   evidenceForDisplayedCase,
   parseProtectionEvidencePresentation,
@@ -246,6 +253,31 @@ test("every network mutation requires opt-in and the external administrator capa
   }).allowed, false);
 });
 
+test("A6-F02/F03 browser recovery authority is exact, no-secret and expires within its fixed bound", () => {
+  const now = Date.UTC(2026, 7, 3);
+  const runId = "11111111-1111-4111-8111-111111111111";
+  const values = [
+    pendingCreationRecovery("conflict", runId, now),
+    pendingMutationRecovery("no-conflict", runId, "evaluatePrivateConflict", now),
+    retentionRequiredRecovery("conflict", runId, now),
+  ];
+  for (const value of values) {
+    const serialized = JSON.stringify(value);
+    assert.deepEqual(parseProtectionBrowserRecovery(serialized, now), value);
+    assert.equal(value.expiresAtUnix - value.createdAtUnix, PROTECTION_RECOVERY_TTL_MS);
+    assert.doesNotMatch(serialized, /"(?:capability|credential|secret|privateRoot|path)"\s*:/i);
+    assert.equal(parseProtectionBrowserRecovery(serialized, value.expiresAtUnix), null);
+    assert.equal(parseProtectionBrowserRecovery(JSON.stringify({ ...value, extra: true }), now), null);
+    assert.equal(parseProtectionBrowserRecovery(JSON.stringify({ ...value, scenario: "other" }), now), null);
+    assert.equal(parseProtectionBrowserRecovery(JSON.stringify({ ...value, expiresAtUnix: now + 1 }), now), null);
+  }
+  assert.equal(parseProtectionBrowserRecovery("not-json", now), null);
+  assert.equal(parseProtectionBrowserRecovery(JSON.stringify({
+    ...pendingMutationRecovery("conflict", runId, "releaseGovernedResult", now),
+    operation: "exportPrivateKeys",
+  }), now), null);
+});
+
 for (const scenario of ["conflict", "no-conflict"] as const) {
   test(`retained real governed-FHE ${scenario} evidence is structurally safe when present`, (context) => {
     const path = join(process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`);
@@ -378,6 +410,63 @@ artifactTest("A4-01-R1 all four receivable literals reject wrong type and non-ca
       ProtectionEvidenceError,
       `${field} accepted a missing literal`,
     );
+  }
+});
+
+const A6_BOOLEAN_FIELDS = [
+  ["recourse.opened", ["recourse", "opened"], (scenario: "conflict" | "no-conflict") => scenario === "conflict"],
+  [
+    "originalReceivablePreservation.reserveAccountingSeparate",
+    ["originalReceivablePreservation", "reserveAccountingSeparate"],
+    () => true,
+  ],
+  [
+    "originalReceivablePreservation.claimBurnedOrTransferredByProtection",
+    ["originalReceivablePreservation", "claimBurnedOrTransferredByProtection"],
+    () => false,
+  ],
+  ["governedFheEvidence.publicStructureValidated", ["governedFheEvidence", "publicStructureValidated"], () => true],
+  [
+    "recourseAttestation.attestation.productionIsolationProven",
+    ["recourseAttestation", "attestation", "productionIsolationProven"],
+    () => false,
+  ],
+] as const;
+
+artifactTest("A6-F01 exact scenario-bound Booleans reject every non-Boolean, missing and opposite value", () => {
+  for (const scenario of ["conflict", "no-conflict"] as const) {
+    for (const [field, path, expectedForScenario] of A6_BOOLEAN_FIELDS) {
+      const expected = expectedForScenario(scenario);
+      const variants: ReadonlyArray<readonly [string, unknown]> = [
+        ["opposite Boolean", !expected],
+        ["expected string", String(expected)],
+        ["opposite string", String(!expected)],
+        ["expected number", Number(expected)],
+        ["opposite number", Number(!expected)],
+        ["null", null],
+      ];
+      for (const [variant, replacement] of variants) {
+        const evidence = mutableEvidence(scenario);
+        replaceJsonPath(evidence, path, replacement);
+        assert.throws(
+          () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+          ProtectionEvidenceError,
+          `${field} accepted ${variant} for ${scenario}`,
+        );
+      }
+      const missing = mutableEvidence(scenario) as unknown as Record<string, unknown>;
+      let parent = missing;
+      for (const part of path.slice(0, -1)) parent = parent[part] as Record<string, unknown>;
+      delete parent[path.at(-1)!];
+      assert.throws(
+        () => verifyAndProjectPublicProtectionEvidence(
+          rehash(missing as unknown as MordantProtectionEvidence),
+          RETAINED_SOURCE_COMMIT,
+        ),
+        ProtectionEvidenceError,
+        `${field} accepted a missing value for ${scenario}`,
+      );
+    }
   }
 });
 

@@ -822,34 +822,54 @@ async function exclusive<T>(runId: string, operation: () => Promise<T>): Promise
   }
 }
 
-async function createProtectionCaseRuntime(runtime: ProtectionRuntime, scenario: ProductScenario): Promise<ProtectionCaseView> {
+async function createProtectionCaseRuntime(
+  runtime: ProtectionRuntime,
+  scenario: ProductScenario,
+  creationRequestId: string,
+): Promise<ProtectionCaseView> {
   if (scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Unsupported product scenario", 400);
   }
-  const runId = randomUUID();
-  const root = join(runtime.runRoot, runId);
-  const createdAt = runtime.now().toISOString();
-  const protectionCase = createProtectionCaseModel({
-    scenario,
-    createdAt,
-    caseNonce: randomBytes(32).toString("hex"),
+  // The browser-generated creation request ID is the durable one-to-one map to
+  // the run. Identity mapping makes a lost create response recoverable without
+  // admitting another create or maintaining a second fallible registry.
+  assertRunId(creationRequestId);
+  const runId = creationRequestId;
+  return exclusive(`creation:${creationRequestId}`, async () => {
+    const existingPath = statePath(runtime, runId);
+    if (existsSync(existingPath)) {
+      const existing = await loadState(runtime, runId, false);
+      if (existing.protectionCase.productScenario !== scenario) {
+        throw new ProtectionProductError("Creation request scenario mismatch", 409);
+      }
+      return publicView(existing, runtime);
+    }
+    const root = join(runtime.runRoot, runId);
+    const createdAt = runtime.now().toISOString();
+    const protectionCase = createProtectionCaseModel({
+      scenario,
+      createdAt,
+      caseNonce: randomBytes(32).toString("hex"),
+    });
+    const state: InternalState = {
+      schemaVersion: "mordant.protection-execution/2",
+      runId,
+      stage: "CASE_CREATED",
+      protectionCase,
+      paths: {
+        root,
+        publicRoot: join(root, "public"),
+        decryptorPrivateRoot: join(root, "decryptor-private"),
+        participantPrivateRoot: join(root, "participant-private"),
+      },
+      startedAtUnix: unix(createdAt),
+    };
+    mkdirSync(runtime.runRoot, { recursive: true, mode: 0o700 });
+    // A process loss after directory creation but before execution.json is
+    // safely recoverable by the same creationRequestId.
+    mkdirSync(root, { recursive: true, mode: 0o700 });
+    return publicView(saveState(runtime, state), runtime);
   });
-  const state: InternalState = {
-    schemaVersion: "mordant.protection-execution/2",
-    runId,
-    stage: "CASE_CREATED",
-    protectionCase,
-    paths: {
-      root,
-      publicRoot: join(root, "public"),
-      decryptorPrivateRoot: join(root, "decryptor-private"),
-      participantPrivateRoot: join(root, "participant-private"),
-    },
-    startedAtUnix: unix(createdAt),
-  };
-  mkdirSync(runtime.runRoot, { recursive: true, mode: 0o700 });
-  mkdirSync(root, { recursive: false, mode: 0o700 });
-  return publicView(saveState(runtime, state), runtime);
 }
 
 async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
@@ -1558,6 +1578,14 @@ async function readProtectionCaseRuntime(runtime: ProtectionRuntime, runId: stri
   return publicView(await loadState(runtime, runId, false), runtime);
 }
 
+async function readProtectionCreationRuntime(
+  runtime: ProtectionRuntime,
+  creationRequestId: string,
+): Promise<ProtectionCaseView> {
+  // Lookup is strictly passive and resolves the durable identity map only.
+  return readProtectionCaseRuntime(runtime, creationRequestId);
+}
+
 function loadImportedProtectionEvidenceRuntime(
   runtime: ProtectionRuntime,
   scenario: ProductScenario = "conflict",
@@ -1660,6 +1688,21 @@ async function retainProtectionEvidenceInConfiguredRootRuntime(
   runId: string,
 ): Promise<RetainedProtectionEvidenceView> {
   return exclusive(runId, async () => {
+    const pending = pendingOperation(runtime.runRoot, runId);
+    if (pending?.operation === "retainProtectionEvidence") {
+      await loadState(runtime, runId);
+      if (pendingOperation(runtime.runRoot, runId) === null) {
+        return readRetainedProtectionEvidenceInConfiguredRootRuntime(runtime, runId);
+      }
+    } else {
+      try {
+        // A confirmed retry after a lost retention response must not create a
+        // second operation-journal result or rerun the retain command.
+        return readRetainedProtectionEvidenceInConfiguredRootRuntime(runtime, runId);
+      } catch (error) {
+        if (!(error instanceof ProtectionProductError) || error.status !== 423) throw error;
+      }
+    }
     const state = await loadState(runtime, runId);
     const retainedPath = await retainProtectionEvidenceRuntime(
       runtime,
@@ -1717,7 +1760,9 @@ async function validateRetainedPublicArtifactsRuntime(runtime: ProtectionRuntime
 export function createProtectionOrchestrator(options: ProtectionRuntimeOptions = {}) {
   const runtime = runtimeFrom(options);
   return Object.freeze({
-    createProtectionCase: (scenario: ProductScenario) => createProtectionCaseRuntime(runtime, scenario),
+    createProtectionCase: (scenario: ProductScenario, creationRequestId: string = randomUUID()) => (
+      createProtectionCaseRuntime(runtime, scenario, creationRequestId)
+    ),
     preparePrivateMatch: (runId: string) => preparePrivateMatchRuntime(runtime, runId),
     submitParticipantPledge: (
       runId: string,
@@ -1732,6 +1777,7 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     completeCureChronology: (runId: string) => completeCureChronologyRuntime(runtime, runId),
     exportProtectionEvidence: (runId: string) => exportProtectionEvidenceRuntime(runtime, runId),
     readProtectionCase: (runId: string) => readProtectionCaseRuntime(runtime, runId),
+    readProtectionCreation: (creationRequestId: string) => readProtectionCreationRuntime(runtime, creationRequestId),
     loadImportedProtectionEvidence: (scenario: ProductScenario = "conflict") => loadImportedProtectionEvidenceRuntime(runtime, scenario),
     retainProtectionEvidence: (runId: string, destination: string) => retainProtectionEvidenceRuntime(runtime, runId, destination),
     readRetainedProtectionEvidenceInConfiguredRoot: (runId: string) => (
@@ -1755,6 +1801,7 @@ export const openRecourseCase = DEFAULT_ORCHESTRATOR.openRecourseCase;
 export const completeCureChronology = DEFAULT_ORCHESTRATOR.completeCureChronology;
 export const exportProtectionEvidence = DEFAULT_ORCHESTRATOR.exportProtectionEvidence;
 export const readProtectionCase = DEFAULT_ORCHESTRATOR.readProtectionCase;
+export const readProtectionCreation = DEFAULT_ORCHESTRATOR.readProtectionCreation;
 export const loadImportedProtectionEvidence = DEFAULT_ORCHESTRATOR.loadImportedProtectionEvidence;
 export const retainProtectionEvidence = DEFAULT_ORCHESTRATOR.retainProtectionEvidence;
 export const readRetainedProtectionEvidenceInConfiguredRoot = (

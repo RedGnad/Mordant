@@ -184,6 +184,26 @@ function crashing(base: ProtectionRuntimeOptions, target: string) {
   });
 }
 
+test("A6-F02 creationRequestId durably resolves to exactly one idempotent run", async () => {
+  const { base } = await fakeRuntimeRoot("conflict");
+  const creationRequestId = "22222222-2222-4222-8222-222222222222";
+  const first = createProtectionOrchestrator(base);
+  const created = await first.createProtectionCase("conflict", creationRequestId);
+  const repeated = await first.createProtectionCase("conflict", creationRequestId);
+  const restarted = createProtectionOrchestrator(base);
+  const recovered = await restarted.readProtectionCreation(creationRequestId);
+
+  assert.equal(created.runId, creationRequestId);
+  assert.equal(repeated.runId, created.runId);
+  assert.equal(recovered.runId, created.runId);
+  assert.equal(repeated.protectionCase.fheCaseId, created.protectionCase.fheCaseId);
+  assert.equal(recovered.protectionCase.fheCaseId, created.protectionCase.fheCaseId);
+  await assert.rejects(
+    restarted.createProtectionCase("no-conflict", creationRequestId),
+    /Creation request scenario mismatch/,
+  );
+});
+
 async function prepared(base: ProtectionRuntimeOptions) {
   const orchestrator = createProtectionOrchestrator(base);
   let view = await orchestrator.createProtectionCase("no-conflict");
@@ -475,6 +495,7 @@ artifactTest("interrupted retention resumes through a fresh orchestrator and exa
   const evidence = writeCompleteExecution(runRoot, retainedNoConflict());
   const destinationRoot = join(root, "retained");
   const destination = join(destinationRoot, "no-conflict.json");
+  let retentionCalls = 0;
   mkdirSync(destinationRoot, { recursive: true });
   const base: ProtectionRuntimeOptions = {
     runRoot,
@@ -487,6 +508,7 @@ artifactTest("interrupted retention resumes through a fresh orchestrator and exa
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {
       if (binary === "inspect") return { finalized: true, evaluationAdmission: true, releaseAdmission: true, ambiguous: false } as T;
       assert.equal(binary, "retain");
+      retentionCalls += 1;
       const target = join(argument(args, "-retention-root"), `${argument(args, "-scenario")}.json`);
       const source = readFileSync(argument(args, "-source"));
       if (existsSync(target)) {
@@ -498,12 +520,17 @@ artifactTest("interrupted retention resumes through a fresh orchestrator and exa
     },
   };
   const first = crashing(base, "after-capability-retention-before-readback");
-  await assert.rejects(first.retainProtectionEvidence(evidence.runId, destination), /INJECTED_CRASH/);
+  await assert.rejects(first.retainProtectionEvidenceInConfiguredRoot(evidence.runId), /INJECTED_CRASH/);
   assert.equal(existsSync(destination), true);
   const restarted = createProtectionOrchestrator(base);
-  await restarted.retainProtectionEvidence(evidence.runId, destination);
+  await restarted.retainProtectionEvidenceInConfiguredRoot(evidence.runId);
+  await restarted.retainProtectionEvidenceInConfiguredRoot(evidence.runId);
   assert.equal((JSON.parse(readFileSync(destination, "utf8")) as MordantProtectionEvidence).manifestDigest, evidence.manifestDigest);
   assert.equal(readOperationJournal(runRoot, evidence.runId).records.at(-1)?.outcome, "RECONCILED");
+  assert.equal(readOperationJournal(runRoot, evidence.runId).records.filter((record) => (
+    record.operation === "retainProtectionEvidence"
+  )).length, 1);
+  assert.equal(retentionCalls, 1);
 });
 
 artifactTest("retention rejects a symlink destination without reading or replacing its target", async () => {

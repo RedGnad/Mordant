@@ -24,6 +24,14 @@ import {
   type ProtectionEvidencePresentation,
 } from "@/lib/protection/protection-presentation";
 import type { ProductScenario } from "@/lib/protection/protection-case";
+import {
+  PROTECTION_RECOVERY_STORAGE_KEY,
+  parseProtectionBrowserRecovery,
+  pendingCreationRecovery,
+  pendingMutationRecovery,
+  retentionRequiredRecovery,
+  type ProtectionBrowserRecovery,
+} from "@/lib/protection/protection-browser-recovery";
 import type { ProtectionCaseView } from "@/lib/protection/governed-fhe-product-server";
 
 import styles from "./protection-experience.module.css";
@@ -44,7 +52,7 @@ const EXECUTION_STAGES = new Set([
   "ABORTED",
 ]);
 
-type RequestState = "idle" | "loading" | "creating" | "executing" | "resuming";
+type RequestState = "idle" | "loading" | "creating" | "executing" | "resuming" | "retaining";
 type HistoryMode = "none" | "push" | "replace";
 type UrlAuthority = Readonly<{
   scenario: ProductScenario;
@@ -56,6 +64,13 @@ type ReadbackRequirement = Readonly<{
   scenario: ProductScenario;
   operation: string;
   operationLabel: string;
+}>;
+type RetentionRequiredView = Readonly<{
+  schemaVersion: "mordant.protection-retention-required/1";
+  status: "RETENTION_REQUIRED";
+  runId: string;
+  scenario: ProductScenario;
+  recoveryOperation: "retainProtectionEvidence";
 }>;
 
 const STAGE_INDEX: Readonly<Record<ProtectionCaseView["stage"], number>> = {
@@ -219,6 +234,42 @@ function parseProtectionCaseView(value: unknown, runId?: string, scenario?: Prod
   return structuredClone(value) as ProtectionCaseView;
 }
 
+function parseRetentionRequiredView(
+  value: unknown,
+  runId: string,
+  scenario: ProductScenario,
+): RetentionRequiredView | null {
+  if (!exactRecord(value, ["schemaVersion", "status", "runId", "scenario", "recoveryOperation"])) return null;
+  if (
+    value.schemaVersion !== "mordant.protection-retention-required/1"
+    || value.status !== "RETENTION_REQUIRED"
+    || value.runId !== runId
+    || value.scenario !== scenario
+    || value.recoveryOperation !== "retainProtectionEvidence"
+  ) return null;
+  return structuredClone(value) as RetentionRequiredView;
+}
+
+function parseRetainedProtectionView(
+  value: unknown,
+  runId: string,
+  scenario: ProductScenario,
+): ProtectionEvidencePresentation | null {
+  if (!exactRecord(value, ["schemaVersion", "runId", "scenario", "caseId", "manifestDigest", "evidence"])) return null;
+  const evidence = parseProtectionEvidencePresentation(value.evidence);
+  if (
+    value.schemaVersion !== "mordant.retained-protection-view/1"
+    || value.runId !== runId
+    || value.scenario !== scenario
+    || evidence === null
+    || evidence.runId !== runId
+    || evidence.scenario !== scenario
+    || value.caseId !== evidence.fhe.caseId
+    || value.manifestDigest !== evidence.manifestDigest
+  ) return null;
+  return evidence;
+}
+
 class ProtectionResponseFailure extends Error {
   readonly notAdmitted: Readonly<{ runId: string; operation: string }> | null;
 
@@ -283,10 +334,16 @@ function readProtectionUrl(search: string): UrlAuthority {
   return { scenario, runId: runIds[0] ?? null, error: null };
 }
 
-function adapterUrl(origin: string, runId?: string): string {
+function adapterUrl(origin: string, authority?: Readonly<{ runId?: string; creationRequestId?: string }>): string {
   const url = new URL(origin);
-  if (runId !== undefined) url.searchParams.set("runId", runId);
+  if (authority?.runId !== undefined) url.searchParams.set("runId", authority.runId);
+  if (authority?.creationRequestId !== undefined) url.searchParams.set("creationRequestId", authority.creationRequestId);
   return url.toString();
+}
+
+function operationLabel(operation: string): string {
+  return Object.values(OPERATION).find((candidate) => candidate.api === operation)?.label
+    ?? (operation === "retainProtectionEvidence" ? "evidence retention" : "interrupted local operation");
 }
 
 function focusableElements(root: HTMLElement): HTMLElement[] {
@@ -357,6 +414,15 @@ function EvidenceDrawer({ evidence, onClose, returnFocus }: {
 
   const refusal = "ABSENT — signed false Boolean refused recourse; no recourse record was created.";
   const rows = [
+    ["Evidence verification", "VERIFIED", true],
+    ["Final incident state", evidence.recourseAttestation.attestation.finalIncidentState, true],
+    ["Final recourse state", evidence.recourseAttestation.attestation.finalRecourseState, true],
+    ["Clock class", evidence.recourseAttestation.attestation.clockClass, true],
+    [
+      "Signature verification status",
+      "VERIFIED — participant, governed-result and recourse-attestation signatures",
+      true,
+    ],
     ["Source commit", evidence.sourceCommit, true],
     ["Governed-FHE commit", evidence.governedFheCommit, true],
     ["Asset record", evidence.cleanverseAssetDigest, true],
@@ -473,10 +539,14 @@ export function ProtectionExperience({
   const [resumeRunId, setResumeRunId] = useState<string | null>(initialRunId);
   const [drawerTrigger, setDrawerTrigger] = useState<HTMLButtonElement | null>(null);
   const [readbackRequired, setReadbackRequired] = useState<ReadbackRequirement | null>(initialReadbackRequirement);
+  const [recoveryAuthority, setRecoveryAuthority] = useState<ProtectionBrowserRecovery | null>(null);
+  const [invalidStoredRecovery, setInvalidStoredRecovery] = useState(false);
   const requestGeneration = useRef(0);
   const requestController = useRef<AbortController | null>(null);
   const pendingMutation = useRef<ReadbackRequirement | null>(null);
   const readbackRequirementRef = useRef<ReadbackRequirement | null>(initialReadbackRequirement);
+  const recoveryAuthorityRef = useRef<ProtectionBrowserRecovery | null>(null);
+  const invalidStoredRecoveryRef = useRef(false);
 
   const localMode = mode === "local";
   const activeCase = localMode ? localView?.protectionCase ?? null : evidence?.protectionCase ?? null;
@@ -488,10 +558,47 @@ export function ProtectionExperience({
     : provisionalStage?.recourse ?? recourseStatePresentation("NOT_OPEN");
   const signedProductState = activeEvidence?.recourseAttestation.attestation ?? null;
   const conflict = localMode ? localView?.governedResult?.conflict ?? null : evidence?.governedResult.conflict ?? null;
-  const currentOperation = readbackRequired !== null || localView?.nextOperation === null || localView?.nextOperation === undefined
+  const currentOperation = readbackRequired !== null || recoveryAuthority?.kind === "RETENTION_REQUIRED"
+    || localView?.nextOperation === null || localView?.nextOperation === undefined
     ? null : OPERATION[localView.nextOperation] ?? null;
   const currentRunId = localView?.runId ?? resumeRunId;
   const busy = requestState !== "idle";
+  const unresolvedRecovery = recoveryAuthority !== null || invalidStoredRecovery || readbackRequired !== null;
+
+  const retainRecoveryAuthority = useCallback((authority: ProtectionBrowserRecovery): boolean => {
+    if (typeof window !== "undefined") {
+      try {
+        const serialized = JSON.stringify(authority);
+        window.sessionStorage.setItem(PROTECTION_RECOVERY_STORAGE_KEY, serialized);
+        if (parseProtectionBrowserRecovery(window.sessionStorage.getItem(PROTECTION_RECOVERY_STORAGE_KEY) ?? "") === null) {
+          throw new Error("Recovery record verification failed");
+        }
+      } catch {
+        setError("The browser could not durably retain recovery authority. No local operation was dispatched.");
+        return false;
+      }
+    }
+    recoveryAuthorityRef.current = authority;
+    invalidStoredRecoveryRef.current = false;
+    setRecoveryAuthority(authority);
+    setInvalidStoredRecovery(false);
+    return true;
+  }, []);
+
+  const clearVerifiedRecoveryAuthority = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem(PROTECTION_RECOVERY_STORAGE_KEY);
+      } catch {
+        setError("Verified recovery completed, but browser recovery storage could not be cleared. Local mutations remain blocked.");
+        return;
+      }
+    }
+    recoveryAuthorityRef.current = null;
+    invalidStoredRecoveryRef.current = false;
+    setRecoveryAuthority(null);
+    setInvalidStoredRecovery(false);
+  }, []);
 
   const beginRequest = useCallback((state: RequestState) => {
     requestController.current?.abort();
@@ -521,6 +628,11 @@ export function ProtectionExperience({
 
   const requireDurableReadback = useCallback((requirement: ReadbackRequirement, reason: string) => {
     pendingMutation.current = null;
+    if (recoveryAuthorityRef.current === null && Object.values(OPERATION).some((operation) => (
+      operation.api === requirement.operation
+    ))) {
+      retainRecoveryAuthority(pendingMutationRecovery(requirement.scenario, requirement.runId, requirement.operation));
+    }
     readbackRequirementRef.current = requirement;
     setScenario(requirement.scenario);
     setEvidence(null);
@@ -532,11 +644,11 @@ export function ProtectionExperience({
     setError(
       `The outcome of ${requirement.operationLabel} is uncertain. Durable GET-only readback is required before any further mutation. ${reason}`,
     );
-  }, []);
+  }, [retainRecoveryAuthority]);
 
   const loadImportedScenario = useCallback(async (next: ProductScenario, history: HistoryMode = "none") => {
     const requiredReadback = readbackRequirementRef.current;
-    if (pendingMutation.current !== null || requiredReadback !== null) {
+    if (pendingMutation.current !== null || requiredReadback !== null || recoveryAuthorityRef.current !== null || invalidStoredRecoveryRef.current) {
       if (requiredReadback !== null) {
         writeProtectionUrl("replace", requiredReadback.scenario, requiredReadback.runId);
       }
@@ -584,14 +696,28 @@ export function ProtectionExperience({
     }
     const request = beginRequest("resuming");
     try {
-      const response = await fetch(adapterUrl(localAdapterOrigin, runId), { cache: "no-store", signal: request.controller.signal });
-      const view = parseProtectionCaseView(await responseBody(response), runId, expectedScenario);
+      const response = await fetch(adapterUrl(localAdapterOrigin, { runId }), { cache: "no-store", signal: request.controller.signal });
+      const body = await responseBody(response);
+      const retentionRequired = parseRetentionRequiredView(body, runId, expectedScenario);
+      if (retentionRequired !== null) {
+        if (requestGeneration.current !== request.generation) return;
+        const authority = retentionRequiredRecovery(expectedScenario, runId);
+        if (!retainRecoveryAuthority(authority)) return;
+        pendingMutation.current = null;
+        readbackRequirementRef.current = null;
+        setReadbackRequired(null);
+        setLocalView(null);
+        setError(null);
+        return;
+      }
+      const view = parseProtectionCaseView(body, runId, expectedScenario);
       if (view === null) throw new Error("Durable run readback did not match the URL authority.");
       if (requestGeneration.current !== request.generation) return;
       setLocalView(view);
       setResumeRunId(view.runId);
       readbackRequirementRef.current = null;
       setReadbackRequired(null);
+      if (recoveryAuthorityRef.current !== null) clearVerifiedRecoveryAuthority();
     } catch (nextError) {
       if (requestGeneration.current !== request.generation) return;
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
@@ -599,10 +725,60 @@ export function ProtectionExperience({
     } finally {
       if (requestGeneration.current === request.generation) setRequestState("idle");
     }
-  }, [beginRequest, clearAuthority, localAdapterOrigin]);
+  }, [beginRequest, clearAuthority, clearVerifiedRecoveryAuthority, localAdapterOrigin, retainRecoveryAuthority]);
+
+  const recoverPendingCreation = useCallback(async (authority: Extract<ProtectionBrowserRecovery, { kind: "CREATION_PENDING" }>) => {
+    if (localAdapterOrigin === null) {
+      setError("Local creation recovery is unavailable on this deployment. The unresolved recovery record was preserved.");
+      return;
+    }
+    clearAuthority(authority.scenario, "local", true);
+    setResumeRunId(null);
+    setError(null);
+    const request = beginRequest("resuming");
+    try {
+      const lookupResponse = await fetch(adapterUrl(localAdapterOrigin, {
+        creationRequestId: authority.creationRequestId,
+      }), { cache: "no-store", signal: request.controller.signal });
+      const lookup = parseProtectionCaseView(
+        await responseBody(lookupResponse),
+        undefined,
+        authority.scenario,
+      );
+      if (lookup === null) throw new Error("Creation lookup did not resolve the exact durable run.");
+      writeProtectionUrl("replace", authority.scenario, lookup.runId);
+      setResumeRunId(lookup.runId);
+      const readbackResponse = await fetch(adapterUrl(localAdapterOrigin, { runId: lookup.runId }), {
+        cache: "no-store",
+        signal: request.controller.signal,
+      });
+      const readback = parseProtectionCaseView(
+        await responseBody(readbackResponse),
+        lookup.runId,
+        authority.scenario,
+      );
+      if (readback === null) throw new Error("Recovered creation failed durable GET-only run verification.");
+      if (requestGeneration.current !== request.generation) return;
+      setLocalView(readback);
+      setResumeRunId(readback.runId);
+      readbackRequirementRef.current = null;
+      setReadbackRequired(null);
+      clearVerifiedRecoveryAuthority();
+    } catch (nextError) {
+      if (requestGeneration.current !== request.generation) return;
+      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      setError(`${nextError instanceof Error ? nextError.message : "Creation recovery failed"} No new case was created.`);
+    } finally {
+      if (requestGeneration.current === request.generation) setRequestState("idle");
+    }
+  }, [beginRequest, clearAuthority, clearVerifiedRecoveryAuthority, localAdapterOrigin]);
 
   const startLocalRun = useCallback(async () => {
     if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
+    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery) return;
+    const creationRequestId = globalThis.crypto.randomUUID();
+    const creationAuthority = pendingCreationRecovery(scenario, creationRequestId);
+    if (!retainRecoveryAuthority(creationAuthority)) return;
     clearAuthority(scenario, "local");
     setResumeRunId(null);
     setError(null);
@@ -611,7 +787,7 @@ export function ProtectionExperience({
       const response = await fetch(adapterUrl(localAdapterOrigin), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ intent: "create", scenario }),
+        body: JSON.stringify({ intent: "create", scenario, creationRequestId }),
         signal: request.controller.signal,
       });
       const view = parseProtectionCaseView(await responseBody(response), undefined, scenario);
@@ -620,14 +796,15 @@ export function ProtectionExperience({
       setLocalView(view);
       setResumeRunId(view.runId);
       writeProtectionUrl("push", scenario, view.runId);
+      clearVerifiedRecoveryAuthority();
     } catch (nextError) {
       if (requestGeneration.current !== request.generation) return;
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
-      setError(nextError instanceof Error ? nextError.message : "Local case creation failed");
+      setError(`${nextError instanceof Error ? nextError.message : "Local case creation failed"} Creation recovery remains available; no second create will be sent.`);
     } finally {
       if (requestGeneration.current === request.generation) setRequestState("idle");
     }
-  }, [beginRequest, clearAuthority, localAdapterOrigin, scenario]);
+  }, [beginRequest, clearAuthority, clearVerifiedRecoveryAuthority, invalidStoredRecovery, localAdapterOrigin, retainRecoveryAuthority, scenario]);
 
   const executeNext = useCallback(async () => {
     if (
@@ -640,6 +817,7 @@ export function ProtectionExperience({
       operation: currentOperation.api,
       operationLabel: currentOperation.label,
     };
+    if (!retainRecoveryAuthority(pendingMutationRecovery(scenario, localView.runId, currentOperation.api))) return;
     pendingMutation.current = attemptedMutation;
     const request = beginRequest("executing");
     setError(null);
@@ -661,6 +839,7 @@ export function ProtectionExperience({
       setLocalView(view);
       readbackRequirementRef.current = null;
       setReadbackRequired(null);
+      clearVerifiedRecoveryAuthority();
     } catch (nextError) {
       if (pendingMutation.current !== attemptedMutation) return;
       const reason = nextError instanceof Error ? nextError.message : "Local protection operation failed";
@@ -671,6 +850,7 @@ export function ProtectionExperience({
         && requestGeneration.current === request.generation
       ) {
         pendingMutation.current = null;
+        clearVerifiedRecoveryAuthority();
         setError(reason);
         return;
       }
@@ -678,10 +858,86 @@ export function ProtectionExperience({
     } finally {
       if (requestGeneration.current === request.generation) setRequestState("idle");
     }
-  }, [beginRequest, currentOperation, localAdapterOrigin, localView, readbackRequired, requireDurableReadback, scenario]);
+  }, [
+    beginRequest, clearVerifiedRecoveryAuthority, currentOperation, localAdapterOrigin, localView,
+    readbackRequired, requireDurableReadback, retainRecoveryAuthority, scenario,
+  ]);
+
+  const finishEvidenceRetention = useCallback(async () => {
+    const authority = recoveryAuthorityRef.current;
+    if (localAdapterOrigin === null || authority?.kind !== "RETENTION_REQUIRED" || busy) return;
+    const request = beginRequest("retaining");
+    setError(null);
+    try {
+      const retentionResponse = await fetch(adapterUrl(localAdapterOrigin), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          intent: "execute",
+          runId: authority.runId,
+          operation: authority.operation,
+        }),
+        signal: request.controller.signal,
+      });
+      if (parseRetainedProtectionView(
+        await responseBody(retentionResponse),
+        authority.runId,
+        authority.scenario,
+      ) === null) throw new Error("Evidence retention response failed exact public verification.");
+      const readbackResponse = await fetch(adapterUrl(localAdapterOrigin, { runId: authority.runId }), {
+        cache: "no-store",
+        signal: request.controller.signal,
+      });
+      const view = parseProtectionCaseView(
+        await responseBody(readbackResponse),
+        authority.runId,
+        authority.scenario,
+      );
+      if (view === null || view.stage !== "COMPLETE" || view.evidence === null) {
+        throw new Error("Retained evidence did not reach verified COMPLETE readback.");
+      }
+      if (requestGeneration.current !== request.generation) return;
+      setScenario(authority.scenario);
+      setMode("local");
+      setLocalView(view);
+      setResumeRunId(view.runId);
+      readbackRequirementRef.current = null;
+      setReadbackRequired(null);
+      clearVerifiedRecoveryAuthority();
+      writeProtectionUrl("replace", authority.scenario, authority.runId);
+    } catch (nextError) {
+      if (requestGeneration.current !== request.generation) return;
+      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      setError(`${nextError instanceof Error ? nextError.message : "Evidence retention recovery failed"} The fixed idempotent retention action remains required.`);
+    } finally {
+      if (requestGeneration.current === request.generation) setRequestState("idle");
+    }
+  }, [beginRequest, busy, clearVerifiedRecoveryAuthority, localAdapterOrigin]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const resumeStoredAuthority = (authority: ProtectionBrowserRecovery) => {
+      recoveryAuthorityRef.current = authority;
+      invalidStoredRecoveryRef.current = false;
+      setRecoveryAuthority(authority);
+      setInvalidStoredRecovery(false);
+      setScenario(authority.scenario);
+      setMode("local");
+      if (authority.kind === "CREATION_PENDING") {
+        void recoverPendingCreation(authority);
+        return;
+      }
+      const requirement = authority.kind === "MUTATION_PENDING" ? {
+        runId: authority.runId,
+        scenario: authority.scenario,
+        operation: authority.operation,
+        operationLabel: operationLabel(authority.operation),
+      } : null;
+      readbackRequirementRef.current = requirement;
+      setReadbackRequired(requirement);
+      writeProtectionUrl("replace", authority.scenario, authority.runId);
+      void resumeLocalRun(authority.runId, authority.scenario);
+    };
     const popstate = () => {
       const dispatchedMutation = pendingMutation.current;
       if (dispatchedMutation !== null) {
@@ -696,6 +952,11 @@ export function ProtectionExperience({
       if (requiredReadback !== null) {
         writeProtectionUrl("replace", requiredReadback.scenario, requiredReadback.runId);
         void resumeLocalRun(requiredReadback.runId, requiredReadback.scenario, "replace");
+        return;
+      }
+      const storedAuthority = recoveryAuthorityRef.current;
+      if (storedAuthority !== null) {
+        resumeStoredAuthority(storedAuthority);
         return;
       }
       const authority = readProtectionUrl(window.location.search);
@@ -714,11 +975,29 @@ export function ProtectionExperience({
     };
     window.addEventListener("popstate", popstate);
     let resumeTimer: number | null = null;
-    if (initialUrlError === null) {
+    let rawStoredRecovery: string | null = null;
+    try {
+      rawStoredRecovery = window.sessionStorage.getItem(PROTECTION_RECOVERY_STORAGE_KEY);
+    } catch {
+      invalidStoredRecoveryRef.current = true;
+      setInvalidStoredRecovery(true);
+      setError("Browser recovery storage is unavailable. Local execution remains blocked.");
+    }
+    if (rawStoredRecovery !== null) {
+      const stored = parseProtectionBrowserRecovery(rawStoredRecovery);
+      if (stored === null) {
+        clearAuthority(initialScenario, "local", true);
+        setRequestState("idle");
+        invalidStoredRecoveryRef.current = true;
+        setInvalidStoredRecovery(true);
+        setError("The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.");
+      } else {
+        resumeTimer = window.setTimeout(() => resumeStoredAuthority(stored), 0);
+      }
+    } else if (initialUrlError === null) {
       if (initialRunId !== null) {
         resumeTimer = window.setTimeout(() => void resumeLocalRun(initialRunId, initialScenario), 0);
-      }
-      else writeProtectionUrl("replace", initialScenario, null);
+      } else writeProtectionUrl("replace", initialScenario, null);
     }
     return () => {
       if (resumeTimer !== null) window.clearTimeout(resumeTimer);
@@ -727,7 +1006,32 @@ export function ProtectionExperience({
       requestGeneration.current += 1;
       pendingMutation.current = null;
     };
-  }, [clearAuthority, initialRunId, initialScenario, initialUrlError, loadImportedScenario, requireDurableReadback, resumeLocalRun]);
+  }, [
+    clearAuthority, initialRunId, initialScenario, initialUrlError, loadImportedScenario,
+    recoverPendingCreation, requireDurableReadback, resumeLocalRun,
+  ]);
+
+  const abandonUnresolvedRecovery = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const confirmed = window.confirm(
+      "Abandon the unresolved local recovery record? This does not cancel or roll back backend work, and a case may still exist.",
+    );
+    if (!confirmed) return;
+    try {
+      window.sessionStorage.removeItem(PROTECTION_RECOVERY_STORAGE_KEY);
+    } catch {
+      setError("The unresolved recovery record could not be cleared. No authority changed.");
+      return;
+    }
+    pendingMutation.current = null;
+    recoveryAuthorityRef.current = null;
+    invalidStoredRecoveryRef.current = false;
+    readbackRequirementRef.current = null;
+    setRecoveryAuthority(null);
+    setInvalidStoredRecovery(false);
+    setReadbackRequired(null);
+    void loadImportedScenario(scenario, "replace");
+  }, [loadImportedScenario, scenario]);
 
   function openEvidence(event: ReactMouseEvent<HTMLButtonElement>) {
     if (activeEvidence === null) return;
@@ -745,18 +1049,34 @@ export function ProtectionExperience({
       ? "Creating a new durable local case. The browser is waiting for backend readback."
       : requestState === "resuming"
         ? "Reading the last durable backend stage. No operation is being started."
-    : requestState === "executing"
-      ? currentOperation?.waiting ?? "Waiting for the fixed backend operation to return its durable stage."
-      : readbackRequired !== null
-        ? `Durable GET-only readback required after the uncertain ${readbackRequired.operationLabel} response. No mutation is available.`
-      : provisionalStage?.detail ?? "Verified retained public evidence is ready.";
+      : requestState === "retaining"
+        ? "Finishing the one fixed idempotent evidence-retention operation, then performing GET-only COMPLETE readback."
+        : requestState === "executing"
+          ? currentOperation?.waiting ?? "Waiting for the fixed backend operation to return its durable stage."
+          : recoveryAuthority?.kind === "CREATION_PENDING"
+            ? "A creation response is unresolved. Recovery uses creation lookup and GET-only run readback; no second create is available."
+            : recoveryAuthority?.kind === "RETENTION_REQUIRED"
+              ? "The evaluation and export are complete. One fixed idempotent evidence-retention operation remains."
+              : readbackRequired !== null
+                ? `Durable GET-only readback required after the uncertain ${readbackRequired.operationLabel} response. No mutation is available.`
+                : error !== null && activeCase === null
+                  ? "Verified evidence is unavailable. Retry verified evidence loading or resume the retained recovery authority."
+                  : activeCase === null
+                    ? "No verified case conclusion is loaded."
+                    : provisionalStage?.detail ?? "Verified retained public evidence is ready.";
+  const conclusionLabel = activeCase === null
+    ? busy ? "Verified case loading" : "No verified conclusion"
+    : conflict === null ? "Private check in progress" : conflict ? "Conflict confirmed" : "No conflict found";
+  const conclusionDetail = activeCase === null
+    ? busy ? "Awaiting verified evidence" : "Verified evidence unavailable"
+    : `${recourse.label}${activeEvidence === null && localView !== null ? " · provisional backend state" : ""}`;
 
   return (
     <div
       className={styles.page}
       data-testid="protection-product"
       data-execution={localMode ? "local" : "imported"}
-      data-readback-required={readbackRequired === null ? "false" : "true"}
+      data-readback-required={unresolvedRecovery ? "true" : "false"}
       aria-busy={busy}
     >
       <div className={styles.pageContent} inert={drawerOpen ? true : undefined} aria-hidden={drawerOpen ? "true" : undefined}>
@@ -792,8 +1112,8 @@ export function ProtectionExperience({
             </div>
             <div className={styles.outcome} data-conflict={conflict === null ? "pending" : conflict ? "true" : "false"}>
               <span>Current conclusion</span>
-              <strong>{conflict === null ? "Private check in progress" : conflict ? "Conflict confirmed" : "No conflict found"}</strong>
-              <p>{recourse.label}{activeEvidence === null && localView !== null ? " · provisional backend state" : ""}</p>
+              <strong>{conclusionLabel}</strong>
+              <p>{conclusionDetail}</p>
             </div>
           </section>
 
@@ -806,7 +1126,7 @@ export function ProtectionExperience({
                     key={option}
                     type="button"
                     aria-pressed={!localMode && scenario === option}
-                    disabled={requestState === "creating" || requestState === "executing" || requestState === "resuming" || readbackRequired !== null}
+                    disabled={busy || unresolvedRecovery}
                     onClick={() => void loadImportedScenario(option, "push")}
                   >
                     {option === "conflict" ? "Conflict" : "No conflict"}
@@ -816,7 +1136,7 @@ export function ProtectionExperience({
             </div>
             <p>{progressText}</p>
             {localAdapterOrigin !== null ? (
-              <button className={styles.localButton} type="button" disabled={busy || readbackRequired !== null} onClick={() => void startLocalRun()}>
+              <button className={styles.localButton} type="button" disabled={busy || unresolvedRecovery} onClick={() => void startLocalRun()}>
                 {localMode ? "Start a fresh local case" : "Run this case locally"}
               </button>
             ) : null}
@@ -826,9 +1146,21 @@ export function ProtectionExperience({
 
           {activeCase === null ? (
             <section className={styles.localStatus} data-testid="case-loading-status" aria-live="polite" aria-busy={busy}>
-              <p>{readbackRequired !== null ? "Durable readback required" : busy ? "Verified case loading" : "Verified case unavailable"}</p>
+              <p>{invalidStoredRecovery
+                ? "Supervised abandonment required"
+                : recoveryAuthority?.kind === "CREATION_PENDING"
+                  ? "Creation recovery required"
+                  : recoveryAuthority?.kind === "RETENTION_REQUIRED"
+                    ? "Evidence retention required"
+                    : readbackRequired !== null ? "Durable readback required" : busy ? "Verified case loading" : "Verified case unavailable"}</p>
               <strong>{busy
                 ? progressText
+                : invalidStoredRecovery
+                  ? "The stored recovery authority cannot be safely interpreted. It has not been cleared."
+                  : recoveryAuthority?.kind === "CREATION_PENDING"
+                    ? `${error === null ? "Creation response is unresolved." : error} Look up the existing creation request and verify its durable run with GET only. Do not create another case.`
+                    : recoveryAuthority?.kind === "RETENTION_REQUIRED"
+                      ? `${error === null ? "Evaluation and export are already complete." : error} Finish only the fixed idempotent evidence-retention operation.`
                 : readbackRequired !== null
                   ? `The ${readbackRequired.operationLabel} mutation may or may not have committed. Read durable state before retrying or advancing.`
                   : error ?? "No authoritative case is selected."}</strong>
@@ -838,11 +1170,35 @@ export function ProtectionExperience({
                   Blocked mutation · {readbackRequired.operation} · GET readback only
                 </code>
               )}
-              {currentRunId !== null && localAdapterOrigin !== null && !busy ? (
+              {recoveryAuthority?.kind === "CREATION_PENDING" && localAdapterOrigin !== null && !busy ? (
+                <button type="button" onClick={() => void recoverPendingCreation(recoveryAuthority)}>
+                  Recover durable creation
+                </button>
+              ) : null}
+              {recoveryAuthority?.kind === "RETENTION_REQUIRED" && localAdapterOrigin !== null && !busy ? (
+                <button type="button" onClick={() => void finishEvidenceRetention()}>
+                  Finish evidence retention
+                </button>
+              ) : null}
+              {currentRunId !== null && localAdapterOrigin !== null && !busy
+                && recoveryAuthority?.kind !== "CREATION_PENDING" && recoveryAuthority?.kind !== "RETENTION_REQUIRED" ? (
                 <button type="button" onClick={() => void resumeLocalRun(currentRunId, scenario, "replace")}>
                   Resume durable run
                 </button>
               ) : null}
+              {error !== null && currentRunId === null && !unresolvedRecovery && !busy ? (
+                <button type="button" onClick={() => void loadImportedScenario(scenario, "replace")}>
+                  Retry verified evidence loading
+                </button>
+              ) : null}
+              {!unresolvedRecovery ? null : (
+                <>
+                  <p id="recovery-abandon-caveat">Abandonment only clears this browser record; it does not cancel or roll back backend work.</p>
+                  <button type="button" aria-describedby="recovery-abandon-caveat" onClick={abandonUnresolvedRecovery}>
+                    Abandon unresolved recovery
+                  </button>
+                </>
+              )}
             </section>
           ) : (
             <>

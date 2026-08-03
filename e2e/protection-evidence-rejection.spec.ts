@@ -41,6 +41,30 @@ const METADATA_MARKERS = [
   ],
 ] as const;
 
+const BOOLEAN_MARKERS = [
+  ["recourse opened", ["recourse", "opened"], "A6_RECOURSE_OPENED_MARKER"],
+  [
+    "reserve accounting separate",
+    ["originalReceivablePreservation", "reserveAccountingSeparate"],
+    "A6_RESERVE_SEPARATE_MARKER",
+  ],
+  [
+    "protection claim burn or transfer",
+    ["originalReceivablePreservation", "claimBurnedOrTransferredByProtection"],
+    "A6_CLAIM_TRANSFER_MARKER",
+  ],
+  [
+    "governed public structure",
+    ["governedFheEvidence", "publicStructureValidated"],
+    "A6_PUBLIC_STRUCTURE_MARKER",
+  ],
+  [
+    "recourse production isolation",
+    ["recourseAttestation", "attestation", "productionIsolationProven"],
+    "A6_PRODUCTION_ISOLATION_MARKER",
+  ],
+] as const;
+
 function replaceJsonPath(root: unknown, path: readonly (string | number)[], value: unknown): void {
   let cursor = root as Record<string, unknown>;
   for (const part of path.slice(0, -1)) cursor = cursor[part] as Record<string, unknown>;
@@ -101,6 +125,15 @@ for (const [field, path, marker] of LITERAL_MARKERS) {
 
 for (const [field, path, marker] of METADATA_MARKERS) {
   test(`A4-01-R2 ${field} marker is absent from API, HTML, RSC and DOM`, async ({ page, request }) => {
+    const evidence = structuredClone(pristine);
+    replaceJsonPath(evidence, path, marker);
+    writeFileSync(fixturePath, `${JSON.stringify(rehash(evidence), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await expectRejectedFromEveryPublicSurface(page, request, marker);
+  });
+}
+
+for (const [field, path, marker] of BOOLEAN_MARKERS) {
+  test(`A6-F01 ${field} marker is absent from API, HTML, RSC, hydration and visible DOM`, async ({ page, request }) => {
     const evidence = structuredClone(pristine);
     replaceJsonPath(evidence, path, marker);
     writeFileSync(fixturePath, `${JSON.stringify(rehash(evidence), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });

@@ -806,11 +806,11 @@ function assertSignedRecourseAttestation(
     || attestation.originalReceivableState !== evidence.originalReceivablePreservation.state
     || attestation.reserveAccountingSeparation.reserveDomain !== "PROTECTION"
     || attestation.reserveAccountingSeparation.receivableDomain !== "RECEIVABLE"
-    || !attestation.reserveAccountingSeparation.separate
-    || attestation.reserveAccountingSeparation.claimBurnedOrTransferred
+    || attestation.reserveAccountingSeparation.separate !== true
+    || attestation.reserveAccountingSeparation.claimBurnedOrTransferred !== false
     || attestation.executionClass !== "REAL_BGV_FHE" || attestation.deploymentClass !== "LOCAL_SINGLE_HOST"
     || attestation.releaseClass !== "GOVERNED_DECRYPTOR" || attestation.recourseClass !== "LOCAL_PROTOCOL_DOUBLE"
-    || attestation.productionIsolationProven
+    || attestation.productionIsolationProven !== false
     || attestation.releaseAuthorityId !== evidence.governedResult.releaseAuthorityId
   ) fail("RECOURSE_ATTESTATION_BINDING", "Signed recourse attestation cross-reference mismatch");
   if (attestation.signedBoolean) {
@@ -1126,12 +1126,12 @@ function assertPublicProtectionEvidenceUnchecked(
   if (
     governed.schemaVersion !== "mordant.governed-fhe-public-evidence/2"
     || governed.productClaim !== PRODUCT_CLAIM_IDENTIFIER
-    || !governed.publicStructureValidated
+    || governed.publicStructureValidated !== true
     || governed.executionClass !== "REAL_BGV_FHE"
     || governed.deploymentClass !== "LOCAL_SINGLE_HOST"
     || governed.releaseClass !== "GOVERNED_DECRYPTOR"
     || governed.recourseClass !== "LOCAL_PROTOCOL_DOUBLE"
-    || governed.productionIsolationProven
+    || governed.productionIsolationProven !== false
   ) fail("GOVERNED_PRODUCT_PROOF", "Governed public product proof schema or claim mismatch");
 
   if (
@@ -1145,7 +1145,7 @@ function assertPublicProtectionEvidenceUnchecked(
   if (result.conflict) {
     const record = evidence.recourse.record;
     if (
-      !evidence.recourse.opened || evidence.recourse.refusedReason !== null || record === null
+      evidence.recourse.opened !== true || evidence.recourse.refusedReason !== null || record === null
       || evidence.recourse.recordDigest === null
     ) fail("RECOURSE_STATE", "Conflict result must have a recourse record");
     exactKeys(record, [
@@ -1170,7 +1170,7 @@ function assertPublicProtectionEvidenceUnchecked(
       || record.cureDeadlineUnix !== record.boundAtUnix + 24 * 60 * 60
     ) fail("RECOURSE_PINS", "Recourse record trusted pins mismatch");
   } else if (
-    evidence.recourse.opened || evidence.recourse.refusedReason !== "SIGNED_RESULT_FALSE"
+    evidence.recourse.opened !== false || evidence.recourse.refusedReason !== "SIGNED_RESULT_FALSE"
     || evidence.recourse.record !== null || evidence.recourse.recordDigest !== null
     || governed.recourseRecordDigest !== zeroDigest
   ) fail("RECOURSE_REFUSAL", "False result must refuse recourse without a record");
@@ -1194,8 +1194,8 @@ function assertPublicProtectionEvidenceUnchecked(
   if (
     evidence.originalReceivablePreservation.state !== "OUTSTANDING_INTACT"
     || evidence.protectionCase.originalReceivable.state !== evidence.originalReceivablePreservation.state
-    || evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection
-    || !evidence.originalReceivablePreservation.reserveAccountingSeparate
+    || evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection !== false
+    || evidence.originalReceivablePreservation.reserveAccountingSeparate !== true
   ) fail("RECEIVABLE_PRESERVATION", "Original receivable preservation is not proven by this manifest");
 
   if (governed.recourseAttestationDigest !== evidence.recourseAttestation.digest) {

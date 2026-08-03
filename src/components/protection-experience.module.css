@@ -166,6 +166,7 @@
 .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
 .localButton, .nextAction button, .evidenceButton {
   min-height: 44px;
+  min-block-size: 44px;
   padding: 0 18px;
   border: 1px solid var(--ink);
   background: var(--amber);

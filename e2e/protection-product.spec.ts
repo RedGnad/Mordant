@@ -194,6 +194,21 @@ test.describe("public discovery and fixed product viewport", () => {
   }
 
   for (const viewport of [
+    { width: 768, height: 600 },
+    { width: 1024, height: 600 },
+    { width: 1366, height: 600 },
+  ] as const) {
+    test(`primary protection CTAs remain at least 44px at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/protection?scenario=conflict");
+      await expectMinimumTarget(page.getByRole("button", { name: "Conflict", exact: true }));
+      await expectMinimumTarget(page.getByRole("button", { name: "No conflict", exact: true }));
+      await expectMinimumTarget(page.getByRole("button", { name: "Run this case locally" }));
+      await expectMinimumTarget(page.getByRole("button", { name: "Open complete evidence" }));
+    });
+  }
+
+  for (const viewport of [
     { name: "desktop", width: 1280, height: 900 },
     { name: "tablet", width: 768, height: 1024 },
     { name: "mobile", width: 390, height: 844 },
@@ -296,6 +311,9 @@ test.describe("imported evidence URL authority", () => {
     await expect(productAlert(page)).toHaveText("Verified evidence store unavailable");
     await expect(page.getByText("Conflict confirmed", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("case-loading-status")).toContainText("Verified case unavailable");
+    await expect(page.getByText("No verified conclusion", { exact: true })).toBeVisible();
+    await expect(page.getByText("Private check in progress", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Verified retained public evidence is ready.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Evidence", exact: true })).toBeDisabled();
 
     await page.unroute(`**${IMPORTED_API}?scenario=no-conflict`);
@@ -432,6 +450,13 @@ test.describe("verified public projection and evidence dialog", () => {
     await expect(evidenceRow(dialog, "Governed-result digest").locator("code")).toHaveText(governedResult.digest as string);
     await expect(evidenceRow(dialog, "Recourse-record digest").locator("code")).toHaveText(recourse.recordDigest as string);
     await expect(evidenceRow(dialog, "Protection evidence manifest").locator("code")).toHaveText(manifestDigest);
+    await expect(evidenceRow(dialog, "Evidence verification").locator("code")).toHaveText("VERIFIED");
+    await expect(evidenceRow(dialog, "Final incident state").locator("code")).toHaveText("CONFLICT_CONFIRMED");
+    await expect(evidenceRow(dialog, "Final recourse state").locator("code")).toHaveText("SIMULATED_AVAILABLE");
+    await expect(evidenceRow(dialog, "Clock class").locator("code")).toHaveText("SIMULATED_PROTOCOL_CLOCK");
+    await expect(evidenceRow(dialog, "Signature verification status").locator("code")).toHaveText(
+      "VERIFIED — participant, governed-result and recourse-attestation signatures",
+    );
 
     const copyManifest = dialog.getByRole("button", { name: "Copy Protection evidence manifest" });
     await copyManifest.click();
@@ -467,6 +492,191 @@ test.describe("verified public projection and evidence dialog", () => {
     await expect(evidenceRow(dialog, "Governed-result reference in recourse")).toContainText(
       "ABSENT — no recourse record references a governed result.",
     );
+    await expect(evidenceRow(dialog, "Evidence verification").locator("code")).toHaveText("VERIFIED");
+    await expect(evidenceRow(dialog, "Final incident state").locator("code")).toHaveText("CLEARED");
+    await expect(evidenceRow(dialog, "Final recourse state").locator("code")).toHaveText("REFUSED");
+    await expect(evidenceRow(dialog, "Clock class").locator("code")).toHaveText("REAL_OBSERVED_CLOCK");
+  });
+});
+
+test.describe("persisted browser recovery authority", () => {
+  test("lost creation response re-enters through lookup and GET without a second create", async ({ page, request }) => {
+    const evidence = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "77777777-7777-4777-8777-777777777777";
+    const createdCase = localCase(evidence, "PRIVATE_MATCH_OPEN", "NOT_OPEN");
+    const calls: string[] = [];
+    let creationRequestId: string | null = null;
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const adapterRequest = route.request();
+      if (adapterRequest.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      const url = new URL(adapterRequest.url());
+      if (adapterRequest.method() === "POST") {
+        const body = adapterRequest.postDataJSON() as { intent: string; creationRequestId?: string };
+        expect(body.intent).toBe("create");
+        expect(body.creationRequestId).toMatch(/^[0-9a-f-]{36}$/u);
+        creationRequestId = body.creationRequestId ?? null;
+        calls.push("POST:create");
+        await route.abort("connectionreset");
+        return;
+      }
+      if (url.searchParams.has("creationRequestId")) {
+        expect(url.searchParams.get("creationRequestId")).toBe(creationRequestId);
+        calls.push("GET:creation");
+      } else {
+        expect(url.searchParams.get("runId")).toBe(runId);
+        calls.push("GET:run");
+      }
+      await fulfillAdapterJson(route, localView(runId, "CASE_CREATED", "preparePrivateMatch", createdCase));
+    });
+
+    await page.goto("/protection?scenario=conflict");
+    await page.getByRole("button", { name: "Run this case locally" }).click();
+    await expect(page.getByTestId("case-loading-status")).toContainText("Creation recovery required");
+    const stored = await page.evaluate(() => JSON.parse(sessionStorage.getItem(
+      "mordant.protection.browser-recovery.v1",
+    ) ?? "null") as Record<string, unknown> | null);
+    expect(stored).toMatchObject({
+      schemaVersion: "mordant.protection-browser-recovery/1",
+      kind: "CREATION_PENDING",
+      scenario: "conflict",
+      creationRequestId,
+    });
+    expect(Object.keys(stored ?? {}).sort()).toEqual([
+      "createdAtUnix", "creationRequestId", "expiresAtUnix", "kind", "scenario", "schemaVersion",
+    ]);
+
+    await page.goto("/");
+    await page.goto("/protection?scenario=no-conflict");
+    await expect(page).toHaveURL(new RegExp(`scenario=conflict&runId=${runId}$`, "u"));
+    await expect(page.getByRole("button", { name: "Prepare private match" })).toBeVisible();
+    expect(calls).toEqual(["POST:create", "GET:creation", "GET:run"]);
+    expect(await page.evaluate(() => sessionStorage.getItem("mordant.protection.browser-recovery.v1"))).toBeNull();
+  });
+
+  test("lost mutation response survives reload and resumes with one GET and no mutation replay", async ({ page, request }) => {
+    const evidence = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "88888888-8888-4888-8888-888888888888";
+    const beforeEvaluation = localCase(evidence, "PRIVATE_MATCH_OPEN", "NOT_OPEN");
+    const afterEvaluation = localCase(evidence, "EVALUATED", "NOT_OPEN");
+    const calls: string[] = [];
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const adapterRequest = route.request();
+      if (adapterRequest.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      if (adapterRequest.method() === "GET") {
+        calls.push("GET");
+        return fulfillAdapterJson(route, localView(runId, "EVALUATED", "releaseGovernedResult", afterEvaluation, {
+          evaluatedArtifactDigest: (evidence.fhe as Record<string, unknown>).evaluatedArtifactDigest,
+        }));
+      }
+      const body = adapterRequest.postDataJSON() as { intent: string; operation?: string };
+      if (body.intent === "create") {
+        calls.push("POST:create");
+        return fulfillAdapterJson(route, localView(
+          runId, "PARTICIPANT_B_SUBMITTED", "evaluatePrivateConflict", beforeEvaluation,
+        ));
+      }
+      expect(body.operation).toBe("evaluatePrivateConflict");
+      calls.push("POST:evaluatePrivateConflict");
+      await route.abort("connectionreset");
+    });
+
+    await page.goto("/protection?scenario=conflict");
+    await page.getByRole("button", { name: "Run this case locally" }).click();
+    await page.getByRole("button", { name: "Evaluate private conflict" }).click();
+    await expect(page.getByTestId("durable-readback-required")).toContainText("evaluatePrivateConflict");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toBeVisible();
+    expect(calls).toEqual(["POST:create", "POST:evaluatePrivateConflict", "GET"]);
+    expect(await page.evaluate(() => sessionStorage.getItem("mordant.protection.browser-recovery.v1"))).toBeNull();
+  });
+
+  test("export interruption exposes only fixed retention recovery and then GETs COMPLETE", async ({ page, request }) => {
+    const imported = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const completeCase = localCase(imported, "CONFLICT_CONFIRMED", "SIMULATED_AVAILABLE");
+    const localEvidence = { ...imported, runId };
+    const calls: string[] = [];
+    let getCount = 0;
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const adapterRequest = route.request();
+      if (adapterRequest.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      if (adapterRequest.method() === "GET") {
+        getCount += 1;
+        calls.push(`GET:${getCount}`);
+        if (getCount === 1) return fulfillAdapterJson(route, {
+          schemaVersion: "mordant.protection-retention-required/1",
+          status: "RETENTION_REQUIRED",
+          runId,
+          scenario: "conflict",
+          recoveryOperation: "retainProtectionEvidence",
+        });
+        return fulfillAdapterJson(route, localView(runId, "COMPLETE", null, completeCase, {
+          governedResult: {
+            conflict: true,
+            digest: (imported.governedResult as Record<string, unknown>).digest,
+            releaseMode: "governed-decryptor-v1",
+          },
+          recourse: { opened: true, reason: null },
+          evidence: localEvidence,
+        }));
+      }
+      const body = adapterRequest.postDataJSON() as { intent: string; operation?: string };
+      if (body.intent === "create") {
+        calls.push("POST:create");
+        return fulfillAdapterJson(route, localView(
+          runId, "CHRONOLOGY_COMPLETE", "exportProtectionEvidence", completeCase,
+        ));
+      }
+      if (body.operation === "exportProtectionEvidence") {
+        calls.push("POST:exportProtectionEvidence");
+        await route.abort("connectionreset");
+        return;
+      }
+      expect(body.operation).toBe("retainProtectionEvidence");
+      calls.push("POST:retainProtectionEvidence");
+      return fulfillAdapterJson(route, {
+        schemaVersion: "mordant.retained-protection-view/1",
+        runId,
+        scenario: "conflict",
+        caseId: (imported.fhe as Record<string, unknown>).caseId,
+        manifestDigest: imported.manifestDigest,
+        evidence: localEvidence,
+      });
+    });
+
+    await page.goto("/protection?scenario=conflict");
+    await page.getByRole("button", { name: "Run this case locally" }).click();
+    await page.getByRole("button", { name: "Seal public evidence" }).click();
+    await expect(page.getByTestId("durable-readback-required")).toContainText("exportProtectionEvidence");
+    await page.getByRole("button", { name: "Resume durable run" }).click();
+    await expect(page.getByTestId("case-loading-status")).toContainText("Evidence retention required");
+    await expect(page.getByRole("button", { name: "Finish evidence retention" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Seal public evidence" })).toHaveCount(0);
+    expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem(
+      "mordant.protection.browser-recovery.v1",
+    ) ?? "null") as Record<string, unknown> | null)).toMatchObject({
+      kind: "RETENTION_REQUIRED",
+      scenario: "conflict",
+      runId,
+      operation: "retainProtectionEvidence",
+    });
+
+    await page.getByRole("button", { name: "Finish evidence retention" }).click();
+    await expect(page.getByRole("button", { name: "Open complete evidence" })).toBeEnabled();
+    await expect(page.getByText("Conflict confirmed", { exact: true })).toBeVisible();
+    expect(calls).toEqual([
+      "POST:create",
+      "POST:exportProtectionEvidence",
+      "GET:1",
+      "POST:retainProtectionEvidence",
+      "GET:2",
+    ]);
+    expect(calls.filter((call) => call === "POST:exportProtectionEvidence")).toHaveLength(1);
+    expect(calls.filter((call) => call === "POST:retainProtectionEvidence")).toHaveLength(1);
+    await expect(page.locator("body")).not.toContainText("ABORTED");
   });
 });
 

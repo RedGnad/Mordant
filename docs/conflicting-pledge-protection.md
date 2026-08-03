@@ -66,13 +66,14 @@ also be exact loopback HTTP origins. The Next development server is expected at 
 
 The browser receives only the non-secret adapter origin. The adapter alone reads
 `MORDANT_LOCAL_ADMIN_CAPABILITY` and attaches it to its private downstream request. Its input is one
-of two exact JSON shapes: fixed scenario creation, or a run ID plus one enumerated product
+of two exact JSON shapes: fixed scenario creation plus a browser-generated `creationRequestId`, or a run ID plus one enumerated product
 operation. It rejects additional fields and accepts no path, key, ciphertext, circuit, slot,
 timestamp, chronology or attestation. Evidence export automatically invokes the fixed retention
 operation against the pre-existing server-configured `MORDANT_PROTECTION_RETENTION_ROOT` capability
 and compares an independent no-follow durable readback to the exported run. The shipped imported
-evidence root is read-only and distinct from this local retention capability. Refresh/resume reads the
-same run ID; it does not create another run. A hostile process already executing on the same local
+evidence root is read-only and distinct from this local retention capability. The creation identifier
+durably maps to exactly one run, so a lost create response is recovered by creation lookup and then
+GET-only run readback; the browser never sends a second create. A hostile process already executing on the same local
 user account or a fully compromised development host remains outside this supervised-MVP boundary.
 
 ## Signed product roots
@@ -120,6 +121,22 @@ admission it is an explicit terminal error. A narrow Go helper retains evidence 
 pre-existing directory capability with create-only same-directory publication, file and directory
 flushes, and exact `O_NOFOLLOW` readback. Root, intermediate and destination symlinks, non-regular
 targets, path-identity replacement and cross-case/cross-scenario writes are rejected.
+
+Before dispatch, the browser stores one exact, no-secret, 24-hour recovery record in session storage:
+pending creation (`scenario`, `creationRequestId`), pending mutation (`scenario`, `runId`, fixed
+operation), or retention required (`scenario`, `runId`, fixed `retainProtectionEvidence`). Normal
+navigation, unmount, refresh and history transitions do not clear it. Re-entering `/protection`
+prioritizes that record, replaces conflicting URL state and performs only the corresponding passive
+lookup/GET recovery. The record is cleared only after an exact verified response/readback, an exact
+pre-dispatch `NOT_ADMITTED` refusal, or a user-confirmed supervised abandonment. Abandonment clears
+only browser authority; it does not cancel or roll back backend work.
+
+A passive GET of a run whose export is complete but configured retained envelope is absent returns
+only the public `RETENTION_REQUIRED` status, run ID, scenario and fixed recovery operation. It does
+not evaluate, release, export or retain. The UI exposes only **Finish evidence retention**, which
+invokes the existing fixed idempotent retention operation and then requires a separate GET to reach
+verified `COMPLETE`. An already retained exact envelope returns directly without creating a second
+retention journal result; a pending retention journal is reconciled through its existing operation.
 
 Ordinary unlink removes only each Mordant-generated transient plaintext pledge JSON file and
 participant signing-key file after the exact signed public submission is verified. This is

@@ -12,6 +12,7 @@ import {
 
 const CAPABILITY = "server-only-capability-0123456789abcdef";
 const BROWSER_ORIGIN = "http://127.0.0.1:3000";
+const CREATION_REQUEST_ID = "22222222-2222-4222-8222-222222222222";
 
 function configuration() {
   return {
@@ -72,13 +73,65 @@ test("browser never supplies or receives the capability while downstream receive
     const response = await browserFetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", host: "attacker.example", "x-forwarded-for": "203.0.113.7" },
-      body: JSON.stringify({ intent: "create", scenario: "conflict" }),
+      body: JSON.stringify({ intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID }),
     });
     assert.equal(response.status, 200);
     const text = await response.text();
     assert.doesNotMatch(text, /server-only-capability/);
     assert.equal(downstream.length, 1);
     assert.equal(downstream[0].headers["x-mordant-admin-capability"], CAPABILITY);
+  });
+});
+
+test("creation lookup is GET-only and preserves the exact browser creationRequestId", async () => {
+  const calls = [];
+  const view = { runId: CREATION_REQUEST_ID, stage: "CASE_CREATED" };
+  await withAdapter(async (url, init) => {
+    calls.push({ url: String(url), init });
+    return Response.json(view);
+  }, async (url) => {
+    const created = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID }),
+    });
+    assert.equal(created.status, 200);
+    const recovered = await browserFetch(`${url}?creationRequestId=${CREATION_REQUEST_ID}`);
+    assert.equal(recovered.status, 200);
+    assert.equal(calls.length, 2);
+    assert.equal(JSON.parse(calls[0].init.body).creationRequestId, CREATION_REQUEST_ID);
+    assert.equal(calls[1].init.method, "GET");
+    assert.match(calls[1].url, new RegExp(`creationRequestId=${CREATION_REQUEST_ID}$`));
+    assert.equal(calls[1].init.body, undefined);
+  });
+});
+
+test("the supervised retention recovery operation is fixed and forwards exactly once", async () => {
+  const runId = "11111111-1111-4111-8111-111111111111";
+  const calls = [];
+  await withAdapter(async (url, init) => {
+    calls.push({ url: String(url), init });
+    return Response.json({
+      schemaVersion: "mordant.retained-protection-view/1",
+      runId,
+      scenario: "conflict",
+      caseId: "sha256:case",
+      manifestDigest: "sha256:manifest",
+      evidence: {},
+    });
+  }, async (url) => {
+    const recovered = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intent: "execute", runId, operation: "retainProtectionEvidence" }),
+    });
+    assert.equal(recovered.status, 200);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(JSON.parse(calls[0].init.body), {
+      intent: "execute",
+      runId,
+      operation: "retainProtectionEvidence",
+    });
   });
 });
 
@@ -89,13 +142,13 @@ test("origin, unknown operations and every additional private field are refused 
     const noOrigin = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ intent: "create", scenario: "conflict" }),
+      body: JSON.stringify({ intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID }),
     });
     assert.equal(noOrigin.status, 403);
     for (const body of [
-      { intent: "create", scenario: "conflict", privateKey: CAPABILITY },
+      { intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID, privateKey: CAPABILITY },
       { intent: "execute", runId: "11111111-1111-4111-8111-111111111111", operation: "arbitrary", path: "/tmp/private" },
-      { intent: "execute", runId: "11111111-1111-4111-8111-111111111111", operation: "retainProtectionEvidence" },
+      { intent: "execute", runId: "11111111-1111-4111-8111-111111111111", operation: "retainProtectionEvidence", destination: "/tmp/private" },
     ]) {
       const response = await browserFetch(url, {
         method: "POST",
@@ -105,8 +158,14 @@ test("origin, unknown operations and every additional private field are refused 
       assert.equal(response.status, 400);
       const refusal = await response.json();
       if (body.intent === "execute" && body.operation === "retainProtectionEvidence") {
-        assert.deepEqual(refusal, { error: "Unsupported or non-exact product operation" });
-      }
+        assert.deepEqual(refusal, {
+          schemaVersion: "mordant.local-mutation-error/1",
+          mutationAdmission: "NOT_ADMITTED",
+          runId: body.runId,
+          operation: body.operation,
+          error: "Unsupported or non-exact product operation",
+        });
+      } else assert.deepEqual(refusal, { error: "Unsupported or non-exact product operation" });
     }
     assert.equal(forwarded, 0);
   });
@@ -253,6 +312,29 @@ test("a COMPLETE refresh performs exactly one downstream GET and never admits re
   });
 });
 
+test("RETENTION_REQUIRED remains a passive minimal GET status with no downstream mutation", async () => {
+  const runId = "11111111-1111-4111-8111-111111111111";
+  const status = {
+    schemaVersion: "mordant.protection-retention-required/1",
+    status: "RETENTION_REQUIRED",
+    runId,
+    scenario: "conflict",
+    recoveryOperation: "retainProtectionEvidence",
+  };
+  const calls = [];
+  await withAdapter(async (url, init) => {
+    calls.push({ url: String(url), init });
+    return Response.json(status);
+  }, async (url) => {
+    const response = await browserFetch(`${url}?runId=${runId}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), status);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].init.method, "GET");
+    assert.equal(calls[0].init.body, undefined);
+  });
+});
+
 test("an absent or mismatched retained envelope fails COMPLETE readback without any downstream POST", async () => {
   const runId = "11111111-1111-4111-8111-111111111111";
   for (const [status, message] of [
@@ -283,7 +365,7 @@ test("GET cardinality and every POST or OPTIONS query parameter are rejected", a
     const post = await browserFetch(`${url}?path=/tmp/private`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ intent: "create", scenario: "conflict" }),
+      body: JSON.stringify({ intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID }),
     });
     assert.equal(post.status, 400);
     const options = await browserFetch(`${url}?target=other`, { method: "OPTIONS" });
@@ -339,7 +421,7 @@ test("caller-controlled Host and forwarding headers are not consulted as authori
         },
       }, resolve);
       request.once("error", reject);
-      request.end(JSON.stringify({ intent: "create", scenario: "no-conflict" }));
+      request.end(JSON.stringify({ intent: "create", scenario: "no-conflict", creationRequestId: CREATION_REQUEST_ID }));
     });
     assert.equal(response.statusCode, 200);
     response.resume();

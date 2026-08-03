@@ -12,6 +12,7 @@ const OPERATIONS = new Set([
   "openRecourseCase",
   "completeCureChronology",
   "exportProtectionEvidence",
+  "retainProtectionEvidence",
 ]);
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_BODY_BYTES = 2_048;
@@ -127,9 +128,11 @@ async function readJsonBody(request) {
 
 function validateBrowserOperation(value) {
   if (
-    exactKeys(value, ["intent", "scenario"])
+    exactKeys(value, ["intent", "scenario", "creationRequestId"])
     && value.intent === "create"
     && (value.scenario === "conflict" || value.scenario === "no-conflict")
+    && typeof value.creationRequestId === "string"
+    && RUN_ID.test(value.creationRequestId)
   ) return value;
   if (
     exactKeys(value, ["intent", "runId", "operation"])
@@ -244,18 +247,23 @@ export function createLocalProtectionAdapter(configuration, options = {}) {
         return;
       }
       if (request.method === "GET") {
-        if (
-          [...url.searchParams.keys()].length !== 1
-          || url.searchParams.getAll("runId").length !== 1
-          || !RUN_ID.test(url.searchParams.get("runId") ?? "")
-        ) {
-          throw new LocalProtectionAdapterError("An exact runId is required", 400);
+        const keys = [...url.searchParams.keys()];
+        const runId = url.searchParams.get("runId");
+        const creationRequestId = url.searchParams.get("creationRequestId");
+        const exactRunLookup = keys.length === 1
+          && url.searchParams.getAll("runId").length === 1
+          && RUN_ID.test(runId ?? "");
+        const exactCreationLookup = keys.length === 1
+          && url.searchParams.getAll("creationRequestId").length === 1
+          && RUN_ID.test(creationRequestId ?? "");
+        if (!exactRunLookup && !exactCreationLookup) {
+          throw new LocalProtectionAdapterError("An exact runId or creationRequestId is required", 400);
         }
         const view = await downstreamJson(
           configuration,
           fetchImpl,
           "GET",
-          { runId: url.searchParams.get("runId") },
+          exactRunLookup ? { runId } : { creationRequestId },
           undefined,
           markDownstreamDispatched,
         );

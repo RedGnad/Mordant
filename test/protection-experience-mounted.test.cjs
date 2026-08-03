@@ -109,6 +109,25 @@ artifactTest("mounted imported to local loading to local error never renders imp
   await act(async () => { renderer.unmount(); });
 });
 
+artifactTest("no-adapter public failure renders one truthful unavailable state and a retry action", async () => {
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(ProtectionExperience, props(null, {
+      initialScenario: "conflict",
+      initialUrlError: "Verified protection evidence is unavailable.",
+      localAdapterOrigin: null,
+    })));
+  });
+  const rendered = text(renderer.root);
+  assert.match(rendered, /No verified conclusion/);
+  assert.match(rendered, /Verified evidence unavailable/);
+  assert.match(rendered, /Retry verified evidence loading/);
+  assert.doesNotMatch(rendered, /Private check in progress/);
+  assert.doesNotMatch(rendered, /Verified retained public evidence is ready/);
+  assert.equal(button(renderer.root, "Run this case locally"), undefined);
+  await act(async () => { renderer.unmount(); });
+});
+
 artifactTest("mounted local states show admitted cure window provisionally before complete evidence", async () => {
   const imported = evidence();
   const runId = "11111111-1111-4111-8111-111111111111";
@@ -441,6 +460,8 @@ artifactTest("failed imported scenario load clears every previous case authority
     await Promise.resolve();
   });
   assert.match(text(renderer.root), /IMPORTED_READ_FAILED/);
+  assert.match(text(renderer.root), /No verified conclusion/);
+  assert.doesNotMatch(text(renderer.root), /Private check in progress|Verified retained public evidence is ready/);
   assert.doesNotMatch(text(renderer.root), new RegExp(imported.protectionCase.fheCaseId.slice(-16)));
   await act(async () => { renderer.unmount(); });
 });
@@ -456,6 +477,8 @@ artifactTest("mismatched imported response is refused without falling back", asy
   await act(async () => { renderer = create(React.createElement(ProtectionExperience, props(conflict))); });
   await act(async () => { button(renderer.root, "No conflict").props.onClick(); });
   assert.match(text(renderer.root), /did not match the requested scenario/);
+  assert.match(text(renderer.root), /No verified conclusion/);
+  assert.doesNotMatch(text(renderer.root), /Private check in progress|Verified retained public evidence is ready/);
   assert.doesNotMatch(text(renderer.root), new RegExp(conflict.protectionCase.fheCaseId.slice(-16)));
   await act(async () => { renderer.unmount(); });
 });
@@ -538,6 +561,11 @@ artifactTest("drawer renders the actual recourse record digest and full required
   const dialog = renderer.root.findByProps({ role: "dialog" });
   const rendered = text(dialog);
   for (const exact of [
+    "VERIFIED",
+    imported.recourseAttestation.attestation.finalIncidentState,
+    imported.recourseAttestation.attestation.finalRecourseState,
+    imported.recourseAttestation.attestation.clockClass,
+    "VERIFIED — participant, governed-result and recourse-attestation signatures",
     imported.sourceCommit,
     imported.governedFheCommit,
     imported.fhe.caseId,
@@ -562,6 +590,10 @@ artifactTest("no-conflict drawer states explicit refusal and absence without a f
   });
   const rendered = text(renderer.root.findByProps({ role: "dialog" }));
   assert.match(rendered, /ABSENT — signed false Boolean refused recourse/);
+  assert.match(rendered, /Evidence verification VERIFIED/);
+  assert.match(rendered, /Final incident state CLEARED/);
+  assert.match(rendered, /Final recourse state REFUSED/);
+  assert.match(rendered, /Clock class REAL_OBSERVED_CLOCK/);
   assert.match(rendered, /No digest exists/);
   assert.equal(imported.recourse.recordDigest, null);
   await act(async () => { renderer.unmount(); });
