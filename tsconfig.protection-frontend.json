@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": [
+      { "name": "next" }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/app/protection/page.tsx",
+    "src/app/api/protection/conflicting-pledge/route.ts",
+    "src/components/protection-experience.tsx",
+    "src/components/product-shell.tsx",
+    "src/lib/protection/cleanverse-asset.ts",
+    "src/lib/protection/protection-case.ts",
+    "src/lib/protection/protection-evidence.ts",
+    "src/lib/protection/protection-presentation.ts",
+    "src/lib/protection/governed-fhe-product-server.ts"
+  ],
+  "exclude": ["node_modules", "contracts"]
+}

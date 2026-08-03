@@ -49,8 +49,8 @@ export const PRODUCT_STORAGE = Object.freeze({
   safetyMarginBytes: 1_610_612_736,
 });
 
-const SOURCE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
-const GOVERNED_FHE_COMMIT = SOURCE_COMMIT;
+const SOURCE_COMMIT = "e5a5d15145e3b1ef2c573374a08439acb46b4e95";
+const GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
 const RUN_ROOT = resolve(process.env.MORDANT_PROTECTION_RUN_ROOT ?? join(process.cwd(), ".mordant", "protection"));
 const BIN_ROOT = resolve(process.env.MORDANT_GOVERNED_FHE_BIN_DIR ?? join(process.cwd(), ".mordant", "governed-fhe-bin"));
 const GO_ROOT = resolve(process.cwd(), "fhe-lab", "lattigo");

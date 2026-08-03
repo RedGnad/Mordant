@@ -22,6 +22,7 @@ import {
 } from "./protection-case";
 import { assertPublicProtectionEvidence, type MordantProtectionEvidence } from "./protection-evidence";
 import { evaluateDiskSpace, PRODUCT_STORAGE } from "./governed-fhe-product-server";
+import { PRODUCT_EXECUTION_LABELS, recoursePresentation } from "./protection-presentation";
 
 const BAD_DIGEST = `sha256:${"ff".repeat(32)}` as Sha256Digest;
 
@@ -126,6 +127,12 @@ test("disk preflight refuses before key generation when the safety margin is una
   assert.equal(insufficient.requiredBytes, PRODUCT_STORAGE.estimatedCaseBytes + PRODUCT_STORAGE.safetyMarginBytes);
 });
 
+test("frontend copy never presents protocol-double recourse as live settlement", () => {
+  assert.match(PRODUCT_EXECUTION_LABELS.recourse, /^Local protocol double/);
+  assert.match(PRODUCT_EXECUTION_LABELS.recourse, /no Cleanverse settlement transaction/);
+  assert.doesNotMatch(PRODUCT_EXECUTION_LABELS.recourse, /^Live /i);
+});
+
 for (const scenario of ["conflict", "no-conflict"] as const) {
   test(`retained real governed-FHE ${scenario} evidence is structurally safe when present`, (context) => {
     const path = join(process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`);
@@ -138,6 +145,7 @@ for (const scenario of ["conflict", "no-conflict"] as const) {
       assert.equal(evidence.governedResult.assetIdentity, CANONICAL_CLEANVERSE_ASSET_DIGEST);
       assert.equal(evidence.governedResult.conflict, scenario === "conflict");
       assert.equal(evidence.recourse.opened, scenario === "conflict");
+      assert.equal(recoursePresentation(evidence).status, scenario === "conflict" ? "AVAILABLE" : "REFUSED");
       assert.equal(evidence.originalReceivablePreservation.state, "OUTSTANDING_INTACT");
       assert.equal(evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection, false);
       assert.doesNotMatch(JSON.stringify(evidence), /secret-key|private-root|receivableId|privateMetadataCommitment/i);

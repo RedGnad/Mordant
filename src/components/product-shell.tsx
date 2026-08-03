@@ -77,16 +77,19 @@ const TRANSACTION_DEMO_NAVIGATION: Readonly<Record<ProductSurface, ShellDefiniti
 const EXECUTED_REVIEW_NAVIGATION: Readonly<Record<ProductSurface, ShellDefinition["navigation"]>> = {
   workspace: [
     { href: "/workspace", label: "Workspace", current: true },
+    { href: "/protection", label: "Private protection" },
     { href: "/participant", label: "Participant" },
     { href: "/protocol", label: "Protocol" },
   ],
   "deal-room": [
     { href: "/workspace", label: "Workspace" },
+    { href: "/protection", label: "Private protection" },
     { href: "/participant", label: "Participant", current: true },
     { href: "/protocol", label: "Protocol" },
   ],
   protocol: [
     { href: "/workspace", label: "Workspace" },
+    { href: "/protection", label: "Private protection" },
     { href: "/participant", label: "Participant" },
     { href: "/protocol", label: "Protocol", current: true },
   ],

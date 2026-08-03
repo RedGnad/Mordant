@@ -1,6 +1,6 @@
 {
   "schemaVersion": "mordant.protection-evidence/1",
-  "sourceCommit": "3b0247593d022fb18aadd2b554329f85c5a19898",
+  "sourceCommit": "e5a5d15145e3b1ef2c573374a08439acb46b4e95",
   "governedFheCommit": "3b0247593d022fb18aadd2b554329f85c5a19898",
   "scenario": "conflict",
   "cleanverseAsset": {
@@ -636,5 +636,5 @@
     "generatedAtUnix": 1785718527
   },
   "generatedAt": "2026-08-03T00:55:30.823Z",
-  "manifestDigest": "sha256:c665cd579c89aba3a1fda394706f75fc13be31ef9284745687c433a78e67d907"
+  "manifestDigest": "sha256:f197e298ef78a6a4cbab9ed338f32998bb21dec1ee3dcd6e3aeaab7aa8da60ac"
 }
