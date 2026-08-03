@@ -12,7 +12,8 @@ import {
   readProtectionCase,
   releaseGovernedResult,
   submitParticipantPledge,
-} from "@/lib/protection/governed-fhe-product-server";
+} from "../../../../lib/protection/governed-fhe-product-server";
+import { protectionMutationGate } from "../../../../lib/protection/protection-api-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +26,9 @@ function response(body: unknown, status = 200) {
 }
 
 function failure(error: unknown) {
-  if (error instanceof ProtectionProductError) return response({ error: error.message }, error.status);
-  return response({ error: error instanceof Error ? error.message : "Protection operation failed" }, 500);
+  if (error instanceof ProtectionProductError && error.status < 500) return response({ error: error.message }, error.status);
+  if (error instanceof ProtectionProductError && error.status === 507) return response({ error: error.message }, error.status);
+  return response({ error: "Protection operation failed" }, 500);
 }
 
 function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const runId = url.searchParams.get("runId");
-    if (runId !== null) return response(readProtectionCase(runId));
+    if (runId !== null) return response(await readProtectionCase(runId));
     const scenario = url.searchParams.get("scenario") === "no-conflict" ? "no-conflict" : "conflict";
     return response({
       schemaVersion: "mordant.protection-imported-view/1",
@@ -52,6 +54,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const gate = protectionMutationGate(request);
+  if (!gate.allowed) return response({ error: "Protection mutation endpoint unavailable" }, gate.status ?? 404);
   try {
     const body = await request.json() as Record<string, unknown>;
     if (

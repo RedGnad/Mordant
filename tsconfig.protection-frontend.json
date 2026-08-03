@@ -13,8 +13,10 @@
     "src/components/protection-experience.tsx",
     "src/components/product-shell.tsx",
     "src/lib/protection/cleanverse-asset.ts",
+    "src/lib/protection/protection-api-gate.ts",
     "src/lib/protection/protection-case.ts",
     "src/lib/protection/protection-evidence.ts",
+    "src/lib/protection/protection-operation-journal.ts",
     "src/lib/protection/protection-presentation.ts",
     "src/lib/protection/governed-fhe-product-server.ts"
   ],

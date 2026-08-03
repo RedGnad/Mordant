@@ -159,7 +159,7 @@ export function createProtectionCase(options: Readonly<{
       units: "100000000",
       accountingDomain: "RECEIVABLE",
     },
-    evidenceReferences: [asset.provenance.value.evidencePath],
+    evidenceReferences: asset.provenance.value.sources.map((source) => source.evidencePath),
     timeline: [{
       ordinal: 1,
       kind: "PROTECTION_ACTIVATED",

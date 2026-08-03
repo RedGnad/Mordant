@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   PRIVATE_CONFLICT_STEPS,
   PRODUCT_EXECUTION_LABELS,
+  evidenceForDisplayedCase,
   recoursePresentation,
+  recourseStatePresentation,
 } from "@/lib/protection/protection-presentation";
 import type { MordantProtectionEvidence } from "@/lib/protection/protection-evidence";
 import type { ProductScenario } from "@/lib/protection/protection-case";
@@ -28,12 +30,14 @@ const STAGE_INDEX: Readonly<Record<ProtectionCaseView["stage"], number>> = {
   CASE_CREATED: 0,
   MATCH_PREPARED: 0,
   PARTICIPANT_A_SUBMITTED: 1,
+  PARTICIPANT_B_PUBLISHED: 2,
   PARTICIPANT_B_SUBMITTED: 2,
   EVALUATED: 3,
   RELEASED: 5,
   RECOURSE_OPENED: 5,
   CHRONOLOGY_COMPLETE: 5,
   COMPLETE: 5,
+  ABORTED: 0,
 };
 
 const OPERATION: Readonly<Record<string, Readonly<{ api: string; label: string; support: string }>>> = {
@@ -171,34 +175,33 @@ export function ProtectionExperience({
   const [scenario, setScenario] = useState<ProductScenario>(initialEvidence.scenario);
   const [evidence, setEvidence] = useState(initialEvidence);
   const [localView, setLocalView] = useState<ProtectionCaseView | null>(null);
+  const [mode, setMode] = useState<"imported" | "local">("imported");
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const localMode = mode === "local";
   const activeCase = localView?.protectionCase ?? evidence.protectionCase;
-  const activeEvidence = localView?.evidence ?? evidence;
-  const localMode = localView !== null;
-  const completedStep = localMode ? STAGE_INDEX[localView.stage] : 5;
-  const localRecourse = localView?.recourse;
-  const recourse = localMode && localRecourse !== null && localRecourse !== undefined
-    ? {
-      status: localRecourse.opened ? "AVAILABLE" : "REFUSED",
-      label: localRecourse.opened ? "Governed recourse available after cure chronology" : "Recourse refused — signed Boolean is false",
-    }
-    : recoursePresentation(activeEvidence);
-  const conflict = localView?.governedResult?.conflict ?? activeEvidence.governedResult.conflict;
+  const activeEvidence = evidenceForDisplayedCase(mode, evidence, localView);
+  const completedStep = localMode && localView !== null ? STAGE_INDEX[localView.stage] : localMode ? 0 : 5;
+  const recourse = localMode
+    ? recourseStatePresentation(localView?.protectionCase.recourseState ?? "NOT_OPEN")
+    : recoursePresentation(evidence);
+  const conflict = localMode ? localView?.governedResult?.conflict ?? null : evidence.governedResult.conflict;
   const currentOperation = localView?.nextOperation === null || localView?.nextOperation === undefined
     ? null : OPERATION[localView.nextOperation] ?? null;
 
   async function selectImportedScenario(next: ProductScenario) {
     setRequestState("loading");
     setError(null);
+    setDrawerOpen(false);
+    setMode("imported");
+    setLocalView(null);
     try {
       const response = await fetch(`${ENDPOINT}?scenario=${next}`, { cache: "no-store" });
       const imported = await body<ImportedView>(response);
       setScenario(next);
       setEvidence(imported.evidence);
-      setLocalView(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Evidence readback failed");
     } finally {
@@ -209,6 +212,9 @@ export function ProtectionExperience({
   async function startLocalRun() {
     setRequestState("executing");
     setError(null);
+    setDrawerOpen(false);
+    setMode("local");
+    setLocalView(null);
     try {
       const response = await fetch(ENDPOINT, {
         method: "POST",
@@ -253,7 +259,7 @@ export function ProtectionExperience({
         <nav aria-label="Protection navigation">
           <Link href="/workspace">Workspace</Link>
           <span aria-current="page">Conflicting Pledge Protection</span>
-          <button type="button" onClick={() => setDrawerOpen(true)}>Evidence</button>
+          <button type="button" disabled={activeEvidence === null} onClick={() => setDrawerOpen(true)}>Evidence</button>
         </nav>
       </header>
 
@@ -269,9 +275,9 @@ export function ProtectionExperience({
             <h1>Protect <span>MINV01</span> from conflicting pledges.</h1>
             <p>The asset is the case root. One classified Cleanverse record binds the private match, signed result, cure chronology and recourse evidence.</p>
           </div>
-          <div className={styles.outcome} data-conflict={conflict ? "true" : "false"}>
+          <div className={styles.outcome} data-conflict={conflict === null ? "pending" : conflict ? "true" : "false"}>
             <span>Current conclusion</span>
-            <strong>{localMode && localView.governedResult === null ? "Private check in progress" : conflict ? "Conflict confirmed" : "No conflict found"}</strong>
+            <strong>{conflict === null ? "Private check in progress" : conflict ? "Conflict confirmed" : "No conflict found"}</strong>
             <p>{recourse.label}</p>
           </div>
         </section>
@@ -307,8 +313,8 @@ export function ProtectionExperience({
               <div><dt>Issuer identity</dt><dd>Admin address observed · legal identity unproven</dd></div>
               <div><dt>A-Pass</dt><dd>Holder profiles admitted at observation</dd></div>
               <div><dt>Settlement asset</dt><dd>aUSDC · identity observed, not settled in this slice</dd></div>
-              <div><dt>Terms / policy</dt><dd>{activeCase.cleanverseAsset.policy.value.documentedTermsVersion} · min tier 50</dd></div>
-              <div><dt>Issuance</dt><dd>Block {activeCase.cleanverseAsset.issuance.value.blockNumber} · {compact(activeCase.cleanverseAsset.issuance.value.transactionHash)}</dd></div>
+              <div><dt>Terms / policy</dt><dd>{activeCase.cleanverseAsset.documentationTerms.value.version} documented · min tier 50 observed</dd></div>
+              <div><dt>Issuance</dt><dd>Deployment block {activeCase.cleanverseAsset.tokenDeployment.value.blockNumber} · {compact(activeCase.cleanverseAsset.issuance.value.transactionHash)}</dd></div>
             </dl>
             <footer><span>LIVE OBSERVED</span><p>Issuance and readback are retained evidence, not a fresh browser observation.</p></footer>
           </section>
@@ -352,7 +358,9 @@ export function ProtectionExperience({
                 </button>
               </div>
             ) : (
-              <button className={styles.evidenceButton} type="button" onClick={() => setDrawerOpen(true)}>Open complete evidence</button>
+              <button className={styles.evidenceButton} type="button" disabled={activeEvidence === null} onClick={() => setDrawerOpen(true)}>
+                {activeEvidence === null ? "Evidence available after sealing" : "Open complete evidence"}
+              </button>
             )}
           </section>
         </div>
@@ -380,7 +388,7 @@ export function ProtectionExperience({
         </section>
       </main>
 
-      {drawerOpen ? <EvidenceDrawer evidence={activeEvidence} onClose={() => setDrawerOpen(false)} /> : null}
+      {drawerOpen && activeEvidence !== null ? <EvidenceDrawer evidence={activeEvidence} onClose={() => setDrawerOpen(false)} /> : null}
     </div>
   );
 }

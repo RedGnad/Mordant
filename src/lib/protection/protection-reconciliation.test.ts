@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,8 @@ import { test } from "node:test";
 
 import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./governed-fhe-product-server";
 import type { Sha256Digest } from "./cleanverse-asset";
+import type { MordantProtectionEvidence } from "./protection-evidence";
+import { readOperationJournal } from "./protection-operation-journal";
 
 function digest(byte: string): Sha256Digest {
   return `sha256:${byte.repeat(64)}`;
@@ -192,7 +194,7 @@ test("irreversible evaluation admission without a terminal artifact becomes ABOR
   await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_A");
   await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_B");
   failAfterAdmission.add("evaluator");
-  await assert.rejects(orchestrator.evaluatePrivateConflict(view.runId), /EVALUATOR_INTERRUPTED/);
+  await assert.rejects(orchestrator.evaluatePrivateConflict(view.runId), /Governed FHE evaluator operation failed/);
   const recovered = await createProtectionOrchestrator(base).readProtectionCase(view.runId);
   assert.equal(recovered.stage, "ABORTED");
   assert.equal(calls.get("evaluator"), 1);
@@ -240,4 +242,142 @@ test("case-space preflight uses RUN_ROOT and separately refuses an undersized bi
     error instanceof Error && /binaries and bounded Go cache/.test(error.message)
   ));
   assert.equal(calls.get("keygen"), undefined);
+});
+
+function retainedNoConflict(): MordantProtectionEvidence {
+  return JSON.parse(readFileSync(join(
+    process.cwd(), "docs", "evidence", "conflicting-pledge-protection", "no-conflict.json",
+  ), "utf8")) as MordantProtectionEvidence;
+}
+
+function writeCompleteExecution(root: string, evidence: MordantProtectionEvidence): void {
+  const caseRoot = join(root, evidence.runId);
+  mkdirSync(caseRoot, { recursive: true });
+  writeFileSync(join(caseRoot, "execution.json"), `${JSON.stringify({
+    schemaVersion: "mordant.protection-execution/2",
+    runId: evidence.runId,
+    stage: "COMPLETE",
+    protectionCase: evidence.protectionCase,
+    paths: {
+      root: caseRoot,
+      publicRoot: join(caseRoot, "public"),
+      decryptorPrivateRoot: join(caseRoot, "decryptor-private"),
+      participantPrivateRoot: join(caseRoot, "participant-private"),
+    },
+    evidence,
+    startedAtUnix: Math.floor(new Date(evidence.protectionCase.createdAt).valueOf() / 1000),
+  }, null, 2)}\n`);
+}
+
+test("interrupted retention resumes through a fresh orchestrator and exact readback", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mordant-retention-reconcile-"));
+  const evidence = retainedNoConflict();
+  const runRoot = join(root, "runs");
+  const destinationRoot = join(root, "retained");
+  const destination = join(destinationRoot, "no-conflict.json");
+  writeCompleteExecution(runRoot, evidence);
+  const base: ProtectionRuntimeOptions = {
+    runRoot,
+    binRoot: join(root, "bin"),
+    importedEvidenceRoot: destinationRoot,
+    skipBinaryBuild: true,
+    statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
+    binaryRunner: async <T>(binary: string) => {
+      assert.equal(binary, "inspect");
+      return { finalized: true, evaluationAdmission: true, releaseAdmission: true, ambiguous: false } as T;
+    },
+  };
+  const first = crashing(base, "during-retention-before-atomic-rename");
+  await assert.rejects(first.retainProtectionEvidence(evidence.runId, destination), /INJECTED_CRASH/);
+  assert.equal(existsSync(destination), false);
+  const restarted = createProtectionOrchestrator(base);
+  await restarted.retainProtectionEvidence(evidence.runId, destination);
+  assert.equal((JSON.parse(readFileSync(destination, "utf8")) as MordantProtectionEvidence).manifestDigest, evidence.manifestDigest);
+  assert.equal(readOperationJournal(runRoot, evidence.runId).records.at(-1)?.outcome, "COMPLETED");
+});
+
+test("published evidence reconciles after crash without a second create-only export", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mordant-evidence-reconcile-"));
+  const evidence = retainedNoConflict();
+  const runRoot = join(root, "runs");
+  const caseRoot = join(runRoot, evidence.runId);
+  const publicRoot = join(caseRoot, "public");
+  const privateRoot = join(caseRoot, "decryptor-private");
+  const participantRoot = join(caseRoot, "participant-private");
+  mkdirSync(publicRoot, { recursive: true });
+  mkdirSync(privateRoot, { recursive: true });
+  mkdirSync(participantRoot, { recursive: true });
+  const { digest: _resultDigest, ...signedResult } = evidence.governedResult;
+  for (const [name, value] of [
+    ["case-binding.json", evidence.caseAuthorization.binding],
+    ["binding-signature-a.json", evidence.caseAuthorization.participantSignatures[0]],
+    ["binding-signature-b.json", evidence.caseAuthorization.participantSignatures[1]],
+    ["case-crypto.json", { publicKey: evidence.fhe.publicKey }],
+    ["evaluated-conflict.json", {
+      resultCiphertext: evidence.fhe.resultCiphertext,
+      resultCiphertextCommitment: evidence.fhe.resultCiphertextCommitment,
+      evaluatorProvenance: evidence.fhe.evaluatorProvenance,
+    }],
+    ["governed-conflict-result.json", signedResult],
+  ] as const) writeFileSync(join(publicRoot, name), `${JSON.stringify(value)}\n`);
+  const pins = evidence.governedFheEvidence.measurements.release.trustedRecoursePins;
+  const execution = {
+    schemaVersion: "mordant.protection-execution/2",
+    runId: evidence.runId,
+    stage: "RECOURSE_OPENED",
+    protectionCase: evidence.protectionCase,
+    paths: { root: caseRoot, publicRoot, decryptorPrivateRoot: privateRoot, participantPrivateRoot: participantRoot },
+    keygen: { bindingDigest: evidence.fhe.caseBindingDigest, durationNanos: 0, report: evidence.governedFheEvidence.measurements.keyGeneration },
+    submissions: {
+      PARTICIPANT_A: { artifactDigest: evidence.fhe.participantArtifactDigests[0], durationNanos: 0, ciphertextBytes: 1, artifactBytes: 1 },
+      PARTICIPANT_B: { artifactDigest: evidence.fhe.participantArtifactDigests[1], durationNanos: 0, ciphertextBytes: 1, artifactBytes: 1 },
+    },
+    evaluation: { artifactDigest: evidence.fhe.evaluatedArtifactDigest, durationNanos: 0, resultBytes: 1, artifactBytes: 1 },
+    release: {
+      resultDigest: evidence.governedResult.digest, conflict: false, releaseMode: "governed-decryptor-v1",
+      durationNanos: 0, resultBytes: 1, exactRetry: false, trustedRecoursePins: pins,
+    },
+    recourse: { opened: false, reason: "SIGNED_RESULT_FALSE" },
+    startedAtUnix: Math.floor(new Date(evidence.protectionCase.createdAt).valueOf() / 1000),
+  };
+  writeFileSync(join(caseRoot, "execution.json"), `${JSON.stringify(execution, null, 2)}\n`);
+  let publicEvidenceExists = false;
+  let exports = 0;
+  const inspection = {
+    foundation: { bindingDigest: evidence.fhe.caseBindingDigest, report: {} },
+    submissionA: { artifactDigest: evidence.fhe.participantArtifactDigests[0], ciphertextBytes: 1, artifactBytes: 1 },
+    submissionB: { artifactDigest: evidence.fhe.participantArtifactDigests[1], ciphertextBytes: 1, artifactBytes: 1 },
+    finalized: true,
+    evaluationAdmission: true,
+    evaluation: { artifactDigest: evidence.fhe.evaluatedArtifactDigest, resultBytes: 1, artifactBytes: 1 },
+    releaseAdmission: true,
+    release: {
+      resultDigest: evidence.governedResult.digest, conflict: false, releaseMode: "governed-decryptor-v1",
+      resultBytes: 1, exactRetry: true, trustedRecoursePins: pins,
+    },
+    ambiguous: false,
+  };
+  const base: ProtectionRuntimeOptions = {
+    runRoot,
+    binRoot: join(root, "bin"),
+    importedEvidenceRoot: join(root, "retained"),
+    skipBinaryBuild: true,
+    statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
+    binaryRunner: async <T>(binary: string) => {
+      if (binary === "inspect") return {
+        ...inspection,
+        ...(publicEvidenceExists ? { evidence: evidence.governedFheEvidence } : {}),
+      } as T;
+      assert.equal(binary, "recourse");
+      exports += 1;
+      publicEvidenceExists = true;
+      return evidence.governedFheEvidence as T;
+    },
+  };
+  const first = crashing(base, "after-evidence-publication-before-state-save");
+  await assert.rejects(first.exportProtectionEvidence(evidence.runId), /INJECTED_CRASH/);
+  const recovered = await createProtectionOrchestrator(base).readProtectionCase(evidence.runId);
+  assert.equal(recovered.stage, "COMPLETE");
+  assert.equal(recovered.evidence?.runId, evidence.runId);
+  assert.equal(exports, 1);
 });

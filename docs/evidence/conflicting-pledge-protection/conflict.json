@@ -1,10 +1,11 @@
 {
-  "schemaVersion": "mordant.protection-evidence/1",
-  "sourceCommit": "e5a5d15145e3b1ef2c573374a08439acb46b4e95",
+  "schemaVersion": "mordant.protection-evidence/2",
+  "runId": "80858769-07b5-4016-ac6e-a7d47ca32de8",
+  "sourceCommit": "e5b5650c18e1947c7944c49f6832cefde478ed5f",
   "governedFheCommit": "3b0247593d022fb18aadd2b554329f85c5a19898",
   "scenario": "conflict",
   "cleanverseAsset": {
-    "schemaVersion": "mordant.cleanverse-asset-record/1",
+    "schemaVersion": "mordant.cleanverse-asset-record/2",
     "network": {
       "value": {
         "name": "monad-testnet",
@@ -61,7 +62,6 @@
     "policy": {
       "value": {
         "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
-        "documentedTermsVersion": "Cleanverse API v5.6",
         "launchRule": {
           "allowedGroup": "",
           "allowedSubGroup": "",
@@ -73,6 +73,17 @@
       "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
       "observedAt": "2026-07-28T19:22:28.982Z"
     },
+    "documentationTerms": {
+      "value": {
+        "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+        "version": "v5.6",
+        "consultedAtRaw": "2026-07-27",
+        "sourceKind": "manual-versioned-transcription"
+      },
+      "classification": "DOCUMENTED",
+      "source": "docs/evidence/cleanverse-monad-2026-07-28.json",
+      "observedAt": "2026-07-27"
+    },
     "aPass": {
       "value": {
         "statusAtObservation": "HOLDER_PROFILES_ADMITTED",
@@ -80,8 +91,8 @@
         "holderBExpirationUnix": 1816796031
       },
       "classification": "LIVE_OBSERVED",
-      "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
-      "observedAt": "2026-07-28T19:22:28.982Z"
+      "source": "docs/evidence/cleanverse-monad-2026-07-28.json",
+      "observedAt": "2026-07-27T23:23:14.605Z"
     },
     "settlementAsset": {
       "value": {
@@ -97,16 +108,23 @@
       "value": {
         "status": "ISSUED",
         "transactionHash": "0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c",
-        "blockNumber": "48901234",
-        "issuedAt": "2026-07-29 03:22:22"
+        "issuedAtRaw": "2026-07-29 03:22:22"
       },
       "classification": "LIVE_OBSERVED",
       "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
       "observedAt": "2026-07-28T19:22:28.982Z"
     },
-    "observation": {
+    "tokenDeployment": {
       "value": {
-        "blockNumber": "48901220",
+        "blockNumber": "48901234"
+      },
+      "classification": "LIVE_OBSERVED",
+      "source": "docs/evidence/monad-m13a-ceremony-2026-07-28.json",
+      "observedAt": "2026-07-28T20:52:42.848Z"
+    },
+    "preflightObservation": {
+      "value": {
+        "preflightPinnedBlock": "48901220",
         "blockHash": "0x85b5236019fe240ad72eee25ff388435d4faedf40e361ad5e75033045969f9d0",
         "generatedAt": "2026-07-28T19:22:28.982Z"
       },
@@ -116,20 +134,37 @@
     },
     "provenance": {
       "value": {
-        "evidencePath": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
-        "evidenceSha256": "3919f586ba19a901151225e0d9de83d554566db26658fd301a025625ba02a8d9"
+        "sources": [
+          {
+            "evidencePath": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
+            "evidenceSha256": "3919f586ba19a901151225e0d9de83d554566db26658fd301a025625ba02a8d9"
+          },
+          {
+            "evidencePath": "docs/evidence/cleanverse-monad-2026-07-28.json",
+            "evidenceSha256": "6e8a7c742a032ba82272b0931503aed85470cf3f8b39915f763e47cc1bbaf0df"
+          },
+          {
+            "evidencePath": "docs/evidence/monad-m13a-ceremony-2026-07-28.json",
+            "evidenceSha256": "cd0bcc8944796a18dda32efa618bb5a0a2311b0755cd16c6a5ef657e34e18bb3"
+          }
+        ]
       },
       "classification": "LIVE_OBSERVED",
       "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
       "observedAt": "2026-07-28T19:22:28.982Z"
     }
   },
-  "cleanverseAssetDigest": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90",
+  "cleanverseAssetDigest": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
   "sourceClassifications": [
     {
       "subject": "Cleanverse MINV01 asset record",
       "classification": "LIVE_OBSERVED",
       "detail": "Retained M-11 issuance and readback evidence"
+    },
+    {
+      "subject": "Cleanverse documentation version",
+      "classification": "DOCUMENTED",
+      "detail": "Retained manual versioned transcription; not classified as on-chain"
     },
     {
       "subject": "N15 BGV evaluation and governed release",
@@ -156,7 +191,7 @@
     "schemaVersion": "mordant.protection-case/1",
     "productScenario": "conflict",
     "cleanverseAsset": {
-      "schemaVersion": "mordant.cleanverse-asset-record/1",
+      "schemaVersion": "mordant.cleanverse-asset-record/2",
       "network": {
         "value": {
           "name": "monad-testnet",
@@ -213,7 +248,6 @@
       "policy": {
         "value": {
           "address": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
-          "documentedTermsVersion": "Cleanverse API v5.6",
           "launchRule": {
             "allowedGroup": "",
             "allowedSubGroup": "",
@@ -225,6 +259,17 @@
         "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
         "observedAt": "2026-07-28T19:22:28.982Z"
       },
+      "documentationTerms": {
+        "value": {
+          "pageTitle": "Cleanverse API v5.6 - Integration Documentation",
+          "version": "v5.6",
+          "consultedAtRaw": "2026-07-27",
+          "sourceKind": "manual-versioned-transcription"
+        },
+        "classification": "DOCUMENTED",
+        "source": "docs/evidence/cleanverse-monad-2026-07-28.json",
+        "observedAt": "2026-07-27"
+      },
       "aPass": {
         "value": {
           "statusAtObservation": "HOLDER_PROFILES_ADMITTED",
@@ -232,8 +277,8 @@
           "holderBExpirationUnix": 1816796031
         },
         "classification": "LIVE_OBSERVED",
-        "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
-        "observedAt": "2026-07-28T19:22:28.982Z"
+        "source": "docs/evidence/cleanverse-monad-2026-07-28.json",
+        "observedAt": "2026-07-27T23:23:14.605Z"
       },
       "settlementAsset": {
         "value": {
@@ -249,16 +294,23 @@
         "value": {
           "status": "ISSUED",
           "transactionHash": "0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c",
-          "blockNumber": "48901234",
-          "issuedAt": "2026-07-29 03:22:22"
+          "issuedAtRaw": "2026-07-29 03:22:22"
         },
         "classification": "LIVE_OBSERVED",
         "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
         "observedAt": "2026-07-28T19:22:28.982Z"
       },
-      "observation": {
+      "tokenDeployment": {
         "value": {
-          "blockNumber": "48901220",
+          "blockNumber": "48901234"
+        },
+        "classification": "LIVE_OBSERVED",
+        "source": "docs/evidence/monad-m13a-ceremony-2026-07-28.json",
+        "observedAt": "2026-07-28T20:52:42.848Z"
+      },
+      "preflightObservation": {
+        "value": {
+          "preflightPinnedBlock": "48901220",
           "blockHash": "0x85b5236019fe240ad72eee25ff388435d4faedf40e361ad5e75033045969f9d0",
           "generatedAt": "2026-07-28T19:22:28.982Z"
         },
@@ -268,15 +320,27 @@
       },
       "provenance": {
         "value": {
-          "evidencePath": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
-          "evidenceSha256": "3919f586ba19a901151225e0d9de83d554566db26658fd301a025625ba02a8d9"
+          "sources": [
+            {
+              "evidencePath": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
+              "evidenceSha256": "3919f586ba19a901151225e0d9de83d554566db26658fd301a025625ba02a8d9"
+            },
+            {
+              "evidencePath": "docs/evidence/cleanverse-monad-2026-07-28.json",
+              "evidenceSha256": "6e8a7c742a032ba82272b0931503aed85470cf3f8b39915f763e47cc1bbaf0df"
+            },
+            {
+              "evidencePath": "docs/evidence/monad-m13a-ceremony-2026-07-28.json",
+              "evidenceSha256": "cd0bcc8944796a18dda32efa618bb5a0a2311b0755cd16c6a5ef657e34e18bb3"
+            }
+          ]
         },
         "classification": "LIVE_OBSERVED",
         "source": "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
         "observedAt": "2026-07-28T19:22:28.982Z"
       }
     },
-    "cleanverseAssetDigest": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90",
+    "cleanverseAssetDigest": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
     "service": "Conflicting Pledge Protection",
     "serviceVersion": 1,
     "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
@@ -291,7 +355,7 @@
       "accountingDomain": "PROTECTION",
       "executionClassification": "PROTOCOL_DOUBLE"
     },
-    "holderRecordDate": "2026-08-03T00:52:44.678Z",
+    "holderRecordDate": "2026-08-03T02:47:05.719Z",
     "holderSnapshot": [
       {
         "holderId": "HOLDER_A",
@@ -304,11 +368,11 @@
         "allocationBps": 4000
       }
     ],
-    "holderAllocationDigest": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-    "fheCaseId": "sha256:f4f8f0ee43252fa3e07f48224a5b683f20ee8ddc85e8bab7ecf0abfd965264b0",
+    "holderAllocationDigest": "sha256:0dfcdff6d9c1dec310b0247a45561d953efbbb804860ba1e52dc76853e372f70",
+    "fheCaseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
     "releaseMode": "governed-decryptor-v1",
     "incidentState": "CONFLICT_CONFIRMED",
-    "cureDeadline": "2026-08-04T00:55:25.000Z",
+    "cureDeadline": "2026-08-04T02:48:46.000Z",
     "recourseState": "AVAILABLE",
     "originalReceivable": {
       "state": "OUTSTANDING_INTACT",
@@ -317,211 +381,272 @@
       "accountingDomain": "RECEIVABLE"
     },
     "evidenceReferences": [
-      "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json"
+      "docs/evidence/monad-invoice-atoken-launch-2026-07-28.json",
+      "docs/evidence/cleanverse-monad-2026-07-28.json",
+      "docs/evidence/monad-m13a-ceremony-2026-07-28.json"
     ],
     "timeline": [
       {
         "ordinal": 1,
         "kind": "PROTECTION_ACTIVATED",
-        "at": "2026-08-03T00:53:44.678Z",
+        "at": "2026-08-03T02:48:05.719Z",
         "label": "Mordant protection activated for the canonical Cleanverse asset",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90"
-      },
-      {
-        "kind": "HOLDER_SNAPSHOT_RECORDED",
-        "at": "2026-08-03T00:54:45.086Z",
-        "label": "Record-date holder allocation fixed at 60 / 40 and reserve held separately",
-        "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-        "ordinal": 2
+        "evidenceRef": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c"
       },
       {
         "kind": "PARTICIPANT_A_ENCRYPTED_PLEDGE_RECEIVED",
-        "at": "2026-08-03T00:54:53.367Z",
+        "at": "2026-08-03T02:48:10.965Z",
         "label": "Participant A encrypted pledge received",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:b394388890ecfc68c36e6c78bf85cb98f81b787d6e50298bc7f9ca366256fd74",
-        "ordinal": 3
+        "evidenceRef": "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+        "ordinal": 2
       },
       {
         "kind": "PARTICIPANT_B_ENCRYPTED_PLEDGE_RECEIVED",
-        "at": "2026-08-03T00:54:54.853Z",
+        "at": "2026-08-03T02:48:13.301Z",
         "label": "Participant B encrypted pledge received",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:09a5f7ea9f972d2ef13bb9782555ce8a07521daa86f85ef810aeb26576da72c3",
-        "ordinal": 4
+        "evidenceRef": "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4",
+        "ordinal": 3
       },
       {
         "kind": "FHE_EVALUATION_COMPLETE",
-        "at": "2026-08-03T00:55:10.516Z",
+        "at": "2026-08-03T02:48:15.987Z",
         "label": "Fixed N15 BGV conflict circuit evaluated without an evaluator decryption key",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:35b2bbdc54760b2f6985e7712e4ca1bcafb6be60c7aa148a3d19462d66b5a215",
-        "ordinal": 5
+        "evidenceRef": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
+        "ordinal": 4
       },
       {
         "kind": "GOVERNED_RECOMPUTATION_VERIFIED",
-        "at": "2026-08-03T00:55:25.920Z",
+        "at": "2026-08-03T02:48:30.888Z",
         "label": "Governed decryptor independently recomputed the fixed circuit",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:6b49842ada4f9294fa1a38093acfc6edb109e11b555912ec2fd63def5b35fdae",
-        "ordinal": 6
+        "evidenceRef": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+        "ordinal": 5
       },
       {
         "kind": "SIGNED_CONFLICT_CONFIRMED",
-        "at": "2026-08-03T00:55:25.920Z",
+        "at": "2026-08-03T02:48:30.888Z",
         "label": "Signed Boolean confirmed a conflicting pledge",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-        "ordinal": 7
+        "evidenceRef": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+        "ordinal": 6
       },
       {
         "kind": "CURE_WINDOW_OPENED",
-        "at": "2026-08-03T00:55:26.995Z",
+        "at": "2026-08-03T02:48:46.549Z",
         "label": "Record-date holders remain fixed while the cure / dispute window runs",
         "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-        "ordinal": 8
+        "evidenceRef": "sha256:0dfcdff6d9c1dec310b0247a45561d953efbbb804860ba1e52dc76853e372f70",
+        "ordinal": 7
       },
       {
         "kind": "RECOURSE_AVAILABLE_AFTER_CURE",
-        "at": "2026-08-04T00:55:26.000Z",
+        "at": "2026-08-04T02:48:47.000Z",
         "label": "Local chronology reached the cure deadline; governed recourse is available",
         "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-        "ordinal": 9
+        "evidenceRef": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+        "ordinal": 8
       }
     ],
-    "createdAt": "2026-08-03T00:53:44.678Z"
+    "createdAt": "2026-08-03T02:48:05.719Z"
   },
   "participantPublicIdentities": [
     {
       "role": "PARTICIPANT_A",
-      "id": "sha256:a313437e81e4cffa8063838c0a65e73237e4feef43856e7cfc9c0d7197b1ede2",
-      "signingPublicKey": "I2RLZkr5eUCHUIU1r73cDNRkE+v2c3adpB1QhXc0ekI="
+      "id": "sha256:69b0fe497c1f79f127427d5e4ac90b90a740847e42401e360f812e37b5ce0f38",
+      "signingPublicKey": "QhpThr4MwukE0nnkkav/EmUV1wU5dLKwd+9NnQLSUu0="
     },
     {
       "role": "PARTICIPANT_B",
-      "id": "sha256:fecadae95cdd2d4d12142a8bb317f1d63d96bf8be90d3e77d8184e0fa9597a69",
-      "signingPublicKey": "DRbjhFmnb7HktSQbofKKSiYm5WT6YN7XfuPvU5cLDqo="
+      "id": "sha256:63b52fc58864f59c649371c43d6b0148d77f0105eb47cd6a0e2d3fe781eb1bf0",
+      "signingPublicKey": "5sRCDsjefP8Y2iRdiJlVYrBZjeO6YP+iy5HiNorBPNA="
     }
   ],
+  "caseAuthorization": {
+    "binding": {
+      "schemaVersion": "mordant.fhe-case-binding/1",
+      "caseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
+      "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+      "serviceId": "mordant.private-pledge-matching",
+      "serviceVersion": 1,
+      "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+      "policyVersion": 1,
+      "circuitId": "mordant.identity-full-fhe-256",
+      "circuitVersion": 5,
+      "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+      "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+      "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+      "publicKeyDigest": "sha256:344ef53210a95a1848d05ab4472fa3b709a6297049c7645f8571e493c21d1ce4",
+      "evaluationKeyManifestDigest": "sha256:0a7b49edcfdf6ebdd62532be2a3a7e0fac8ba238187fffc2fed2c71f879bf021",
+      "participantA": {
+        "id": "sha256:69b0fe497c1f79f127427d5e4ac90b90a740847e42401e360f812e37b5ce0f38",
+        "role": "PARTICIPANT_A",
+        "signingPublicKey": "QhpThr4MwukE0nnkkav/EmUV1wU5dLKwd+9NnQLSUu0="
+      },
+      "participantB": {
+        "id": "sha256:63b52fc58864f59c649371c43d6b0148d77f0105eb47cd6a0e2d3fe781eb1bf0",
+        "role": "PARTICIPANT_B",
+        "signingPublicKey": "5sRCDsjefP8Y2iRdiJlVYrBZjeO6YP+iy5HiNorBPNA="
+      },
+      "participantOrder": [
+        "sha256:69b0fe497c1f79f127427d5e4ac90b90a740847e42401e360f812e37b5ce0f38",
+        "sha256:63b52fc58864f59c649371c43d6b0148d77f0105eb47cd6a0e2d3fe781eb1bf0"
+      ],
+      "inputSchema": "mordant.encrypted-pledge/governed-fhe-v1",
+      "resultSchema": "mordant.fixed-conflict-boolean/v1",
+      "releaseMode": "governed-decryptor-v1",
+      "releaseAuthorityId": "sha256:624ddbe45f0949cc40292f789be7f393e2014999574475cf409824828509b08d",
+      "releaseAuthorityPublicKey": "Ifo0SGnCnLTcLS9/z4mkXey/K7AmxKY7GWHTDnBRhEs=",
+      "caseNonce": "sha256:27d10ed3d6925af1f4a1d26d9c055e50b70179e6bd3d27ec9fa45eb113456cc6",
+      "createdAtUnix": 1785725285,
+      "expiresAtUnix": 1785739685
+    },
+    "bindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+    "participantSignatures": [
+      {
+        "role": "PARTICIPANT_A",
+        "participantId": "sha256:69b0fe497c1f79f127427d5e4ac90b90a740847e42401e360f812e37b5ce0f38",
+        "bindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+        "signature": "Vn67xkO3j25I6lfT9abMOlSCaEU5EX50SGMa8r0itwEGIvVVPlZkEiaERP09VnyHmSZ6PnIrMd7iVVGzHJMlCw=="
+      },
+      {
+        "role": "PARTICIPANT_B",
+        "participantId": "sha256:63b52fc58864f59c649371c43d6b0148d77f0105eb47cd6a0e2d3fe781eb1bf0",
+        "bindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+        "signature": "2XsNybNRcv8k+F2Z9m3S/iTQux4/sSbU0JTewz9D7qVcz6fuDVmvk9lI8dccaZkothwnGgApwWYv6ZDF6WBsDA=="
+      }
+    ]
+  },
   "fhe": {
-    "caseId": "sha256:f4f8f0ee43252fa3e07f48224a5b683f20ee8ddc85e8bab7ecf0abfd965264b0",
-    "assetIdentity": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90",
-    "caseBindingDigest": "sha256:abb5eb2ff59e605263558fb175650f6385940d4e015c81ee65b122675c7893f5",
+    "caseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "caseBindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
     "profile": "mordant.bgv.identity-full-fhe-256.n15/v1",
     "circuitId": "mordant.identity-full-fhe-256",
     "circuitVersion": 5,
     "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
     "publicKey": {
       "path": "public-key.bin",
-      "sha256": "sha256:40b5dca77b536d8d7cc39a03ee4aa492eecc3fc789650fc4090f96c9f12cc7a2",
+      "sha256": "sha256:344ef53210a95a1848d05ab4472fa3b709a6297049c7645f8571e493c21d1ce4",
       "length": 7864600
     },
-    "evaluationKeyManifestDigest": "sha256:05d392069e01cc44707fac028325ae58c9e31acdfe3c1b8c9c9a22ce9671391d",
+    "evaluationKeyManifestDigest": "sha256:0a7b49edcfdf6ebdd62532be2a3a7e0fac8ba238187fffc2fed2c71f879bf021",
     "participantArtifactDigests": [
-      "sha256:b394388890ecfc68c36e6c78bf85cb98f81b787d6e50298bc7f9ca366256fd74",
-      "sha256:09a5f7ea9f972d2ef13bb9782555ce8a07521daa86f85ef810aeb26576da72c3"
+      "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+      "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4"
     ],
-    "evaluatedArtifactDigest": "sha256:35b2bbdc54760b2f6985e7712e4ca1bcafb6be60c7aa148a3d19462d66b5a215",
+    "evaluatedArtifactDigest": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
     "resultCiphertext": {
       "path": "result-conflict.bin",
-      "sha256": "sha256:6b49842ada4f9294fa1a38093acfc6edb109e11b555912ec2fd63def5b35fdae",
+      "sha256": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
       "length": 6291950
     },
-    "resultCiphertextCommitment": "sha256:a9575c01233ed0d453ead3f06a2b7fe88473b0a67285825537687c1c3319ad4b",
+    "resultCiphertextCommitment": "sha256:5ddbbc2565b6ebde3434466cc1741c370d7bf66e2669eb9aa534d988817d6003",
     "evaluatorProvenance": "sha256:1fa188cc833355c01c76e3e71d5645f8f264d1edd733c010252cc3313674cc89",
-    "independentlyRecomputedResultDigest": "sha256:6b49842ada4f9294fa1a38093acfc6edb109e11b555912ec2fd63def5b35fdae"
+    "independentlyRecomputedResultDigest": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030"
   },
   "governedResult": {
-    "digest": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-    "assetIdentity": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90",
+    "digest": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+    "schemaVersion": "mordant.governed-conflict-result/1",
+    "caseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
+    "caseBindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "serviceId": "mordant.private-pledge-matching",
+    "serviceVersion": 1,
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "policyVersion": 1,
+    "circuitId": "mordant.identity-full-fhe-256",
+    "circuitVersion": 5,
+    "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "participantArtifactDigests": [
+      "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+      "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4"
+    ],
+    "evaluatedArtifactDigest": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
+    "resultCiphertextDigest": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+    "resultCiphertextCommitment": "sha256:5ddbbc2565b6ebde3434466cc1741c370d7bf66e2669eb9aa534d988817d6003",
     "conflict": true,
-    "signature": "t58gMtl+kXmMtUPyEBoEAjj2I6jBJsLK9ky0EQWHsYERPl1/CUpPhXOasMooRlfMc9ockxjcu4H5RhhvvqJADQ==",
-    "releaseMode": "governed-decryptor-v1",
-    "releaseAuthorityId": "sha256:ed1c7fc6541f434694abb179aa2d5656759693134c85060b85977a523d8ed63f",
-    "releaseAuthorityPublicKey": "I1gTb0ATLNKoUA6slKc52GqS3Njnp8bTRlnZ8Pv0D5E=",
     "releaseOrdinal": 1,
-    "releasedAtUnix": 1785718511
+    "releaseMode": "governed-decryptor-v1",
+    "releaseAuthorityId": "sha256:624ddbe45f0949cc40292f789be7f393e2014999574475cf409824828509b08d",
+    "releaseAuthorityPublicKey": "Ifo0SGnCnLTcLS9/z4mkXey/K7AmxKY7GWHTDnBRhEs=",
+    "releasedAtUnix": 1785725311,
+    "sourceProvenance": "sha256:46557293087e4b1c6c3c040f5dea5a4aec30da9dd2cc8a97bec3f41fb5cd59e5",
+    "signature": "IMQTPpbYLIsR5QazVV+g6KBLc0PY0fHs81HaZf8VtYuEJaYa5Pugc1OLKWXCznoKiMIKbEr1LzGe8CYJBmzqDg=="
   },
   "chronology": {
-    "recordDate": "2026-08-03T00:52:44.678Z",
-    "holderAllocationDigest": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-    "cureDeadline": "2026-08-04T00:55:25.000Z",
+    "recordDate": "2026-08-03T02:47:05.719Z",
+    "holderAllocationDigest": "sha256:0dfcdff6d9c1dec310b0247a45561d953efbbb804860ba1e52dc76853e372f70",
+    "cureDeadline": "2026-08-04T02:48:46.000Z",
     "events": [
       {
         "ordinal": 1,
         "kind": "PROTECTION_ACTIVATED",
-        "at": "2026-08-03T00:53:44.678Z",
+        "at": "2026-08-03T02:48:05.719Z",
         "label": "Mordant protection activated for the canonical Cleanverse asset",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90"
-      },
-      {
-        "kind": "HOLDER_SNAPSHOT_RECORDED",
-        "at": "2026-08-03T00:54:45.086Z",
-        "label": "Record-date holder allocation fixed at 60 / 40 and reserve held separately",
-        "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-        "ordinal": 2
+        "evidenceRef": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c"
       },
       {
         "kind": "PARTICIPANT_A_ENCRYPTED_PLEDGE_RECEIVED",
-        "at": "2026-08-03T00:54:53.367Z",
+        "at": "2026-08-03T02:48:10.965Z",
         "label": "Participant A encrypted pledge received",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:b394388890ecfc68c36e6c78bf85cb98f81b787d6e50298bc7f9ca366256fd74",
-        "ordinal": 3
+        "evidenceRef": "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+        "ordinal": 2
       },
       {
         "kind": "PARTICIPANT_B_ENCRYPTED_PLEDGE_RECEIVED",
-        "at": "2026-08-03T00:54:54.853Z",
+        "at": "2026-08-03T02:48:13.301Z",
         "label": "Participant B encrypted pledge received",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:09a5f7ea9f972d2ef13bb9782555ce8a07521daa86f85ef810aeb26576da72c3",
-        "ordinal": 4
+        "evidenceRef": "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4",
+        "ordinal": 3
       },
       {
         "kind": "FHE_EVALUATION_COMPLETE",
-        "at": "2026-08-03T00:55:10.516Z",
+        "at": "2026-08-03T02:48:15.987Z",
         "label": "Fixed N15 BGV conflict circuit evaluated without an evaluator decryption key",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:35b2bbdc54760b2f6985e7712e4ca1bcafb6be60c7aa148a3d19462d66b5a215",
-        "ordinal": 5
+        "evidenceRef": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
+        "ordinal": 4
       },
       {
         "kind": "GOVERNED_RECOMPUTATION_VERIFIED",
-        "at": "2026-08-03T00:55:25.920Z",
+        "at": "2026-08-03T02:48:30.888Z",
         "label": "Governed decryptor independently recomputed the fixed circuit",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:6b49842ada4f9294fa1a38093acfc6edb109e11b555912ec2fd63def5b35fdae",
-        "ordinal": 6
+        "evidenceRef": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+        "ordinal": 5
       },
       {
         "kind": "SIGNED_CONFLICT_CONFIRMED",
-        "at": "2026-08-03T00:55:25.920Z",
+        "at": "2026-08-03T02:48:30.888Z",
         "label": "Signed Boolean confirmed a conflicting pledge",
         "classification": "LOCAL_EXECUTION",
-        "evidenceRef": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-        "ordinal": 7
+        "evidenceRef": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+        "ordinal": 6
       },
       {
         "kind": "CURE_WINDOW_OPENED",
-        "at": "2026-08-03T00:55:26.995Z",
+        "at": "2026-08-03T02:48:46.549Z",
         "label": "Record-date holders remain fixed while the cure / dispute window runs",
         "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
-        "ordinal": 8
+        "evidenceRef": "sha256:0dfcdff6d9c1dec310b0247a45561d953efbbb804860ba1e52dc76853e372f70",
+        "ordinal": 7
       },
       {
         "kind": "RECOURSE_AVAILABLE_AFTER_CURE",
-        "at": "2026-08-04T00:55:26.000Z",
+        "at": "2026-08-04T02:48:47.000Z",
         "label": "Local chronology reached the cure deadline; governed recourse is available",
         "classification": "PROTOCOL_DOUBLE",
-        "evidenceRef": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-        "ordinal": 9
+        "evidenceRef": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+        "ordinal": 8
       }
     ]
   },
@@ -529,21 +654,22 @@
     "classification": "PROTOCOL_DOUBLE",
     "opened": true,
     "refusedReason": null,
+    "recordDigest": "sha256:78d0545482e7cab57126e596402009bb630e0bfdb3f7bd96bdf633c4e39fa3d6",
     "record": {
       "schemaVersion": "mordant.fhe-recourse-adapter-record/1",
-      "caseId": "sha256:f4f8f0ee43252fa3e07f48224a5b683f20ee8ddc85e8bab7ecf0abfd965264b0",
-      "caseBindingDigest": "sha256:abb5eb2ff59e605263558fb175650f6385940d4e015c81ee65b122675c7893f5",
-      "assetIdentity": "sha256:bda73089edd6aa413c67abe1a4daad4dc674518eb987eed2cacd1a26667adc90",
+      "caseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
+      "caseBindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+      "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
       "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
       "policyVersion": 1,
-      "resultDigest": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
+      "resultDigest": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
       "releaseMode": "governed-decryptor-v1",
-      "releaseAuthorityId": "sha256:ed1c7fc6541f434694abb179aa2d5656759693134c85060b85977a523d8ed63f",
-      "recordDateUnix": 1785718364,
-      "boundAtUnix": 1785718525,
-      "cureDeadlineUnix": 1785804925,
+      "releaseAuthorityId": "sha256:624ddbe45f0949cc40292f789be7f393e2014999574475cf409824828509b08d",
+      "recordDateUnix": 1785725225,
+      "boundAtUnix": 1785725326,
+      "cureDeadlineUnix": 1785811726,
       "reserveBasisPoints": 1000,
-      "holderAllocationDigest": "sha256:96caec06e14c2720616be11f4f23db1d9c0124249d9a82c454522cb0ef274a56",
+      "holderAllocationDigest": "sha256:0dfcdff6d9c1dec310b0247a45561d953efbbb804860ba1e52dc76853e372f70",
       "originalReceivableIntact": true,
       "open": true
     }
@@ -557,18 +683,24 @@
   },
   "governedFheEvidence": {
     "schemaVersion": "mordant.governed-fhe-public-evidence/1",
-    "caseId": "sha256:f4f8f0ee43252fa3e07f48224a5b683f20ee8ddc85e8bab7ecf0abfd965264b0",
-    "caseBindingDigest": "sha256:abb5eb2ff59e605263558fb175650f6385940d4e015c81ee65b122675c7893f5",
-    "caseManifestDigest": "sha256:dce3ff7af9596344829de0d31989f33a8dbfdda3f80d5d2a43a91ee3f8193ec7",
+    "caseId": "sha256:da3085f559192317b878edfbdd0bdea2a00ce457fdf6ddab0b8daadc72c2be9d",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "caseBindingDigest": "sha256:bb9c58ec02a3b79d83a2ecbc8df4b09d8d35e7cfa956ae77edf5da9ec10778ad",
+    "caseManifestDigest": "sha256:9909bb488bb1eada178cf74a1a0ba34a4d6ced60216f1d306ac0201a036a7146",
     "submissionDigests": [
-      "sha256:b394388890ecfc68c36e6c78bf85cb98f81b787d6e50298bc7f9ca366256fd74",
-      "sha256:09a5f7ea9f972d2ef13bb9782555ce8a07521daa86f85ef810aeb26576da72c3"
+      "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+      "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4"
     ],
-    "evaluatedArtifactDigest": "sha256:35b2bbdc54760b2f6985e7712e4ca1bcafb6be60c7aa148a3d19462d66b5a215",
-    "governedResultDigest": "sha256:4949680f981f05dc28e997012f20d4f6a055d5937ccda1908688a0e5479b3388",
-    "recourseRecordDigest": "sha256:e06d0ba7bc39657833de791109d9f709e1df961896fd66215ac9084c8791b242",
+    "evaluatedArtifactDigest": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
+    "resultCiphertextDigest": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+    "resultCiphertextCommitment": "sha256:5ddbbc2565b6ebde3434466cc1741c370d7bf66e2669eb9aa534d988817d6003",
+    "evaluatorProvenance": "sha256:1fa188cc833355c01c76e3e71d5645f8f264d1edd733c010252cc3313674cc89",
+    "recomputedResultCiphertextDigest": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+    "decryptorProvenance": "sha256:46557293087e4b1c6c3c040f5dea5a4aec30da9dd2cc8a97bec3f41fb5cd59e5",
+    "governedResultDigest": "sha256:1645600026ed31496ed6fa60a1c4bdccc129bf0fb4baf315a51cadc9506d63bc",
+    "recourseRecordDigest": "sha256:78d0545482e7cab57126e596402009bb630e0bfdb3f7bd96bdf633c4e39fa3d6",
     "releaseMode": "governed-decryptor-v1",
-    "releaseAuthorityId": "sha256:ed1c7fc6541f434694abb179aa2d5656759693134c85060b85977a523d8ed63f",
+    "releaseAuthorityId": "sha256:624ddbe45f0949cc40292f789be7f393e2014999574475cf409824828509b08d",
     "conflict": true,
     "publicStructureValidated": true,
     "executionClass": "REAL_BGV_FHE",
@@ -579,7 +711,7 @@
     "publicArtifactBytes": 391680322,
     "measurements": {
       "keyGeneration": {
-        "duration": 4084695583,
+        "duration": 3286166166,
         "parameterBytes": 459,
         "publicKeyBytes": 7864600,
         "relinearizationKeyBytes": 31458448,
@@ -599,42 +731,42 @@
       },
       "submissions": [
         {
-          "duration": 1246142084,
+          "duration": 1063731833,
           "ciphertextBytes": 31459990,
           "artifactBytes": 1853
         },
         {
-          "duration": 1435708125,
+          "duration": 1145269834,
           "ciphertextBytes": 31459990,
           "artifactBytes": 1853
         }
       ],
       "evaluation": {
-        "duration": 14674850625,
+        "duration": 12873509000,
         "resultCiphertextBytes": 6291950,
         "artifactBytes": 1347
       },
       "release": {
-        "duration": 14360979292,
+        "duration": 13286559375,
         "resultBytes": 1750,
         "exactRetry": false,
         "trustedRecoursePins": {
-          "participantArtifactDigestA": "sha256:b394388890ecfc68c36e6c78bf85cb98f81b787d6e50298bc7f9ca366256fd74",
-          "participantArtifactDigestB": "sha256:09a5f7ea9f972d2ef13bb9782555ce8a07521daa86f85ef810aeb26576da72c3",
-          "evaluatedArtifactDigest": "sha256:35b2bbdc54760b2f6985e7712e4ca1bcafb6be60c7aa148a3d19462d66b5a215",
-          "recomputedResultCiphertextDigest": "sha256:6b49842ada4f9294fa1a38093acfc6edb109e11b555912ec2fd63def5b35fdae",
-          "resultCiphertextCommitment": "sha256:a9575c01233ed0d453ead3f06a2b7fe88473b0a67285825537687c1c3319ad4b",
+          "participantArtifactDigestA": "sha256:9e7f6e85db62a2c7e50c771b8306977c90cd90d8f9272c8cd11e5447abb19fee",
+          "participantArtifactDigestB": "sha256:789c52b0e00e88f1136f0736c67df49ea6fbad4f86081773c59ff705f48fa8f4",
+          "evaluatedArtifactDigest": "sha256:f06c98102e66c56eee4ef3b9552eaec2f27c5e7f21c4a2a3eb0ea12ba7205e4f",
+          "recomputedResultCiphertextDigest": "sha256:b66e5a45f11173b547eec86fe5c18160e943265db5c1cc661e6a12cd89459030",
+          "resultCiphertextCommitment": "sha256:5ddbbc2565b6ebde3434466cc1741c370d7bf66e2669eb9aa534d988817d6003",
           "decryptorProvenance": "sha256:46557293087e4b1c6c3c040f5dea5a4aec30da9dd2cc8a97bec3f41fb5cd59e5",
           "releaseMode": "governed-decryptor-v1",
-          "releaseAuthorityId": "sha256:ed1c7fc6541f434694abb179aa2d5656759693134c85060b85977a523d8ed63f"
+          "releaseAuthorityId": "sha256:624ddbe45f0949cc40292f789be7f393e2014999574475cf409824828509b08d"
         }
       },
-      "completeDuration": 103000000000,
+      "completeDuration": 46000000000,
       "peakRssBytes": 0
     },
     "productClaim": "Mordant evaluates private pledge records under BGV FHE. The evaluator cannot inspect the inputs or dictate the released result. The governed decryptor independently recomputes the fixed circuit, decrypts the final Boolean, and signs it into the recourse workflow. The MVP uses a designated trusted decryptor; threshold output release remains a post-MVP research track.",
-    "generatedAtUnix": 1785718527
+    "generatedAtUnix": 1785725331
   },
-  "generatedAt": "2026-08-03T00:55:30.823Z",
-  "manifestDigest": "sha256:f197e298ef78a6a4cbab9ed338f32998bb21dec1ee3dcd6e3aeaab7aa8da60ac"
+  "generatedAt": "2026-08-03T02:48:51.428Z",
+  "manifestDigest": "sha256:3329e49b906da505f59ef91abfdc735e45db1c3e2e28be9f41d7f2eeed76bfa3"
 }

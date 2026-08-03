@@ -12,7 +12,7 @@ import {
 import type { MordantProtectionCase, ProductScenario } from "./protection-case";
 
 export const EXPECTED_GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
-export const EXPECTED_PROTECTION_SOURCE_COMMIT = "e5a5d15145e3b1ef2c573374a08439acb46b4e95";
+export const EXPECTED_PROTECTION_SOURCE_COMMIT = "e5b5650c18e1947c7944c49f6832cefde478ed5f";
 
 export type PublicObjectReference = Readonly<{
   path: string;
@@ -316,13 +316,15 @@ export function governedResultDigest(result: GovernedSignedResult): Sha256Digest
 }
 
 export function verifyGovernedResultSignature(result: GovernedSignedResult): void {
-  exactKeys(result, [
+  const expectedFields = [
     "schemaVersion", "caseId", "caseBindingDigest", "assetIdentity", "serviceId", "serviceVersion", "policyId",
     "policyVersion", "circuitId", "circuitVersion", "circuitDigest", "parameterProfile", "parameterFingerprint",
     "participantArtifactDigests", "evaluatedArtifactDigest", "resultCiphertextDigest", "resultCiphertextCommitment",
     "conflict", "releaseOrdinal", "releaseMode", "releaseAuthorityId", "releaseAuthorityPublicKey", "releasedAtUnix",
     "sourceProvenance", "signature",
-  ], "GOVERNED_RESULT_FIELDS");
+  ];
+  if (Object.hasOwn(result, "digest")) expectedFields.push("digest");
+  exactKeys(result, expectedFields, "GOVERNED_RESULT_FIELDS");
   verifyGoSignature(
     result.releaseAuthorityPublicKey,
     "MordantGovernedConflictResult/v1",
