@@ -171,6 +171,86 @@ func TestRetainPublicEvidenceConfinesDestinationCapability(t *testing.T) {
 		assertMissing(t, filepath.Join(old, "conflict.json"), filepath.Join(root, "conflict.json"))
 	})
 
+	t.Run("intermediate parent substitution after snapshot", func(t *testing.T) {
+		base := canonicalTempDir(t)
+		parent := filepath.Join(base, "parent")
+		intermediate := filepath.Join(parent, "intermediate")
+		root := filepath.Join(intermediate, "retained")
+		originalTree := filepath.Join(parent, "intermediate-a")
+		replacementTree := filepath.Join(parent, "intermediate-b")
+		if err := os.MkdirAll(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(replacementTree, "retained"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		originalMarker := filepath.Join(root, "existing.txt")
+		replacementMarker := filepath.Join(replacementTree, "retained", "existing.txt")
+		if err := os.WriteFile(originalMarker, []byte("original-unchanged"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(replacementMarker, []byte("replacement-unchanged"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		components := strings.Split(strings.TrimPrefix(filepath.Clean(root), string(filepath.Separator)), string(filepath.Separator))
+		selectedIndex := len(components) - 2
+		if selectedIndex < 0 || selectedIndex >= len(components)-1 ||
+			components[selectedIndex] != filepath.Base(intermediate) ||
+			components[selectedIndex] == filepath.Base(root) || components[selectedIndex+1] != filepath.Base(root) {
+			t.Fatalf("selected component is not demonstrably intermediate: index=%d components=%v", selectedIndex, components)
+		}
+		// Exercise the dedicated production opener directly on the stable
+		// multi-component root before the raced retain call below.
+		probeFD, _, err := openAbsoluteDirectoryNoFollow(root, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := unix.Close(probeFD); err != nil {
+			t.Fatal(err)
+		}
+
+		hookCount := 0
+		hooks := retentionHooks{afterComponentSnapshot: func(index int, component string) error {
+			if index != selectedIndex {
+				return nil
+			}
+			if component != filepath.Base(intermediate) || component == filepath.Base(root) {
+				t.Fatalf("hook selected final or unexpected component: index=%d component=%s", index, component)
+			}
+			hookCount++
+			replaceRoot(t, intermediate, originalTree, replacementTree)
+			return nil
+		}}
+		reconciled, err := retainPublicEvidenceWithHooks(root, "conflict", manifest, caseID, data, hooks)
+		if err == nil || reconciled {
+			t.Fatalf("intermediate substitution returned a capability: reconciled=%v err=%v", reconciled, err)
+		}
+		if hookCount != 1 {
+			t.Fatalf("intermediate hook count=%d, want 1", hookCount)
+		}
+
+		originalRetained := filepath.Join(originalTree, "retained")
+		replacementRetained := filepath.Join(intermediate, "retained")
+		assertMissing(t,
+			filepath.Join(originalRetained, "conflict.json"), filepath.Join(originalRetained, "no-conflict.json"),
+			filepath.Join(replacementRetained, "conflict.json"), filepath.Join(replacementRetained, "no-conflict.json"),
+			replacementTree,
+		)
+		if got, readErr := os.ReadFile(filepath.Join(originalRetained, "existing.txt")); readErr != nil || string(got) != "original-unchanged" {
+			t.Fatalf("original tree marker overwritten: %q err=%v", got, readErr)
+		}
+		if got, readErr := os.ReadFile(filepath.Join(replacementRetained, "existing.txt")); readErr != nil || string(got) != "replacement-unchanged" {
+			t.Fatalf("replacement tree marker overwritten: %q err=%v", got, readErr)
+		}
+		for label, directory := range map[string]string{"original": originalRetained, "replacement": replacementRetained} {
+			entries, readErr := os.ReadDir(directory)
+			if readErr != nil || len(entries) != 1 || entries[0].Name() != "existing.txt" {
+				t.Fatalf("%s tree gained or lost a component: entries=%v err=%v", label, entries, readErr)
+			}
+		}
+	})
+
 	t.Run("substitution after final descriptor pin", func(t *testing.T) {
 		parent := canonicalTempDir(t)
 		root := filepath.Join(parent, "retained")
