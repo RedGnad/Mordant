@@ -70,6 +70,10 @@ type objectStore struct {
 	private    bool
 }
 
+type objectCreateHooks struct {
+	beforePublish func(directoryFD int, name string) error
+}
+
 func openObjectStore(root string, quota int64, private bool) (*objectStore, error) {
 	if !filepath.IsAbs(root) || quota <= 0 {
 		return nil, ErrStore
@@ -217,15 +221,26 @@ func (s *objectStore) usedBytes() (int64, error) {
 }
 
 func (s *objectStore) openRegular(name string) (int, unix.Stat_t, error) {
-	var stat unix.Stat_t
+	var before, stat unix.Stat_t
 	if s.verifyPinned() != nil || validateObjectName(name) != nil {
 		return -1, stat, ErrStore
 	}
-	fd, err := unix.Openat(s.fd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err := unix.Fstatat(s.fd, name, &before, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return -1, stat, err
+	}
+	if before.Mode&unix.S_IFMT != unix.S_IFREG {
+		return -1, stat, ErrStore
+	}
+	// O_NONBLOCK prevents a type-swap race from hanging on a FIFO between the
+	// no-follow classification and the descriptor open. The post-open fstat and
+	// identity comparison make the classification authoritative.
+	fd, err := unix.Openat(s.fd, name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return -1, stat, err
 	}
-	if unix.Fstat(fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG || (s.private && uint64(stat.Nlink) != 1) {
+	if unix.Fstat(fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG ||
+		uint64(stat.Dev) != uint64(before.Dev) || uint64(stat.Ino) != uint64(before.Ino) ||
+		(s.private && uint64(stat.Nlink) != 1) {
 		_ = unix.Close(fd)
 		return -1, stat, ErrStore
 	}
@@ -241,6 +256,10 @@ func temporaryObjectName() (string, error) {
 }
 
 func (s *objectStore) create(name string, data []byte) (ObjectRef, error) {
+	return s.createWithHooks(name, data, objectCreateHooks{})
+}
+
+func (s *objectStore) createWithHooks(name string, data []byte, hooks objectCreateHooks) (ObjectRef, error) {
 	var ref ObjectRef
 	if s == nil || validateObjectName(name) != nil || len(data) == 0 || int64(len(data)) > s.quota || s.verifyPinned() != nil {
 		return ref, ErrStore
@@ -309,6 +328,11 @@ func (s *objectStore) create(name string, data []byte) (ObjectRef, error) {
 	}
 	if err := temporary.Sync(); err != nil {
 		return ref, ErrStore
+	}
+	if hooks.beforePublish != nil {
+		if err := hooks.beforePublish(s.fd, name); err != nil {
+			return ref, ErrStore
+		}
 	}
 	if err := unix.Linkat(s.fd, tempName, s.fd, name, 0); err != nil {
 		return ref, fmt.Errorf("%w: publish object: %v", ErrStore, err)
