@@ -69,7 +69,7 @@
 
 .header nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(210px, 1.35fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(210px, 1.35fr);
 }
 
 .header nav a {
@@ -106,6 +106,26 @@
 .mobileLabel {
   display: none;
 }
+
+.publicTruthBoundary {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--rule);
+  background: #fff7db;
+}
+
+.publicTruthBoundary p {
+  min-width: 0;
+  margin: 0;
+  padding: 11px clamp(14px, 2vw, 26px);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.publicTruthBoundary p + p { border-left: 1px solid rgb(33 25 35 / 20%); }
+.publicTruthBoundary strong { display: block; margin-bottom: 2px; font-size: 11px; }
 
 .hero,
 .integration,
@@ -1057,6 +1077,12 @@
   }
 }
 
+@media (max-width: 1050px) {
+  .publicTruthBoundary { grid-template-columns: 1fr 1fr; }
+  .publicTruthBoundary p:nth-child(3) { border-top: 1px solid rgb(33 25 35 / 20%); border-left: 0; }
+  .publicTruthBoundary p:nth-child(4) { border-top: 1px solid rgb(33 25 35 / 20%); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .transformationTitle h2 span {
     animation: public-state-title 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1347,12 +1373,15 @@
 
 @media (max-width: 760px) {
   .header {
-    min-height: 56px;
-    grid-template-columns: minmax(132px, 1fr) auto;
+    min-height: 104px;
+    grid-template-columns: 1fr;
   }
 
   .brand {
+    min-height: 52px;
     padding: 0 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
     font-size: 19px;
   }
 
@@ -1361,11 +1390,13 @@
   }
 
   .header nav {
-    grid-template-columns: auto minmax(112px, auto);
+    min-height: 52px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .header nav a {
     min-width: 0;
+    min-height: 52px;
     padding: 0 12px;
     font-size: 11px;
   }
@@ -1386,8 +1417,13 @@
     display: inline;
   }
 
+  .publicTruthBoundary { grid-template-columns: 1fr; }
+  .publicTruthBoundary p + p,
+  .publicTruthBoundary p:nth-child(3),
+  .publicTruthBoundary p:nth-child(4) { border-top: 1px solid rgb(33 25 35 / 20%); border-left: 0; }
+
   .hero {
-    min-height: calc(100svh - 56px);
+    min-height: calc(100svh - 104px);
     justify-content: flex-start;
     padding-block: 42px 28px;
   }

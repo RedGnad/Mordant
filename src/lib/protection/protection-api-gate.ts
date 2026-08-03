@@ -16,6 +16,9 @@ export function protectionMutationGate(request: Request, environment: NodeJS.Pro
   if (environment.NODE_ENV === "production") {
     return { allowed: false, status: 405, reason: "PRODUCTION_READ_ONLY" };
   }
+  if (environment.NODE_ENV !== "development") {
+    return { allowed: false, status: 404, reason: "LOCAL_EXECUTION_DISABLED" };
+  }
   if (environment.MORDANT_LOCAL_EXECUTION_ENABLED !== "1") {
     return { allowed: false, status: 404, reason: "LOCAL_EXECUTION_DISABLED" };
   }

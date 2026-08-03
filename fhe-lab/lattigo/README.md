@@ -20,6 +20,11 @@ are retained, but those five executables are excluded from default builds behind
 historical-evidence tag. They are not production aliases, fallbacks, compatibility modes or inputs
 to `oneshotceremony`.
 
+The historical monolithic `cmd/mordant-fhe-demo` executable is intentionally retired. It predates
+the product-authorized case binding and the current three-field `RecourseAdapterConfig`; restoring
+its removed caller-controlled recourse fields is not an authorized compatibility path. The
+maintained narrow product commands remain part of the default Go build.
+
 ## Pinned implementation
 
 - Package: `github.com/tuneinsight/lattigo/v6`

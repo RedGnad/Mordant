@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
 import {
+  CANONICAL_CLEANVERSE_ASSET_RECORD,
   CANONICAL_CLEANVERSE_ASSET_DIGEST,
   cleanverseAssetRecordDigest,
   sha256Digest,
@@ -17,6 +18,8 @@ import {
 
 export const EXPECTED_GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
 export const PRODUCT_CLAIM_IDENTIFIER = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1" as const;
+export const EXPECTED_PUBLIC_KEY_BYTES = 7_864_600;
+export const EXPECTED_RESULT_CIPHERTEXT_BYTES = 6_291_950;
 
 export type PublicObjectReference = Readonly<{
   path: string;
@@ -312,12 +315,71 @@ function fail(code: string, message: string): never {
   throw new ProtectionEvidenceError(code, message);
 }
 
-function exactKeys(value: object, expected: readonly string[], code: string): void {
-  const actual = Object.keys(value).sort();
+function objectValue(value: unknown, code: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail(code, `${code}: expected an object`);
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    fail(code, `${code}: expected a plain JSON object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactKeys(value: unknown, expected: readonly string[], code: string): asserts value is Record<string, unknown> {
+  const actual = Object.keys(objectValue(value, code)).sort();
   const sorted = [...expected].sort();
   if (actual.length !== sorted.length || !actual.every((key, index) => key === sorted[index])) {
     fail(code, `${code}: unexpected or missing fields`);
   }
+}
+
+function exactArray(value: unknown, length: number, code: string): asserts value is unknown[] {
+  if (!Array.isArray(value) || value.length !== length) {
+    fail(code, `${code}: expected exactly ${length} entries`);
+  }
+}
+
+function exactShape(value: unknown, template: unknown, code: string): void {
+  if (Array.isArray(template)) {
+    exactArray(value, template.length, code);
+    for (let index = 0; index < template.length; index += 1) {
+      exactShape(value[index], template[index], code);
+    }
+    return;
+  }
+  if (template !== null && typeof template === "object") {
+    exactKeys(value, Object.keys(template), code);
+    const record = value as Record<string, unknown>;
+    for (const [key, nestedTemplate] of Object.entries(template)) {
+      exactShape(record[key], nestedTemplate, code);
+    }
+    return;
+  }
+  if (value !== null && typeof value === "object") fail(code, `${code}: unexpected nested object`);
+}
+
+function exactNonNegativeInteger(value: unknown, code: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    fail(code, `${code}: expected a non-negative safe integer`);
+  }
+  return value;
+}
+
+function exactSourceCommit(value: unknown, code: string): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value) || /^0{40}$/.test(value)) {
+    fail(code, `${code}: exact non-zero lowercase source commit required`);
+  }
+  return value;
+}
+
+export function resolveProtectionExportSourceCommit(
+  expectedSourceCommit: unknown,
+  environmentSourceCommit: unknown,
+): string {
+  const expected = exactSourceCommit(expectedSourceCommit, "SOURCE_COMMIT_PIN");
+  const supplied = exactSourceCommit(environmentSourceCommit, "SOURCE_COMMIT_ENV");
+  if (supplied !== expected) fail("SOURCE_COMMIT_ENV", "Evidence export source commit disagrees with the server/build pin");
+  return expected;
 }
 
 function sha256Raw(value: string | Buffer): Sha256Digest {
@@ -774,45 +836,97 @@ export function protectionEvidenceDigest(
   return sha256Digest("MordantProtectionEvidence/v4", evidence);
 }
 
-export function assertPublicProtectionEvidence(evidence: MordantProtectionEvidence): void {
-  if (evidence.schemaVersion !== "mordant.protection-evidence/4") fail("SCHEMA", "Unsupported protection evidence schema");
+function assertExactPublicEvidenceShape(evidence: MordantProtectionEvidence): void {
   exactKeys(evidence, [
     "schemaVersion", "manifestDigest", "runId", "sourceCommit", "governedFheCommit", "scenario", "cleanverseAsset",
     "cleanverseAssetDigest", "sourceClassifications", "protectionCase", "participantPublicIdentities", "protectionAuthorization",
     "caseAuthorization", "fhe", "governedResult", "chronology", "recourse", "originalReceivablePreservation",
     "recourseAttestation", "governedFheEvidence", "generatedAt",
   ], "PROTECTION_EVIDENCE_FIELDS");
-  const { manifestDigest, ...value } = evidence;
-  // manifestDigest detects transport corruption; authenticity is established
-  // only by the three signed canonical roots below.
-  if (manifestDigest !== protectionEvidenceDigest(value)) fail("MANIFEST_DIGEST", "Protection evidence digest mismatch");
-  if (!/^[0-9a-f]{40}$/.test(evidence.sourceCommit)) fail("SOURCE_COMMIT", "Exact product source commit required");
-  if (evidence.governedFheCommit !== EXPECTED_GOVERNED_FHE_COMMIT) fail("GOVERNED_FHE_COMMIT", "Unexpected governed-FHE commit");
-  if (!/^[0-9a-f-]{36}$/.test(evidence.runId)) fail("RUN_ID", "Protection evidence run ID rejected");
 
-  const assetDigest = cleanverseAssetRecordDigest(evidence.cleanverseAsset);
-  if (
-    assetDigest !== CANONICAL_CLEANVERSE_ASSET_DIGEST
-    || assetDigest !== evidence.cleanverseAssetDigest
-    || assetDigest !== evidence.protectionCase.cleanverseAssetDigest
-    || cleanverseAssetRecordDigest(evidence.protectionCase.cleanverseAsset) !== assetDigest
-  ) fail("ASSET_RECORD_DIGEST", "Cleanverse asset record digest mismatch");
-
+  exactShape(evidence.cleanverseAsset, CANONICAL_CLEANVERSE_ASSET_RECORD, "CLEANVERSE_ASSET_FIELDS");
   exactKeys(evidence.protectionCase, [
     "schemaVersion", "productScenario", "cleanverseAsset", "cleanverseAssetDigest", "service", "serviceVersion",
     "policyId", "policyVersion", "protectedAmount", "reserve", "holderRecordDate", "holderSnapshot",
     "holderAllocationDigest", "caseNonce", "fheCaseId", "releaseMode", "originalReceivable",
     "evidenceReferences",
   ], "PUBLIC_PROTECTION_CASE_FIELDS");
-
-  assertParticipantAuthorization(evidence);
-  const protectionDigest = assertSignedProtectionBinding(evidence);
-  if (protectionDigest !== evidence.governedFheEvidence.protectionBindingDigest) {
-    fail("PROTECTION_BINDING_CROSS_REFERENCE", "Governed-FHE evidence protection-binding digest mismatch");
+  exactShape(evidence.protectionCase.cleanverseAsset, CANONICAL_CLEANVERSE_ASSET_RECORD, "PROTECTION_CASE_ASSET_FIELDS");
+  exactKeys(evidence.protectionCase.protectedAmount, ["asset", "minorUnits"], "PUBLIC_PROTECTED_AMOUNT_FIELDS");
+  exactKeys(evidence.protectionCase.reserve, [
+    "basisPoints", "minorUnits", "accountingDomain", "executionClassification",
+  ], "PUBLIC_RESERVE_FIELDS");
+  exactArray(evidence.protectionCase.holderSnapshot, 2, "PUBLIC_HOLDER_SNAPSHOT");
+  for (const holder of evidence.protectionCase.holderSnapshot) {
+    exactKeys(holder, ["holderId", "protectedUnits", "allocationBps"], "PUBLIC_HOLDER_FIELDS");
   }
-  const binding = evidence.caseAuthorization.binding;
-  const protectionBinding = evidence.protectionAuthorization.binding;
-  const result = evidence.governedResult;
+  exactKeys(evidence.protectionCase.originalReceivable, [
+    "state", "principalMinorUnits", "units", "accountingDomain",
+  ], "PUBLIC_RECEIVABLE_FIELDS");
+  exactArray(evidence.protectionCase.evidenceReferences, 3, "PUBLIC_EVIDENCE_REFERENCES");
+
+  exactArray(evidence.participantPublicIdentities, 2, "PUBLIC_PARTICIPANT_IDENTITIES");
+  for (const identity of evidence.participantPublicIdentities) {
+    exactKeys(identity, ["role", "id", "signingPublicKey"], "PUBLIC_PARTICIPANT_IDENTITY_FIELDS");
+  }
+  exactKeys(evidence.protectionAuthorization, [
+    "binding", "bindingDigest", "participantSignatures",
+  ], "PROTECTION_AUTHORIZATION_FIELDS");
+  exactArray(evidence.protectionAuthorization.participantSignatures, 2, "PROTECTION_SIGNATURES");
+  exactKeys(evidence.caseAuthorization, [
+    "binding", "bindingDigest", "participantSignatures",
+  ], "CASE_AUTHORIZATION_FIELDS");
+  exactArray(evidence.caseAuthorization.binding.participantOrder, 2, "PARTICIPANT_ORDER_FIELDS");
+  exactArray(evidence.caseAuthorization.participantSignatures, 2, "PARTICIPANT_SIGNATURES");
+
+  exactKeys(evidence.fhe, [
+    "caseId", "assetIdentity", "caseBindingDigest", "profile", "circuitId", "circuitVersion", "circuitDigest",
+    "publicKey", "evaluationKeyManifestDigest", "participantArtifactDigests", "evaluatedArtifactDigest",
+    "resultCiphertext", "resultCiphertextCommitment", "evaluatorProvenance", "independentlyRecomputedResultDigest",
+  ], "FHE_FIELDS");
+  exactKeys(evidence.fhe.publicKey, ["path", "sha256", "length"], "FHE_PUBLIC_KEY_FIELDS");
+  exactKeys(evidence.fhe.resultCiphertext, ["path", "sha256", "length"], "FHE_RESULT_CIPHERTEXT_FIELDS");
+  exactArray(evidence.fhe.participantArtifactDigests, 2, "FHE_PARTICIPANT_ARTIFACTS");
+  if (
+    evidence.fhe.publicKey.path !== "public-key.bin"
+    || evidence.fhe.publicKey.length !== EXPECTED_PUBLIC_KEY_BYTES
+    || evidence.fhe.resultCiphertext.path !== "result-conflict.bin"
+    || evidence.fhe.resultCiphertext.length !== EXPECTED_RESULT_CIPHERTEXT_BYTES
+  ) fail("FHE_PUBLIC_OBJECT_METADATA", "Unexpected FHE public-object path or size");
+
+  exactKeys(evidence.governedResult, [
+    "schemaVersion", "caseId", "caseBindingDigest", "assetIdentity", "serviceId", "serviceVersion", "policyId",
+    "policyVersion", "circuitId", "circuitVersion", "circuitDigest", "parameterProfile", "parameterFingerprint",
+    "participantArtifactDigests", "evaluatedArtifactDigest", "resultCiphertextDigest", "resultCiphertextCommitment",
+    "conflict", "releaseOrdinal", "releaseMode", "releaseAuthorityId", "releaseAuthorityPublicKey", "releasedAtUnix",
+    "sourceProvenance", "signature", "digest",
+  ], "GOVERNED_RESULT_FIELDS");
+  exactArray(evidence.governedResult.participantArtifactDigests, 2, "GOVERNED_RESULT_PARTICIPANT_ARTIFACTS");
+
+  exactKeys(evidence.chronology, [
+    "schemaVersion", "clockClass", "signedAtUnix", "simulationAsOfUnix", "recordDate",
+    "holderAllocationDigest", "cureDeadlineUnix", "finalIncidentState", "finalRecourseState", "events",
+  ], "CHRONOLOGY_FIELDS");
+  if (!Array.isArray(evidence.chronology.events)) fail("CHRONOLOGY_EVENTS", "Chronology events must be an array");
+  for (const event of evidence.chronology.events) {
+    exactKeys(event, ["ordinal", "kind", "atUnix", "clockSource", "evidenceRef"], "CHRONOLOGY_EVENT_FIELDS");
+  }
+
+  exactKeys(evidence.recourse, [
+    "classification", "opened", "refusedReason", "recordDigest", "record",
+  ], "RECOURSE_FIELDS");
+  if (evidence.recourse.record !== null) {
+    exactKeys(evidence.recourse.record, [
+      "schemaVersion", "caseId", "caseBindingDigest", "assetIdentity", "policyId", "policyVersion", "resultDigest",
+      "releaseMode", "releaseAuthorityId", "recordDateUnix", "boundAtUnix", "cureDeadlineUnix", "reserveBasisPoints",
+      "holderAllocationDigest", "originalReceivableIntact", "open",
+    ], "RECOURSE_RECORD_FIELDS");
+  }
+  exactKeys(evidence.originalReceivablePreservation, [
+    "state", "principalMinorUnits", "units", "reserveAccountingSeparate", "claimBurnedOrTransferredByProtection",
+  ], "RECEIVABLE_PRESERVATION_FIELDS");
+  exactKeys(evidence.recourseAttestation, ["digest", "attestation"], "RECOURSE_ATTESTATION_ENVELOPE_FIELDS");
+
   const governed = evidence.governedFheEvidence;
   exactKeys(governed, [
     "schemaVersion", "caseId", "assetIdentity", "caseBindingDigest", "caseManifestDigest", "submissionDigests",
@@ -823,6 +937,109 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
     "releaseClass", "recourseClass", "productionIsolationProven", "publicArtifactBytes", "measurements", "productClaim",
     "generatedAtUnix",
   ], "GOVERNED_FHE_EVIDENCE_FIELDS");
+  exactArray(governed.submissionDigests, 2, "GOVERNED_SUBMISSION_DIGESTS");
+  exactKeys(governed.measurements, [
+    "keyGeneration", "submissions", "evaluation", "release", "completeDuration", "peakRssBytes",
+  ], "GOVERNED_MEASUREMENT_FIELDS");
+  const measurements = governed.measurements as Record<string, unknown>;
+  exactKeys(measurements.keyGeneration, [
+    "duration", "parameterBytes", "publicKeyBytes", "relinearizationKeyBytes", "galoisKeyBytes",
+    "publicArtifactBytes", "privateArtifactBytes",
+  ], "KEY_GENERATION_MEASUREMENT_FIELDS");
+  const keyGeneration = measurements.keyGeneration as Record<string, unknown>;
+  exactArray(keyGeneration.galoisKeyBytes, 9, "GALOIS_KEY_MEASUREMENT_FIELDS");
+  exactArray(measurements.submissions, 2, "SUBMISSION_MEASUREMENT_FIELDS");
+  for (const submission of measurements.submissions) {
+    exactKeys(submission, ["duration", "ciphertextBytes", "artifactBytes"], "SUBMISSION_MEASUREMENT_FIELDS");
+  }
+  exactKeys(measurements.evaluation, [
+    "duration", "resultCiphertextBytes", "artifactBytes",
+  ], "EVALUATION_MEASUREMENT_FIELDS");
+  exactKeys(measurements.release, [
+    "duration", "resultBytes", "exactRetry", "trustedRecoursePins",
+  ], "RELEASE_MEASUREMENT_FIELDS");
+  const release = measurements.release as Record<string, unknown>;
+  exactKeys(release.trustedRecoursePins, [
+    "participantArtifactDigestA", "participantArtifactDigestB", "evaluatedArtifactDigest",
+    "recomputedResultCiphertextDigest", "resultCiphertextCommitment", "decryptorProvenance",
+    "releaseMode", "releaseAuthorityId",
+  ], "TRUSTED_RECOURSE_PIN_FIELDS");
+
+  const evaluation = measurements.evaluation as Record<string, unknown>;
+  const expectedTerminalSizes = evidence.scenario === "conflict"
+    ? { releaseResultBytes: 1_750, publicArtifactBytes: 391_684_354 }
+    : evidence.scenario === "no-conflict"
+      ? { releaseResultBytes: 1_751, publicArtifactBytes: 391_682_810 }
+      : null;
+  if (
+    expectedTerminalSizes === null
+    || keyGeneration.parameterBytes !== 459
+    || keyGeneration.publicKeyBytes !== EXPECTED_PUBLIC_KEY_BYTES
+    || keyGeneration.relinearizationKeyBytes !== 31_458_448
+    || !(keyGeneration.galoisKeyBytes as unknown[]).every((value) => value === 31_458_464)
+    || keyGeneration.publicArtifactBytes !== 322_454_282
+    || keyGeneration.privateArtifactBytes !== 3_932_962
+    || !(measurements.submissions as unknown[]).every((entry) => {
+      const submission = entry as Record<string, unknown>;
+      return submission.ciphertextBytes === 31_459_990 && submission.artifactBytes === 1_853;
+    })
+    || evaluation.resultCiphertextBytes !== EXPECTED_RESULT_CIPHERTEXT_BYTES
+    || evaluation.artifactBytes !== 1_347
+    || release.resultBytes !== expectedTerminalSizes.releaseResultBytes
+    || governed.publicArtifactBytes !== expectedTerminalSizes.publicArtifactBytes
+  ) fail("FHE_MEASUREMENT_SIZE", "Unexpected FHE artifact size metadata");
+  for (const [code, value] of [
+    ["KEY_GENERATION_DURATION", keyGeneration.duration],
+    ["COMPLETE_DURATION", measurements.completeDuration],
+    ["PEAK_RSS_BYTES", measurements.peakRssBytes],
+    ["EVALUATION_DURATION", evaluation.duration],
+    ["RELEASE_DURATION", release.duration],
+    ["GENERATED_AT_UNIX", governed.generatedAtUnix],
+  ] as const) exactNonNegativeInteger(value, code);
+  for (const entry of measurements.submissions as unknown[]) {
+    exactNonNegativeInteger((entry as Record<string, unknown>).duration, "SUBMISSION_DURATION");
+  }
+}
+
+function assertPublicProtectionEvidenceUnchecked(
+  evidence: MordantProtectionEvidence,
+  expectedSourceCommit: unknown,
+): void {
+  if (!Object.hasOwn(objectValue(evidence, "PROTECTION_EVIDENCE_STRUCTURE"), "sourceCommit")) {
+    fail("SOURCE_COMMIT", "Protection evidence source commit is missing");
+  }
+  assertExactPublicEvidenceShape(evidence);
+  if (evidence.schemaVersion !== "mordant.protection-evidence/4") fail("SCHEMA", "Unsupported protection evidence schema");
+  const { manifestDigest, ...value } = evidence;
+  // manifestDigest detects transport corruption; authenticity is established
+  // only by the three signed canonical roots below.
+  if (manifestDigest !== protectionEvidenceDigest(value)) fail("MANIFEST_DIGEST", "Protection evidence digest mismatch");
+  const expectedCommit = exactSourceCommit(expectedSourceCommit, "SOURCE_COMMIT_PIN");
+  if (exactSourceCommit(evidence.sourceCommit, "SOURCE_COMMIT") !== expectedCommit) {
+    fail("SOURCE_COMMIT", "Protection evidence source commit disagrees with the server/build pin");
+  }
+  if (evidence.governedFheCommit !== EXPECTED_GOVERNED_FHE_COMMIT) fail("GOVERNED_FHE_COMMIT", "Unexpected governed-FHE commit");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(evidence.runId)) {
+    fail("RUN_ID", "Protection evidence run ID rejected");
+  }
+
+  const assetDigest = cleanverseAssetRecordDigest(evidence.cleanverseAsset);
+  if (
+    assetDigest !== CANONICAL_CLEANVERSE_ASSET_DIGEST
+    || assetDigest !== evidence.cleanverseAssetDigest
+    || assetDigest !== evidence.protectionCase.cleanverseAssetDigest
+    || cleanverseAssetRecordDigest(evidence.protectionCase.cleanverseAsset) !== assetDigest
+  ) fail("ASSET_RECORD_DIGEST", "Cleanverse asset record digest mismatch");
+
+  assertParticipantAuthorization(evidence);
+  const protectionDigest = assertSignedProtectionBinding(evidence);
+  if (protectionDigest !== evidence.governedFheEvidence.protectionBindingDigest) {
+    fail("PROTECTION_BINDING_CROSS_REFERENCE", "Governed-FHE evidence protection-binding digest mismatch");
+  }
+  const binding = evidence.caseAuthorization.binding;
+  const protectionBinding = evidence.protectionAuthorization.binding;
+  const result = evidence.governedResult;
+  const governed = evidence.governedFheEvidence;
   const pins = governed.measurements.release.trustedRecoursePins;
   const expectedScenarioConflict = protectionBinding.productScenario === "conflict";
   if (
@@ -904,7 +1121,20 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
   if (
     governed.schemaVersion !== "mordant.governed-fhe-public-evidence/2"
     || governed.productClaim !== PRODUCT_CLAIM_IDENTIFIER
+    || !governed.publicStructureValidated
+    || governed.executionClass !== "REAL_BGV_FHE"
+    || governed.deploymentClass !== "LOCAL_SINGLE_HOST"
+    || governed.releaseClass !== "GOVERNED_DECRYPTOR"
+    || governed.recourseClass !== "LOCAL_PROTOCOL_DOUBLE"
+    || governed.productionIsolationProven
   ) fail("GOVERNED_PRODUCT_PROOF", "Governed public product proof schema or claim mismatch");
+
+  if (
+    evidence.protectionCase.reserve.accountingDomain !== "PROTECTION"
+    || evidence.protectionCase.reserve.executionClassification !== "PROTOCOL_DOUBLE"
+    || evidence.protectionCase.originalReceivable.accountingDomain !== "RECEIVABLE"
+    || evidence.recourse.classification !== "PROTOCOL_DOUBLE"
+  ) fail("PUBLIC_CLASSIFICATION", "Contradictory public execution or accounting classification");
 
   const zeroDigest = `sha256:${"00".repeat(32)}`;
   if (result.conflict) {
@@ -974,5 +1204,18 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
     "privateroot", "receivableid", "authorizationcommitment", "privatemetadatacommitment",
   ]) {
     if (serialized.includes(forbidden)) fail("PRIVATE_MATERIAL", `Private material marker found in public evidence: ${forbidden}`);
+  }
+}
+
+export function assertPublicProtectionEvidence(
+  evidence: unknown,
+  expectedSourceCommit: unknown,
+): asserts evidence is MordantProtectionEvidence {
+  try {
+    objectValue(evidence, "PROTECTION_EVIDENCE_STRUCTURE");
+    assertPublicProtectionEvidenceUnchecked(evidence as MordantProtectionEvidence, expectedSourceCommit);
+  } catch (error) {
+    if (error instanceof ProtectionEvidenceError) throw error;
+    fail("PROTECTION_EVIDENCE_STRUCTURE", "Malformed protection evidence was rejected");
   }
 }

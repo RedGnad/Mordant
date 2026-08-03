@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import type { ProductScenario } from "./protection-case";
 import {
   completeCureChronology,
@@ -9,7 +7,7 @@ import {
   openRecourseCase,
   preparePrivateMatch,
   releaseGovernedResult,
-  retainProtectionEvidence,
+  retainProtectionEvidenceInConfiguredRoot,
   submitParticipantPledge,
   validateRetainedPublicArtifacts,
 } from "./governed-fhe-product-server";
@@ -32,14 +30,10 @@ async function main() {
   }
   if (scenario === "conflict") view = await completeCureChronology(view.runId);
   view = await exportProtectionEvidence(view.runId);
-  const destination = join(
-    process.cwd(),
-    "docs",
-    "evidence",
-    "conflicting-pledge-protection",
-    `${scenario}.json`,
-  );
-  await retainProtectionEvidence(view.runId, destination);
+  const retained = await retainProtectionEvidenceInConfiguredRoot(view.runId);
+  if (retained.manifestDigest !== view.evidence?.manifestDigest) {
+    throw new Error("configured retention readback did not match exported evidence");
+  }
   const validation = await validateRetainedPublicArtifacts(view.runId);
   process.stdout.write(`${JSON.stringify({
     schemaVersion: "mordant.protection-smoke/1",
@@ -52,7 +46,8 @@ async function main() {
     evidenceDigest: validation.evidenceDigest,
     governedResultDigest: validation.governedResultDigest,
     privateMarkersAbsent: validation.privateMarkersAbsent,
-    retainedEvidence: destination,
+    retainedEvidence: "CONFIGURED_RETENTION_CAPABILITY",
+    retainedManifestDigest: retained.manifestDigest,
   }, null, 2)}\n`);
 }
 

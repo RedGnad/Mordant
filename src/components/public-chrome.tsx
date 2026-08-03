@@ -17,6 +17,10 @@ export function PublicHeader() {
       <nav aria-label="Public navigation">
         <Link className={styles.optionalNav} href="/#product">How it works</Link>
         <Link className={styles.optionalNav} href="/#integrate">Integration</Link>
+        <Link className={styles.protectionNav} href="/protection?scenario=conflict">
+          <span className={styles.desktopLabel}>Conflicting Pledge Protection</span>
+          <span className={styles.mobileLabel}>Protection</span>
+        </Link>
         <Link href="/demo">
           <span className={styles.desktopLabel}>Recorded demo</span>
           <span className={styles.mobileLabel}>Demo</span>

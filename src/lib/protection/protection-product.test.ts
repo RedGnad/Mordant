@@ -30,21 +30,33 @@ import {
   governedResultDigest,
   protectionBindingDigest,
   protectionEvidenceDigest,
+  resolveProtectionExportSourceCommit,
   verifyGovernedResultSignature,
   type MordantProtectionEvidence,
 } from "./protection-evidence";
+import {
+  projectPublicProtectionCase,
+  verifyAndProjectPublicProtectionEvidence,
+} from "./protection-public-view";
 import { evaluateDiskSpace, PRODUCT_STORAGE } from "./governed-fhe-product-server";
 import type { ProtectionCaseView } from "./governed-fhe-product-server";
 import { protectionMutationGate } from "./protection-api-gate";
 import {
   PRODUCT_EXECUTION_LABELS,
   evidenceForDisplayedCase,
+  parseProtectionEvidencePresentation,
   recoursePresentation,
   recourseStatePresentation,
 } from "./protection-presentation";
-import { POST } from "../../app/api/protection/conflicting-pledge/route";
+import { GET } from "../../app/api/protection/conflicting-pledge/route";
+import { createProtectionPostHandler } from "./protection-api-route";
 
 const BAD_DIGEST = `sha256:${"ff".repeat(32)}` as Sha256Digest;
+const RETAINED_SOURCE_COMMIT = process.env.MORDANT_PROTECTION_SOURCE_COMMIT
+  ?? "cf4d9543c18cc5ba9776572a66d0a9cc677d403a";
+if (!/^[0-9a-f]{40}$/.test(RETAINED_SOURCE_COMMIT) || /^0{40}$/.test(RETAINED_SOURCE_COMMIT)) {
+  throw new Error("Tests require an exact non-zero lowercase product source commit pin");
+}
 
 function mutateRecord(
   mutate: (record: Record<string, unknown>) => void,
@@ -178,26 +190,42 @@ test("recourse labels derive only from the five explicit product states", () => 
 });
 
 test("production POST gate returns before parsing any request body", async () => {
-  const previous = process.env.NODE_ENV;
-  process.env.NODE_ENV = "production";
   let parsed = false;
-  try {
-    const request = {
-      url: "https://mordant.example/api/protection/conflicting-pledge",
-      headers: new Headers(),
-      json: async () => { parsed = true; throw new Error("body must not be parsed"); },
-    } as unknown as Request;
-    const response = await POST(request);
-    assert.equal(response.status, 405);
-    assert.equal(parsed, false);
-  } finally {
-    if (previous === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = previous;
+  const request = {
+    url: "https://mordant.example/api/protection/conflicting-pledge",
+    headers: new Headers(),
+    json: async () => { parsed = true; throw new Error("body must not be parsed"); },
+  } as unknown as Request;
+  const post = createProtectionPostHandler({ NODE_ENV: "production" });
+  const response = await post(request);
+  assert.equal(response.status, 405);
+  assert.equal(parsed, false);
+});
+
+test("imported evidence API rejects malformed, duplicate and unknown URL authority", async () => {
+  for (const query of [
+    "scenario=other",
+    "scenario=conflict&scenario=no-conflict",
+    "scenario=conflict&privateRoot=%2Ftmp%2Fsecret",
+    "runId=11111111-1111-4111-8111-111111111111&scenario=conflict",
+    "runId=11111111-1111-4111-8111-111111111111&runId=22222222-2222-4222-8222-222222222222",
+  ]) {
+    const response = await GET(new Request(`http://127.0.0.1/api/protection/conflicting-pledge?${query}`));
+    assert.equal(response.status, 400, query);
   }
 });
 
 test("every network mutation requires opt-in and the external administrator capability", () => {
   const loopback = new Request("http://127.0.0.1:3000/api/protection/conflicting-pledge", { method: "POST" });
+  const missingModeEnvironment = {
+    MORDANT_LOCAL_EXECUTION_ENABLED: "1", MORDANT_LOCAL_ADMIN_CAPABILITY: "a".repeat(32),
+  } as unknown as NodeJS.ProcessEnv;
+  assert.equal(protectionMutationGate(loopback, missingModeEnvironment).allowed, false);
+  assert.equal(protectionMutationGate(new Request(loopback, {
+    headers: { "x-mordant-admin-capability": "a".repeat(32) },
+  }), {
+    NODE_ENV: "test", MORDANT_LOCAL_EXECUTION_ENABLED: "1", MORDANT_LOCAL_ADMIN_CAPABILITY: "a".repeat(32),
+  }).allowed, false);
   assert.equal(protectionMutationGate(loopback, { NODE_ENV: "development" }).allowed, false);
   assert.equal(protectionMutationGate(loopback, { NODE_ENV: "development", MORDANT_LOCAL_EXECUTION_ENABLED: "1" }).allowed, false);
   const remote = new Request("https://mordant.example/api/protection/conflicting-pledge", {
@@ -222,14 +250,15 @@ for (const scenario of ["conflict", "no-conflict"] as const) {
     const path = join(process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`);
     try {
       const evidence = JSON.parse(readFileSync(path, "utf8")) as MordantProtectionEvidence;
-      assertPublicProtectionEvidence(evidence);
+      assertPublicProtectionEvidence(evidence, RETAINED_SOURCE_COMMIT);
+      const presentation = verifyAndProjectPublicProtectionEvidence(evidence, RETAINED_SOURCE_COMMIT);
       assert.equal(evidence.scenario, scenario);
       assert.equal(evidence.cleanverseAssetDigest, CANONICAL_CLEANVERSE_ASSET_DIGEST);
       assert.equal(evidence.fhe.assetIdentity, CANONICAL_CLEANVERSE_ASSET_DIGEST);
       assert.equal(evidence.governedResult.assetIdentity, CANONICAL_CLEANVERSE_ASSET_DIGEST);
       assert.equal(evidence.governedResult.conflict, scenario === "conflict");
       assert.equal(evidence.recourse.opened, scenario === "conflict");
-      assert.equal(recoursePresentation(evidence).status, scenario === "conflict" ? "SIMULATED_AVAILABLE" : "REFUSED");
+      assert.equal(recoursePresentation(presentation).status, scenario === "conflict" ? "SIMULATED_AVAILABLE" : "REFUSED");
       assert.equal(evidence.originalReceivablePreservation.state, "OUTSTANDING_INTACT");
       assert.equal(evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection, false);
       assert.doesNotMatch(JSON.stringify(evidence), /secret-key|private-root|receivableId|privateMetadataCommitment/i);
@@ -269,10 +298,200 @@ function rehash(evidence: MordantProtectionEvidence): MordantProtectionEvidence 
 }
 
 function rejectsEvidence(evidence: MordantProtectionEvidence, expectedCode: string): void {
-  assert.throws(() => assertPublicProtectionEvidence(evidence), (error: unknown) => (
+  assert.throws(() => assertPublicProtectionEvidence(evidence, RETAINED_SOURCE_COMMIT), (error: unknown) => (
     error instanceof ProtectionEvidenceError && error.code === expectedCode
   ));
 }
+
+function addOwnKey(value: object, key: string, entry: unknown): void {
+  Object.defineProperty(value, key, { value: entry, enumerable: true, configurable: true, writable: true });
+}
+
+artifactTest("A4 source provenance requires the exact non-zero server/build pin", () => {
+  const rejected: ReadonlyArray<readonly [string, string | undefined]> = [
+    ["zero", "0".repeat(40)],
+    ["other valid SHA", "1".repeat(40)],
+    ["missing", undefined],
+    ["malformed", "not-a-commit"],
+    ["uppercase", RETAINED_SOURCE_COMMIT.toUpperCase()],
+  ];
+  for (const [name, sourceCommit] of rejected) {
+    const evidence = mutableEvidence("conflict") as unknown as Record<string, unknown>;
+    if (sourceCommit === undefined) delete evidence.sourceCommit;
+    else evidence.sourceCommit = sourceCommit;
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence as unknown as MordantProtectionEvidence), RETAINED_SOURCE_COMMIT),
+      (error: unknown) => error instanceof ProtectionEvidenceError && error.code === "SOURCE_COMMIT",
+      `${name} source commit was accepted`,
+    );
+  }
+  assert.throws(
+    () => assertPublicProtectionEvidence(retainedEvidence("conflict"), "1".repeat(40)),
+    (error: unknown) => error instanceof ProtectionEvidenceError && error.code === "SOURCE_COMMIT",
+  );
+  assert.throws(
+    () => assertPublicProtectionEvidence(retainedEvidence("conflict"), undefined),
+    (error: unknown) => error instanceof ProtectionEvidenceError && error.code === "SOURCE_COMMIT_PIN",
+  );
+});
+
+test("A4 export provenance refuses every environment disagreement", () => {
+  assert.equal(
+    resolveProtectionExportSourceCommit(RETAINED_SOURCE_COMMIT, RETAINED_SOURCE_COMMIT),
+    RETAINED_SOURCE_COMMIT,
+  );
+  for (const environmentValue of [undefined, "", "0".repeat(40), "1".repeat(40), RETAINED_SOURCE_COMMIT.toUpperCase()]) {
+    assert.throws(
+      () => resolveProtectionExportSourceCommit(RETAINED_SOURCE_COMMIT, environmentValue),
+      (error: unknown) => error instanceof ProtectionEvidenceError && error.code === "SOURCE_COMMIT_ENV",
+    );
+  }
+  assert.throws(
+    () => resolveProtectionExportSourceCommit(undefined, RETAINED_SOURCE_COMMIT),
+    (error: unknown) => error instanceof ProtectionEvidenceError && error.code === "SOURCE_COMMIT_PIN",
+  );
+});
+
+artifactTest("A4 exact nested schema rejects rehashed private, path, prototype-like and unknown fields", () => {
+  const mutations: ReadonlyArray<readonly [string, (value: Mutable<MordantProtectionEvidence>) => void]> = [
+    ["plaintext pledge", (value) => { addOwnKey(value.fhe, "plaintextPledge", { receivableId: "PRIVATE" }); }],
+    ["underscore plaintext", (value) => { addOwnKey(value.fhe, "plaintext_pledge", "PRIVATE"); }],
+    ["case variant", (value) => { addOwnKey(value.fhe, "PlaintextPledge", "PRIVATE"); }],
+    ["private root", (value) => { addOwnKey(value.fhe, "private_root", "/tmp/private"); }],
+    ["nested FHE key", (value) => { addOwnKey(value.fhe.publicKey, "extra", { secret: true }); }],
+    ["measurement root", (value) => { addOwnKey(value.governedFheEvidence.measurements, "extra", {}); }],
+    ["measurement release", (value) => { addOwnKey(value.governedFheEvidence.measurements.release, "extra", {}); }],
+    ["trusted pin", (value) => { addOwnKey(value.governedFheEvidence.measurements.release.trustedRecoursePins, "extra", BAD_DIGEST); }],
+    ["reserve", (value) => { addOwnKey(value.protectionCase.reserve, "localPath", "/tmp/reserve"); }],
+    ["holder", (value) => { addOwnKey(value.protectionCase.holderSnapshot[0], "secret", "PRIVATE"); }],
+    ["receivable", (value) => { addOwnKey(value.protectionCase.originalReceivable, "privateMetadata", {}); }],
+    ["protection envelope", (value) => { addOwnKey(value.protectionAuthorization, "extra", {}); }],
+    ["case envelope", (value) => { addOwnKey(value.caseAuthorization, "extra", {}); }],
+    ["recourse envelope", (value) => { addOwnKey(value.recourse, "extra", {}); }],
+    ["preservation envelope", (value) => { addOwnKey(value.originalReceivablePreservation, "extra", {}); }],
+    ["attestation envelope", (value) => { addOwnKey(value.recourseAttestation, "extra", {}); }],
+    ["participant identity", (value) => { addOwnKey(value.participantPublicIdentities[0], "extra", {}); }],
+    ["prototype-like", (value) => { addOwnKey(value.fhe.publicKey, "__proto__", { polluted: true }); }],
+    ["malformed run ID", (value) => { value.runId = "-".repeat(36); }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${name} field was accepted after transport rehash`,
+    );
+  }
+});
+
+artifactTest("A4 canonical FHE paths and sizes reject absolute, private, variant and unexpected values", () => {
+  const mutations: ReadonlyArray<readonly [string, (value: Mutable<MordantProtectionEvidence>) => void]> = [
+    ["absolute public key", (value) => { value.fhe.publicKey.path = "/tmp/public-key.bin"; }],
+    ["private key path", (value) => { value.fhe.publicKey.path = "decryptor-private/secret-key.bin"; }],
+    ["case variant", (value) => { value.fhe.publicKey.path = "Public-Key.bin"; }],
+    ["underscore variant", (value) => { value.fhe.publicKey.path = "public_key.bin"; }],
+    ["public key size", (value) => { value.fhe.publicKey.length += 1; }],
+    ["result path", (value) => { value.fhe.resultCiphertext.path = "/tmp/result-conflict.bin"; }],
+    ["result size", (value) => { value.fhe.resultCiphertext.length -= 1; }],
+    ["measurement size", (value) => {
+      const keyGeneration = value.governedFheEvidence.measurements.keyGeneration as Record<string, unknown>;
+      keyGeneration.publicKeyBytes = Number(keyGeneration.publicKeyBytes) + 1;
+    }],
+    ["release result size", (value) => {
+      const release = value.governedFheEvidence.measurements.release as Record<string, unknown>;
+      release.resultBytes = Number(release.resultBytes) + 1;
+    }],
+    ["public artifact total", (value) => { value.governedFheEvidence.publicArtifactBytes += 1; }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${name} was accepted`,
+    );
+  }
+});
+
+artifactTest("A4 contradictory public execution classifications are rejected", () => {
+  const mutations: ReadonlyArray<(value: Mutable<MordantProtectionEvidence>) => void> = [
+    (value) => { value.governedFheEvidence.executionClass = "PLAINTEXT" as "REAL_BGV_FHE"; },
+    (value) => { value.governedFheEvidence.deploymentClass = "REMOTE" as "LOCAL_SINGLE_HOST"; },
+    (value) => { value.governedFheEvidence.releaseClass = "GENERIC" as "GOVERNED_DECRYPTOR"; },
+    (value) => { value.governedFheEvidence.recourseClass = "LIVE" as "LOCAL_PROTOCOL_DOUBLE"; },
+    (value) => { value.governedFheEvidence.productionIsolationProven = true as false; },
+    (value) => { value.protectionCase.reserve.executionClassification = "LIVE" as "PROTOCOL_DOUBLE"; },
+    (value) => { value.recourse.classification = "LIVE" as "PROTOCOL_DOUBLE"; },
+  ];
+  for (const mutate of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+    );
+  }
+});
+
+artifactTest("A4 malformed nested values fail as ProtectionEvidenceError rather than TypeError", () => {
+  const mutations: ReadonlyArray<(value: Mutable<MordantProtectionEvidence>) => void> = [
+    (value) => { value.fhe.publicKey = null as unknown as typeof value.fhe.publicKey; },
+    (value) => { value.governedFheEvidence.measurements = [] as unknown as typeof value.governedFheEvidence.measurements; },
+    (value) => { value.recourseAttestation.attestation = null as unknown as typeof value.recourseAttestation.attestation; },
+    (value) => { value.protectionCase.holderSnapshot = {} as unknown as typeof value.protectionCase.holderSnapshot; },
+  ];
+  for (const mutate of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      (error: unknown) => error instanceof ProtectionEvidenceError && !(error instanceof TypeError),
+    );
+  }
+  for (const malformed of [null, [], "evidence", 1]) {
+    assert.throws(
+      () => assertPublicProtectionEvidence(malformed, RETAINED_SOURCE_COMMIT),
+      (error: unknown) => error instanceof ProtectionEvidenceError && !(error instanceof TypeError),
+    );
+  }
+});
+
+artifactTest("A4 verified projection is allowlisted, detached and strips raw FHE metadata", () => {
+  const evidence = mutableEvidence("conflict");
+  const originalManifest = evidence.manifestDigest;
+  const projected = verifyAndProjectPublicProtectionEvidence(evidence, RETAINED_SOURCE_COMMIT);
+  assert.notEqual(projected, evidence);
+  assert.notEqual(projected.protectionCase, evidence.protectionCase);
+  assert.notEqual(projected.chronology.events, evidence.chronology.events);
+  assert.equal(projected.recourseAttestation.attestation.chronologyDigest, evidence.recourseAttestation.attestation.chronologyDigest);
+  const serialized = JSON.stringify(projected);
+  for (const forbidden of [
+    "public-key.bin", "result-conflict.bin", "measurements", "governedFheEvidence", "evidenceReferences",
+    "privateArtifactBytes", "publicKeyBytes", "resultCiphertextBytes", "\"length\"", "\"path\"",
+  ]) assert.equal(serialized.includes(forbidden), false, `${forbidden} survived projection`);
+
+  evidence.manifestDigest = BAD_DIGEST;
+  evidence.chronology.events[0].kind = "SENTINEL_MUTATION";
+  addOwnKey(evidence.fhe, "sentinelPrivateRoot", "/tmp/sentinel");
+  assert.equal(projected.manifestDigest, originalManifest);
+  assert.equal(JSON.stringify(projected).includes("SENTINEL"), false);
+  assert.equal(Object.isFrozen(projected), true);
+  assert.equal(Object.isFrozen(projected.chronology.events), true);
+});
+
+artifactTest("A4 case projection strips sentinel fields and shares no caller references", () => {
+  const source = structuredClone(retainedEvidence("conflict").protectionCase) as unknown as Record<string, unknown>;
+  addOwnKey(source, "privateRoot", "/tmp/SENTINEL_PRIVATE_ROOT");
+  addOwnKey(source.reserve as object, "secretPath", "/tmp/SENTINEL_SECRET_PATH");
+  const projected = projectPublicProtectionCase(source as unknown as MordantProtectionEvidence["protectionCase"]);
+  (source.reserve as Record<string, unknown>).minorUnits = "SENTINEL_MUTATION";
+  const serialized = JSON.stringify(projected);
+  assert.equal(serialized.includes("SENTINEL"), false);
+  assert.equal(projected.reserve.minorUnits, "10000000");
+  assert.notEqual(projected.reserve, source.reserve);
+});
 
 artifactTest("TypeScript verifies the exact retained Go-generated Ed25519 result", () => {
   const conflict = retainedEvidence("conflict");
@@ -295,6 +514,8 @@ artifactTest("hybrid no-conflict case plus conflict recourse record is rejected"
 artifactTest("hybrid conflict product evidence plus no-conflict governed-FHE evidence is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.governedFheEvidence = mutableEvidence("no-conflict").governedFheEvidence;
+  conflict.governedFheEvidence.publicArtifactBytes = 391_684_354;
+  (conflict.governedFheEvidence.measurements.release as Record<string, unknown>).resultBytes = 1_750;
   rejectsEvidence(rehash(conflict), "PROTECTION_BINDING_CROSS_REFERENCE");
 });
 
@@ -356,7 +577,7 @@ artifactTest("every canonical signed product field rejects an adversarial mutati
     const evidence = mutableEvidence("conflict");
     mutate(evidence);
     assert.throws(
-      () => assertPublicProtectionEvidence(rehash(evidence)),
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
       (error: unknown) => error instanceof ProtectionEvidenceError,
       `${name} mutation was accepted`,
     );
@@ -397,7 +618,7 @@ artifactTest("canonical chronology rejects every caller-controlled mutation afte
     const evidence = mutableEvidence("conflict");
     mutate(evidence);
     assert.throws(
-      () => assertPublicProtectionEvidence(rehash(evidence)),
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
       (error: unknown) => error instanceof ProtectionEvidenceError,
       `${name} mutation was accepted`,
     );
@@ -407,7 +628,7 @@ artifactTest("canonical chronology rejects every caller-controlled mutation afte
 artifactTest("TypeScript verifies both participant product signatures and the release-authority attestation", () => {
   for (const scenario of ["conflict", "no-conflict"] as const) {
     const evidence = retainedEvidence(scenario);
-    assertPublicProtectionEvidence(evidence);
+    assertPublicProtectionEvidence(evidence, RETAINED_SOURCE_COMMIT);
     assert.equal(protectionBindingDigest(evidence.protectionAuthorization.binding), evidence.protectionAuthorization.bindingDigest);
     assert.equal(evidence.recourseAttestation.attestation.protectionBindingDigest, evidence.protectionAuthorization.bindingDigest);
     assert.equal(evidence.recourseAttestation.attestation.governedResultDigest, evidence.governedResult.digest);
@@ -448,7 +669,7 @@ artifactTest("every MordantProtectionBinding field is authenticated", () => {
     const evidence = mutableEvidence("conflict");
     replaceJsonPath(evidence.protectionAuthorization.binding, path, replacement);
     assert.throws(
-      () => assertPublicProtectionEvidence(rehash(evidence)),
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
       (error: unknown) => error instanceof ProtectionEvidenceError,
       `${field} was not authenticated`,
     );
@@ -492,7 +713,7 @@ artifactTest("every MordantRecourseAttestation field is authenticated", () => {
     const evidence = mutableEvidence("conflict");
     replaceJsonPath(evidence.recourseAttestation.attestation, path, replacement);
     assert.throws(
-      () => assertPublicProtectionEvidence(rehash(evidence)),
+      () => assertPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
       (error: unknown) => error instanceof ProtectionEvidenceError,
       `${field} was not authenticated`,
     );
@@ -500,7 +721,7 @@ artifactTest("every MordantRecourseAttestation field is authenticated", () => {
 });
 
 artifactTest("component evidence state never falls back across imported and local transitions", () => {
-  const imported = retainedEvidence("conflict");
+  const imported = verifyAndProjectPublicProtectionEvidence(retainedEvidence("conflict"), RETAINED_SOURCE_COMMIT);
   const incomplete = {
     runId: "11111111-1111-4111-8111-111111111111",
     protectionCase: { ...imported.protectionCase, recourseState: "NOT_OPEN" },
@@ -509,16 +730,31 @@ artifactTest("component evidence state never falls back across imported and loca
   const cureWindow = {
     ...incomplete,
     protectionCase: { ...incomplete.protectionCase, recourseState: "CURE_WINDOW" },
-  } as ProtectionCaseView;
+  } as unknown as ProtectionCaseView;
   const complete = {
     ...incomplete,
     runId: imported.runId,
-    protectionCase: imported.protectionCase,
+    protectionCase: { ...imported.protectionCase, recourseState: "SIMULATED_AVAILABLE" },
     evidence: imported,
-  } as ProtectionCaseView;
+  } as unknown as ProtectionCaseView;
   assert.equal(evidenceForDisplayedCase("imported", imported, null), imported);
   assert.equal(evidenceForDisplayedCase("local", imported, incomplete), null);
   assert.equal(evidenceForDisplayedCase("local", imported, cureWindow), null);
   assert.equal(recourseStatePresentation(cureWindow.protectionCase.recourseState).status, "CURE_WINDOW");
   assert.equal(evidenceForDisplayedCase("local", imported, complete), imported);
+});
+
+artifactTest("client presentation parser detaches the exact verified allowlist and rejects extra fields", () => {
+  const projected = verifyAndProjectPublicProtectionEvidence(retainedEvidence("conflict"), RETAINED_SOURCE_COMMIT);
+  const parsed = parseProtectionEvidencePresentation(projected);
+  assert.deepEqual(parsed, projected);
+  assert.notEqual(parsed, projected);
+
+  const topLevel = structuredClone(projected) as unknown as Record<string, unknown>;
+  topLevel.privatePlaintext = "must-not-enter-react-state";
+  assert.equal(parseProtectionEvidencePresentation(topLevel), null);
+
+  const nested = structuredClone(projected) as unknown as { fhe: Record<string, unknown> };
+  nested.fhe.privateArtifactPath = "/private/plaintext";
+  assert.equal(parseProtectionEvidencePresentation(nested), null);
 });

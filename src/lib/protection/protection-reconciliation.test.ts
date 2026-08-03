@@ -50,6 +50,9 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
   const calls = new Map<string, number>();
   const inspectArgs: string[][] = [];
   const failAfterAdmission = new Set<string>();
+  let evaluatorGate: Promise<void> | null = null;
+  let announceEvaluatorStart: (() => void) | null = null;
+  let releaseEvaluatorGate: (() => void) | null = null;
   const runner: NonNullable<ProtectionRuntimeOptions["binaryRunner"]> = async <T>(binary: string, args: readonly string[]) => {
     calls.set(binary, (calls.get(binary) ?? 0) + 1);
     const publicRoot = argument(args, "-public-root");
@@ -105,6 +108,8 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
     }
     if (binary === "evaluator") {
       inspection.evaluationAdmission = true;
+      announceEvaluatorStart?.();
+      if (evaluatorGate !== null) await evaluatorGate;
       if (failAfterAdmission.has("evaluator")) throw new Error("EVALUATOR_INTERRUPTED_AFTER_ADMISSION");
       inspection.evaluation = { artifactDigest: digest("5"), resultBytes: 6, artifactBytes: 7 };
       const binding = JSON.parse(readFileSync(join(publicRoot, "case-binding.json"), "utf8")) as Record<string, unknown>;
@@ -143,7 +148,22 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
     runRoot: join(root, "runs"), binRoot: join(root, "bin"), importedEvidenceRoot: join(root, "retained"),
     binaryRunner: runner, skipBinaryBuild: true, statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
   };
-  return { base, calls, failAfterAdmission, inspectArgs };
+  const pauseEvaluator = () => {
+    let startedResolve!: () => void;
+    const started = new Promise<void>((resolve) => { startedResolve = resolve; });
+    evaluatorGate = new Promise<void>((resolve) => { releaseEvaluatorGate = resolve; });
+    announceEvaluatorStart = startedResolve;
+    return {
+      started,
+      release: () => {
+        releaseEvaluatorGate?.();
+        evaluatorGate = null;
+        announceEvaluatorStart = null;
+        releaseEvaluatorGate = null;
+      },
+    };
+  };
+  return { base, calls, failAfterAdmission, inspectArgs, pauseEvaluator };
 }
 
 function crashing(base: ProtectionRuntimeOptions, target: string) {
@@ -211,6 +231,31 @@ test("completed evaluation reconciles and is never evaluated twice", async () =>
   await assert.rejects(first.evaluatePrivateConflict(view.runId), /INJECTED_CRASH/);
   const recovered = await createProtectionOrchestrator(base).readProtectionCase(view.runId);
   assert.equal(recovered.stage, "EVALUATED");
+  assert.equal(calls.get("evaluator"), 1);
+});
+
+test("refresh during a live admitted evaluation cannot abort or duplicate the terminal operation", async () => {
+  const { base, calls, pauseEvaluator } = await fakeRuntimeRoot();
+  const { orchestrator, view } = await prepared(base);
+  await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_A");
+  await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_B");
+  const paused = pauseEvaluator();
+  const evaluation = orchestrator.evaluatePrivateConflict(view.runId);
+  await paused.started;
+  try {
+    await assert.rejects(
+      orchestrator.readProtectionCase(view.runId),
+      /operation is still running; resume durable readback/,
+    );
+    const pending = readOperationJournal(String(base.runRoot), view.runId).records.at(-1);
+    assert.equal(pending?.phase, "EVALUATING");
+    assert.equal(pending?.outcome, "PENDING");
+  } finally {
+    paused.release();
+  }
+  const completed = await evaluation;
+  assert.equal(completed.stage, "EVALUATED");
+  assert.equal((await orchestrator.readProtectionCase(view.runId)).stage, "EVALUATED");
   assert.equal(calls.get("evaluator"), 1);
 });
 
@@ -343,6 +388,8 @@ artifactTest("interrupted retention resumes through a fresh orchestrator and exa
     runRoot,
     binRoot: join(root, "bin"),
     importedEvidenceRoot: destinationRoot,
+    retentionRoot: destinationRoot,
+    expectedSourceCommit: evidence.sourceCommit,
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {
@@ -382,6 +429,8 @@ artifactTest("retention rejects a symlink destination without reading or replaci
     runRoot,
     binRoot: join(root, "bin"),
     importedEvidenceRoot: destinationRoot,
+    retentionRoot: destinationRoot,
+    expectedSourceCommit: evidence.sourceCommit,
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {
@@ -478,6 +527,7 @@ artifactTest("published evidence reconciles after crash without a second create-
     runRoot,
     binRoot: join(root, "bin"),
     importedEvidenceRoot: join(root, "retained"),
+    expectedSourceCommit: evidence.sourceCommit,
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {

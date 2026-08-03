@@ -49,6 +49,32 @@ The exact retained provenance is:
   that import as browser-side or newly executed FHE.
 - The recourse adapter and cure clock are `PROTOCOL_DOUBLE`. No live Cleanverse settlement occurs.
 
+### Supervised browser adapter
+
+The optional adapter is started with `pnpm protection:adapter` only after its process is explicitly
+configured with `NODE_ENV=development`, `MORDANT_LOCAL_EXECUTION_ENABLED=1`, a server-only
+`MORDANT_LOCAL_ADMIN_CAPABILITY` of at least 32 characters, the exact source pin, exact browser and
+downstream loopback origins, and a pre-created `MORDANT_PROTECTION_RETENTION_ROOT`. The Next
+development server receives the same gate, source pin and immutable roots. The adapter refuses every
+other environment, binds only `127.0.0.1`, and verifies the kernel-supplied
+socket peer before reading a product operation. `Host`, `Forwarded`, `X-Forwarded-For`, URL hostnames
+and caller headers are never peer authority. The configured browser and downstream origins must
+also be exact loopback HTTP origins. The Next development server is expected at the immutable
+`MORDANT_LOCAL_DOWNSTREAM_ORIGIN`; the browser origin is fixed by
+`MORDANT_LOCAL_BROWSER_ORIGIN`. Startup also requires the exact non-zero
+`MORDANT_PROTECTION_SOURCE_COMMIT` build/server pin.
+
+The browser receives only the non-secret adapter origin. The adapter alone reads
+`MORDANT_LOCAL_ADMIN_CAPABILITY` and attaches it to its private downstream request. Its input is one
+of two exact JSON shapes: fixed scenario creation, or a run ID plus one enumerated product
+operation. It rejects additional fields and accepts no path, key, ciphertext, circuit, slot,
+timestamp, chronology or attestation. Evidence export automatically invokes the fixed retention
+operation against the pre-existing server-configured `MORDANT_PROTECTION_RETENTION_ROOT` capability
+and compares an independent no-follow durable readback to the exported run. The shipped imported
+evidence root is read-only and distinct from this local retention capability. Refresh/resume reads the
+same run ID; it does not create another run. A hostile process already executing on the same local
+user account or a fully compromised development host remains outside this supervised-MVP boundary.
+
 ## Signed product roots
 
 `MordantProtectionBinding` is the canonical participant-authorized product root. It binds the

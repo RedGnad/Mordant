@@ -275,6 +275,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       <a className={styles.skip} href="#content">Skip to content</a>
       <PublicHeader />
 
+      <section className={styles.publicTruthBoundary} aria-label="MVP evidence and execution boundaries">
+        <p><strong>Observed provenance</strong> Cleanverse / Monad testnet asset identity is retained real evidence.</p>
+        <p><strong>Private evaluation</strong> BGV runs locally off-chain on synthetic lender pledge fixtures; no real funds or submissions.</p>
+        <p><strong>Governed recourse</strong> Cure time is simulated and recourse is a local protocol double, not live settlement.</p>
+        <p><strong>Trusted release</strong> A designated decryptor is trusted; no native Monad FHE, threshold or trustless release is claimed.</p>
+      </section>
+
       <main id="content">
         <section
           className={styles.hero}
@@ -301,8 +308,8 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
           <p className={styles.heroSupport}>Governed execution and evidence for receivables exceptions.</p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href="#product">See how Mordant works</Link>
-            <Link className={styles.secondary} href="#integrate">See how it integrates</Link>
+            <Link className={styles.primary} href="/protection?scenario=conflict">Open Conflicting Pledge Protection</Link>
+            <Link className={styles.secondary} href="#product">See how Mordant works</Link>
           </div>
         </section>
 

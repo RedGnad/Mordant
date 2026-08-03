@@ -20,8 +20,10 @@ test("the public story stays specific and its causal control does not move", asy
     name: "Conflict became recourse.",
   })).toBeVisible();
   await expect(page.getByText("Governed execution and evidence for receivables exceptions.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Conflicting Pledge Protection" })).toHaveAttribute("href", "/protection?scenario=conflict");
+  await expect(page.getByRole("link", { name: /Conflicting Pledge Protection|Protection/u }).first()).toHaveAttribute("href", "/protection?scenario=conflict");
   await expect(page.getByRole("link", { name: "See how Mordant works" })).toHaveAttribute("href", "#product");
-  await expect(page.getByRole("link", { name: "See how it integrates" })).toHaveAttribute("href", "#integrate");
+  await expect(page.getByRole("region", { name: "MVP evidence and execution boundaries" })).toContainText("synthetic lender pledge fixtures");
 
   const renderedText = await page.locator("body").innerText();
   expect(renderedText).not.toMatch(/\b0[1-5]\s*[·/]\s*/u);

@@ -46,6 +46,7 @@ import {
   governedResultDigest,
   protectionBindingDigest,
   protectionEvidenceDigest,
+  resolveProtectionExportSourceCommit,
   verifyGovernedResultSignature,
   type FheCaseBinding,
   type CanonicalChronologyEvent,
@@ -57,6 +58,12 @@ import {
   type ProtectionBindingSignature,
   type PublicRecourseRecord,
 } from "./protection-evidence";
+import {
+  projectPublicProtectionCase,
+  verifyAndProjectPublicProtectionEvidence,
+  type PublicProtectionCaseProjection,
+  type VerifiedPublicProtectionEvidence,
+} from "./protection-public-view";
 import {
   beginOperation,
   finishOperation,
@@ -163,11 +170,13 @@ export type ProtectionRuntimeOptions = Readonly<{
   binRoot?: string;
   goRoot?: string;
   importedEvidenceRoot?: string;
+  retentionRoot?: string;
   now?: () => Date;
   failpoint?: (name: string) => void;
   binaryRunner?: <T>(binary: keyof typeof BINARIES, args: readonly string[]) => Promise<T>;
   statfsAvailableBytes?: (root: string) => number;
   skipBinaryBuild?: boolean;
+  expectedSourceCommit?: string;
 }>;
 
 type ProtectionRuntime = Readonly<{
@@ -175,24 +184,41 @@ type ProtectionRuntime = Readonly<{
   binRoot: string;
   goRoot: string;
   importedEvidenceRoot: string;
+  retentionRoot: string;
   now: () => Date;
   failpoint: (name: string) => void;
   binaryRunner?: ProtectionRuntimeOptions["binaryRunner"];
   statfsAvailableBytes?: ProtectionRuntimeOptions["statfsAvailableBytes"];
   skipBinaryBuild: boolean;
+  expectedSourceCommit: unknown;
 }>;
 
 function runtimeFrom(options: ProtectionRuntimeOptions = {}): ProtectionRuntime {
+  const importedEvidenceRoot = resolve(
+    options.importedEvidenceRoot
+    ?? process.env.MORDANT_PROTECTION_EVIDENCE_ROOT
+    ?? join(process.cwd(), "docs", "evidence", "conflicting-pledge-protection"),
+  );
   return {
     runRoot: resolve(options.runRoot ?? process.env.MORDANT_PROTECTION_RUN_ROOT ?? join(process.cwd(), ".mordant", "protection")),
     binRoot: resolve(options.binRoot ?? process.env.MORDANT_GOVERNED_FHE_BIN_DIR ?? join(process.cwd(), ".mordant", "governed-fhe-bin")),
     goRoot: resolve(options.goRoot ?? join(process.cwd(), "fhe-lab", "lattigo")),
-    importedEvidenceRoot: resolve(options.importedEvidenceRoot ?? join(process.cwd(), "docs", "evidence", "conflicting-pledge-protection")),
+    importedEvidenceRoot,
+    // Imported, reviewable fixtures and locally retained evidence are separate
+    // capabilities. Configuring a read root can never make it writable.
+    retentionRoot: resolve(
+      options.retentionRoot
+      ?? process.env.MORDANT_PROTECTION_RETENTION_ROOT
+      ?? join(process.cwd(), ".mordant", "protection-retained-evidence"),
+    ),
     now: options.now ?? (() => new Date()),
     failpoint: options.failpoint ?? (() => undefined),
     binaryRunner: options.binaryRunner,
     statfsAvailableBytes: options.statfsAvailableBytes,
     skipBinaryBuild: options.skipBinaryBuild ?? false,
+    // Capture the independent build/server pin once. Export separately checks
+    // the live environment so a changed or missing value cannot rewrite it.
+    expectedSourceCommit: options.expectedSourceCommit ?? process.env.MORDANT_PROTECTION_SOURCE_COMMIT,
   };
 }
 
@@ -223,7 +249,11 @@ export type ProtectionCaseView = Readonly<{
   runId: string;
   stage: ExecutionStage;
   nextOperation: string | null;
-  protectionCase: MordantProtectionCase;
+  protectionCase: PublicProtectionCaseProjection & Readonly<{
+    incidentState: MordantProtectionCase["incidentState"];
+    cureDeadline: string | null;
+    recourseState: MordantProtectionCase["recourseState"];
+  }>;
   participantArtifactDigests: Readonly<{
     participantA: Sha256Digest | null;
     participantB: Sha256Digest | null;
@@ -234,14 +264,26 @@ export type ProtectionCaseView = Readonly<{
     digest: Sha256Digest;
     releaseMode: "governed-decryptor-v1";
   }> | null;
-  recourse: InternalState["recourse"] | null;
-  evidence: MordantProtectionEvidence | null;
+  recourse: Readonly<{
+    opened: boolean;
+    reason: "SIGNED_RESULT_FALSE" | null;
+  }> | null;
+  evidence: VerifiedPublicProtectionEvidence | null;
   execution: Readonly<{
     fhe: "REAL_BGV_FHE";
     deployment: "LOCAL_SINGLE_HOST";
     webPresentation: "PUBLIC_EVIDENCE_READBACK";
     recourse: "LOCAL_PROTOCOL_DOUBLE";
   }>;
+}>;
+
+export type RetainedProtectionEvidenceView = Readonly<{
+  schemaVersion: "mordant.retained-protection-view/1";
+  runId: string;
+  scenario: ProductScenario;
+  caseId: Sha256Digest;
+  manifestDigest: Sha256Digest;
+  evidence: VerifiedPublicProtectionEvidence;
 }>;
 
 export class ProtectionProductError extends Error {
@@ -353,7 +395,9 @@ function readJsonNoFollow<T>(path: string): T {
 }
 
 function assertRunId(runId: string): void {
-  if (!/^[0-9a-f-]{36}$/.test(runId)) throw new ProtectionProductError("Invalid protection run id", 400);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(runId)) {
+    throw new ProtectionProductError("Invalid protection run id", 400);
+  }
 }
 
 function statePath(runtime: ProtectionRuntime, runId: string): string {
@@ -393,13 +437,19 @@ function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string
   }
 }
 
-function publicView(state: InternalState): ProtectionCaseView {
+function publicView(state: InternalState, runtime: ProtectionRuntime): ProtectionCaseView {
+  const protectionCase = projectPublicProtectionCase(state.protectionCase);
   const view: ProtectionCaseView = {
     schemaVersion: "mordant.protection-product-view/1",
     runId: state.runId,
     stage: state.stage,
     nextOperation: nextOperation(state.stage, state.protectionCase.productScenario),
-    protectionCase: state.protectionCase,
+    protectionCase: {
+      ...protectionCase,
+      incidentState: state.protectionCase.incidentState,
+      cureDeadline: state.protectionCase.cureDeadline,
+      recourseState: state.protectionCase.recourseState,
+    },
     participantArtifactDigests: {
       participantA: state.submissions?.PARTICIPANT_A?.artifactDigest ?? null,
       participantB: state.submissions?.PARTICIPANT_B?.artifactDigest ?? null,
@@ -410,8 +460,13 @@ function publicView(state: InternalState): ProtectionCaseView {
       digest: state.release.resultDigest,
       releaseMode: state.release.releaseMode,
     },
-    recourse: state.recourse ?? null,
-    evidence: state.evidence ?? null,
+    recourse: state.recourse === undefined ? null : {
+      opened: state.recourse.opened,
+      reason: state.recourse.reason ?? null,
+    },
+    evidence: state.evidence === undefined
+      ? null
+      : verifyAndProjectPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit),
     execution: {
       fhe: "REAL_BGV_FHE",
       deployment: "LOCAL_SINGLE_HOST",
@@ -485,6 +540,7 @@ function recourseFromRecord(record: PublicRecourseRecord): NonNullable<InternalS
 }
 
 function reconcileProtectionProjection(
+  runtime: ProtectionRuntime,
   state: InternalState,
   pending: ProductOperationRecord,
   inspection: ProductInspection,
@@ -599,19 +655,19 @@ function reconcileProtectionProjection(
     case "EXPORTING": {
       const productEvidencePath = join(state.paths.root, "protection-evidence.json");
       if (!existsSync(productEvidencePath) && inspection.evidence !== undefined) {
-        const recovered = buildProtectionEvidence(state, inspection.evidence, pending.createdAt);
+        const recovered = buildProtectionEvidence(runtime, state, inspection.evidence, pending.createdAt);
         writeJsonAtomic(productEvidencePath, recovered, 0o644);
       }
       if (!existsSync(productEvidencePath)) return null;
       const evidence = readJson<MordantProtectionEvidence>(productEvidencePath);
-      assertPublicProtectionEvidence(evidence);
+      assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
       return { ...state, stage: "COMPLETE", evidence };
     }
     case "RETAINING":
       if (typeof pending.immutableParameters.destination !== "string" || !existsSync(pending.immutableParameters.destination)) return null;
       try {
         const retained = readJsonNoFollow<MordantProtectionEvidence>(pending.immutableParameters.destination);
-        assertPublicProtectionEvidence(retained);
+        assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
         return retained.scenario === state.protectionCase.productScenario
           && retained.protectionCase.fheCaseId === state.protectionCase.fheCaseId
           && retained.manifestDigest === state.evidence?.manifestDigest ? state : null;
@@ -636,7 +692,7 @@ async function reconcileState(runtime: ProtectionRuntime, state: InternalState, 
     return abortState(runtime, state, pending, inspection.ambiguousReason ?? "AMBIGUOUS_CRYPTOGRAPHIC_ACTION");
   }
   if (pending === null) return state;
-  const reconstructed = reconcileProtectionProjection(state, pending, inspection);
+  const reconstructed = reconcileProtectionProjection(runtime, state, pending, inspection);
   if (reconstructed !== null) {
     const saved = saveState(runtime, reconstructed);
     finishOperation(runtime.runRoot, state.runId, pending.operationId, "RECONCILED", runtime.now().toISOString());
@@ -789,13 +845,13 @@ async function createProtectionCaseRuntime(runtime: ProtectionRuntime, scenario:
   };
   mkdirSync(runtime.runRoot, { recursive: true, mode: 0o700 });
   mkdirSync(root, { recursive: false, mode: 0o700 });
-  return publicView(saveState(runtime, state));
+  return publicView(saveState(runtime, state), runtime);
 }
 
 async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
-    if (state.stage === "MATCH_PREPARED") return publicView(state);
+    if (state.stage === "MATCH_PREPARED") return publicView(state, runtime);
     if (state.stage !== "CASE_CREATED") throw new ProtectionProductError("Private match is already prepared");
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "preparePrivateMatch",
@@ -886,7 +942,7 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       participantKeys: { PARTICIPANT_A: participantA.path, PARTICIPANT_B: participantB.path },
     });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
@@ -943,9 +999,9 @@ async function submitParticipantPledgeRuntime(
     let state = await loadState(runtime, runId);
     assertProtectionAssetBinding(state.protectionCase, expectedAssetDigest);
     if (role === "PARTICIPANT_B" && state.stage === "PARTICIPANT_B_PUBLISHED") {
-      return publicView(await finalizeParticipantSubmissions(runtime, state));
+      return publicView(await finalizeParticipantSubmissions(runtime, state), runtime);
     }
-    if (state.submissions?.[role] !== undefined) return publicView(state);
+    if (state.submissions?.[role] !== undefined) return publicView(state, runtime);
     const expectedStage = role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
     if (state.stage !== expectedStage || state.participantKeys === undefined) {
       throw new ProtectionProductError(`Participant ${role} submission is out of order`);
@@ -1002,14 +1058,14 @@ async function submitParticipantPledgeRuntime(
     state = saveState(runtime, state);
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
     if (role === "PARTICIPANT_B") state = await finalizeParticipantSubmissions(runtime, state);
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
 async function evaluatePrivateConflictRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
-    if (state.stage === "EVALUATED") return publicView(state);
+    if (state.stage === "EVALUATED") return publicView(state, runtime);
     if (state.stage !== "PARTICIPANT_B_SUBMITTED") throw new ProtectionProductError("Both encrypted submissions are required");
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "evaluatePrivateConflict",
@@ -1042,14 +1098,14 @@ async function evaluatePrivateConflictRuntime(runtime: ProtectionRuntime, runId:
     }, { incidentState: "EVALUATED" });
     state = saveState(runtime, { ...state, stage: "EVALUATED", protectionCase, evaluation: output });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
 async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
-    if (state.stage === "RELEASED" && state.release !== undefined) return publicView(state);
+    if (state.stage === "RELEASED" && state.release !== undefined) return publicView(state, runtime);
     if (state.stage !== "EVALUATED") throw new ProtectionProductError("FHE evaluation is not complete");
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "releaseGovernedResult",
@@ -1111,7 +1167,7 @@ async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: s
     }, { incidentState: output.conflict ? "CONFLICT_CONFIRMED" : "CLEARED" });
     state = saveState(runtime, { ...state, stage: "RELEASED", protectionCase, release: output });
     finishOperation(runtime.runRoot, runId, operation.operationId, output.exactRetry ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
@@ -1127,7 +1183,7 @@ async function openRecourseCaseRuntime(
       state.recourse !== undefined
       && ["RECOURSE_OPENED", "CHRONOLOGY_COMPLETE", "COMPLETE"].includes(state.stage)
     ) {
-      return publicView(state);
+      return publicView(state, runtime);
     }
     if (state.stage !== "RELEASED" || state.release === undefined) {
       throw new ProtectionProductError("A signed governed result is required");
@@ -1186,7 +1242,7 @@ async function openRecourseCaseRuntime(
     }
     state = saveState(runtime, { ...state, stage: "RECOURSE_OPENED", protectionCase, recourse });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
@@ -1217,7 +1273,7 @@ async function completeCureChronologyRuntime(runtime: ProtectionRuntime, runId: 
     // derives and signs its timestamp, event and final state internally.
     state = saveState(runtime, { ...state, stage: "CHRONOLOGY_COMPLETE" });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
@@ -1228,6 +1284,7 @@ function digestPublicFile(path: string): Sha256Digest {
 }
 
 function buildProtectionEvidence(
+  runtime: ProtectionRuntime,
   state: InternalState,
   governedFheEvidence: GovernedFhePublicEvidence,
   generatedAt: string,
@@ -1240,9 +1297,14 @@ function buildProtectionEvidence(
   ) {
     throw new ProtectionProductError("The complete governed FHE run is required", 500);
   }
-  const sourceCommit = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? "";
-  if (!/^[0-9a-f]{40}$/.test(sourceCommit)) {
-    throw new ProtectionProductError("Exact product source commit is required for evidence export", 500);
+  let sourceCommit: string;
+  try {
+    sourceCommit = resolveProtectionExportSourceCommit(
+      runtime.expectedSourceCommit,
+      process.env.MORDANT_PROTECTION_SOURCE_COMMIT,
+    );
+  } catch {
+    throw new ProtectionProductError("Exact product source commit disagrees with the server/build pin", 500);
   }
   const binding = readJson<FheCaseBinding>(join(state.paths.publicRoot, "case-binding.json"));
   const signatureA = readJson<ParticipantBindingSignature>(join(state.paths.publicRoot, "binding-signature-a.json"));
@@ -1384,14 +1446,14 @@ function buildProtectionEvidence(
     generatedAt,
   };
   const evidence: MordantProtectionEvidence = { ...base, manifestDigest: protectionEvidenceDigest(base) };
-  assertPublicProtectionEvidence(evidence);
+  assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
   return evidence;
 }
 
 async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
-    if (state.stage === "COMPLETE" && state.evidence !== undefined) return publicView(state);
+    if (state.stage === "COMPLETE" && state.evidence !== undefined) return publicView(state, runtime);
     const expectedStage = state.protectionCase.productScenario === "conflict" ? "CHRONOLOGY_COMPLETE" : "RECOURSE_OPENED";
     if (state.stage !== expectedStage || state.release === undefined || state.keygen === undefined) {
       throw new ProtectionProductError("The product journey is not complete");
@@ -1465,25 +1527,33 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       "-request", measurementsPath,
     ]);
     if (existsSync(measurementsPath)) rmSync(measurementsPath);
-    const evidence = buildProtectionEvidence(state, governedFheEvidence, operation.createdAt, attestation.chronology);
+    const evidence = buildProtectionEvidence(runtime, state, governedFheEvidence, operation.createdAt, attestation.chronology);
     writeJsonAtomic(join(state.paths.root, "protection-evidence.json"), evidence, 0o644);
     runtime.failpoint("after-evidence-publication-before-state-save");
     state = saveState(runtime, { ...state, stage: "COMPLETE", evidence });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
-    return publicView(state);
+    return publicView(state, runtime);
   });
 }
 
 async function readProtectionCaseRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
-  return publicView(await loadState(runtime, runId, false));
+  // A GET must never reconcile an admitted operation while this process is
+  // still executing it. Ordinary restart clears this in-memory lock and then
+  // the durable journal is the authority for reconciliation.
+  if (locks.has(runId)) {
+    throw new ProtectionProductError("A protection operation is still running; resume durable readback after it completes", 423);
+  }
+  return publicView(await loadState(runtime, runId, false), runtime);
 }
 
-function loadImportedProtectionEvidenceRuntime(runtime: ProtectionRuntime, scenario: ProductScenario = "conflict"): MordantProtectionEvidence {
+function loadImportedProtectionEvidenceRuntime(
+  runtime: ProtectionRuntime,
+  scenario: ProductScenario = "conflict",
+): VerifiedPublicProtectionEvidence {
   const path = join(runtime.importedEvidenceRoot, `${scenario}.json`);
   if (!existsSync(path)) throw new ProtectionProductError("Imported protection evidence is unavailable", 503);
   const evidence = readJson<MordantProtectionEvidence>(path);
-  assertPublicProtectionEvidence(evidence);
-  return evidence;
+  return verifyAndProjectPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
 }
 
 async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId: string, destination: string): Promise<string> {
@@ -1491,9 +1561,10 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   if (state.stage !== "COMPLETE" || state.evidence === undefined) {
     throw new ProtectionProductError("Only complete public evidence may be retained");
   }
-  const allowed = resolve(runtime.importedEvidenceRoot, `${state.protectionCase.productScenario}.json`);
+  assertPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit);
+  const allowed = resolve(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`);
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
-  if (!existsSync(runtime.importedEvidenceRoot)) {
+  if (!existsSync(runtime.retentionRoot)) {
     throw new ProtectionProductError("Configured evidence retention capability is unavailable", 503);
   }
   const operation = beginOperation(runtime.runRoot, runId, {
@@ -1511,7 +1582,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     createdAt: runtime.now().toISOString(),
   });
   const retention = await runJSON<Readonly<{ reconciled: boolean }>>(runtime, "retain", [
-    "-retention-root", runtime.importedEvidenceRoot,
+    "-retention-root", runtime.retentionRoot,
     "-scenario", state.protectionCase.productScenario,
     "-source", join(state.paths.root, "protection-evidence.json"),
     "-manifest-digest", state.evidence.manifestDigest,
@@ -1519,14 +1590,47 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   ]);
   runtime.failpoint("after-capability-retention-before-readback");
   const retained = readJsonNoFollow<MordantProtectionEvidence>(allowed);
-  assertPublicProtectionEvidence(retained);
+  assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
   if (
-    retained.scenario !== state.protectionCase.productScenario
+    retained.runId !== state.runId
+    || retained.scenario !== state.protectionCase.productScenario
     || retained.protectionCase.fheCaseId !== state.protectionCase.fheCaseId
     || retained.manifestDigest !== state.evidence.manifestDigest
   ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
   finishOperation(runtime.runRoot, runId, operation.operationId, retention.reconciled ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
   return allowed;
+}
+
+async function retainProtectionEvidenceInConfiguredRootRuntime(
+  runtime: ProtectionRuntime,
+  runId: string,
+): Promise<RetainedProtectionEvidenceView> {
+  return exclusive(runId, async () => {
+    const state = await loadState(runtime, runId);
+    const retainedPath = await retainProtectionEvidenceRuntime(
+      runtime,
+      runId,
+      join(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`),
+    );
+    // This is a second independent no-follow read, after the retention command
+    // and its own readback, so the adapter only receives the exact durable bytes.
+    const retained = readJsonNoFollow<MordantProtectionEvidence>(retainedPath);
+    const evidence = verifyAndProjectPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
+    if (
+      evidence.runId !== state.runId
+      || evidence.scenario !== state.protectionCase.productScenario
+      || evidence.fhe.caseId !== state.protectionCase.fheCaseId
+      || evidence.manifestDigest !== state.evidence?.manifestDigest
+    ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
+    return Object.freeze({
+      schemaVersion: "mordant.retained-protection-view/1",
+      runId: state.runId,
+      scenario: evidence.scenario,
+      caseId: evidence.fhe.caseId,
+      manifestDigest: evidence.manifestDigest,
+      evidence,
+    });
+  });
 }
 
 async function validateRetainedPublicArtifactsRuntime(runtime: ProtectionRuntime, runId: string): Promise<Readonly<{
@@ -1572,6 +1676,9 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     readProtectionCase: (runId: string) => readProtectionCaseRuntime(runtime, runId),
     loadImportedProtectionEvidence: (scenario: ProductScenario = "conflict") => loadImportedProtectionEvidenceRuntime(runtime, scenario),
     retainProtectionEvidence: (runId: string, destination: string) => retainProtectionEvidenceRuntime(runtime, runId, destination),
+    retainProtectionEvidenceInConfiguredRoot: (runId: string) => (
+      retainProtectionEvidenceInConfiguredRootRuntime(runtime, runId)
+    ),
     validateRetainedPublicArtifacts: (runId: string) => validateRetainedPublicArtifactsRuntime(runtime, runId),
   });
 }
@@ -1589,4 +1696,5 @@ export const exportProtectionEvidence = DEFAULT_ORCHESTRATOR.exportProtectionEvi
 export const readProtectionCase = DEFAULT_ORCHESTRATOR.readProtectionCase;
 export const loadImportedProtectionEvidence = DEFAULT_ORCHESTRATOR.loadImportedProtectionEvidence;
 export const retainProtectionEvidence = DEFAULT_ORCHESTRATOR.retainProtectionEvidence;
+export const retainProtectionEvidenceInConfiguredRoot = DEFAULT_ORCHESTRATOR.retainProtectionEvidenceInConfiguredRoot;
 export const validateRetainedPublicArtifacts = DEFAULT_ORCHESTRATOR.validateRetainedPublicArtifacts;
