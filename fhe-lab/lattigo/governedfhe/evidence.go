@@ -24,27 +24,33 @@ type SmokeMeasurements struct {
 }
 
 type PublicEvidence struct {
-	SchemaVersion             string            `json:"schemaVersion"`
-	CaseID                    Digest            `json:"caseId"`
-	CaseBindingDigest         Digest            `json:"caseBindingDigest"`
-	CaseManifestDigest        Digest            `json:"caseManifestDigest"`
-	SubmissionDigests         []Digest          `json:"submissionDigests"`
-	EvaluatedArtifactDigest   Digest            `json:"evaluatedArtifactDigest"`
-	GovernedResultDigest      Digest            `json:"governedResultDigest"`
-	RecourseRecordDigest      Digest            `json:"recourseRecordDigest,omitempty"`
-	ReleaseMode               string            `json:"releaseMode"`
-	ReleaseAuthorityID        Digest            `json:"releaseAuthorityId"`
-	Conflict                  bool              `json:"conflict"`
-	PublicStructureValidated  bool              `json:"publicStructureValidated"`
-	ExecutionClass            string            `json:"executionClass"`
-	DeploymentClass           string            `json:"deploymentClass"`
-	ReleaseClass              string            `json:"releaseClass"`
-	RecourseClass             string            `json:"recourseClass"`
-	ProductionIsolationProven bool              `json:"productionIsolationProven"`
-	PublicArtifactBytes       int64             `json:"publicArtifactBytes"`
-	Measurements              SmokeMeasurements `json:"measurements"`
-	ProductClaim              string            `json:"productClaim"`
-	GeneratedAtUnix           int64             `json:"generatedAtUnix"`
+	SchemaVersion                    string            `json:"schemaVersion"`
+	CaseID                           Digest            `json:"caseId"`
+	AssetIdentity                    Digest            `json:"assetIdentity"`
+	CaseBindingDigest                Digest            `json:"caseBindingDigest"`
+	CaseManifestDigest               Digest            `json:"caseManifestDigest"`
+	SubmissionDigests                []Digest          `json:"submissionDigests"`
+	EvaluatedArtifactDigest          Digest            `json:"evaluatedArtifactDigest"`
+	ResultCiphertextDigest           Digest            `json:"resultCiphertextDigest"`
+	ResultCiphertextCommitment       Digest            `json:"resultCiphertextCommitment"`
+	EvaluatorProvenance              Digest            `json:"evaluatorProvenance"`
+	RecomputedResultCiphertextDigest Digest            `json:"recomputedResultCiphertextDigest"`
+	DecryptorProvenance              Digest            `json:"decryptorProvenance"`
+	GovernedResultDigest             Digest            `json:"governedResultDigest"`
+	RecourseRecordDigest             Digest            `json:"recourseRecordDigest,omitempty"`
+	ReleaseMode                      string            `json:"releaseMode"`
+	ReleaseAuthorityID               Digest            `json:"releaseAuthorityId"`
+	Conflict                         bool              `json:"conflict"`
+	PublicStructureValidated         bool              `json:"publicStructureValidated"`
+	ExecutionClass                   string            `json:"executionClass"`
+	DeploymentClass                  string            `json:"deploymentClass"`
+	ReleaseClass                     string            `json:"releaseClass"`
+	RecourseClass                    string            `json:"recourseClass"`
+	ProductionIsolationProven        bool              `json:"productionIsolationProven"`
+	PublicArtifactBytes              int64             `json:"publicArtifactBytes"`
+	Measurements                     SmokeMeasurements `json:"measurements"`
+	ProductClaim                     string            `json:"productClaim"`
+	GeneratedAtUnix                  int64             `json:"generatedAtUnix"`
 }
 
 func expectedPublicFiles(includeRecourse, includeEvidence bool) map[string]bool {
@@ -156,9 +162,12 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 		return PublicEvidence{}, err
 	}
 	evidence := PublicEvidence{
-		SchemaVersion: EvidenceSchema, CaseID: manifest.Binding.CaseID, CaseBindingDigest: artifact.CaseBindingDigest,
+		SchemaVersion: EvidenceSchema, CaseID: manifest.Binding.CaseID, AssetIdentity: manifest.Binding.AssetIdentity, CaseBindingDigest: artifact.CaseBindingDigest,
 		CaseManifestDigest: manifestDigest, SubmissionDigests: []Digest{digestA, digestB},
-		EvaluatedArtifactDigest: artifactDigest, GovernedResultDigest: resultDigest, RecourseRecordDigest: recourseDigest,
+		EvaluatedArtifactDigest: artifactDigest, ResultCiphertextDigest: artifact.ResultCiphertext.Digest,
+		ResultCiphertextCommitment: artifact.ResultCiphertextCommitment, EvaluatorProvenance: artifact.EvaluatorProvenance,
+		RecomputedResultCiphertextDigest: result.ResultCiphertextDigest, DecryptorProvenance: result.SourceProvenance,
+		GovernedResultDigest: resultDigest, RecourseRecordDigest: recourseDigest,
 		ReleaseMode: result.ReleaseMode, ReleaseAuthorityID: result.ReleaseAuthorityID, Conflict: result.Conflict,
 		PublicStructureValidated: true, ExecutionClass: EvidenceExecutionClass, DeploymentClass: EvidenceDeploymentClass,
 		ReleaseClass: EvidenceReleaseClass, RecourseClass: EvidenceRecourseClass, ProductionIsolationProven: false,
