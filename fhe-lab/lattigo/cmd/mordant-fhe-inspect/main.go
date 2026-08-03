@@ -12,13 +12,30 @@ import (
 )
 
 func main() {
+	mode := flag.String("mode", "public", "public or pending-private")
 	publicRoot := flag.String("public-root", "", "absolute public case root")
 	privateRoot := flag.String("private-root", "", "absolute private decryptor root")
+	pendingPhase := flag.String("pending-phase", "", "exact pending product phase for private inspection")
 	flag.Parse()
-	if *publicRoot == "" || *privateRoot == "" {
-		fail(fmt.Errorf("-public-root and -private-root are required"))
+	if *publicRoot == "" {
+		fail(fmt.Errorf("-public-root is required"))
 	}
-	report, err := governedfhe.InspectProductCase(*publicRoot, *privateRoot)
+	var report governedfhe.ProductInspection
+	var err error
+	switch *mode {
+	case "public":
+		if *privateRoot != "" || *pendingPhase != "" {
+			fail(fmt.Errorf("public inspection refuses private inputs"))
+		}
+		report, err = governedfhe.InspectProductCase(*publicRoot)
+	case "pending-private":
+		if *privateRoot == "" || *pendingPhase == "" {
+			fail(fmt.Errorf("pending-private inspection requires private root and phase"))
+		}
+		report, err = governedfhe.InspectPendingProductPrivate(*publicRoot, *privateRoot, *pendingPhase)
+	default:
+		fail(fmt.Errorf("unsupported inspection mode"))
+	}
 	if err != nil {
 		fail(err)
 	}

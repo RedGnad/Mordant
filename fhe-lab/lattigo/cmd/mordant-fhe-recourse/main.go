@@ -27,8 +27,9 @@ type recourseRequest struct {
 }
 
 func main() {
-	mode := flag.String("mode", "recourse", "recourse or evidence")
+	mode := flag.String("mode", "recourse", "recourse, attest, or evidence")
 	publicRoot := flag.String("public-root", "", "absolute immutable public case root")
+	privateRoot := flag.String("private-root", "", "absolute private decryptor root; attest only")
 	requestPath := flag.String("request", "", "absolute strict request JSON")
 	flag.Parse()
 	if !filepath.IsAbs(*publicRoot) || !filepath.IsAbs(*requestPath) {
@@ -37,6 +38,11 @@ func main() {
 	switch *mode {
 	case "recourse":
 		runRecourse(*publicRoot, *requestPath)
+	case "attest":
+		if !filepath.IsAbs(*privateRoot) {
+			fail(fmt.Errorf("attest requires -private-root"))
+		}
+		runAttest(*publicRoot, *privateRoot, *requestPath)
 	case "evidence":
 		runEvidence(*publicRoot, *requestPath)
 	default:
@@ -69,6 +75,12 @@ func loadManifest(publicRoot string) governedfhe.FHECaseManifest {
 func runRecourse(publicRoot, requestPath string) {
 	var request recourseRequest
 	strictRead(requestPath, &request)
+	authorization, err := governedfhe.VerifyProtectionAuthorization(publicRoot)
+	if err != nil || authorization.Binding.FHECaseID != request.CaseID ||
+		authorization.Binding.CleanverseAssetRecordDigest != request.AssetIdentity ||
+		authorization.Binding.HolderAllocationDigest != request.HolderAllocationDigest {
+		fail(governedfhe.ErrRecourse)
+	}
 	result, signedResult, err := governedfhe.LoadGovernedConflictResult(publicRoot)
 	if err != nil || result.CaseID != request.CaseID || result.AssetIdentity != request.AssetIdentity {
 		fail(governedfhe.ErrRecourse)
@@ -96,9 +108,29 @@ func runRecourse(publicRoot, requestPath string) {
 	}{true, record})
 }
 
+func runAttest(publicRoot, privateRoot, requestPath string) {
+	var chronology governedfhe.ProductChronology
+	strictRead(requestPath, &chronology)
+	attestation, err := governedfhe.CreateRecourseAttestation(publicRoot, privateRoot, chronology)
+	if err != nil {
+		fail(err)
+	}
+	digest, err := attestation.Digest()
+	if err != nil {
+		fail(err)
+	}
+	writeJSON(struct {
+		Digest      governedfhe.Digest                     `json:"digest"`
+		Attestation governedfhe.MordantRecourseAttestation `json:"attestation"`
+	}{digest, attestation})
+}
+
 func runEvidence(publicRoot, requestPath string) {
 	var measurements governedfhe.SmokeMeasurements
 	strictRead(requestPath, &measurements)
+	if _, err := governedfhe.LoadProductRecourseAttestation(publicRoot); err != nil {
+		fail(err)
+	}
 	evidence, err := governedfhe.ExportPublicEvidence(publicRoot, measurements, time.Now().UTC())
 	if err != nil {
 		fail(err)

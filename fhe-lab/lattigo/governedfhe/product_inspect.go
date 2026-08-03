@@ -10,18 +10,22 @@ import (
 // Cleanverse product orchestrator. It exposes no decryption capability or
 // private material.
 type ProductInspection struct {
-	Foundation          *ProductKeygenInspection     `json:"foundation,omitempty"`
-	SubmissionA         *ProductSubmissionInspection `json:"submissionA,omitempty"`
-	SubmissionB         *ProductSubmissionInspection `json:"submissionB,omitempty"`
-	Finalized           bool                         `json:"finalized"`
-	EvaluationAdmission bool                         `json:"evaluationAdmission"`
-	Evaluation          *ProductEvaluationInspection `json:"evaluation,omitempty"`
-	ReleaseAdmission    bool                         `json:"releaseAdmission"`
-	Release             *ProductReleaseInspection    `json:"release,omitempty"`
-	Recourse            *RecourseRecord              `json:"recourse,omitempty"`
-	Evidence            *PublicEvidence              `json:"evidence,omitempty"`
-	Ambiguous           bool                         `json:"ambiguous"`
-	AmbiguousReason     string                       `json:"ambiguousReason,omitempty"`
+	Foundation                *ProductKeygenInspection     `json:"foundation,omitempty"`
+	SubmissionA               *ProductSubmissionInspection `json:"submissionA,omitempty"`
+	SubmissionB               *ProductSubmissionInspection `json:"submissionB,omitempty"`
+	Finalized                 bool                         `json:"finalized"`
+	EvaluationAdmission       bool                         `json:"evaluationAdmission"`
+	Evaluation                *ProductEvaluationInspection `json:"evaluation,omitempty"`
+	ReleaseAdmission          bool                         `json:"releaseAdmission"`
+	FoundationPrivateComplete bool                         `json:"foundationPrivateComplete"`
+	ReleasePrivateComplete    bool                         `json:"releasePrivateComplete"`
+	Release                   *ProductReleaseInspection    `json:"release,omitempty"`
+	Recourse                  *RecourseRecord              `json:"recourse,omitempty"`
+	ProtectionBindingDigest   *Digest                      `json:"protectionBindingDigest,omitempty"`
+	RecourseAttestationDigest *Digest                      `json:"recourseAttestationDigest,omitempty"`
+	Evidence                  *PublicEvidence              `json:"evidence,omitempty"`
+	Ambiguous                 bool                         `json:"ambiguous"`
+	AmbiguousReason           string                       `json:"ambiguousReason,omitempty"`
 }
 
 type ProductKeygenInspection struct {
@@ -92,9 +96,9 @@ func inspectPrivateFoundation(store *objectStore, binding FHECaseBinding, bindin
 	return nil
 }
 
-// InspectProductCase verifies every complete public terminal object and the
-// private admission markers required for safe reconciliation. It never writes.
-func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, error) {
+// InspectProductCase verifies public terminal objects only. It never opens a
+// private root and is safe for GET/read reconciliation.
+func InspectProductCase(publicRoot string) (ProductInspection, error) {
 	var inspection ProductInspection
 	if _, err := os.Stat(publicRoot); os.IsNotExist(err) {
 		return inspection, nil
@@ -104,15 +108,8 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 		return inspection, err
 	}
 	defer publicStore.close()
-	privateStore, err := openObjectStore(privateRoot, PrivateCaseQuota, true)
-	if err != nil {
-		return inspection, err
-	}
-	defer privateStore.close()
-
 	publicNames, _ := publicStore.names()
-	privateNames, _ := privateStore.names()
-	if len(publicNames) == 0 && len(privateNames) == 0 {
+	if len(publicNames) == 0 {
 		return inspection, nil
 	}
 	binding, cryptoManifest, foundationErr := loadCaseFoundation(publicStore)
@@ -122,16 +119,21 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 	}
 	bindingDigest, _ := binding.Digest()
 	temporaryManifest := FHECaseManifest{Binding: binding, Crypto: cryptoManifest}
-	if _, err := loadReleaseAuthority(publicStore, temporaryManifest); err != nil || inspectPrivateFoundation(privateStore, binding, bindingDigest) != nil {
+	if _, err := loadReleaseAuthority(publicStore, temporaryManifest); err != nil {
 		inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_AUTHORITY"
 		return inspection, nil
 	}
+	authorization, err := loadProtectionAuthorization(publicStore, binding)
+	if err != nil {
+		inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_PRODUCT_AUTHORIZATION"
+		return inspection, nil
+	}
+	inspection.ProtectionBindingDigest = &authorization.Digest
 	publicBytes, _ := publicStore.usedBytes()
-	privateBytes, _ := privateStore.usedBytes()
 	report := KeyGenerationReport{
 		ParameterBytes: cryptoManifest.Parameters.Length, PublicKeyBytes: cryptoManifest.PublicKey.Length,
 		RelinearizationKeyBytes: cryptoManifest.EvaluationKeys.RelinearizationKey.Length,
-		PublicArtifactBytes:     publicBytes, PrivateArtifactBytes: privateBytes,
+		PublicArtifactBytes:     publicBytes,
 	}
 	for _, key := range cryptoManifest.EvaluationKeys.GaloisKeys {
 		report.GaloisKeyBytes = append(report.GaloisKeyBytes, key.Object.Length)
@@ -174,8 +176,7 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 		}
 	}
 
-	inspection.ReleaseAdmission = privateStore.exists(recomputeAdmissionObject) || privateStore.exists(releaseAdmissionObject) || privateStore.exists(releaseConsumedObject)
-	if publicStore.exists(publicResultObject) || privateStore.exists(retainedResultObject) {
+	if publicStore.exists(publicResultObject) {
 		if inspection.Evaluation == nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "RESULT_WITHOUT_EVALUATION"
 			return inspection, nil
@@ -184,9 +185,7 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 		authority, authorityErr := loadReleaseAuthority(publicStore, manifest)
 		var result GovernedConflictResult
 		resultBytes, resultRef, resultErr := publicStore.readJSON(publicResultObject, &result)
-		var retained GovernedConflictResult
-		retainedBytes, _, retainedErr := privateStore.readJSON(retainedResultObject, &retained)
-		if authorityErr != nil || resultErr != nil || retainedErr != nil || !bytes.Equal(resultBytes, retainedBytes) ||
+		if authorityErr != nil || resultErr != nil ||
 			verifyGovernedResult(result, manifest, artifact, authority) != nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "INCOMPLETE_RELEASE_ADMISSION"
 			return inspection, nil
@@ -200,13 +199,37 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 	if publicStore.exists(recourseRecordObject) {
 		var record RecourseRecord
 		if _, _, err := publicStore.readJSON(recourseRecordObject, &record); err != nil || inspection.Release == nil ||
-			record.CaseID != binding.CaseID || record.CaseBindingDigest != bindingDigest || record.AssetIdentity != binding.AssetIdentity ||
-			record.ResultDigest != inspection.Release.ResultDigest || record.ReleaseMode != inspection.Release.ReleaseMode ||
-			record.ReleaseAuthorityID != binding.ReleaseAuthorityID || !record.OriginalReceivableIntact || !record.Open {
+			func() error {
+				var result GovernedConflictResult
+				if _, _, resultErr := publicStore.readJSON(publicResultObject, &result); resultErr != nil {
+					return resultErr
+				}
+				return validateCompleteRecourseRecord(record, binding, result, inspection.Release.ResultDigest,
+					authorization.Binding.HolderRecordDate, authorization.Binding.HolderAllocationDigest)
+			}() != nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "INVALID_RECOURSE_RECORD"
 			return inspection, nil
 		}
 		inspection.Recourse = &record
+	}
+	if publicStore.exists(productAttestationObject) {
+		var result GovernedConflictResult
+		resultBytes, _, resultErr := publicStore.readJSON(publicResultObject, &result)
+		if resultErr != nil || len(resultBytes) < 2 {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "INVALID_PRODUCT_ATTESTATION"
+			return inspection, nil
+		}
+		var record *RecourseRecord
+		if inspection.Recourse != nil {
+			record = inspection.Recourse
+		}
+		attestation, attestationErr := loadProductAttestation(publicStore, authorization, result, DigestBytes(resultBytes[:len(resultBytes)-1]), record)
+		if attestationErr != nil {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "INVALID_PRODUCT_ATTESTATION"
+			return inspection, nil
+		}
+		digest, _ := attestation.Digest()
+		inspection.RecourseAttestationDigest = &digest
 	}
 
 	if publicStore.exists(evidenceObject) {
@@ -214,6 +237,8 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 		if _, _, err := publicStore.readJSON(evidenceObject, &evidence); err != nil || inspection.Release == nil ||
 			evidence.SchemaVersion != EvidenceSchema || evidence.CaseID != binding.CaseID || evidence.AssetIdentity != binding.AssetIdentity ||
 			evidence.CaseBindingDigest != bindingDigest || evidence.GovernedResultDigest != inspection.Release.ResultDigest ||
+			evidence.ProtectionBindingDigest != authorization.Digest || inspection.RecourseAttestationDigest == nil ||
+			evidence.RecourseAttestationDigest != *inspection.RecourseAttestationDigest ||
 			evidence.Conflict != inspection.Release.Conflict || evidence.ReleaseAuthorityID != binding.ReleaseAuthorityID ||
 			evidence.ReleaseMode != binding.ReleaseMode || !evidence.PublicStructureValidated {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "INVALID_PUBLIC_EVIDENCE"
@@ -221,5 +246,62 @@ func InspectProductCase(publicRoot, privateRoot string) (ProductInspection, erro
 		}
 		inspection.Evidence = &evidence
 	}
+	return inspection, nil
+}
+
+// InspectPendingProductPrivate opens private state only for the exact pending
+// operation that requires private one-shot admission recovery.
+func InspectPendingProductPrivate(publicRoot, privateRoot, phase string) (ProductInspection, error) {
+	var inspection ProductInspection
+	if phase != "PREPARING" && phase != "RELEASING" {
+		return inspection, ErrBinding
+	}
+	publicStore, err := openObjectStore(publicRoot, PublicCaseQuota, false)
+	if err != nil {
+		return inspection, err
+	}
+	defer publicStore.close()
+	privateStore, err := openObjectStore(privateRoot, PrivateCaseQuota, true)
+	if err != nil {
+		return inspection, err
+	}
+	defer privateStore.close()
+	binding, _, err := loadCaseFoundation(publicStore)
+	if err != nil {
+		inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_FOUNDATION"
+		return inspection, nil
+	}
+	if _, err := loadProtectionAuthorization(publicStore, binding); err != nil {
+		inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_PRODUCT_AUTHORIZATION"
+		return inspection, nil
+	}
+	bindingDigest, _ := binding.Digest()
+	if phase == "PREPARING" {
+		if inspectPrivateFoundation(privateStore, binding, bindingDigest) != nil {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_PRIVATE_FOUNDATION"
+			return inspection, nil
+		}
+		inspection.FoundationPrivateComplete = true
+		return inspection, nil
+	}
+	inspection.ReleaseAdmission = privateStore.exists(recomputeAdmissionObject) || privateStore.exists(releaseAdmissionObject) || privateStore.exists(releaseConsumedObject)
+	if !publicStore.exists(publicResultObject) || !privateStore.exists(retainedResultObject) {
+		return inspection, nil
+	}
+	manifest, err := loadCaseManifest(publicStore)
+	if err != nil {
+		return inspection, err
+	}
+	artifact, _, _, err := loadEvaluatedArtifact(publicStore, manifest)
+	authority, authorityErr := loadReleaseAuthority(publicStore, manifest)
+	var result, retained GovernedConflictResult
+	resultBytes, _, resultErr := publicStore.readJSON(publicResultObject, &result)
+	retainedBytes, _, retainedErr := privateStore.readJSON(retainedResultObject, &retained)
+	if err != nil || authorityErr != nil || resultErr != nil || retainedErr != nil || !bytes.Equal(resultBytes, retainedBytes) ||
+		verifyGovernedResult(result, manifest, artifact, authority) != nil {
+		inspection.Ambiguous, inspection.AmbiguousReason = true, "INCOMPLETE_RELEASE_ADMISSION"
+		return inspection, nil
+	}
+	inspection.ReleasePrivateComplete = true
 	return inspection, nil
 }

@@ -19,13 +19,16 @@ import {
   assertGovernedResultAsset,
   assertParticipantSubmissionAsset,
   assertRecourseAsset,
+  assertProtectionBindingDerivations,
   createProtectionCase,
+  protectionBindingFromCase,
   ProtectionBindingError,
 } from "./protection-case";
 import {
   ProtectionEvidenceError,
   assertPublicProtectionEvidence,
   governedResultDigest,
+  protectionBindingDigest,
   protectionEvidenceDigest,
   verifyGovernedResultSignature,
   type MordantProtectionEvidence,
@@ -116,6 +119,9 @@ test("the FHE case is derived only from the protection-case asset and policy", (
   assert.equal(protection.cleanverseAssetDigest, CANONICAL_CLEANVERSE_ASSET_DIGEST);
   assert.equal(protection.fheCaseId, replay.fheCaseId);
   assert.equal(protection.policyId, replay.policyId);
+  const binding = protectionBindingFromCase(protection);
+  assertProtectionBindingDerivations(binding);
+  assert.equal(protectionBindingDigest(binding), protectionBindingDigest(protectionBindingFromCase(replay)));
 });
 
 test("participant, governed result and recourse reject another asset", () => {
@@ -189,10 +195,10 @@ test("production POST gate returns before parsing any request body", async () =>
   }
 });
 
-test("local mutation requires opt-in plus loopback or an external capability", () => {
+test("every network mutation requires opt-in and the external administrator capability", () => {
   const loopback = new Request("http://127.0.0.1:3000/api/protection/conflicting-pledge", { method: "POST" });
   assert.equal(protectionMutationGate(loopback, { NODE_ENV: "development" }).allowed, false);
-  assert.equal(protectionMutationGate(loopback, { NODE_ENV: "development", MORDANT_LOCAL_EXECUTION_ENABLED: "1" }).allowed, true);
+  assert.equal(protectionMutationGate(loopback, { NODE_ENV: "development", MORDANT_LOCAL_EXECUTION_ENABLED: "1" }).allowed, false);
   const remote = new Request("https://mordant.example/api/protection/conflicting-pledge", {
     method: "POST", headers: { "x-mordant-admin-capability": "a".repeat(32) },
   });
@@ -202,6 +208,12 @@ test("local mutation requires opt-in plus loopback or an external capability", (
   assert.equal(protectionMutationGate(remote, {
     NODE_ENV: "development", MORDANT_LOCAL_EXECUTION_ENABLED: "1", MORDANT_LOCAL_ADMIN_CAPABILITY: "a".repeat(32),
   }).allowed, true);
+  const forgedLoopbackHost = new Request("https://remote.example/api/protection/conflicting-pledge", {
+    method: "POST", headers: { host: "localhost" },
+  });
+  assert.equal(protectionMutationGate(forgedLoopbackHost, {
+    NODE_ENV: "development", MORDANT_LOCAL_EXECUTION_ENABLED: "1", MORDANT_LOCAL_ADMIN_CAPABILITY: "a".repeat(32),
+  }).allowed, false);
 });
 
 for (const scenario of ["conflict", "no-conflict"] as const) {
@@ -244,7 +256,9 @@ function mutableEvidence(scenario: "conflict" | "no-conflict"): Mutable<MordantP
 
 function rehash(evidence: MordantProtectionEvidence): MordantProtectionEvidence {
   const clone = structuredClone(evidence);
-  const { manifestDigest: _discarded, ...value } = clone;
+  const value = Object.fromEntries(
+    Object.entries(clone).filter(([key]) => key !== "manifestDigest"),
+  ) as Omit<MordantProtectionEvidence, "manifestDigest">;
   return { ...value, manifestDigest: protectionEvidenceDigest(value) };
 }
 
@@ -275,7 +289,7 @@ test("hybrid no-conflict case plus conflict recourse record is rejected", () => 
 test("hybrid conflict product evidence plus no-conflict governed-FHE evidence is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.governedFheEvidence = mutableEvidence("no-conflict").governedFheEvidence;
-  rejectsEvidence(rehash(conflict), "SCENARIO_BINDING");
+  rejectsEvidence(rehash(conflict), "PROTECTION_BINDING_CROSS_REFERENCE");
 });
 
 test("another release-authority projection is rejected", () => {
@@ -312,6 +326,126 @@ test("mutated CaseID is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.fhe.caseId = BAD_DIGEST;
   rejectsEvidence(rehash(conflict), "CASE_ID_BINDING");
+});
+
+test("every canonical signed product field rejects an adversarial mutation", () => {
+  const mutations: ReadonlyArray<readonly [string, (evidence: Mutable<MordantProtectionEvidence>) => void]> = [
+    ["holder snapshot", (value) => { value.protectionCase.holderSnapshot[0].protectedUnits = "1"; }],
+    ["holder allocation", (value) => { value.protectionCase.holderAllocationDigest = BAD_DIGEST; }],
+    ["record date", (value) => { value.protectionCase.holderRecordDate = "2026-08-03T00:00:00.000Z"; }],
+    ["reserve", (value) => { value.protectionCase.reserve.minorUnits = "1" as "10000000"; }],
+    ["scenario", (value) => { value.scenario = "no-conflict"; }],
+    ["chronology", (value) => { value.chronology.events[0].label = "substituted chronology"; }],
+    ["cure deadline", (value) => { value.chronology.cureDeadline = "2026-08-09T00:00:00.000Z"; }],
+    ["recourse state", (value) => { value.protectionCase.recourseState = "REFUSED"; }],
+    ["original receivable state", (value) => { value.protectionCase.originalReceivable.state = "OTHER" as "OUTSTANDING_INTACT"; }],
+    ["product claim", (value) => { value.recourseAttestation.attestation.productClaim = "other" as typeof value.recourseAttestation.attestation.productClaim; }],
+    ["execution class", (value) => { value.recourseAttestation.attestation.executionClass = "OTHER" as "REAL_BGV_FHE"; }],
+    ["deployment class", (value) => { value.recourseAttestation.attestation.deploymentClass = "OTHER" as "LOCAL_SINGLE_HOST"; }],
+    ["release class", (value) => { value.recourseAttestation.attestation.releaseClass = "OTHER" as "GOVERNED_DECRYPTOR"; }],
+    ["recourse class", (value) => { value.recourseAttestation.attestation.recourseClass = "OTHER" as "LOCAL_PROTOCOL_DOUBLE"; }],
+    ["production isolation", (value) => { value.recourseAttestation.attestation.productionIsolationProven = true as false; }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence)),
+      (error: unknown) => error instanceof ProtectionEvidenceError,
+      `${name} mutation was accepted`,
+    );
+  }
+});
+
+test("TypeScript verifies both participant product signatures and the release-authority attestation", () => {
+  for (const scenario of ["conflict", "no-conflict"] as const) {
+    const evidence = retainedEvidence(scenario);
+    assertPublicProtectionEvidence(evidence);
+    assert.equal(protectionBindingDigest(evidence.protectionAuthorization.binding), evidence.protectionAuthorization.bindingDigest);
+    assert.equal(evidence.recourseAttestation.attestation.protectionBindingDigest, evidence.protectionAuthorization.bindingDigest);
+    assert.equal(evidence.recourseAttestation.attestation.governedResultDigest, evidence.governedResult.digest);
+  }
+});
+
+function replaceJsonPath(root: unknown, path: readonly (string | number)[], value: unknown): void {
+  let cursor = root as Record<string | number, unknown>;
+  for (const part of path.slice(0, -1)) cursor = cursor[part] as Record<string | number, unknown>;
+  cursor[path.at(-1)!] = value;
+}
+
+test("every MordantProtectionBinding field is authenticated", () => {
+  const mutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
+    ["schemaVersion", ["schemaVersion"], "other/1"],
+    ["cleanverseAssetRecordDigest", ["cleanverseAssetRecordDigest"], BAD_DIGEST],
+    ["protectionService", ["protectionService"], "Other service"],
+    ["protectionServiceVersion", ["protectionServiceVersion"], 2],
+    ["policyId", ["policyId"], BAD_DIGEST],
+    ["policyVersion", ["policyVersion"], 2],
+    ["productScenario", ["productScenario"], "no-conflict"],
+    ["fixtureClassification", ["fixtureClassification"], "LIVE"],
+    ["protectedAmount.asset", ["protectedAmount", "asset"], "OTHER"],
+    ["protectedAmount.minorUnits", ["protectedAmount", "minorUnits"], "1"],
+    ["reserveBasisPoints", ["reserveBasisPoints"], 999],
+    ["reserveAmount.asset", ["reserveAmount", "asset"], "OTHER"],
+    ["reserveAmount.minorUnits", ["reserveAmount", "minorUnits"], "1"],
+    ["holderRecordDate", ["holderRecordDate"], "2026-08-03T00:00:00.000Z"],
+    ["holderSnapshot.holderId", ["holderSnapshot", 0, "holderId"], "OTHER"],
+    ["holderSnapshot.protectedUnits", ["holderSnapshot", 0, "protectedUnits"], "1"],
+    ["holderSnapshot.allocationBps", ["holderSnapshot", 0, "allocationBps"], 5999],
+    ["holderAllocationDigest", ["holderAllocationDigest"], BAD_DIGEST],
+    ["caseNonce", ["caseNonce"], BAD_DIGEST],
+    ["fheCaseId", ["fheCaseId"], BAD_DIGEST],
+    ["governedReleaseMode", ["governedReleaseMode"], "threshold-2of3-v1"],
+  ];
+  for (const [field, path, replacement] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence.protectionAuthorization.binding, path, replacement);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence)),
+      (error: unknown) => error instanceof ProtectionEvidenceError,
+      `${field} was not authenticated`,
+    );
+  }
+});
+
+test("every MordantRecourseAttestation field is authenticated", () => {
+  const mutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
+    ["schemaVersion", ["schemaVersion"], "other/1"],
+    ["protectionBindingDigest", ["protectionBindingDigest"], BAD_DIGEST],
+    ["governedResultDigest", ["governedResultDigest"], BAD_DIGEST],
+    ["caseId", ["caseId"], BAD_DIGEST],
+    ["cleanverseAssetRecordDigest", ["cleanverseAssetRecordDigest"], BAD_DIGEST],
+    ["signedBoolean", ["signedBoolean"], false],
+    ["recourseRecordDigest", ["recourseRecordDigest"], BAD_DIGEST],
+    ["recourseRefusal", ["recourseRefusal"], "SIGNED_RESULT_FALSE"],
+    ["holderAllocationDigest", ["holderAllocationDigest"], BAD_DIGEST],
+    ["recordDate", ["recordDate"], "2026-08-03T00:00:00.000Z"],
+    ["cureDeadline", ["cureDeadline"], null],
+    ["finalRecourseState", ["finalRecourseState"], "REFUSED"],
+    ["chronologyDigest", ["chronologyDigest"], BAD_DIGEST],
+    ["originalReceivableState", ["originalReceivableState"], "BURNED"],
+    ["reserveAccountingSeparation.reserveDomain", ["reserveAccountingSeparation", "reserveDomain"], "OTHER"],
+    ["reserveAccountingSeparation.receivableDomain", ["reserveAccountingSeparation", "receivableDomain"], "OTHER"],
+    ["reserveAccountingSeparation.separate", ["reserveAccountingSeparation", "separate"], false],
+    ["reserveAccountingSeparation.claimBurnedOrTransferred", ["reserveAccountingSeparation", "claimBurnedOrTransferred"], true],
+    ["executionClass", ["executionClass"], "OTHER"],
+    ["deploymentClass", ["deploymentClass"], "OTHER"],
+    ["releaseClass", ["releaseClass"], "OTHER"],
+    ["recourseClass", ["recourseClass"], "OTHER"],
+    ["productionIsolationProven", ["productionIsolationProven"], true],
+    ["productClaim", ["productClaim"], "other"],
+    ["releaseAuthorityId", ["releaseAuthorityId"], BAD_DIGEST],
+    ["signature", ["signature"], Buffer.alloc(64, 1).toString("base64")],
+  ];
+  for (const [field, path, replacement] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence.recourseAttestation.attestation, path, replacement);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence)),
+      (error: unknown) => error instanceof ProtectionEvidenceError,
+      `${field} was not authenticated`,
+    );
+  }
 });
 
 test("component evidence state never falls back across imported and local transitions", () => {

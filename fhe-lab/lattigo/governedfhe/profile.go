@@ -42,7 +42,7 @@ const (
 	ReleaseAdmissionSchema    = "mordant.fhe-release-admission/1"
 	ReleaseConsumedSchema     = "mordant.fhe-release-consumed/1"
 	RecourseRecordSchema      = "mordant.fhe-recourse-adapter-record/1"
-	EvidenceSchema            = "mordant.governed-fhe-public-evidence/1"
+	EvidenceSchema            = "mordant.governed-fhe-public-evidence/2"
 
 	PublicCaseQuota  int64 = 1 << 30
 	PrivateCaseQuota int64 = 64 << 20

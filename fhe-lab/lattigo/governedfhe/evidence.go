@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-const ProductClaim = "Mordant evaluates private pledge records under BGV FHE. The evaluator cannot inspect the inputs or dictate the released result. The governed decryptor independently recomputes the fixed circuit, decrypts the final Boolean, and signs it into the recourse workflow. The MVP uses a designated trusted decryptor; threshold output release remains a post-MVP research track."
-
 const (
 	EvidenceExecutionClass  = "REAL_BGV_FHE"
 	EvidenceDeploymentClass = "LOCAL_SINGLE_HOST"
@@ -37,6 +35,8 @@ type PublicEvidence struct {
 	RecomputedResultCiphertextDigest Digest            `json:"recomputedResultCiphertextDigest"`
 	DecryptorProvenance              Digest            `json:"decryptorProvenance"`
 	GovernedResultDigest             Digest            `json:"governedResultDigest"`
+	ProtectionBindingDigest          Digest            `json:"protectionBindingDigest"`
+	RecourseAttestationDigest        Digest            `json:"recourseAttestationDigest"`
 	RecourseRecordDigest             Digest            `json:"recourseRecordDigest,omitempty"`
 	ReleaseMode                      string            `json:"releaseMode"`
 	ReleaseAuthorityID               Digest            `json:"releaseAuthorityId"`
@@ -61,6 +61,8 @@ func expectedPublicFiles(includeRecourse, includeEvidence bool) map[string]bool 
 		submissionAObject: true, submissionBObject: true, submissionAManifest: true, submissionBManifest: true,
 		evaluationAdmissionObject: true, evaluationCompletedObject: true,
 		resultCiphertextObject: true, evaluatedArtifactObject: true, releaseAuthorityObject: true, publicResultObject: true,
+		protectionBindingObject: true, protectionSignatureAObject: true, protectionSignatureBObject: true,
+		productAttestationObject: true,
 	}
 	for index := range rotationSteps {
 		allowed[galoisObject(index)] = true
@@ -84,6 +86,10 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 	}
 	defer publicStore.close()
 	manifest, err := loadCaseManifest(publicStore)
+	if err != nil {
+		return PublicEvidence{}, err
+	}
+	authorization, err := loadProtectionAuthorization(publicStore, manifest.Binding)
 	if err != nil {
 		return PublicEvidence{}, err
 	}
@@ -122,18 +128,30 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 	if includeRecourse {
 		var recourse RecourseRecord
 		recourseBytes, _, err := publicStore.readJSON(recourseRecordObject, &recourse)
-		if err != nil || !result.Conflict || recourse.SchemaVersion != RecourseRecordSchema ||
-			recourse.CaseID != manifest.Binding.CaseID || recourse.CaseBindingDigest != artifact.CaseBindingDigest ||
-			recourse.AssetIdentity != manifest.Binding.AssetIdentity || recourse.PolicyID != manifest.Binding.PolicyID ||
-			recourse.PolicyVersion != result.PolicyVersion || recourse.ResultDigest != resultDigest ||
-			recourse.ReleaseMode != result.ReleaseMode || recourse.ReleaseAuthorityID != result.ReleaseAuthorityID ||
-			recourse.RecordDateUnix <= 0 || recourse.RecordDateUnix > manifest.Binding.CreatedAtUnix ||
-			recourse.BoundAtUnix < result.ReleasedAtUnix || recourse.CureDeadlineUnix <= recourse.BoundAtUnix ||
-			recourse.ReserveBasisPoints != MVPReserveBasisPoints || !nonzero(recourse.HolderAllocationDigest) ||
-			!recourse.OriginalReceivableIntact || !recourse.Open {
+		if err != nil || validateCompleteRecourseRecord(
+			recourse, manifest.Binding, result, resultDigest,
+			authorization.Binding.HolderRecordDate, authorization.Binding.HolderAllocationDigest,
+		) != nil {
 			return PublicEvidence{}, ErrArtifact
 		}
 		recourseDigest = DigestBytes(recourseBytes[:len(recourseBytes)-1])
+	}
+	attestation, err := loadProductAttestation(publicStore, authorization, result, resultDigest, func() *RecourseRecord {
+		if !includeRecourse {
+			return nil
+		}
+		var record RecourseRecord
+		if _, _, readErr := publicStore.readJSON(recourseRecordObject, &record); readErr != nil {
+			return nil
+		}
+		return &record
+	}())
+	if err != nil {
+		return PublicEvidence{}, err
+	}
+	attestationDigest, err := attestation.Digest()
+	if err != nil {
+		return PublicEvidence{}, err
 	}
 	if publicStore.rejectUnknown(expectedPublicFiles(includeRecourse, false)) != nil {
 		return PublicEvidence{}, ErrArtifact
@@ -146,7 +164,8 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 	}
 	for _, name := range []string{caseCryptoObject, caseBindingObject, caseManifestObject, bindingSignatureAObject, bindingSignatureBObject,
 		submissionAManifest, submissionBManifest, evaluationAdmissionObject, evaluationCompletedObject, evaluatedArtifactObject,
-		releaseAuthorityObject, publicResultObject, recourseRecordObject} {
+		releaseAuthorityObject, publicResultObject, recourseRecordObject, protectionBindingObject, protectionSignatureAObject,
+		protectionSignatureBObject, productAttestationObject} {
 		if !publicStore.exists(name) {
 			continue
 		}
@@ -167,11 +186,12 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 		EvaluatedArtifactDigest: artifactDigest, ResultCiphertextDigest: artifact.ResultCiphertext.Digest,
 		ResultCiphertextCommitment: artifact.ResultCiphertextCommitment, EvaluatorProvenance: artifact.EvaluatorProvenance,
 		RecomputedResultCiphertextDigest: result.ResultCiphertextDigest, DecryptorProvenance: result.SourceProvenance,
-		GovernedResultDigest: resultDigest, RecourseRecordDigest: recourseDigest,
+		GovernedResultDigest: resultDigest, ProtectionBindingDigest: authorization.Digest,
+		RecourseAttestationDigest: attestationDigest, RecourseRecordDigest: recourseDigest,
 		ReleaseMode: result.ReleaseMode, ReleaseAuthorityID: result.ReleaseAuthorityID, Conflict: result.Conflict,
 		PublicStructureValidated: true, ExecutionClass: EvidenceExecutionClass, DeploymentClass: EvidenceDeploymentClass,
 		ReleaseClass: EvidenceReleaseClass, RecourseClass: EvidenceRecourseClass, ProductionIsolationProven: false,
-		PublicArtifactBytes: publicBytes, Measurements: measurements, ProductClaim: ProductClaim, GeneratedAtUnix: now.Unix(),
+		PublicArtifactBytes: publicBytes, Measurements: measurements, ProductClaim: ProductClaimIdentifier, GeneratedAtUnix: now.Unix(),
 	}
 	if _, _, err := publicStore.createJSON(evidenceObject, evidence); err != nil {
 		return PublicEvidence{}, err

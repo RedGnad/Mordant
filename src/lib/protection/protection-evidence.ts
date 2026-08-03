@@ -9,10 +9,16 @@ import {
   type Sha256Digest,
   type SourceClassification,
 } from "./cleanverse-asset";
-import type { MordantProtectionCase, ProductScenario } from "./protection-case";
+import {
+  assertProtectionBindingDerivations,
+  protectionBindingFromCase,
+  type MordantProtectionBinding,
+  type MordantProtectionCase,
+  type ProductScenario,
+} from "./protection-case";
 
 export const EXPECTED_GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
-export const EXPECTED_PROTECTION_SOURCE_COMMIT = "e5b5650c18e1947c7944c49f6832cefde478ed5f";
+export const PRODUCT_CLAIM_IDENTIFIER = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1" as const;
 
 export type PublicObjectReference = Readonly<{
   path: string;
@@ -64,6 +70,44 @@ export type ParticipantBindingSignature = Readonly<{
   role: "PARTICIPANT_A" | "PARTICIPANT_B";
   participantId: Sha256Digest;
   bindingDigest: Sha256Digest;
+  signature: string;
+}>;
+
+export type ProtectionBindingSignature = Readonly<{
+  role: "PARTICIPANT_A" | "PARTICIPANT_B";
+  participantId: Sha256Digest;
+  protectionBindingDigest: Sha256Digest;
+  signature: string;
+}>;
+
+export type MordantRecourseAttestation = Readonly<{
+  schemaVersion: "mordant.recourse-attestation/1";
+  protectionBindingDigest: Sha256Digest;
+  governedResultDigest: Sha256Digest;
+  caseId: Sha256Digest;
+  cleanverseAssetRecordDigest: Sha256Digest;
+  signedBoolean: boolean;
+  recourseRecordDigest: Sha256Digest;
+  recourseRefusal: "NONE" | "SIGNED_RESULT_FALSE";
+  holderAllocationDigest: Sha256Digest;
+  recordDate: string;
+  cureDeadline: string | null;
+  finalRecourseState: "AVAILABLE" | "REFUSED";
+  chronologyDigest: Sha256Digest;
+  originalReceivableState: "OUTSTANDING_INTACT";
+  reserveAccountingSeparation: Readonly<{
+    reserveDomain: "PROTECTION";
+    receivableDomain: "RECEIVABLE";
+    separate: true;
+    claimBurnedOrTransferred: false;
+  }>;
+  executionClass: "REAL_BGV_FHE";
+  deploymentClass: "LOCAL_SINGLE_HOST";
+  releaseClass: "GOVERNED_DECRYPTOR";
+  recourseClass: "LOCAL_PROTOCOL_DOUBLE";
+  productionIsolationProven: false;
+  productClaim: typeof PRODUCT_CLAIM_IDENTIFIER;
+  releaseAuthorityId: Sha256Digest;
   signature: string;
 }>;
 
@@ -126,7 +170,7 @@ type TrustedRecoursePins = Readonly<{
 }>;
 
 export type GovernedFhePublicEvidence = Readonly<{
-  schemaVersion: "mordant.governed-fhe-public-evidence/1";
+  schemaVersion: "mordant.governed-fhe-public-evidence/2";
   caseId: Sha256Digest;
   assetIdentity: Sha256Digest;
   caseBindingDigest: Sha256Digest;
@@ -139,6 +183,8 @@ export type GovernedFhePublicEvidence = Readonly<{
   recomputedResultCiphertextDigest: Sha256Digest;
   decryptorProvenance: Sha256Digest;
   governedResultDigest: Sha256Digest;
+  protectionBindingDigest: Sha256Digest;
+  recourseAttestationDigest: Sha256Digest;
   recourseRecordDigest: Sha256Digest;
   releaseMode: "governed-decryptor-v1";
   releaseAuthorityId: Sha256Digest;
@@ -163,7 +209,7 @@ export type GovernedFhePublicEvidence = Readonly<{
 }>;
 
 export type MordantProtectionEvidence = Readonly<{
-  schemaVersion: "mordant.protection-evidence/2";
+  schemaVersion: "mordant.protection-evidence/3";
   manifestDigest: Sha256Digest;
   runId: string;
   sourceCommit: string;
@@ -177,6 +223,11 @@ export type MordantProtectionEvidence = Readonly<{
     Readonly<{ role: "PARTICIPANT_A"; id: Sha256Digest; signingPublicKey: string }>,
     Readonly<{ role: "PARTICIPANT_B"; id: Sha256Digest; signingPublicKey: string }>,
   ];
+  protectionAuthorization: Readonly<{
+    binding: MordantProtectionBinding;
+    bindingDigest: Sha256Digest;
+    participantSignatures: readonly [ProtectionBindingSignature, ProtectionBindingSignature];
+  }>;
   caseAuthorization: Readonly<{
     binding: FheCaseBinding;
     bindingDigest: Sha256Digest;
@@ -220,6 +271,10 @@ export type MordantProtectionEvidence = Readonly<{
     reserveAccountingSeparate: true;
     claimBurnedOrTransferredByProtection: false;
   }>;
+  recourseAttestation: Readonly<{
+    digest: Sha256Digest;
+    attestation: MordantRecourseAttestation;
+  }>;
   governedFheEvidence: GovernedFhePublicEvidence;
   generatedAt: string;
 }>;
@@ -249,6 +304,44 @@ function sha256Raw(value: string | Buffer): Sha256Digest {
 
 function identityValue(identity: FheParticipantIdentity): object {
   return { id: identity.id, role: identity.role, signingPublicKey: identity.signingPublicKey };
+}
+
+function protectionBindingValue(binding: MordantProtectionBinding): object {
+  return {
+    schemaVersion: binding.schemaVersion,
+    cleanverseAssetRecordDigest: binding.cleanverseAssetRecordDigest,
+    protectionService: binding.protectionService,
+    protectionServiceVersion: binding.protectionServiceVersion,
+    policyId: binding.policyId,
+    policyVersion: binding.policyVersion,
+    productScenario: binding.productScenario,
+    fixtureClassification: binding.fixtureClassification,
+    protectedAmount: { asset: binding.protectedAmount.asset, minorUnits: binding.protectedAmount.minorUnits },
+    reserveBasisPoints: binding.reserveBasisPoints,
+    reserveAmount: { asset: binding.reserveAmount.asset, minorUnits: binding.reserveAmount.minorUnits },
+    holderRecordDate: binding.holderRecordDate,
+    holderSnapshot: binding.holderSnapshot.map((holder) => ({
+      holderId: holder.holderId,
+      protectedUnits: holder.protectedUnits,
+      allocationBps: holder.allocationBps,
+    })),
+    holderAllocationDigest: binding.holderAllocationDigest,
+    caseNonce: binding.caseNonce,
+    fheCaseId: binding.fheCaseId,
+    governedReleaseMode: binding.governedReleaseMode,
+  };
+}
+
+export function protectionBindingDigest(binding: MordantProtectionBinding): Sha256Digest {
+  return sha256Raw(JSON.stringify(protectionBindingValue(binding)));
+}
+
+function protectionSignatureValue(signature: ProtectionBindingSignature): object {
+  return {
+    role: signature.role,
+    participantId: signature.participantId,
+    protectionBindingDigest: signature.protectionBindingDigest,
+  };
 }
 
 function caseBindingValue(binding: FheCaseBinding): object {
@@ -309,6 +402,59 @@ function governedResultValue(result: GovernedSignedResult, signing: boolean): ob
     sourceProvenance: result.sourceProvenance,
     signature: signing ? null : result.signature,
   };
+}
+
+function chronologyValue(chronology: MordantProtectionEvidence["chronology"]): object {
+  return {
+    recordDate: chronology.recordDate,
+    holderAllocationDigest: chronology.holderAllocationDigest,
+    cureDeadline: chronology.cureDeadline,
+    events: chronology.events.map((event) => ({
+      ordinal: event.ordinal,
+      kind: event.kind,
+      at: event.at,
+      label: event.label,
+      classification: event.classification,
+      evidenceRef: event.evidenceRef,
+    })),
+  };
+}
+
+function recourseAttestationValue(attestation: MordantRecourseAttestation, signing: boolean): object {
+  return {
+    schemaVersion: attestation.schemaVersion,
+    protectionBindingDigest: attestation.protectionBindingDigest,
+    governedResultDigest: attestation.governedResultDigest,
+    caseId: attestation.caseId,
+    cleanverseAssetRecordDigest: attestation.cleanverseAssetRecordDigest,
+    signedBoolean: attestation.signedBoolean,
+    recourseRecordDigest: attestation.recourseRecordDigest,
+    recourseRefusal: attestation.recourseRefusal,
+    holderAllocationDigest: attestation.holderAllocationDigest,
+    recordDate: attestation.recordDate,
+    cureDeadline: attestation.cureDeadline,
+    finalRecourseState: attestation.finalRecourseState,
+    chronologyDigest: attestation.chronologyDigest,
+    originalReceivableState: attestation.originalReceivableState,
+    reserveAccountingSeparation: {
+      reserveDomain: attestation.reserveAccountingSeparation.reserveDomain,
+      receivableDomain: attestation.reserveAccountingSeparation.receivableDomain,
+      separate: attestation.reserveAccountingSeparation.separate,
+      claimBurnedOrTransferred: attestation.reserveAccountingSeparation.claimBurnedOrTransferred,
+    },
+    executionClass: attestation.executionClass,
+    deploymentClass: attestation.deploymentClass,
+    releaseClass: attestation.releaseClass,
+    recourseClass: attestation.recourseClass,
+    productionIsolationProven: attestation.productionIsolationProven,
+    productClaim: attestation.productClaim,
+    releaseAuthorityId: attestation.releaseAuthorityId,
+    signature: signing ? null : attestation.signature,
+  };
+}
+
+export function recourseAttestationDigest(attestation: MordantRecourseAttestation): Sha256Digest {
+  return sha256Raw(JSON.stringify(recourseAttestationValue(attestation, false)));
 }
 
 export function governedResultDigest(result: GovernedSignedResult): Sha256Digest {
@@ -414,22 +560,133 @@ function assertParticipantAuthorization(evidence: MordantProtectionEvidence): vo
   }
 }
 
+function assertSignedProtectionBinding(evidence: MordantProtectionEvidence): Sha256Digest {
+  const { binding, bindingDigest, participantSignatures } = evidence.protectionAuthorization;
+  exactKeys(binding, [
+    "schemaVersion", "cleanverseAssetRecordDigest", "protectionService", "protectionServiceVersion", "policyId",
+    "policyVersion", "productScenario", "fixtureClassification", "protectedAmount", "reserveBasisPoints",
+    "reserveAmount", "holderRecordDate", "holderSnapshot", "holderAllocationDigest", "caseNonce", "fheCaseId",
+    "governedReleaseMode",
+  ], "PROTECTION_BINDING_FIELDS");
+  exactKeys(binding.protectedAmount, ["asset", "minorUnits"], "PROTECTED_AMOUNT_FIELDS");
+  exactKeys(binding.reserveAmount, ["asset", "minorUnits"], "RESERVE_AMOUNT_FIELDS");
+  if (binding.holderSnapshot.length !== 2) fail("HOLDER_SNAPSHOT", "Complete ordered holder snapshot required");
+  for (const holder of binding.holderSnapshot) {
+    exactKeys(holder, ["holderId", "protectedUnits", "allocationBps"], "HOLDER_SNAPSHOT_FIELDS");
+  }
+  try {
+    assertProtectionBindingDerivations(binding);
+  } catch {
+    fail("PROTECTION_BINDING_DERIVATION", "Protection binding deterministic derivation rejected");
+  }
+  const recalculated = protectionBindingDigest(binding);
+  if (bindingDigest !== recalculated) fail("PROTECTION_BINDING_DIGEST", "Protection binding digest mismatch");
+  const projected = protectionBindingFromCase(evidence.protectionCase);
+  if (JSON.stringify(protectionBindingValue(projected)) !== JSON.stringify(protectionBindingValue(binding))) {
+    fail("PROTECTION_CASE_PROJECTION", "Unsigned protection-case projection differs from the signed root");
+  }
+  const fheBinding = evidence.caseAuthorization.binding;
+  const identities = [fheBinding.participantA, fheBinding.participantB] as const;
+  for (let index = 0; index < 2; index += 1) {
+    const signature = participantSignatures[index];
+    const identity = identities[index];
+    exactKeys(signature, ["role", "participantId", "protectionBindingDigest", "signature"], "PROTECTION_SIGNATURE_FIELDS");
+    if (
+      signature.role !== identity.role || signature.participantId !== identity.id
+      || signature.protectionBindingDigest !== bindingDigest
+    ) fail("PROTECTION_SIGNATURE_BINDING", "Participant protection signature projection mismatch");
+    verifyGoSignature(
+      identity.signingPublicKey,
+      "MordantProtectionBindingSignature/v1",
+      protectionSignatureValue(signature),
+      signature.signature,
+      "PROTECTION_BINDING_SIGNATURE",
+    );
+  }
+  if (
+    binding.cleanverseAssetRecordDigest !== fheBinding.assetIdentity || binding.policyId !== fheBinding.policyId
+    || binding.policyVersion !== fheBinding.policyVersion || binding.fheCaseId !== fheBinding.caseId
+    || binding.caseNonce !== fheBinding.caseNonce || binding.governedReleaseMode !== fheBinding.releaseMode
+  ) fail("PROTECTION_FHE_AUTHORIZATION", "Signed protection root does not match accepted FHE authorization");
+  return bindingDigest;
+}
+
+function assertSignedRecourseAttestation(
+  evidence: MordantProtectionEvidence,
+  protectionDigest: Sha256Digest,
+  resultDigest: Sha256Digest,
+): void {
+  const { digest, attestation } = evidence.recourseAttestation;
+  exactKeys(attestation, [
+    "schemaVersion", "protectionBindingDigest", "governedResultDigest", "caseId", "cleanverseAssetRecordDigest",
+    "signedBoolean", "recourseRecordDigest", "recourseRefusal", "holderAllocationDigest", "recordDate",
+    "cureDeadline", "finalRecourseState", "chronologyDigest", "originalReceivableState",
+    "reserveAccountingSeparation", "executionClass", "deploymentClass", "releaseClass", "recourseClass",
+    "productionIsolationProven", "productClaim", "releaseAuthorityId", "signature",
+  ], "RECOURSE_ATTESTATION_FIELDS");
+  exactKeys(attestation.reserveAccountingSeparation, [
+    "reserveDomain", "receivableDomain", "separate", "claimBurnedOrTransferred",
+  ], "RESERVE_ACCOUNTING_FIELDS");
+  const recalculated = recourseAttestationDigest(attestation);
+  if (digest !== recalculated) fail("RECOURSE_ATTESTATION_DIGEST", "Recourse attestation digest mismatch");
+  verifyGoSignature(
+    evidence.governedResult.releaseAuthorityPublicKey,
+    "MordantRecourseAttestation/v1",
+    recourseAttestationValue(attestation, true),
+    attestation.signature,
+    "RECOURSE_ATTESTATION_SIGNATURE",
+  );
+  const chronologyDigest = sha256Raw(JSON.stringify(chronologyValue(evidence.chronology)));
+  const expectedRecordDigest = evidence.recourse.recordDigest ?? (`sha256:${"00".repeat(32)}` as Sha256Digest);
+  if (
+    attestation.protectionBindingDigest !== protectionDigest || attestation.governedResultDigest !== resultDigest
+    || attestation.caseId !== evidence.protectionAuthorization.binding.fheCaseId
+    || attestation.cleanverseAssetRecordDigest !== evidence.protectionAuthorization.binding.cleanverseAssetRecordDigest
+    || attestation.signedBoolean !== evidence.governedResult.conflict
+    || attestation.recourseRecordDigest !== expectedRecordDigest
+    || attestation.holderAllocationDigest !== evidence.protectionAuthorization.binding.holderAllocationDigest
+    || attestation.recordDate !== evidence.protectionAuthorization.binding.holderRecordDate
+    || attestation.cureDeadline !== evidence.chronology.cureDeadline
+    || attestation.chronologyDigest !== chronologyDigest
+    || attestation.originalReceivableState !== evidence.originalReceivablePreservation.state
+    || attestation.reserveAccountingSeparation.reserveDomain !== "PROTECTION"
+    || attestation.reserveAccountingSeparation.receivableDomain !== "RECEIVABLE"
+    || !attestation.reserveAccountingSeparation.separate
+    || attestation.reserveAccountingSeparation.claimBurnedOrTransferred
+    || attestation.executionClass !== "REAL_BGV_FHE" || attestation.deploymentClass !== "LOCAL_SINGLE_HOST"
+    || attestation.releaseClass !== "GOVERNED_DECRYPTOR" || attestation.recourseClass !== "LOCAL_PROTOCOL_DOUBLE"
+    || attestation.productionIsolationProven || attestation.productClaim !== PRODUCT_CLAIM_IDENTIFIER
+    || attestation.releaseAuthorityId !== evidence.governedResult.releaseAuthorityId
+  ) fail("RECOURSE_ATTESTATION_BINDING", "Signed recourse attestation cross-reference mismatch");
+  if (attestation.signedBoolean) {
+    if (attestation.recourseRefusal !== "NONE" || attestation.finalRecourseState !== "AVAILABLE") {
+      fail("RECOURSE_ATTESTATION_STATE", "Conflict attestation must make recourse available");
+    }
+  } else if (
+    attestation.recourseRefusal !== "SIGNED_RESULT_FALSE" || attestation.finalRecourseState !== "REFUSED"
+    || attestation.cureDeadline !== null
+  ) fail("RECOURSE_ATTESTATION_STATE", "False result attestation must explicitly refuse recourse");
+}
+
 export function protectionEvidenceDigest(
   evidence: Omit<MordantProtectionEvidence, "manifestDigest">,
 ): Sha256Digest {
-  return sha256Digest("MordantProtectionEvidence/v2", evidence);
+  return sha256Digest("MordantProtectionEvidence/v3", evidence);
 }
 
 export function assertPublicProtectionEvidence(evidence: MordantProtectionEvidence): void {
-  if (evidence.schemaVersion !== "mordant.protection-evidence/2") fail("SCHEMA", "Unsupported protection evidence schema");
+  if (evidence.schemaVersion !== "mordant.protection-evidence/3") fail("SCHEMA", "Unsupported protection evidence schema");
   exactKeys(evidence, [
     "schemaVersion", "manifestDigest", "runId", "sourceCommit", "governedFheCommit", "scenario", "cleanverseAsset",
-    "cleanverseAssetDigest", "sourceClassifications", "protectionCase", "participantPublicIdentities", "caseAuthorization",
-    "fhe", "governedResult", "chronology", "recourse", "originalReceivablePreservation", "governedFheEvidence", "generatedAt",
+    "cleanverseAssetDigest", "sourceClassifications", "protectionCase", "participantPublicIdentities", "protectionAuthorization",
+    "caseAuthorization", "fhe", "governedResult", "chronology", "recourse", "originalReceivablePreservation",
+    "recourseAttestation", "governedFheEvidence", "generatedAt",
   ], "PROTECTION_EVIDENCE_FIELDS");
   const { manifestDigest, ...value } = evidence;
+  // manifestDigest detects transport corruption; authenticity is established
+  // only by the three signed canonical roots below.
   if (manifestDigest !== protectionEvidenceDigest(value)) fail("MANIFEST_DIGEST", "Protection evidence digest mismatch");
-  if (evidence.sourceCommit !== EXPECTED_PROTECTION_SOURCE_COMMIT) fail("SOURCE_COMMIT", "Unexpected product source commit");
+  if (!/^[0-9a-f]{40}$/.test(evidence.sourceCommit)) fail("SOURCE_COMMIT", "Exact product source commit required");
   if (evidence.governedFheCommit !== EXPECTED_GOVERNED_FHE_COMMIT) fail("GOVERNED_FHE_COMMIT", "Unexpected governed-FHE commit");
   if (!/^[0-9a-f-]{36}$/.test(evidence.runId)) fail("RUN_ID", "Protection evidence run ID rejected");
 
@@ -442,25 +699,31 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
   ) fail("ASSET_RECORD_DIGEST", "Cleanverse asset record digest mismatch");
 
   assertParticipantAuthorization(evidence);
+  const protectionDigest = assertSignedProtectionBinding(evidence);
+  if (protectionDigest !== evidence.governedFheEvidence.protectionBindingDigest) {
+    fail("PROTECTION_BINDING_CROSS_REFERENCE", "Governed-FHE evidence protection-binding digest mismatch");
+  }
   const binding = evidence.caseAuthorization.binding;
+  const protectionBinding = evidence.protectionAuthorization.binding;
   const result = evidence.governedResult;
   const governed = evidence.governedFheEvidence;
   exactKeys(governed, [
     "schemaVersion", "caseId", "assetIdentity", "caseBindingDigest", "caseManifestDigest", "submissionDigests",
     "evaluatedArtifactDigest", "resultCiphertextDigest", "resultCiphertextCommitment", "evaluatorProvenance",
-    "recomputedResultCiphertextDigest", "decryptorProvenance", "governedResultDigest", "recourseRecordDigest",
+    "recomputedResultCiphertextDigest", "decryptorProvenance", "governedResultDigest", "protectionBindingDigest",
+    "recourseAttestationDigest", "recourseRecordDigest",
     "releaseMode", "releaseAuthorityId", "conflict", "publicStructureValidated", "executionClass", "deploymentClass",
     "releaseClass", "recourseClass", "productionIsolationProven", "publicArtifactBytes", "measurements", "productClaim",
     "generatedAtUnix",
   ], "GOVERNED_FHE_EVIDENCE_FIELDS");
   const pins = governed.measurements.release.trustedRecoursePins;
-  const expectedScenarioConflict = evidence.scenario === "conflict";
+  const expectedScenarioConflict = protectionBinding.productScenario === "conflict";
   if (
-    evidence.scenario !== evidence.protectionCase.productScenario
+    evidence.scenario !== protectionBinding.productScenario || evidence.protectionCase.productScenario !== protectionBinding.productScenario
     || result.conflict !== expectedScenarioConflict || governed.conflict !== expectedScenarioConflict
   ) fail("SCENARIO_BINDING", "Scenario and signed Boolean mismatch");
 
-  const caseId = evidence.protectionCase.fheCaseId;
+  const caseId = protectionBinding.fheCaseId;
   if (
     evidence.fhe.caseId !== caseId || binding.caseId !== caseId || result.caseId !== caseId || governed.caseId !== caseId
   ) fail("CASE_ID_BINDING", "CaseID mismatch across public evidence");
@@ -473,8 +736,8 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
   ) fail("ASSET_BINDING", "Asset identity mismatch across public evidence");
 
   if (
-    binding.policyId !== evidence.protectionCase.policyId || result.policyId !== binding.policyId
-    || binding.policyVersion !== evidence.protectionCase.policyVersion || result.policyVersion !== binding.policyVersion
+    binding.policyId !== protectionBinding.policyId || result.policyId !== binding.policyId
+    || binding.policyVersion !== protectionBinding.policyVersion || result.policyVersion !== binding.policyVersion
     || binding.circuitId !== evidence.fhe.circuitId || result.circuitId !== binding.circuitId
     || binding.circuitVersion !== evidence.fhe.circuitVersion || result.circuitVersion !== binding.circuitVersion
     || binding.circuitDigest !== evidence.fhe.circuitDigest || result.circuitDigest !== binding.circuitDigest
@@ -531,6 +794,11 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
   }
   verifyGovernedResultSignature(result);
 
+  if (
+    governed.schemaVersion !== "mordant.governed-fhe-public-evidence/2"
+    || governed.productClaim !== PRODUCT_CLAIM_IDENTIFIER
+  ) fail("GOVERNED_PRODUCT_PROOF", "Governed public product proof schema or claim mismatch");
+
   const zeroDigest = `sha256:${"00".repeat(32)}`;
   if (result.conflict) {
     const record = evidence.recourse.record;
@@ -573,9 +841,15 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
   ))) fail("CLASSIFICATIONS", "Protection evidence classifications are incomplete");
   if (
     evidence.originalReceivablePreservation.state !== "OUTSTANDING_INTACT"
+    || evidence.protectionCase.originalReceivable.state !== evidence.originalReceivablePreservation.state
     || evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection
     || !evidence.originalReceivablePreservation.reserveAccountingSeparate
   ) fail("RECEIVABLE_PRESERVATION", "Original receivable preservation is not proven by this manifest");
+
+  if (governed.recourseAttestationDigest !== evidence.recourseAttestation.digest) {
+    fail("RECOURSE_ATTESTATION_CROSS_REFERENCE", "Governed-FHE evidence attestation digest mismatch");
+  }
+  assertSignedRecourseAttestation(evidence, protectionDigest, resultDigest);
 
   const serialized = JSON.stringify(evidence).toLowerCase();
   for (const forbidden of [

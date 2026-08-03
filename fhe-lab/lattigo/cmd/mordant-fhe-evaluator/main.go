@@ -19,6 +19,9 @@ func main() {
 	if *publicRoot == "" {
 		fail(fmt.Errorf("-public-root is required"))
 	}
+	if _, err := governedfhe.VerifyProtectionAuthorization(*publicRoot); err != nil {
+		fail(err)
+	}
 	provenance, err := governedfhe.ExecutableDigest()
 	if err != nil {
 		fail(err)

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +7,8 @@ import { test } from "node:test";
 
 import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./governed-fhe-product-server";
 import type { Sha256Digest } from "./cleanverse-asset";
-import type { MordantProtectionEvidence } from "./protection-evidence";
+import { protectionBindingDigest, type MordantProtectionEvidence } from "./protection-evidence";
+import type { MordantProtectionBinding } from "./protection-case";
 import { readOperationJournal } from "./protection-operation-journal";
 
 function digest(byte: string): Sha256Digest {
@@ -22,6 +23,8 @@ type FakeInspection = {
   evaluationAdmission: boolean;
   evaluation?: { artifactDigest: Sha256Digest; resultBytes: number; artifactBytes: number };
   releaseAdmission: boolean;
+  foundationPrivateComplete: boolean;
+  releasePrivateComplete: boolean;
   release?: {
     resultDigest: Sha256Digest;
     conflict: boolean;
@@ -31,6 +34,7 @@ type FakeInspection = {
     trustedRecoursePins: Record<string, unknown>;
   };
   recourse?: Record<string, unknown>;
+  protectionBindingDigest?: Sha256Digest;
   ambiguous: boolean;
 };
 
@@ -44,15 +48,29 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
   const root = await mkdtemp(join(tmpdir(), "mordant-product-reconcile-"));
   const inspections = new Map<string, FakeInspection>();
   const calls = new Map<string, number>();
+  const inspectArgs: string[][] = [];
   const failAfterAdmission = new Set<string>();
   const runner: NonNullable<ProtectionRuntimeOptions["binaryRunner"]> = async <T>(binary: string, args: readonly string[]) => {
     calls.set(binary, (calls.get(binary) ?? 0) + 1);
     const publicRoot = argument(args, "-public-root");
     const inspection = inspections.get(publicRoot) ?? {
-      finalized: false, evaluationAdmission: false, releaseAdmission: false, ambiguous: false,
+      finalized: false, evaluationAdmission: false, releaseAdmission: false,
+      foundationPrivateComplete: false, releasePrivateComplete: false, ambiguous: false,
     };
     inspections.set(publicRoot, inspection);
-    if (binary === "inspect") return structuredClone(inspection) as T;
+    if (binary === "inspect") {
+      inspectArgs.push([...args]);
+      if (argument(args, "-mode") === "pending-private") {
+        return {
+          finalized: false, evaluationAdmission: false,
+          foundationPrivateComplete: inspection.foundation !== undefined,
+          releaseAdmission: inspection.releaseAdmission,
+          releasePrivateComplete: inspection.release !== undefined,
+          ambiguous: false,
+        } as T;
+      }
+      return structuredClone(inspection) as T;
+    }
     mkdirSync(publicRoot, { recursive: true });
     if (binary === "keygen" && argument(args, "-mode") === "create") {
       const spec = JSON.parse(readFileSync(argument(args, "-spec"), "utf8")) as Record<string, unknown>;
@@ -65,8 +83,10 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
         circuitId: "mordant.identity-full-fhe-256",
       };
       writeFileSync(join(publicRoot, "case-binding.json"), `${JSON.stringify(binding)}\n`);
+      const productDigest = protectionBindingDigest(spec.protectionBinding as MordantProtectionBinding);
       inspection.foundation = { bindingDigest: digest("1"), report: { duration: 1 } };
-      return { bindingDigest: digest("1"), durationNanos: 1, report: { duration: 1 } } as T;
+      inspection.protectionBindingDigest = productDigest;
+      return { bindingDigest: digest("1"), protectionBindingDigest: productDigest, durationNanos: 1, report: { duration: 1 } } as T;
     }
     if (binary === "keygen") {
       inspection.finalized = true;
@@ -117,7 +137,7 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
     runRoot: join(root, "runs"), binRoot: join(root, "bin"), importedEvidenceRoot: join(root, "retained"),
     binaryRunner: runner, skipBinaryBuild: true, statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
   };
-  return { base, calls, failAfterAdmission };
+  return { base, calls, failAfterAdmission, inspectArgs };
 }
 
 function crashing(base: ProtectionRuntimeOptions, target: string) {
@@ -201,14 +221,19 @@ test("irreversible evaluation admission without a terminal artifact becomes ABOR
 });
 
 test("published governed release reconciles as exact retry without a second signature", async () => {
-  const { base, calls } = await fakeRuntimeRoot();
+  const { base, calls, inspectArgs } = await fakeRuntimeRoot();
   const { orchestrator, view } = await prepared(base);
   await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_A");
   await orchestrator.submitParticipantPledge(view.runId, "PARTICIPANT_B");
   await orchestrator.evaluatePrivateConflict(view.runId);
   const first = crashing(base, "after-release-publication-before-state-save");
   await assert.rejects(first.releaseGovernedResult(view.runId), /INJECTED_CRASH/);
-  const recovered = await createProtectionOrchestrator(base).readProtectionCase(view.runId);
+  inspectArgs.length = 0;
+  const restarted = createProtectionOrchestrator(base);
+  const publicOnly = await restarted.readProtectionCase(view.runId);
+  assert.equal(publicOnly.stage, "EVALUATED");
+  assert.ok(inspectArgs.every((args) => argument(args, "-mode") === "public" && !args.includes("-private-root")));
+  const recovered = await restarted.releaseGovernedResult(view.runId);
   assert.equal(recovered.stage, "RELEASED");
   assert.equal(recovered.governedResult?.digest, digest("6"));
   assert.equal(calls.get("decryptor"), 1);
@@ -242,6 +267,31 @@ test("case-space preflight uses RUN_ROOT and separately refuses an undersized bi
     error instanceof Error && /binaries and bounded Go cache/.test(error.message)
   ));
   assert.equal(calls.get("keygen"), undefined);
+});
+
+test("public GET/read reconciliation never supplies a private root to the inspector", async () => {
+  const { base, inspectArgs } = await fakeRuntimeRoot();
+  const { orchestrator, view } = await prepared(base);
+  inspectArgs.length = 0;
+  await orchestrator.readProtectionCase(view.runId);
+  assert.ok(inspectArgs.length >= 1);
+  for (const args of inspectArgs) {
+    assert.equal(argument(args, "-mode"), "public");
+    assert.equal(args.includes("-private-root"), false);
+  }
+});
+
+test("a truncated pre-foundation participant key is durably recovered", async () => {
+  const { base } = await fakeRuntimeRoot();
+  const orchestrator = createProtectionOrchestrator(base);
+  const created = await orchestrator.createProtectionCase("no-conflict");
+  const participantRoot = join(String(base.runRoot), created.runId, "participant-private");
+  mkdirSync(participantRoot, { recursive: true });
+  const keyPath = join(participantRoot, "participant_a.ed25519");
+  writeFileSync(keyPath, Buffer.alloc(7), { mode: 0o600 });
+  const preparedView = await orchestrator.preparePrivateMatch(created.runId);
+  assert.equal(preparedView.stage, "MATCH_PREPARED");
+  assert.equal(readFileSync(keyPath).length, 64);
 });
 
 function retainedNoConflict(): MordantProtectionEvidence {
@@ -296,6 +346,36 @@ test("interrupted retention resumes through a fresh orchestrator and exact readb
   assert.equal(readOperationJournal(runRoot, evidence.runId).records.at(-1)?.outcome, "COMPLETED");
 });
 
+test("retention rejects a symlink destination without reading or replacing its target", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mordant-retention-symlink-"));
+  const evidence = retainedNoConflict();
+  const runRoot = join(root, "runs");
+  const destinationRoot = join(root, "retained");
+  const destination = join(destinationRoot, "no-conflict.json");
+  const target = join(root, "outside.json");
+  writeCompleteExecution(runRoot, evidence);
+  mkdirSync(destinationRoot, { recursive: true });
+  writeFileSync(target, "outside\n");
+  symlinkSync(target, destination);
+  const orchestrator = createProtectionOrchestrator({
+    runRoot,
+    binRoot: join(root, "bin"),
+    importedEvidenceRoot: destinationRoot,
+    skipBinaryBuild: true,
+    statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
+    binaryRunner: async <T>(binary: string, args: readonly string[]) => {
+      assert.equal(binary, "inspect");
+      assert.equal(argument(args, "-mode"), "public");
+      return {
+        finalized: true, evaluationAdmission: true, releaseAdmission: false,
+        foundationPrivateComplete: false, releasePrivateComplete: false, ambiguous: false,
+      } as T;
+    },
+  });
+  await assert.rejects(orchestrator.retainProtectionEvidence(evidence.runId, destination), /Symlink/);
+  assert.equal(readFileSync(target, "utf8"), "outside\n");
+});
+
 test("published evidence reconciles after crash without a second create-only export", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-evidence-reconcile-"));
   const evidence = retainedNoConflict();
@@ -307,11 +387,15 @@ test("published evidence reconciles after crash without a second create-only exp
   mkdirSync(publicRoot, { recursive: true });
   mkdirSync(privateRoot, { recursive: true });
   mkdirSync(participantRoot, { recursive: true });
-  const { digest: _resultDigest, ...signedResult } = evidence.governedResult;
+  const signedResult = structuredClone(evidence.governedResult) as unknown as Record<string, unknown>;
+  delete signedResult.digest;
   for (const [name, value] of [
     ["case-binding.json", evidence.caseAuthorization.binding],
     ["binding-signature-a.json", evidence.caseAuthorization.participantSignatures[0]],
     ["binding-signature-b.json", evidence.caseAuthorization.participantSignatures[1]],
+    ["protection-binding.json", evidence.protectionAuthorization.binding],
+    ["protection-binding-signature-a.json", evidence.protectionAuthorization.participantSignatures[0]],
+    ["protection-binding-signature-b.json", evidence.protectionAuthorization.participantSignatures[1]],
     ["case-crypto.json", { publicKey: evidence.fhe.publicKey }],
     ["evaluated-conflict.json", {
       resultCiphertext: evidence.fhe.resultCiphertext,
@@ -327,7 +411,12 @@ test("published evidence reconciles after crash without a second create-only exp
     stage: "RECOURSE_OPENED",
     protectionCase: evidence.protectionCase,
     paths: { root: caseRoot, publicRoot, decryptorPrivateRoot: privateRoot, participantPrivateRoot: participantRoot },
-    keygen: { bindingDigest: evidence.fhe.caseBindingDigest, durationNanos: 0, report: evidence.governedFheEvidence.measurements.keyGeneration },
+    keygen: {
+      bindingDigest: evidence.fhe.caseBindingDigest,
+      protectionBindingDigest: evidence.protectionAuthorization.bindingDigest,
+      durationNanos: 0,
+      report: evidence.governedFheEvidence.measurements.keyGeneration,
+    },
     submissions: {
       PARTICIPANT_A: { artifactDigest: evidence.fhe.participantArtifactDigests[0], durationNanos: 0, ciphertextBytes: 1, artifactBytes: 1 },
       PARTICIPANT_B: { artifactDigest: evidence.fhe.participantArtifactDigests[1], durationNanos: 0, ciphertextBytes: 1, artifactBytes: 1 },
@@ -341,6 +430,7 @@ test("published evidence reconciles after crash without a second create-only exp
     startedAtUnix: Math.floor(new Date(evidence.protectionCase.createdAt).valueOf() / 1000),
   };
   writeFileSync(join(caseRoot, "execution.json"), `${JSON.stringify(execution, null, 2)}\n`);
+  let attestationExists = false;
   let publicEvidenceExists = false;
   let exports = 0;
   const inspection = {
@@ -355,6 +445,9 @@ test("published evidence reconciles after crash without a second create-only exp
       resultDigest: evidence.governedResult.digest, conflict: false, releaseMode: "governed-decryptor-v1",
       resultBytes: 1, exactRetry: true, trustedRecoursePins: pins,
     },
+    foundationPrivateComplete: false,
+    releasePrivateComplete: false,
+    protectionBindingDigest: evidence.protectionAuthorization.bindingDigest,
     ambiguous: false,
   };
   const base: ProtectionRuntimeOptions = {
@@ -363,12 +456,27 @@ test("published evidence reconciles after crash without a second create-only exp
     importedEvidenceRoot: join(root, "retained"),
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
-    binaryRunner: async <T>(binary: string) => {
+    binaryRunner: async <T>(binary: string, args: readonly string[]) => {
       if (binary === "inspect") return {
         ...inspection,
+        ...(attestationExists ? { recourseAttestationDigest: evidence.recourseAttestation.digest } : {}),
         ...(publicEvidenceExists ? { evidence: evidence.governedFheEvidence } : {}),
       } as T;
       assert.equal(binary, "recourse");
+      const mode = argument(args, "-mode");
+      if (mode === "attest") {
+        attestationExists = true;
+        writeFileSync(
+          join(publicRoot, "product-recourse-attestation.json"),
+          `${JSON.stringify(evidence.recourseAttestation.attestation)}\n`,
+        );
+        return {
+          digest: evidence.recourseAttestation.digest,
+          attestation: evidence.recourseAttestation.attestation,
+        } as T;
+      }
+      assert.equal(mode, "evidence");
+      assert.equal(attestationExists, true);
       exports += 1;
       publicEvidenceExists = true;
       return evidence.governedFheEvidence as T;

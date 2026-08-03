@@ -11,6 +11,7 @@ import {
 export const PROTECTION_SERVICE = "Conflicting Pledge Protection" as const;
 export const PROTECTION_SERVICE_VERSION = 1 as const;
 export const PROTECTION_POLICY_VERSION = 1 as const;
+export const PROTECTION_FIXTURE_CLASSIFICATION = "SYNTHETIC_HACKATHON_FIXTURE" as const;
 export const GOVERNED_RELEASE_MODE = "governed-decryptor-v1" as const;
 export const FHE_PARAMETER_PROFILE = "mordant.bgv.identity-full-fhe-256.n15/v1" as const;
 export const FHE_CIRCUIT = "mordant.identity-full-fhe-256" as const;
@@ -38,6 +39,26 @@ export type HolderAllocation = Readonly<{
   holderId: "HOLDER_A" | "HOLDER_B";
   protectedUnits: string;
   allocationBps: 6000 | 4000;
+}>;
+
+export type MordantProtectionBinding = Readonly<{
+  schemaVersion: "mordant.protection-binding/1";
+  cleanverseAssetRecordDigest: Sha256Digest;
+  protectionService: typeof PROTECTION_SERVICE;
+  protectionServiceVersion: typeof PROTECTION_SERVICE_VERSION;
+  policyId: Sha256Digest;
+  policyVersion: typeof PROTECTION_POLICY_VERSION;
+  productScenario: ProductScenario;
+  fixtureClassification: typeof PROTECTION_FIXTURE_CLASSIFICATION;
+  protectedAmount: Readonly<{ asset: "aUSDC"; minorUnits: "100000000" }>;
+  reserveBasisPoints: 1000;
+  reserveAmount: Readonly<{ asset: "aUSDC"; minorUnits: "10000000" }>;
+  holderRecordDate: string;
+  holderSnapshot: readonly [HolderAllocation, HolderAllocation];
+  holderAllocationDigest: Sha256Digest;
+  caseNonce: Sha256Digest;
+  fheCaseId: Sha256Digest;
+  governedReleaseMode: typeof GOVERNED_RELEASE_MODE;
 }>;
 
 export type ProtectionTimelineEvent = Readonly<{
@@ -68,6 +89,7 @@ export type MordantProtectionCase = Readonly<{
   holderRecordDate: string;
   holderSnapshot: readonly [HolderAllocation, HolderAllocation];
   holderAllocationDigest: Sha256Digest;
+  caseNonce: Sha256Digest;
   fheCaseId: Sha256Digest;
   releaseMode: typeof GOVERNED_RELEASE_MODE;
   incidentState: IncidentState;
@@ -104,6 +126,73 @@ export function holderAllocationDigest(
   });
 }
 
+export function protectionFheCaseId(options: Readonly<{
+  assetDigest: Sha256Digest;
+  scenario: ProductScenario;
+  caseNonce: Sha256Digest;
+  policyId: Sha256Digest;
+  holderAllocationDigest: Sha256Digest;
+}>): Sha256Digest {
+  return sha256Digest("MordantProtectionFHECase/v1", {
+    assetDigest: options.assetDigest,
+    scenario: options.scenario,
+    caseNonce: options.caseNonce,
+    policyId: options.policyId,
+    holderAllocationDigest: options.holderAllocationDigest,
+  });
+}
+
+export function protectionBindingFromCase(protectionCase: MordantProtectionCase): MordantProtectionBinding {
+  return {
+    schemaVersion: "mordant.protection-binding/1",
+    cleanverseAssetRecordDigest: protectionCase.cleanverseAssetDigest,
+    protectionService: protectionCase.service,
+    protectionServiceVersion: protectionCase.serviceVersion,
+    policyId: protectionCase.policyId,
+    policyVersion: protectionCase.policyVersion,
+    productScenario: protectionCase.productScenario,
+    fixtureClassification: PROTECTION_FIXTURE_CLASSIFICATION,
+    protectedAmount: protectionCase.protectedAmount,
+    reserveBasisPoints: protectionCase.reserve.basisPoints,
+    reserveAmount: { asset: "aUSDC", minorUnits: protectionCase.reserve.minorUnits },
+    holderRecordDate: protectionCase.holderRecordDate,
+    holderSnapshot: protectionCase.holderSnapshot,
+    holderAllocationDigest: protectionCase.holderAllocationDigest,
+    caseNonce: protectionCase.caseNonce,
+    fheCaseId: protectionCase.fheCaseId,
+    governedReleaseMode: protectionCase.releaseMode,
+  };
+}
+
+export function assertProtectionBindingDerivations(binding: MordantProtectionBinding): void {
+  const allocation = holderAllocationDigest(
+    binding.cleanverseAssetRecordDigest,
+    binding.holderRecordDate,
+    binding.holderSnapshot,
+  );
+  const caseId = protectionFheCaseId({
+    assetDigest: binding.cleanverseAssetRecordDigest,
+    scenario: binding.productScenario,
+    caseNonce: binding.caseNonce,
+    policyId: binding.policyId,
+    holderAllocationDigest: allocation,
+  });
+  if (
+    binding.schemaVersion !== "mordant.protection-binding/1"
+    || binding.protectionService !== PROTECTION_SERVICE
+    || binding.protectionServiceVersion !== PROTECTION_SERVICE_VERSION
+    || binding.policyId !== protectionPolicyId()
+    || binding.policyVersion !== PROTECTION_POLICY_VERSION
+    || binding.fixtureClassification !== PROTECTION_FIXTURE_CLASSIFICATION
+    || binding.protectedAmount.asset !== "aUSDC" || binding.protectedAmount.minorUnits !== "100000000"
+    || binding.reserveBasisPoints !== 1000
+    || binding.reserveAmount.asset !== "aUSDC" || binding.reserveAmount.minorUnits !== "10000000"
+    || binding.governedReleaseMode !== GOVERNED_RELEASE_MODE
+    || allocation !== binding.holderAllocationDigest
+    || caseId !== binding.fheCaseId
+  ) throw new ProtectionBindingError("Canonical protection binding derivation rejected");
+}
+
 export function createProtectionCase(options: Readonly<{
   scenario: ProductScenario;
   createdAt: string;
@@ -122,10 +211,11 @@ export function createProtectionCase(options: Readonly<{
     Object.freeze({ holderId: "HOLDER_B", protectedUnits: "40000000", allocationBps: 4000 }),
   ] satisfies [HolderAllocation, HolderAllocation]);
   const allocationDigest = holderAllocationDigest(assetDigest, holderRecordDate, holders);
-  const fheCaseId = sha256Digest("MordantProtectionFHECase/v1", {
+  const caseNonce = sha256Digest("MordantProtectionCaseNonce/v1", { entropy: options.caseNonce });
+  const fheCaseId = protectionFheCaseId({
     assetDigest,
     scenario: options.scenario,
-    caseNonce: options.caseNonce,
+    caseNonce,
     policyId: protectionPolicyId(),
     holderAllocationDigest: allocationDigest,
   });
@@ -148,6 +238,7 @@ export function createProtectionCase(options: Readonly<{
     holderRecordDate,
     holderSnapshot: holders,
     holderAllocationDigest: allocationDigest,
+    caseNonce,
     fheCaseId,
     releaseMode: GOVERNED_RELEASE_MODE,
     incidentState: "AUTHORIZED",

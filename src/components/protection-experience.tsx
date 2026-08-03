@@ -111,6 +111,9 @@ function EvidenceDrawer({ evidence, onClose }: {
   }, [onClose]);
   const rows = [
     ["Asset record", evidence.cleanverseAssetDigest],
+    ["Protection binding", evidence.protectionAuthorization.bindingDigest],
+    ["Protection signature A", evidence.protectionAuthorization.participantSignatures[0].signature],
+    ["Protection signature B", evidence.protectionAuthorization.participantSignatures[1].signature],
     ["FHE CaseID", evidence.fhe.caseId],
     ["Case binding", evidence.fhe.caseBindingDigest],
     ["Profile", evidence.fhe.profile],
@@ -125,6 +128,8 @@ function EvidenceDrawer({ evidence, onClose }: {
     ["Release authority", evidence.governedResult.releaseAuthorityId],
     ["Release mode", evidence.governedResult.releaseMode],
     ["Recourse record", evidence.recourse.record === null ? "Refused by signed false result" : String(evidence.recourse.record.resultDigest)],
+    ["Recourse attestation", evidence.recourseAttestation.digest],
+    ["Attestation signature", evidence.recourseAttestation.attestation.signature],
   ] as const;
   return (
     <div className={styles.drawerBackdrop} role="presentation" onMouseDown={(event) => {
@@ -181,7 +186,7 @@ export function ProtectionExperience({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const localMode = mode === "local";
-  const activeCase = localView?.protectionCase ?? evidence.protectionCase;
+  const activeCase = localMode ? localView?.protectionCase ?? null : evidence.protectionCase;
   const activeEvidence = evidenceForDisplayedCase(mode, evidence, localView);
   const completedStep = localMode && localView !== null ? STAGE_INDEX[localView.stage] : localMode ? 0 : 5;
   const recourse = localMode
@@ -303,7 +308,14 @@ export function ProtectionExperience({
 
         {error === null ? null : <p className={styles.error} role="alert">{error}</p>}
 
-        <div className={styles.productGrid}>
+        {activeCase === null ? (
+          <section className={styles.localStatus} data-testid="local-case-status" aria-live="polite">
+            <p>{error === null ? "Creating a new local protection case…" : "Local protection case unavailable"}</p>
+            <strong>{error === null ? "Imported case data is withheld while the local run is loading." : error}</strong>
+          </section>
+        ) : (
+          <>
+          <div className={styles.productGrid}>
           <section className={styles.assetCard} aria-labelledby="asset-heading">
             <header><p>Root product object</p><h2 id="asset-heading">Cleanverse asset</h2></header>
             <dl>
@@ -363,9 +375,9 @@ export function ProtectionExperience({
               </button>
             )}
           </section>
-        </div>
+          </div>
 
-        <section className={styles.timeline} aria-labelledby="timeline-heading">
+          <section className={styles.timeline} aria-labelledby="timeline-heading">
           <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → recourse</h2></header>
           <ol>
             {activeCase.timeline.map((event) => (
@@ -380,7 +392,9 @@ export function ProtectionExperience({
               <div><strong>Original receivable claim remains intact</strong><span>RECEIVABLE DOMAIN · NO PROTECTION BURN OR TRANSFER</span></div>
             </li>
           </ol>
-        </section>
+          </section>
+          </>
+        )}
 
         <section className={styles.claimBoundary}>
           <p>{PRODUCT_CLAIM}</p>

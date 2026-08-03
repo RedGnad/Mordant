@@ -19,13 +19,11 @@ export function protectionMutationGate(request: Request, environment: NodeJS.Pro
   if (environment.MORDANT_LOCAL_EXECUTION_ENABLED !== "1") {
     return { allowed: false, status: 404, reason: "LOCAL_EXECUTION_DISABLED" };
   }
-  const hostname = new URL(request.url).hostname.toLowerCase();
-  const loopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
   const configured = environment.MORDANT_LOCAL_ADMIN_CAPABILITY;
   const supplied = request.headers.get("x-mordant-admin-capability");
   const capability = configured !== undefined && configured.length >= 32 && supplied !== null
     && constantTimeEqual(configured, supplied);
-  return loopback || capability
+  return capability
     ? { allowed: true, status: null, reason: null }
     : { allowed: false, status: 404, reason: "MUTATION_ORIGIN_REJECTED" };
 }

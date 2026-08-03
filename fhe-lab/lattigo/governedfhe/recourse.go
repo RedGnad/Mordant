@@ -78,6 +78,12 @@ func AdaptSignedResultToRecourse(config RecourseAdapterConfig, signedResult []by
 		ReserveBasisPoints: config.ReserveBasisPoints, HolderAllocationDigest: config.HolderAllocationDigest,
 		OriginalReceivableIntact: true, Open: true,
 	}
+	if validateCompleteRecourseRecord(
+		record, binding, result, resultDigest,
+		time.Unix(config.RecordDateUnix, 0).UTC().Format(time.RFC3339), config.HolderAllocationDigest,
+	) != nil {
+		return RecourseRecord{}, ErrRecourse
+	}
 	if store.exists(recourseRecordObject) {
 		var prior RecourseRecord
 		priorBytes, _, err := store.readJSON(recourseRecordObject, &prior)
@@ -91,6 +97,33 @@ func AdaptSignedResultToRecourse(config RecourseAdapterConfig, signedResult []by
 		return RecourseRecord{}, err
 	}
 	return record, nil
+}
+
+// validateCompleteRecourseRecord is the single full validator used by record
+// creation, public evidence export, and product inspection.
+func validateCompleteRecourseRecord(
+	record RecourseRecord,
+	binding FHECaseBinding,
+	result GovernedConflictResult,
+	resultDigest Digest,
+	expectedRecordDate string,
+	expectedHolderAllocation Digest,
+) error {
+	bindingDigest, err := binding.Digest()
+	recordDate, dateErr := time.Parse(time.RFC3339Nano, expectedRecordDate)
+	if err != nil || dateErr != nil || !result.Conflict || record.SchemaVersion != RecourseRecordSchema ||
+		record.CaseID != binding.CaseID || record.CaseBindingDigest != bindingDigest ||
+		record.AssetIdentity != binding.AssetIdentity || record.PolicyID != binding.PolicyID ||
+		record.PolicyVersion != result.PolicyVersion || record.ResultDigest != resultDigest ||
+		record.ReleaseMode != result.ReleaseMode || record.ReleaseAuthorityID != result.ReleaseAuthorityID ||
+		record.RecordDateUnix != recordDate.Unix() || record.RecordDateUnix <= 0 || record.RecordDateUnix > binding.CreatedAtUnix ||
+		record.BoundAtUnix < result.ReleasedAtUnix || record.BoundAtUnix > binding.ExpiresAtUnix ||
+		record.CureDeadlineUnix != record.BoundAtUnix+int64((24*time.Hour)/time.Second) ||
+		record.ReserveBasisPoints != MVPReserveBasisPoints || record.HolderAllocationDigest != expectedHolderAllocation ||
+		!nonzero(record.HolderAllocationDigest) || !record.OriginalReceivableIntact || !record.Open {
+		return ErrRecourse
+	}
+	return nil
 }
 
 func verifyRecourseCaseManifest(manifest FHECaseManifest) (FHECaseBinding, Digest, error) {

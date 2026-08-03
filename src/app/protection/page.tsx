@@ -13,7 +13,7 @@ export default function ProtectionPage() {
   return (
     <ProtectionExperience
       initialEvidence={evidence}
-      localExecutionAvailable={process.env.NODE_ENV !== "production" && process.env.MORDANT_LOCAL_EXECUTION_ENABLED === "1"}
+      localExecutionAvailable={false}
     />
   );
 }

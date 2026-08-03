@@ -37,6 +37,9 @@ func main() {
 	if *publicRoot == "" || *role == "" || *signingKeyPath == "" || *pledgePath == "" || *nonceText == "" || *expires <= 0 {
 		fail(fmt.Errorf("all flags are required"))
 	}
+	if _, err := governedfhe.VerifyProtectionAuthorization(*publicRoot); err != nil {
+		fail(err)
+	}
 	key, err := os.ReadFile(*signingKeyPath)
 	if err != nil || len(key) != ed25519.PrivateKeySize {
 		fail(fmt.Errorf("invalid participant signing key"))

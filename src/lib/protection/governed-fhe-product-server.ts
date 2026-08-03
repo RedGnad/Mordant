@@ -8,13 +8,20 @@ import {
   randomUUID,
 } from "node:crypto";
 import {
+  constants as fsConstants,
   chmodSync,
+  closeSync,
   existsSync,
+  fstatSync,
+  fsyncSync,
+  linkSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
-  renameSync,
   rmSync,
   statfsSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -30,21 +37,24 @@ import {
   createProtectionCase as createProtectionCaseModel,
   FHE_CIRCUIT,
   FHE_PARAMETER_PROFILE,
+  protectionBindingFromCase,
   type MordantProtectionCase,
   type ProductScenario,
 } from "./protection-case";
 import {
   EXPECTED_GOVERNED_FHE_COMMIT,
-  EXPECTED_PROTECTION_SOURCE_COMMIT,
   assertPublicProtectionEvidence,
   governedResultDigest,
+  protectionBindingDigest,
   protectionEvidenceDigest,
   verifyGovernedResultSignature,
   type FheCaseBinding,
   type GovernedFhePublicEvidence,
   type GovernedSignedResult,
   type MordantProtectionEvidence,
+  type MordantRecourseAttestation,
   type ParticipantBindingSignature,
+  type ProtectionBindingSignature,
   type PublicRecourseRecord,
 } from "./protection-evidence";
 import {
@@ -66,7 +76,7 @@ export const PRODUCT_STORAGE = Object.freeze({
   binaryAndCacheBytes: 805_306_368,
 });
 
-const SOURCE_COMMIT = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? EXPECTED_PROTECTION_SOURCE_COMMIT;
+const SOURCE_COMMIT = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? "";
 const GOVERNED_FHE_COMMIT = EXPECTED_GOVERNED_FHE_COMMIT;
 const MAX_PROCESS_BUFFER = 8 << 20;
 
@@ -94,6 +104,7 @@ type ExecutionStage =
 
 type KeygenOutput = Readonly<{
   bindingDigest: Sha256Digest;
+  protectionBindingDigest: Sha256Digest;
   durationNanos: number;
   report: Readonly<Record<string, unknown>>;
 }>;
@@ -136,8 +147,12 @@ type ProductInspection = Readonly<{
   evaluationAdmission: boolean;
   evaluation?: Omit<EvaluationOutput, "durationNanos">;
   releaseAdmission: boolean;
+  foundationPrivateComplete: boolean;
+  releasePrivateComplete: boolean;
   release?: Omit<ReleaseOutput, "durationNanos">;
   recourse?: PublicRecourseRecord;
+  protectionBindingDigest?: Sha256Digest;
+  recourseAttestationDigest?: Sha256Digest;
   evidence?: GovernedFhePublicEvidence;
   ambiguous: boolean;
   ambiguousReason?: string;
@@ -180,8 +195,6 @@ function runtimeFrom(options: ProtectionRuntimeOptions = {}): ProtectionRuntime 
     skipBinaryBuild: options.skipBinaryBuild ?? false,
   };
 }
-
-const DEFAULT_RUNTIME = runtimeFrom();
 
 type InternalState = Readonly<{
   schemaVersion: "mordant.protection-execution/2";
@@ -328,6 +341,28 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
+function readJsonNoFollow<T>(path: string): T {
+  const descriptor = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile()) throw new ProtectionProductError("Retained evidence path rejected", 400);
+    return JSON.parse(readFileSync(descriptor, "utf8")) as T;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function assertNoSymlinkRetentionPath(root: string, destination: string): void {
+  const rootStat = lstatSync(root);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory() || dirname(destination) !== root) {
+    throw new ProtectionProductError("Evidence retention root rejected", 400);
+  }
+  const destinationStat = lstatSync(destination, { throwIfNoEntry: false });
+  if (destinationStat !== undefined && (destinationStat.isSymbolicLink() || !destinationStat.isFile())) {
+    throw new ProtectionProductError("Symlink or non-file retention destination rejected", 400);
+  }
+}
+
 function assertRunId(runId: string): void {
   if (!/^[0-9a-f-]{36}$/.test(runId)) throw new ProtectionProductError("Invalid protection run id", 400);
 }
@@ -415,12 +450,36 @@ function participantKeyPaths(state: InternalState): Readonly<Record<"PARTICIPANT
   };
 }
 
-async function inspectCase(runtime: ProtectionRuntime, state: InternalState): Promise<ProductInspection> {
+async function inspectCase(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  pending: ProductOperationRecord | null,
+  allowPrivateInspection: boolean,
+): Promise<ProductInspection> {
   await ensureBinaries(runtime);
-  return runJSON<ProductInspection>(runtime, "inspect", [
+  const publicInspection = await runJSON<ProductInspection>(runtime, "inspect", [
+    "-mode", "public",
+    "-public-root", state.paths.publicRoot,
+  ]);
+  if (
+    !allowPrivateInspection || pending === null || publicInspection.ambiguous
+    || (pending.phase === "PREPARING" && publicInspection.foundation === undefined)
+    || (pending.phase !== "PREPARING" && pending.phase !== "RELEASING")
+  ) return publicInspection;
+  const privateInspection = await runJSON<ProductInspection>(runtime, "inspect", [
+    "-mode", "pending-private",
     "-public-root", state.paths.publicRoot,
     "-private-root", state.paths.decryptorPrivateRoot,
+    "-pending-phase", pending.phase,
   ]);
+  return {
+    ...publicInspection,
+    foundationPrivateComplete: privateInspection.foundationPrivateComplete,
+    releaseAdmission: privateInspection.releaseAdmission,
+    releasePrivateComplete: privateInspection.releasePrivateComplete,
+    ambiguous: privateInspection.ambiguous,
+    ...(privateInspection.ambiguousReason === undefined ? {} : { ambiguousReason: privateInspection.ambiguousReason }),
+  };
 }
 
 function abortState(runtime: ProtectionRuntime, state: InternalState, pending: ProductOperationRecord, reason: string): InternalState {
@@ -444,7 +503,10 @@ function reconcileProtectionProjection(
   const at = pending.createdAt;
   switch (pending.phase) {
     case "PREPARING": {
-      if (inspection.foundation === undefined) return null;
+      if (
+        inspection.foundation === undefined || !inspection.foundationPrivateComplete
+        || inspection.protectionBindingDigest === undefined
+      ) return null;
       const protectionCase = appendEventOnce(state.protectionCase, {
         kind: "HOLDER_SNAPSHOT_RECORDED",
         at,
@@ -456,7 +518,12 @@ function reconcileProtectionProjection(
         ...state,
         stage: "MATCH_PREPARED",
         protectionCase,
-        keygen: { bindingDigest: inspection.foundation.bindingDigest, durationNanos: 0, report: inspection.foundation.report },
+        keygen: {
+          bindingDigest: inspection.foundation.bindingDigest,
+          protectionBindingDigest: inspection.protectionBindingDigest,
+          durationNanos: 0,
+          report: inspection.foundation.report,
+        },
         participantKeys: participantKeyPaths(state),
       };
     }
@@ -493,7 +560,7 @@ function reconcileProtectionProjection(
       return { ...state, stage: "EVALUATED", protectionCase, evaluation: { ...inspection.evaluation, durationNanos: 0 } };
     }
     case "RELEASING": {
-      if (inspection.release === undefined) return null;
+      if (inspection.release === undefined || !inspection.releasePrivateComplete) return null;
       const release: ReleaseOutput = { ...inspection.release, durationNanos: 0 };
       let protectionCase = appendEventOnce(state.protectionCase, {
         kind: "GOVERNED_RECOMPUTATION_VERIFIED",
@@ -567,14 +634,14 @@ function reconcileProtectionProjection(
   }
 }
 
-async function reconcileState(runtime: ProtectionRuntime, state: InternalState): Promise<InternalState> {
+async function reconcileState(runtime: ProtectionRuntime, state: InternalState, allowPrivateInspection = true): Promise<InternalState> {
   const journal = readOperationJournal(runtime.runRoot, state.runId);
   const last = journal.records.at(-1);
   if (last?.outcome === "ABORTED" && state.stage !== "ABORTED") {
     return saveState(runtime, { ...state, stage: "ABORTED", abortedReason: last.outcomeReason ?? "OPERATION_ABORTED" });
   }
   const pending = pendingOperation(runtime.runRoot, state.runId);
-  const inspection = await inspectCase(runtime, state);
+  const inspection = await inspectCase(runtime, state, pending, allowPrivateInspection);
   if (inspection.ambiguous) {
     if (pending === null) throw new ProtectionProductError("Ambiguous cryptographic terminal state", 500);
     return abortState(runtime, state, pending, inspection.ambiguousReason ?? "AMBIGUOUS_CRYPTOGRAPHIC_ACTION");
@@ -598,14 +665,14 @@ async function reconcileState(runtime: ProtectionRuntime, state: InternalState):
   if (pending.phase === "EVALUATING" && inspection.evaluationAdmission) {
     return abortState(runtime, state, pending, "IRREVERSIBLE_EVALUATION_WITHOUT_TERMINAL_ARTIFACT");
   }
-  if (pending.phase === "RELEASING" && inspection.releaseAdmission) {
+  if (allowPrivateInspection && pending.phase === "RELEASING" && inspection.releaseAdmission) {
     return abortState(runtime, state, pending, "IRREVERSIBLE_RELEASE_WITHOUT_TERMINAL_RESULT");
   }
   return state;
 }
 
-async function loadState(runtime: ProtectionRuntime, runId: string): Promise<InternalState> {
-  return reconcileState(runtime, loadStateRaw(runtime, runId));
+async function loadState(runtime: ProtectionRuntime, runId: string, allowPrivateInspection = true): Promise<InternalState> {
+  return reconcileState(runtime, loadStateRaw(runtime, runId), allowPrivateInspection);
 }
 
 async function runJSON<T>(runtime: ProtectionRuntime, binary: keyof typeof BINARIES, args: readonly string[]): Promise<T> {
@@ -617,17 +684,43 @@ async function runJSON<T>(runtime: ProtectionRuntime, binary: keyof typeof BINAR
       env: { ...process.env },
     });
     return JSON.parse(stdout) as T;
-  } catch (error) {
+  } catch {
     throw new ProtectionProductError(`Governed FHE ${binary} operation failed`, 500);
   }
 }
 
-function rawParticipantKey(role: "PARTICIPANT_A" | "PARTICIPANT_B", root: string) {
+function fsyncDirectory(path: string): void {
+  const descriptor = openSync(path, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function readRegularNoFollow(path: string): Buffer {
+  const descriptor = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile() || stat.nlink !== 1) throw new ProtectionProductError("Private key path rejected", 500);
+    return readFileSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function rawParticipantKey(
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  root: string,
+  recoverTruncated: boolean,
+) {
   const path = join(root, `${role.toLowerCase()}.ed25519`);
   if (existsSync(path)) {
-    const retained = readFileSync(path);
-    if (retained.length !== 64) throw new ProtectionProductError("Retained participant key rejected", 500);
-    return { path, publicBase64: retained.subarray(32).toString("base64") };
+    const retained = readRegularNoFollow(path);
+    if (retained.length === 64) return { path, publicBase64: retained.subarray(32).toString("base64") };
+    if (!recoverTruncated) throw new ProtectionProductError("Truncated participant key after foundation admission", 500);
+    unlinkSync(path);
+    fsyncDirectory(root);
   }
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const publicJwk = publicKey.export({ format: "jwk" });
@@ -638,7 +731,26 @@ function rawParticipantKey(role: "PARTICIPANT_A" | "PARTICIPANT_B", root: string
   const decode = (value: string) => Buffer.from(value, "base64url");
   const rawPublic = decode(publicJwk.x);
   const rawPrivate = Buffer.concat([decode(privateJwk.d), rawPublic]);
-  writeFileSync(path, rawPrivate, { mode: 0o600, flag: "wx" });
+  const temporary = join(root, `.mordant-participant-key-${process.pid}-${randomUUID()}.tmp`);
+  let descriptor = -1;
+  try {
+    descriptor = openSync(
+      temporary,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+      0o600,
+    );
+    writeFileSync(descriptor, rawPrivate);
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    descriptor = -1;
+    linkSync(temporary, path);
+    unlinkSync(temporary);
+    fsyncDirectory(root);
+  } finally {
+    rawPrivate.fill(0);
+    if (descriptor >= 0) closeSync(descriptor);
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
   return { path, publicBase64: rawPublic.toString("base64") };
 }
 
@@ -706,7 +818,10 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       },
       expectedCurrentStage: "CASE_CREATED",
       expectedTargetStage: "MATCH_PREPARED",
-      expectedArtifacts: ["case-binding.json", "case-crypto.json", "release-authority.json", "private-case.json"],
+      expectedArtifacts: [
+        "case-binding.json", "case-crypto.json", "release-authority.json", "private-case.json",
+        "protection-binding.json", "protection-binding-signature-a.json", "protection-binding-signature-b.json",
+      ],
       createdAt: runtime.now().toISOString(),
     });
     assertDiskSpace(runtime);
@@ -717,9 +832,10 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
     mkdirSync(state.paths.publicRoot, { recursive: true, mode: 0o755 });
     mkdirSync(state.paths.decryptorPrivateRoot, { recursive: true, mode: 0o700 });
     mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
-    const participantA = rawParticipantKey("PARTICIPANT_A", state.paths.participantPrivateRoot);
+    const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
+    const participantA = rawParticipantKey("PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation);
     runtime.failpoint("after-participant-key-a");
-    const participantB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot);
+    const participantB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation);
     runtime.failpoint("after-both-participant-keys");
     const specPath = join(state.paths.participantPrivateRoot, "case-spec.json");
     const createdAtUnix = unix(state.protectionCase.createdAt);
@@ -737,9 +853,10 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
         role: "PARTICIPANT_B",
         signingPublicKey: participantB.publicBase64,
       },
-      caseNonce: digestText("MordantProtectionCaseNonce/v1", state.runId),
+      caseNonce: state.protectionCase.caseNonce,
       createdAtUnix,
       expiresAtUnix: createdAtUnix + 4 * 60 * 60,
+      protectionBinding: protectionBindingFromCase(state.protectionCase),
     };
     writeJsonAtomic(specPath, spec);
     runtime.failpoint("after-case-spec");
@@ -756,6 +873,8 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       "-public-root", state.paths.publicRoot,
       "-private-root", state.paths.decryptorPrivateRoot,
       "-spec", specPath,
+      "-participant-a-key", participantA.path,
+      "-participant-b-key", participantB.path,
     ]);
     runtime.failpoint("after-keygen-before-state-save");
     const binding = readJson<Record<string, unknown>>(join(state.paths.publicRoot, "case-binding.json"));
@@ -766,12 +885,14 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       || binding.releaseMode !== state.protectionCase.releaseMode
       || binding.parameterProfile !== FHE_PARAMETER_PROFILE
       || binding.circuitId !== FHE_CIRCUIT
+      || output.protectionBindingDigest !== protectionBindingDigest(protectionBindingFromCase(state.protectionCase))
     ) {
       throw new ProtectionProductError("Generated FHE case does not match the protection case", 500);
     }
     state = saveState(runtime, {
       ...state,
       stage: "MATCH_PREPARED",
+      protectionCase: preparedCase,
       keygen: output,
       participantKeys: { PARTICIPANT_A: participantA.path, PARTICIPANT_B: participantB.path },
     });
@@ -1146,6 +1267,10 @@ function buildProtectionEvidence(
   const binding = readJson<FheCaseBinding>(join(state.paths.publicRoot, "case-binding.json"));
   const signatureA = readJson<ParticipantBindingSignature>(join(state.paths.publicRoot, "binding-signature-a.json"));
   const signatureB = readJson<ParticipantBindingSignature>(join(state.paths.publicRoot, "binding-signature-b.json"));
+  const protectionBinding = readJson<ReturnType<typeof protectionBindingFromCase>>(join(state.paths.publicRoot, "protection-binding.json"));
+  const protectionSignatureA = readJson<ProtectionBindingSignature>(join(state.paths.publicRoot, "protection-binding-signature-a.json"));
+  const protectionSignatureB = readJson<ProtectionBindingSignature>(join(state.paths.publicRoot, "protection-binding-signature-b.json"));
+  const recourseAttestation = readJson<MordantRecourseAttestation>(join(state.paths.publicRoot, "product-recourse-attestation.json"));
   const evaluated = readJson<Record<string, unknown>>(join(state.paths.publicRoot, "evaluated-conflict.json"));
   const result = readJson<GovernedSignedResult>(join(state.paths.publicRoot, "governed-conflict-result.json"));
   const publicKey = (readJson<Record<string, unknown>>(join(state.paths.publicRoot, "case-crypto.json")).publicKey ?? {}) as Record<string, unknown>;
@@ -1153,7 +1278,7 @@ function buildProtectionEvidence(
   const resultCiphertext = (evaluated.resultCiphertext ?? {}) as Record<string, unknown>;
   const recourseRecord = (state.recourse.record ?? null) as PublicRecourseRecord | null;
   const base: Omit<MordantProtectionEvidence, "manifestDigest"> = {
-    schemaVersion: "mordant.protection-evidence/2",
+    schemaVersion: "mordant.protection-evidence/3",
     runId: state.runId,
     sourceCommit: SOURCE_COMMIT,
     governedFheCommit: GOVERNED_FHE_COMMIT,
@@ -1173,6 +1298,11 @@ function buildProtectionEvidence(
       { role: "PARTICIPANT_A", id: participants[0].id, signingPublicKey: participants[0].signingPublicKey },
       { role: "PARTICIPANT_B", id: participants[1].id, signingPublicKey: participants[1].signingPublicKey },
     ],
+    protectionAuthorization: {
+      binding: protectionBinding,
+      bindingDigest: protectionBindingDigest(protectionBinding),
+      participantSignatures: [protectionSignatureA, protectionSignatureB],
+    },
     caseAuthorization: {
       binding,
       bindingDigest: state.keygen.bindingDigest,
@@ -1229,6 +1359,10 @@ function buildProtectionEvidence(
       reserveAccountingSeparate: true,
       claimBurnedOrTransferredByProtection: false,
     },
+    recourseAttestation: {
+      digest: digestPublicFile(join(state.paths.publicRoot, "product-recourse-attestation.json")),
+      attestation: recourseAttestation,
+    },
     governedFheEvidence,
     generatedAt,
   };
@@ -1256,9 +1390,36 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       expectedCurrentStage: expectedStage,
       expectedTargetStage: "COMPLETE",
       fixedNowUnix: Math.floor(runtime.now().valueOf() / 1000),
-      expectedArtifacts: ["evidence.json", "protection-evidence.json"],
+      expectedArtifacts: ["product-recourse-attestation.json", "evidence.json", "protection-evidence.json"],
       createdAt: runtime.now().toISOString(),
     });
+    const chronologyPath = join(state.paths.root, "product-chronology.json");
+    if (state.protectionCase.timeline.some((event) => event.evidenceRef === undefined)) {
+      throw new ProtectionProductError("Complete canonical chronology evidence references are required", 500);
+    }
+    writeJsonAtomic(chronologyPath, {
+      recordDate: state.protectionCase.holderRecordDate,
+      holderAllocationDigest: state.protectionCase.holderAllocationDigest,
+      cureDeadline: state.protectionCase.cureDeadline,
+      events: state.protectionCase.timeline,
+    });
+    const attestation = await runJSON<Readonly<{ digest: Sha256Digest; attestation: MordantRecourseAttestation }>>(
+      runtime,
+      "recourse",
+      [
+        "-mode", "attest",
+        "-public-root", state.paths.publicRoot,
+        "-private-root", state.paths.decryptorPrivateRoot,
+        "-request", chronologyPath,
+      ],
+    );
+    if (
+      attestation.digest !== digestPublicFile(join(state.paths.publicRoot, "product-recourse-attestation.json"))
+      || attestation.attestation.protectionBindingDigest !== state.keygen.protectionBindingDigest
+      || attestation.attestation.governedResultDigest !== state.release.resultDigest
+    ) throw new ProtectionProductError("Signed product attestation readback mismatch", 500);
+    if (existsSync(chronologyPath)) rmSync(chronologyPath);
+    runtime.failpoint("after-attestation-publication-before-evidence");
     const measurementsPath = join(state.paths.root, "measurements.json");
     const report = state.keygen.report;
     writeJsonAtomic(measurementsPath, {
@@ -1305,7 +1466,7 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
 }
 
 async function readProtectionCaseRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
-  return publicView(await loadState(runtime, runId));
+  return publicView(await loadState(runtime, runId, false));
 }
 
 function loadImportedProtectionEvidenceRuntime(runtime: ProtectionRuntime, scenario: ProductScenario = "conflict"): MordantProtectionEvidence {
@@ -1323,6 +1484,8 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   }
   const allowed = resolve(runtime.importedEvidenceRoot, `${state.protectionCase.productScenario}.json`);
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
+  mkdirSync(runtime.importedEvidenceRoot, { recursive: true, mode: 0o700 });
+  assertNoSymlinkRetentionPath(runtime.importedEvidenceRoot, allowed);
   const operation = beginOperation(runtime.runRoot, runId, {
     operation: "retainProtectionEvidence",
     phase: "RETAINING",
@@ -1337,9 +1500,8 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     expectedArtifacts: [allowed],
     createdAt: runtime.now().toISOString(),
   });
-  mkdirSync(runtime.importedEvidenceRoot, { recursive: true });
   if (existsSync(allowed)) {
-    const prior = readJson<MordantProtectionEvidence>(allowed);
+    const prior = readJsonNoFollow<MordantProtectionEvidence>(allowed);
     try {
       assertPublicProtectionEvidence(prior);
     } catch {
@@ -1358,7 +1520,8 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     return allowed;
   }
   writeDurableJsonAtomic(allowed, state.evidence, 0o644, () => runtime.failpoint("during-retention-before-atomic-rename"));
-  const retained = readJson<MordantProtectionEvidence>(allowed);
+  assertNoSymlinkRetentionPath(runtime.importedEvidenceRoot, allowed);
+  const retained = readJsonNoFollow<MordantProtectionEvidence>(allowed);
   assertPublicProtectionEvidence(retained);
   if (
     retained.scenario !== state.protectionCase.productScenario
