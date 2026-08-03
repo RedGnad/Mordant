@@ -18,12 +18,9 @@ import (
 )
 
 type recourseRequest struct {
-	AssetIdentity          governedfhe.Digest              `json:"assetIdentity"`
-	CaseID                 governedfhe.Digest              `json:"caseId"`
-	ExpectedPins           governedfhe.TrustedRecoursePins `json:"expectedPins"`
-	RecordDateUnix         int64                           `json:"recordDateUnix"`
-	HolderAllocationDigest governedfhe.Digest              `json:"holderAllocationDigest"`
-	NowUnix                int64                           `json:"nowUnix"`
+	AssetIdentity governedfhe.Digest              `json:"assetIdentity"`
+	CaseID        governedfhe.Digest              `json:"caseId"`
+	ExpectedPins  governedfhe.TrustedRecoursePins `json:"expectedPins"`
 }
 
 func main() {
@@ -32,18 +29,24 @@ func main() {
 	privateRoot := flag.String("private-root", "", "absolute private decryptor root; attest only")
 	requestPath := flag.String("request", "", "absolute strict request JSON")
 	flag.Parse()
-	if !filepath.IsAbs(*publicRoot) || !filepath.IsAbs(*requestPath) {
-		fail(fmt.Errorf("-public-root and -request must be absolute"))
+	if !filepath.IsAbs(*publicRoot) {
+		fail(fmt.Errorf("-public-root must be absolute"))
 	}
 	switch *mode {
 	case "recourse":
+		if !filepath.IsAbs(*requestPath) {
+			fail(fmt.Errorf("recourse requires -request"))
+		}
 		runRecourse(*publicRoot, *requestPath)
 	case "attest":
 		if !filepath.IsAbs(*privateRoot) {
 			fail(fmt.Errorf("attest requires -private-root"))
 		}
-		runAttest(*publicRoot, *privateRoot, *requestPath)
+		runAttest(*publicRoot, *privateRoot)
 	case "evidence":
+		if !filepath.IsAbs(*requestPath) {
+			fail(fmt.Errorf("evidence requires -request"))
+		}
 		runEvidence(*publicRoot, *requestPath)
 	default:
 		fail(fmt.Errorf("unsupported mode"))
@@ -55,15 +58,22 @@ func strictRead(path string, target any) {
 	if err != nil {
 		fail(err)
 	}
+	if decodeStrictRequest(data, target) != nil {
+		fail(fmt.Errorf("invalid request JSON"))
+	}
+}
+
+func decodeStrictRequest(data []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(target) != nil {
-		fail(fmt.Errorf("invalid request JSON"))
+	if err := decoder.Decode(target); err != nil {
+		return err
 	}
 	var trailing any
 	if decoder.Decode(&trailing) != io.EOF {
-		fail(fmt.Errorf("invalid request JSON"))
+		return fmt.Errorf("trailing request JSON")
 	}
+	return nil
 }
 
 func loadManifest(publicRoot string) governedfhe.FHECaseManifest {
@@ -77,8 +87,7 @@ func runRecourse(publicRoot, requestPath string) {
 	strictRead(requestPath, &request)
 	authorization, err := governedfhe.VerifyProtectionAuthorization(publicRoot)
 	if err != nil || authorization.Binding.FHECaseID != request.CaseID ||
-		authorization.Binding.CleanverseAssetRecordDigest != request.AssetIdentity ||
-		authorization.Binding.HolderAllocationDigest != request.HolderAllocationDigest {
+		authorization.Binding.CleanverseAssetRecordDigest != request.AssetIdentity {
 		fail(governedfhe.ErrRecourse)
 	}
 	result, signedResult, err := governedfhe.LoadGovernedConflictResult(publicRoot)
@@ -87,9 +96,6 @@ func runRecourse(publicRoot, requestPath string) {
 	}
 	config := governedfhe.RecourseAdapterConfig{
 		RecordRoot: publicRoot, CaseManifest: loadManifest(publicRoot), ExpectedPins: request.ExpectedPins,
-		RecordDateUnix: request.RecordDateUnix, CurePeriod: 24 * time.Hour,
-		ReserveBasisPoints:     governedfhe.MVPReserveBasisPoints,
-		HolderAllocationDigest: request.HolderAllocationDigest, Now: time.Unix(request.NowUnix, 0).UTC(),
 	}
 	record, err := governedfhe.AdaptSignedResultToRecourse(config, signedResult)
 	if errors.Is(err, governedfhe.ErrRecourse) && !result.Conflict {
@@ -108,10 +114,8 @@ func runRecourse(publicRoot, requestPath string) {
 	}{true, record})
 }
 
-func runAttest(publicRoot, privateRoot, requestPath string) {
-	var chronology governedfhe.ProductChronology
-	strictRead(requestPath, &chronology)
-	attestation, err := governedfhe.CreateRecourseAttestation(publicRoot, privateRoot, chronology)
+func runAttest(publicRoot, privateRoot string) {
+	attestation, err := governedfhe.CreateRecourseAttestation(publicRoot, privateRoot)
 	if err != nil {
 		fail(err)
 	}
@@ -119,10 +123,15 @@ func runAttest(publicRoot, privateRoot, requestPath string) {
 	if err != nil {
 		fail(err)
 	}
+	chronology, err := governedfhe.LoadCanonicalProductChronology(publicRoot)
+	if err != nil {
+		fail(err)
+	}
 	writeJSON(struct {
 		Digest      governedfhe.Digest                     `json:"digest"`
 		Attestation governedfhe.MordantRecourseAttestation `json:"attestation"`
-	}{digest, attestation})
+		Chronology  governedfhe.ProductChronology          `json:"chronology"`
+	}{digest, attestation, chronology})
 }
 
 func runEvidence(publicRoot, requestPath string) {

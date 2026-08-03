@@ -2,12 +2,10 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 
 import {
   CANONICAL_CLEANVERSE_ASSET_DIGEST,
-  SOURCE_CLASSIFICATIONS,
   cleanverseAssetRecordDigest,
   sha256Digest,
   type CleanverseAssetRecord,
   type Sha256Digest,
-  type SourceClassification,
 } from "./cleanverse-asset";
 import {
   assertProtectionBindingDerivations,
@@ -26,10 +24,22 @@ export type PublicObjectReference = Readonly<{
   length: number;
 }>;
 
-export type EvidenceSource = Readonly<{
-  subject: string;
-  classification: SourceClassification;
-  detail: string;
+export const CANONICAL_SOURCE_CLASSIFICATION_IDS = Object.freeze([
+  "CLEANVERSE_M11_LIVE_OBSERVED",
+  "CLEANVERSE_TERMS_DOCUMENTED",
+  "N15_GOVERNED_FHE_LOCAL_EXECUTION",
+  "RECOURSE_LOCAL_PROTOCOL_DOUBLE",
+  "SYNTHETIC_PROTECTED_PLEDGE_FIXTURE",
+  "PRODUCTION_CUSTODY_UNPROVEN",
+] as const);
+export type CanonicalSourceClassificationId = typeof CANONICAL_SOURCE_CLASSIFICATION_IDS[number];
+export type ProductClockClass = "REAL_OBSERVED_CLOCK" | "SIMULATED_PROTOCOL_CLOCK";
+export type CanonicalChronologyEvent = Readonly<{
+  ordinal: number;
+  kind: string;
+  atUnix: number | null;
+  clockSource: string;
+  evidenceRef: Sha256Digest;
 }>;
 
 export type FheParticipantIdentity = Readonly<{
@@ -81,7 +91,7 @@ export type ProtectionBindingSignature = Readonly<{
 }>;
 
 export type MordantRecourseAttestation = Readonly<{
-  schemaVersion: "mordant.recourse-attestation/1";
+  schemaVersion: "mordant.recourse-attestation/2";
   protectionBindingDigest: Sha256Digest;
   governedResultDigest: Sha256Digest;
   caseId: Sha256Digest;
@@ -92,7 +102,11 @@ export type MordantRecourseAttestation = Readonly<{
   holderAllocationDigest: Sha256Digest;
   recordDate: string;
   cureDeadline: string | null;
-  finalRecourseState: "AVAILABLE" | "REFUSED";
+  finalRecourseState: "AVAILABLE" | "SIMULATED_AVAILABLE" | "REFUSED";
+  finalIncidentState: "CONFLICT_CONFIRMED" | "CLEARED";
+  clockClass: ProductClockClass;
+  signedAtUnix: number;
+  simulationAsOfUnix: number | null;
   chronologyDigest: Sha256Digest;
   originalReceivableState: "OUTSTANDING_INTACT";
   reserveAccountingSeparation: Readonly<{
@@ -106,7 +120,9 @@ export type MordantRecourseAttestation = Readonly<{
   releaseClass: "GOVERNED_DECRYPTOR";
   recourseClass: "LOCAL_PROTOCOL_DOUBLE";
   productionIsolationProven: false;
-  productClaim: typeof PRODUCT_CLAIM_IDENTIFIER;
+  productClaim:
+    | "mordant.conflicting-pledge-protection/governed-fhe-mvp-simulated-protocol-clock-v1"
+    | "mordant.conflicting-pledge-protection/governed-fhe-mvp-real-observed-clock-v1";
   releaseAuthorityId: Sha256Digest;
   signature: string;
 }>;
@@ -209,7 +225,7 @@ export type GovernedFhePublicEvidence = Readonly<{
 }>;
 
 export type MordantProtectionEvidence = Readonly<{
-  schemaVersion: "mordant.protection-evidence/3";
+  schemaVersion: "mordant.protection-evidence/4";
   manifestDigest: Sha256Digest;
   runId: string;
   sourceCommit: string;
@@ -217,8 +233,8 @@ export type MordantProtectionEvidence = Readonly<{
   scenario: ProductScenario;
   cleanverseAsset: CleanverseAssetRecord;
   cleanverseAssetDigest: Sha256Digest;
-  sourceClassifications: readonly EvidenceSource[];
-  protectionCase: MordantProtectionCase;
+  sourceClassifications: readonly CanonicalSourceClassificationId[];
+  protectionCase: Omit<MordantProtectionCase, "timeline" | "incidentState" | "cureDeadline" | "recourseState" | "createdAt">;
   participantPublicIdentities: readonly [
     Readonly<{ role: "PARTICIPANT_A"; id: Sha256Digest; signingPublicKey: string }>,
     Readonly<{ role: "PARTICIPANT_B"; id: Sha256Digest; signingPublicKey: string }>,
@@ -252,10 +268,16 @@ export type MordantProtectionEvidence = Readonly<{
   }>;
   governedResult: Readonly<{ digest: Sha256Digest } & GovernedSignedResult>;
   chronology: Readonly<{
+    schemaVersion: "mordant.product-chronology/1";
+    clockClass: ProductClockClass;
+    signedAtUnix: number;
+    simulationAsOfUnix: number | null;
     recordDate: string;
     holderAllocationDigest: Sha256Digest;
-    cureDeadline: string | null;
-    events: MordantProtectionCase["timeline"];
+    cureDeadlineUnix: number | null;
+    finalIncidentState: "CONFLICT_CONFIRMED" | "CLEARED";
+    finalRecourseState: "AVAILABLE" | "SIMULATED_AVAILABLE" | "REFUSED";
+    events: readonly CanonicalChronologyEvent[];
   }>;
   recourse: Readonly<{
     classification: "PROTOCOL_DOUBLE";
@@ -406,15 +428,20 @@ function governedResultValue(result: GovernedSignedResult, signing: boolean): ob
 
 function chronologyValue(chronology: MordantProtectionEvidence["chronology"]): object {
   return {
+    schemaVersion: chronology.schemaVersion,
+    clockClass: chronology.clockClass,
+    signedAtUnix: chronology.signedAtUnix,
+    simulationAsOfUnix: chronology.simulationAsOfUnix,
     recordDate: chronology.recordDate,
     holderAllocationDigest: chronology.holderAllocationDigest,
-    cureDeadline: chronology.cureDeadline,
+    cureDeadlineUnix: chronology.cureDeadlineUnix,
+    finalIncidentState: chronology.finalIncidentState,
+    finalRecourseState: chronology.finalRecourseState,
     events: chronology.events.map((event) => ({
       ordinal: event.ordinal,
       kind: event.kind,
-      at: event.at,
-      label: event.label,
-      classification: event.classification,
+      atUnix: event.atUnix,
+      clockSource: event.clockSource,
       evidenceRef: event.evidenceRef,
     })),
   };
@@ -434,6 +461,10 @@ function recourseAttestationValue(attestation: MordantRecourseAttestation, signi
     recordDate: attestation.recordDate,
     cureDeadline: attestation.cureDeadline,
     finalRecourseState: attestation.finalRecourseState,
+    finalIncidentState: attestation.finalIncidentState,
+    clockClass: attestation.clockClass,
+    signedAtUnix: attestation.signedAtUnix,
+    simulationAsOfUnix: attestation.simulationAsOfUnix,
     chronologyDigest: attestation.chronologyDigest,
     originalReceivableState: attestation.originalReceivableState,
     reserveAccountingSeparation: {
@@ -498,6 +529,58 @@ function recourseRecordValue(record: PublicRecourseRecord): object {
     holderAllocationDigest: record.holderAllocationDigest,
     originalReceivableIntact: record.originalReceivableIntact,
     open: record.open,
+  };
+}
+
+function expectedCanonicalChronology(evidence: MordantProtectionEvidence): MordantProtectionEvidence["chronology"] {
+  const binding = evidence.caseAuthorization.binding;
+  const protection = evidence.protectionAuthorization.binding;
+  const result = evidence.governedResult;
+  const events: CanonicalChronologyEvent[] = [
+    { ordinal: 1, kind: "PROTECTED_HOLDER_SNAPSHOT_FIXED", atUnix: Math.floor(new Date(protection.holderRecordDate).valueOf() / 1000), clockSource: "PROTECTION_BINDING_RECORD_DATE", evidenceRef: evidence.protectionAuthorization.bindingDigest },
+    { ordinal: 2, kind: "FHE_CASE_CREATED", atUnix: binding.createdAtUnix, clockSource: "SIGNED_FHE_CASE_CLOCK", evidenceRef: evidence.caseAuthorization.bindingDigest },
+    { ordinal: 3, kind: "PARTICIPANT_A_ARTIFACT_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.participantArtifactDigests[0] },
+    { ordinal: 4, kind: "PARTICIPANT_B_ARTIFACT_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.participantArtifactDigests[1] },
+    { ordinal: 5, kind: "FHE_EVALUATION_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.evaluatedArtifactDigest },
+    { ordinal: 6, kind: "GOVERNED_RESULT_RELEASED", atUnix: result.releasedAtUnix, clockSource: "SIGNED_GOVERNED_RELEASE_CLOCK", evidenceRef: result.digest },
+  ];
+  let cureDeadlineUnix: number | null = null;
+  let finalIncidentState: "CONFLICT_CONFIRMED" | "CLEARED" = "CLEARED";
+  let finalRecourseState: "AVAILABLE" | "SIMULATED_AVAILABLE" | "REFUSED" = "REFUSED";
+  let simulationAsOfUnix: number | null = null;
+  if (result.conflict) {
+    const record = evidence.recourse.record;
+    if (record === null || evidence.recourse.recordDigest === null) {
+      fail("CHRONOLOGY_RECORD", "Conflict chronology requires the exact durable recourse record");
+    }
+    cureDeadlineUnix = record.cureDeadlineUnix;
+    finalIncidentState = "CONFLICT_CONFIRMED";
+    events.push({ ordinal: 7, kind: "RECOURSE_BOUND", atUnix: record.boundAtUnix, clockSource: "DURABLE_RECOURSE_CLOCK", evidenceRef: evidence.recourse.recordDigest });
+    if (evidence.chronology.clockClass === "SIMULATED_PROTOCOL_CLOCK") {
+      simulationAsOfUnix = record.cureDeadlineUnix + 1;
+      finalRecourseState = "SIMULATED_AVAILABLE";
+      events.push({ ordinal: 8, kind: "SIMULATED_CURE_WINDOW_COMPLETED", atUnix: simulationAsOfUnix, clockSource: "SIMULATED_PROTOCOL_CLOCK", evidenceRef: evidence.recourse.recordDigest });
+    } else {
+      if (evidence.chronology.signedAtUnix <= record.cureDeadlineUnix) {
+        fail("REAL_CHRONOLOGY_EARLY", "Real observed chronology cannot complete before the cure deadline");
+      }
+      finalRecourseState = "AVAILABLE";
+      events.push({ ordinal: 8, kind: "CURE_WINDOW_COMPLETED", atUnix: evidence.chronology.signedAtUnix, clockSource: "REAL_OBSERVED_CLOCK", evidenceRef: evidence.recourse.recordDigest });
+    }
+  } else {
+    events.push({ ordinal: 7, kind: "RECOURSE_REFUSED_BY_SIGNED_FALSE", atUnix: result.releasedAtUnix, clockSource: "SIGNED_GOVERNED_RELEASE_CLOCK", evidenceRef: result.digest });
+  }
+  return {
+    schemaVersion: "mordant.product-chronology/1",
+    clockClass: evidence.chronology.clockClass,
+    signedAtUnix: evidence.chronology.signedAtUnix,
+    simulationAsOfUnix,
+    recordDate: protection.holderRecordDate,
+    holderAllocationDigest: protection.holderAllocationDigest,
+    cureDeadlineUnix,
+    finalIncidentState,
+    finalRecourseState,
+    events,
   };
 }
 
@@ -620,7 +703,8 @@ function assertSignedRecourseAttestation(
   exactKeys(attestation, [
     "schemaVersion", "protectionBindingDigest", "governedResultDigest", "caseId", "cleanverseAssetRecordDigest",
     "signedBoolean", "recourseRecordDigest", "recourseRefusal", "holderAllocationDigest", "recordDate",
-    "cureDeadline", "finalRecourseState", "chronologyDigest", "originalReceivableState",
+    "cureDeadline", "finalRecourseState", "finalIncidentState", "clockClass", "signedAtUnix",
+    "simulationAsOfUnix", "chronologyDigest", "originalReceivableState",
     "reserveAccountingSeparation", "executionClass", "deploymentClass", "releaseClass", "recourseClass",
     "productionIsolationProven", "productClaim", "releaseAuthorityId", "signature",
   ], "RECOURSE_ATTESTATION_FIELDS");
@@ -631,7 +715,7 @@ function assertSignedRecourseAttestation(
   if (digest !== recalculated) fail("RECOURSE_ATTESTATION_DIGEST", "Recourse attestation digest mismatch");
   verifyGoSignature(
     evidence.governedResult.releaseAuthorityPublicKey,
-    "MordantRecourseAttestation/v1",
+    "MordantRecourseAttestation/v2",
     recourseAttestationValue(attestation, true),
     attestation.signature,
     "RECOURSE_ATTESTATION_SIGNATURE",
@@ -646,7 +730,12 @@ function assertSignedRecourseAttestation(
     || attestation.recourseRecordDigest !== expectedRecordDigest
     || attestation.holderAllocationDigest !== evidence.protectionAuthorization.binding.holderAllocationDigest
     || attestation.recordDate !== evidence.protectionAuthorization.binding.holderRecordDate
-    || attestation.cureDeadline !== evidence.chronology.cureDeadline
+    || (attestation.cureDeadline === null ? null : Math.floor(new Date(attestation.cureDeadline).valueOf() / 1000)) !== evidence.chronology.cureDeadlineUnix
+    || attestation.clockClass !== evidence.chronology.clockClass
+    || attestation.signedAtUnix !== evidence.chronology.signedAtUnix
+    || attestation.simulationAsOfUnix !== evidence.chronology.simulationAsOfUnix
+    || attestation.finalIncidentState !== evidence.chronology.finalIncidentState
+    || attestation.finalRecourseState !== evidence.chronology.finalRecourseState
     || attestation.chronologyDigest !== chronologyDigest
     || attestation.originalReceivableState !== evidence.originalReceivablePreservation.state
     || attestation.reserveAccountingSeparation.reserveDomain !== "PROTECTION"
@@ -655,27 +744,38 @@ function assertSignedRecourseAttestation(
     || attestation.reserveAccountingSeparation.claimBurnedOrTransferred
     || attestation.executionClass !== "REAL_BGV_FHE" || attestation.deploymentClass !== "LOCAL_SINGLE_HOST"
     || attestation.releaseClass !== "GOVERNED_DECRYPTOR" || attestation.recourseClass !== "LOCAL_PROTOCOL_DOUBLE"
-    || attestation.productionIsolationProven || attestation.productClaim !== PRODUCT_CLAIM_IDENTIFIER
+    || attestation.productionIsolationProven
     || attestation.releaseAuthorityId !== evidence.governedResult.releaseAuthorityId
   ) fail("RECOURSE_ATTESTATION_BINDING", "Signed recourse attestation cross-reference mismatch");
   if (attestation.signedBoolean) {
-    if (attestation.recourseRefusal !== "NONE" || attestation.finalRecourseState !== "AVAILABLE") {
-      fail("RECOURSE_ATTESTATION_STATE", "Conflict attestation must make recourse available");
+    const simulated = attestation.clockClass === "SIMULATED_PROTOCOL_CLOCK";
+    const expectedClaim = simulated
+      ? "mordant.conflicting-pledge-protection/governed-fhe-mvp-simulated-protocol-clock-v1"
+      : "mordant.conflicting-pledge-protection/governed-fhe-mvp-real-observed-clock-v1";
+    if (
+      attestation.recourseRefusal !== "NONE"
+      || attestation.finalIncidentState !== "CONFLICT_CONFIRMED"
+      || attestation.finalRecourseState !== (simulated ? "SIMULATED_AVAILABLE" : "AVAILABLE")
+      || attestation.productClaim !== expectedClaim
+    ) {
+      fail("RECOURSE_ATTESTATION_STATE", "Conflict attestation clock and recourse state mismatch");
     }
   } else if (
     attestation.recourseRefusal !== "SIGNED_RESULT_FALSE" || attestation.finalRecourseState !== "REFUSED"
-    || attestation.cureDeadline !== null
+    || attestation.finalIncidentState !== "CLEARED" || attestation.cureDeadline !== null
+    || attestation.clockClass !== "REAL_OBSERVED_CLOCK" || attestation.simulationAsOfUnix !== null
+    || attestation.productClaim !== "mordant.conflicting-pledge-protection/governed-fhe-mvp-real-observed-clock-v1"
   ) fail("RECOURSE_ATTESTATION_STATE", "False result attestation must explicitly refuse recourse");
 }
 
 export function protectionEvidenceDigest(
   evidence: Omit<MordantProtectionEvidence, "manifestDigest">,
 ): Sha256Digest {
-  return sha256Digest("MordantProtectionEvidence/v3", evidence);
+  return sha256Digest("MordantProtectionEvidence/v4", evidence);
 }
 
 export function assertPublicProtectionEvidence(evidence: MordantProtectionEvidence): void {
-  if (evidence.schemaVersion !== "mordant.protection-evidence/3") fail("SCHEMA", "Unsupported protection evidence schema");
+  if (evidence.schemaVersion !== "mordant.protection-evidence/4") fail("SCHEMA", "Unsupported protection evidence schema");
   exactKeys(evidence, [
     "schemaVersion", "manifestDigest", "runId", "sourceCommit", "governedFheCommit", "scenario", "cleanverseAsset",
     "cleanverseAssetDigest", "sourceClassifications", "protectionCase", "participantPublicIdentities", "protectionAuthorization",
@@ -697,6 +797,13 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
     || assetDigest !== evidence.protectionCase.cleanverseAssetDigest
     || cleanverseAssetRecordDigest(evidence.protectionCase.cleanverseAsset) !== assetDigest
   ) fail("ASSET_RECORD_DIGEST", "Cleanverse asset record digest mismatch");
+
+  exactKeys(evidence.protectionCase, [
+    "schemaVersion", "productScenario", "cleanverseAsset", "cleanverseAssetDigest", "service", "serviceVersion",
+    "policyId", "policyVersion", "protectedAmount", "reserve", "holderRecordDate", "holderSnapshot",
+    "holderAllocationDigest", "caseNonce", "fheCaseId", "releaseMode", "originalReceivable",
+    "evidenceReferences",
+  ], "PUBLIC_PROTECTION_CASE_FIELDS");
 
   assertParticipantAuthorization(evidence);
   const protectionDigest = assertSignedProtectionBinding(evidence);
@@ -804,8 +911,8 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
     const record = evidence.recourse.record;
     if (
       !evidence.recourse.opened || evidence.recourse.refusedReason !== null || record === null
-      || evidence.recourse.recordDigest === null || evidence.protectionCase.recourseState !== "AVAILABLE"
-    ) fail("RECOURSE_STATE", "Conflict result must have an available recourse record");
+      || evidence.recourse.recordDigest === null
+    ) fail("RECOURSE_STATE", "Conflict result must have a recourse record");
     exactKeys(record, [
       "schemaVersion", "caseId", "caseBindingDigest", "assetIdentity", "policyId", "policyVersion", "resultDigest",
       "releaseMode", "releaseAuthorityId", "recordDateUnix", "boundAtUnix", "cureDeadlineUnix", "reserveBasisPoints",
@@ -824,21 +931,31 @@ export function assertPublicProtectionEvidence(evidence: MordantProtectionEviden
       || record.recordDateUnix !== Math.floor(new Date(evidence.protectionCase.holderRecordDate).valueOf() / 1000)
       || record.reserveBasisPoints !== evidence.protectionCase.reserve.basisPoints
       || !record.originalReceivableIntact || !record.open
-      || evidence.chronology.cureDeadline !== new Date(record.cureDeadlineUnix * 1000).toISOString()
+      || record.boundAtUnix < result.releasedAtUnix || record.boundAtUnix > binding.expiresAtUnix
+      || record.cureDeadlineUnix !== record.boundAtUnix + 24 * 60 * 60
     ) fail("RECOURSE_PINS", "Recourse record trusted pins mismatch");
   } else if (
     evidence.recourse.opened || evidence.recourse.refusedReason !== "SIGNED_RESULT_FALSE"
     || evidence.recourse.record !== null || evidence.recourse.recordDigest !== null
-    || evidence.protectionCase.recourseState !== "REFUSED" || governed.recourseRecordDigest !== zeroDigest
+    || governed.recourseRecordDigest !== zeroDigest
   ) fail("RECOURSE_REFUSAL", "False result must refuse recourse without a record");
 
+  exactKeys(evidence.chronology, [
+    "schemaVersion", "clockClass", "signedAtUnix", "simulationAsOfUnix", "recordDate",
+    "holderAllocationDigest", "cureDeadlineUnix", "finalIncidentState", "finalRecourseState", "events",
+  ], "CHRONOLOGY_FIELDS");
   if (
-    evidence.chronology.recordDate !== evidence.protectionCase.holderRecordDate
-    || evidence.chronology.holderAllocationDigest !== evidence.protectionCase.holderAllocationDigest
-  ) fail("CHRONOLOGY_BINDING", "Chronology binding mismatch");
-  if (!SOURCE_CLASSIFICATIONS.every((classification) => (
-    evidence.sourceClassifications.some((entry) => entry.classification === classification)
-  ))) fail("CLASSIFICATIONS", "Protection evidence classifications are incomplete");
+    evidence.chronology.signedAtUnix < result.releasedAtUnix
+    || evidence.chronology.signedAtUnix > binding.expiresAtUnix
+    || JSON.stringify(chronologyValue(evidence.chronology)) !== JSON.stringify(chronologyValue(expectedCanonicalChronology(evidence)))
+  ) fail("CHRONOLOGY_CANONICAL", "Chronology was not reconstructed from the exact signed artifacts");
+  for (const event of evidence.chronology.events) {
+    exactKeys(event, ["ordinal", "kind", "atUnix", "clockSource", "evidenceRef"], "CHRONOLOGY_EVENT_FIELDS");
+  }
+  if (
+    evidence.sourceClassifications.length !== CANONICAL_SOURCE_CLASSIFICATION_IDS.length
+    || !evidence.sourceClassifications.every((value, index) => value === CANONICAL_SOURCE_CLASSIFICATION_IDS[index])
+  ) fail("CLASSIFICATIONS", "Canonical source classification IDs changed");
   if (
     evidence.originalReceivablePreservation.state !== "OUTSTANDING_INTACT"
     || evidence.protectionCase.originalReceivable.state !== evidence.originalReceivablePreservation.state

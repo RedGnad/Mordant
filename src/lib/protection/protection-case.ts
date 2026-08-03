@@ -32,7 +32,7 @@ export type IncidentState =
   | "EVALUATED"
   | "CONFLICT_CONFIRMED"
   | "CLEARED";
-export type RecourseState = "NOT_OPEN" | "CURE_WINDOW" | "AVAILABLE" | "REFUSED";
+export type RecourseState = "NOT_OPEN" | "CURE_WINDOW" | "AVAILABLE" | "SIMULATED_AVAILABLE" | "REFUSED";
 export type OriginalReceivableState = "OUTSTANDING_INTACT";
 
 export type HolderAllocation = Readonly<{
@@ -142,7 +142,9 @@ export function protectionFheCaseId(options: Readonly<{
   });
 }
 
-export function protectionBindingFromCase(protectionCase: MordantProtectionCase): MordantProtectionBinding {
+export function protectionBindingFromCase(
+  protectionCase: Omit<MordantProtectionCase, "incidentState" | "cureDeadline" | "recourseState" | "timeline" | "createdAt">,
+): MordantProtectionBinding {
   return {
     schemaVersion: "mordant.protection-binding/1",
     cleanverseAssetRecordDigest: protectionCase.cleanverseAssetDigest,

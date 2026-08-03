@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require("node:assert/strict");
-const { readFileSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { test } = require("node:test");
 const Module = require("node:module");
@@ -26,11 +26,13 @@ Module._resolveFilename = function resolveProductAlias(request, parent, isMain, 
 };
 
 const { ProtectionExperience } = require("../.product-test-dist/src/components/protection-experience.js");
+const evidencePath = (scenario = "conflict") => join(
+  process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`,
+);
+const artifactTest = existsSync(evidencePath("conflict")) ? test : test.skip;
 
 function evidence(scenario = "conflict") {
-  return JSON.parse(readFileSync(join(
-    process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`,
-  ), "utf8"));
+  return JSON.parse(readFileSync(evidencePath(scenario), "utf8"));
 }
 
 function text(node) {
@@ -48,7 +50,7 @@ function response(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-test("mounted imported to local loading to local error never renders imported case data", async () => {
+artifactTest("mounted imported to local loading to local error never renders imported case data", async () => {
   const imported = evidence();
   let rejectRequest;
   global.fetch = () => new Promise((_resolve, reject) => { rejectRequest = reject; });
@@ -69,7 +71,7 @@ test("mounted imported to local loading to local error never renders imported ca
   await act(async () => { renderer.unmount(); });
 });
 
-test("mounted imported to local incomplete to cure window to complete keeps exact local evidence", async () => {
+artifactTest("mounted imported to local incomplete to cure window to complete keeps exact local evidence", async () => {
   const imported = evidence();
   const runId = "11111111-1111-4111-8111-111111111111";
   const incompleteCase = { ...imported.protectionCase, recourseState: "NOT_OPEN", cureDeadline: null };
@@ -98,11 +100,28 @@ test("mounted imported to local incomplete to cure window to complete keeps exac
   await act(async () => { button(renderer.root, "Run this case locally").props.onClick(); });
   assert.equal(button(renderer.root, "Evidence").props.disabled, true);
   await act(async () => { button(renderer.root, "Prepare private match").props.onClick(); });
-  assert.match(text(renderer.root), /Cure \/ dispute window open/);
+  assert.match(text(renderer.root), /Recourse not opened/);
   assert.equal(button(renderer.root, "Evidence").props.disabled, true);
-  await act(async () => { button(renderer.root, "Complete cure chronology").props.onClick(); });
-  assert.match(text(renderer.root), /Governed recourse available/);
+  await act(async () => { button(renderer.root, "Simulate cure-window completion").props.onClick(); });
+  assert.match(text(renderer.root), /Simulated protocol clock/);
   assert.equal(button(renderer.root, "Evidence").props.disabled, false);
   assert.equal(renderer.root.findByProps({ "data-execution": "local" }).props["data-execution"], "local");
+  await act(async () => { renderer.unmount(); });
+});
+
+artifactTest("mounted chronology ignores forged text and suppresses contradictory duplicate kinds", async () => {
+  const imported = evidence();
+  const malicious = structuredClone(imported);
+  malicious.chronology.events[0].label = "Cleanverse confirmed the conflict on-chain";
+  malicious.chronology.events.push({
+    ...malicious.chronology.events[0],
+    ordinal: 99,
+    label: "Cleanverse confirmed the conflict on-chain",
+  });
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(ProtectionExperience, { initialEvidence: malicious, localExecutionAvailable: false })); });
+  const rendered = text(renderer.root);
+  assert.doesNotMatch(rendered, /Cleanverse confirmed the conflict on-chain/);
+  assert.equal((rendered.match(/Protected holder snapshot fixed/g) ?? []).length, 1);
   await act(async () => { renderer.unmount(); });
 });

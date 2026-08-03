@@ -59,13 +59,16 @@ digest and CaseID are recomputed from documented domain-separated canonical inpu
 TypeScript. Both FHE participant Ed25519 identities sign the exact binding digest before either
 encrypted submission can be admitted.
 
-`MordantRecourseAttestation` is created only after the governed Boolean and final local chronology
-exist. The participant-authorized release authority signs the protection-binding digest, governed
-result digest, case and asset identities, Boolean, recourse record or explicit refusal, holder/date/
-cure state, complete chronology digest, intact receivable state, accounting separation, exact
-execution classifications, `productionIsolationProven=false` and the bounded product-claim
-identifier. The public TypeScript verifier authenticates both participant signatures, the existing
-governed-result signature and this release-authority signature, then checks every cross-reference.
+`MordantRecourseAttestation` is created only after the governed Boolean and durable recourse record
+exist. The signer reconstructs the only public chronology from the signed protection and FHE
+bindings, digest-bound participant/evaluator artifacts, signed release clock and durable recourse
+clock. No API accepts chronology events, labels, classifications, timestamps or final state. The
+attestation signs `clockClass`, real `signedAtUnix`, optional `simulationAsOfUnix`, incident state,
+recourse state and the complete canonical chronology digest. The retained conflict case is
+explicitly `SIMULATED_PROTOCOL_CLOCK` and `SIMULATED_AVAILABLE`; it is not evidence that wall-clock
+time passed the cure deadline. The public TypeScript verifier authenticates both participant
+signatures, the existing governed-result signature and this release-authority signature, then
+checks every cross-reference.
 The outer `manifestDigest` is only a transport-integrity checksum and is not an authenticity root.
 
 ## Durable operations and recovery
@@ -87,9 +90,10 @@ as the accepted `exactRetry`; a different or ambiguous irreversible result abort
 Creation, inspection and export share one full recourse-record validator. Participant private keys
 are published with create-only temporary files, file flush, hard-link publication and directory
 flush. A truncated key is regenerated only before any public foundation exists; after foundation
-admission it is an explicit terminal error. Retained evidence is written by temporary file, file
-flush, atomic rename, directory flush and exact `O_NOFOLLOW` readback. The configured retention root
-and destination are checked with `lstat`; symlink and non-regular destinations are rejected.
+admission it is an explicit terminal error. A narrow Go helper retains evidence through a pinned,
+pre-existing directory capability with create-only same-directory publication, file and directory
+flushes, and exact `O_NOFOLLOW` readback. Root, intermediate and destination symlinks, non-regular
+targets, path-identity replacement and cross-case/cross-scenario writes are rejected.
 
 Ordinary unlink removes only each Mordant-generated transient plaintext pledge JSON file and
 participant signing-key file after the exact signed public submission is verified. This is

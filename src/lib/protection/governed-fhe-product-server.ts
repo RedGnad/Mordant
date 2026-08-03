@@ -15,7 +15,6 @@ import {
   fstatSync,
   fsyncSync,
   linkSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -49,6 +48,7 @@ import {
   protectionEvidenceDigest,
   verifyGovernedResultSignature,
   type FheCaseBinding,
+  type CanonicalChronologyEvent,
   type GovernedFhePublicEvidence,
   type GovernedSignedResult,
   type MordantProtectionEvidence,
@@ -76,7 +76,6 @@ export const PRODUCT_STORAGE = Object.freeze({
   binaryAndCacheBytes: 805_306_368,
 });
 
-const SOURCE_COMMIT = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? "";
 const GOVERNED_FHE_COMMIT = EXPECTED_GOVERNED_FHE_COMMIT;
 const MAX_PROCESS_BUFFER = 8 << 20;
 
@@ -87,6 +86,7 @@ const BINARIES = Object.freeze({
   decryptor: "mordant-fhe-decryptor",
   recourse: "mordant-fhe-recourse",
   inspect: "mordant-fhe-inspect",
+  retain: "mordant-fhe-retain",
 });
 
 type ExecutionStage =
@@ -352,17 +352,6 @@ function readJsonNoFollow<T>(path: string): T {
   }
 }
 
-function assertNoSymlinkRetentionPath(root: string, destination: string): void {
-  const rootStat = lstatSync(root);
-  if (rootStat.isSymbolicLink() || !rootStat.isDirectory() || dirname(destination) !== root) {
-    throw new ProtectionProductError("Evidence retention root rejected", 400);
-  }
-  const destinationStat = lstatSync(destination, { throwIfNoEntry: false });
-  if (destinationStat !== undefined && (destinationStat.isSymbolicLink() || !destinationStat.isFile())) {
-    throw new ProtectionProductError("Symlink or non-file retention destination rejected", 400);
-  }
-}
-
 function assertRunId(runId: string): void {
   if (!/^[0-9a-f-]{36}$/.test(runId)) throw new ProtectionProductError("Invalid protection run id", 400);
 }
@@ -621,7 +610,7 @@ function reconcileProtectionProjection(
     case "RETAINING":
       if (typeof pending.immutableParameters.destination !== "string" || !existsSync(pending.immutableParameters.destination)) return null;
       try {
-        const retained = readJson<MordantProtectionEvidence>(pending.immutableParameters.destination);
+        const retained = readJsonNoFollow<MordantProtectionEvidence>(pending.immutableParameters.destination);
         assertPublicProtectionEvidence(retained);
         return retained.scenario === state.protectionCase.productScenario
           && retained.protectionCase.fheCaseId === state.protectionCase.fheCaseId
@@ -1150,25 +1139,19 @@ async function openRecourseCaseRuntime(
         assetIdentity: state.protectionCase.cleanverseAssetDigest,
         caseId: state.protectionCase.fheCaseId,
         expectedPins: state.release.trustedRecoursePins,
-        recordDateUnix: unix(state.protectionCase.holderRecordDate),
-        holderAllocationDigest: state.protectionCase.holderAllocationDigest,
       },
       expectedCurrentStage: "RELEASED",
       expectedTargetStage: "RECOURSE_OPENED",
-      fixedNowUnix: Math.floor(runtime.now().valueOf() / 1000),
-      expectedArtifacts: state.release.conflict ? ["recourse-record.json", "recourse-outcome.json"] : ["recourse-outcome.json"],
+      expectedArtifacts: state.release.conflict
+        ? ["recourse-clock-binding.json", "recourse-record.json", "recourse-outcome.json"]
+        : ["recourse-outcome.json"],
       createdAt: runtime.now().toISOString(),
     });
     const requestPath = join(state.paths.root, "recourse-request.json");
-    const nowUnix = operation.fixed.nowUnix;
-    if (nowUnix === null) throw new ProtectionProductError("Fixed recourse timestamp is unavailable", 500);
     writeJsonAtomic(requestPath, {
       assetIdentity: state.protectionCase.cleanverseAssetDigest,
       caseId: state.protectionCase.fheCaseId,
       expectedPins: state.release.trustedRecoursePins,
-      recordDateUnix: unix(state.protectionCase.holderRecordDate),
-      holderAllocationDigest: state.protectionCase.holderAllocationDigest,
-      nowUnix,
     });
     const recourse = await runJSON<NonNullable<InternalState["recourse"]>>(runtime, "recourse", [
       "-mode", "recourse",
@@ -1230,14 +1213,9 @@ async function completeCureChronologyRuntime(runtime: ProtectionRuntime, runId: 
       expectedArtifacts: ["execution.json"],
       createdAt: runtime.now().toISOString(),
     });
-    const protectionCase = appendEventOnce(state.protectionCase, {
-      kind: "RECOURSE_AVAILABLE_AFTER_CURE",
-      at: new Date(new Date(state.protectionCase.cureDeadline).valueOf() + 1_000).toISOString(),
-      label: "Local chronology reached the cure deadline; governed recourse is available",
-      classification: "PROTOCOL_DOUBLE",
-      evidenceRef: state.release?.resultDigest,
-    }, { recourseState: "AVAILABLE" });
-    state = saveState(runtime, { ...state, stage: "CHRONOLOGY_COMPLETE", protectionCase });
+    // This selects the fixed MVP simulation branch only. The release authority
+    // derives and signs its timestamp, event and final state internally.
+    state = saveState(runtime, { ...state, stage: "CHRONOLOGY_COMPLETE" });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
     return publicView(state);
   });
@@ -1253,6 +1231,7 @@ function buildProtectionEvidence(
   state: InternalState,
   governedFheEvidence: GovernedFhePublicEvidence,
   generatedAt: string,
+  signerChronology?: MordantProtectionEvidence["chronology"],
 ): MordantProtectionEvidence {
   if (
     state.keygen === undefined || state.submissions?.PARTICIPANT_A === undefined
@@ -1261,7 +1240,8 @@ function buildProtectionEvidence(
   ) {
     throw new ProtectionProductError("The complete governed FHE run is required", 500);
   }
-  if (!/^[0-9a-f]{40}$/.test(SOURCE_COMMIT)) {
+  const sourceCommit = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? "";
+  if (!/^[0-9a-f]{40}$/.test(sourceCommit)) {
     throw new ProtectionProductError("Exact product source commit is required for evidence export", 500);
   }
   const binding = readJson<FheCaseBinding>(join(state.paths.publicRoot, "case-binding.json"));
@@ -1277,23 +1257,67 @@ function buildProtectionEvidence(
   const participants = [binding.participantA, binding.participantB] as const;
   const resultCiphertext = (evaluated.resultCiphertext ?? {}) as Record<string, unknown>;
   const recourseRecord = (state.recourse.record ?? null) as PublicRecourseRecord | null;
+  const recourseRecordDigest = recourseRecord === null
+    ? null
+    : digestPublicFile(join(state.paths.publicRoot, "recourse-record.json"));
+  const chronologyEvents: CanonicalChronologyEvent[] = [
+    { ordinal: 1, kind: "PROTECTED_HOLDER_SNAPSHOT_FIXED", atUnix: unix(protectionBinding.holderRecordDate), clockSource: "PROTECTION_BINDING_RECORD_DATE", evidenceRef: protectionBindingDigest(protectionBinding) },
+    { ordinal: 2, kind: "FHE_CASE_CREATED", atUnix: binding.createdAtUnix, clockSource: "SIGNED_FHE_CASE_CLOCK", evidenceRef: state.keygen.bindingDigest },
+    { ordinal: 3, kind: "PARTICIPANT_A_ARTIFACT_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.participantArtifactDigests[0] },
+    { ordinal: 4, kind: "PARTICIPANT_B_ARTIFACT_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.participantArtifactDigests[1] },
+    { ordinal: 5, kind: "FHE_EVALUATION_BOUND", atUnix: null, clockSource: "CRYPTOGRAPHIC_ORDER_ONLY", evidenceRef: result.evaluatedArtifactDigest },
+    { ordinal: 6, kind: "GOVERNED_RESULT_RELEASED", atUnix: result.releasedAtUnix, clockSource: "SIGNED_GOVERNED_RELEASE_CLOCK", evidenceRef: state.release.resultDigest },
+  ];
+  if (result.conflict && recourseRecord !== null && recourseRecordDigest !== null) {
+    chronologyEvents.push(
+      { ordinal: 7, kind: "RECOURSE_BOUND", atUnix: recourseRecord.boundAtUnix, clockSource: "DURABLE_RECOURSE_CLOCK", evidenceRef: recourseRecordDigest },
+      recourseAttestation.clockClass === "SIMULATED_PROTOCOL_CLOCK"
+        ? { ordinal: 8, kind: "SIMULATED_CURE_WINDOW_COMPLETED", atUnix: recourseAttestation.simulationAsOfUnix, clockSource: "SIMULATED_PROTOCOL_CLOCK", evidenceRef: recourseRecordDigest }
+        : { ordinal: 8, kind: "CURE_WINDOW_COMPLETED", atUnix: recourseAttestation.signedAtUnix, clockSource: "REAL_OBSERVED_CLOCK", evidenceRef: recourseRecordDigest },
+    );
+  } else {
+    chronologyEvents.push({ ordinal: 7, kind: "RECOURSE_REFUSED_BY_SIGNED_FALSE", atUnix: result.releasedAtUnix, clockSource: "SIGNED_GOVERNED_RELEASE_CLOCK", evidenceRef: state.release.resultDigest });
+  }
+  const chronology: MordantProtectionEvidence["chronology"] = {
+    schemaVersion: "mordant.product-chronology/1",
+    clockClass: recourseAttestation.clockClass,
+    signedAtUnix: recourseAttestation.signedAtUnix,
+    simulationAsOfUnix: recourseAttestation.simulationAsOfUnix,
+    recordDate: protectionBinding.holderRecordDate,
+    holderAllocationDigest: protectionBinding.holderAllocationDigest,
+    cureDeadlineUnix: recourseRecord?.cureDeadlineUnix ?? null,
+    finalIncidentState: recourseAttestation.finalIncidentState,
+    finalRecourseState: recourseAttestation.finalRecourseState,
+    events: chronologyEvents,
+  };
+  if (signerChronology !== undefined && JSON.stringify(signerChronology) !== JSON.stringify(chronology)) {
+    throw new ProtectionProductError("Signer chronology reconstruction mismatch", 500);
+  }
+  const {
+    timeline: _timeline,
+    incidentState: _incidentState,
+    cureDeadline: _cureDeadline,
+    recourseState: _recourseState,
+    createdAt: _createdAt,
+    ...publicProtectionCase
+  } = state.protectionCase;
   const base: Omit<MordantProtectionEvidence, "manifestDigest"> = {
-    schemaVersion: "mordant.protection-evidence/3",
+    schemaVersion: "mordant.protection-evidence/4",
     runId: state.runId,
-    sourceCommit: SOURCE_COMMIT,
+    sourceCommit,
     governedFheCommit: GOVERNED_FHE_COMMIT,
     scenario: state.protectionCase.productScenario,
     cleanverseAsset: state.protectionCase.cleanverseAsset,
     cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
     sourceClassifications: [
-      { subject: "Cleanverse MINV01 asset record", classification: "LIVE_OBSERVED", detail: "Retained M-11 issuance and readback evidence" },
-      { subject: "Cleanverse documentation version", classification: "DOCUMENTED", detail: "Retained manual versioned transcription; not classified as on-chain" },
-      { subject: "N15 BGV evaluation and governed release", classification: "LOCAL_EXECUTION", detail: "Real single-host subprocess execution" },
-      { subject: "Recourse admission and chronology", classification: "PROTOCOL_DOUBLE", detail: "Accepted local governed-FHE recourse adapter; no live settlement" },
-      { subject: "Protected amount and private pledge contents", classification: "FIXTURE", detail: "Synthetic hackathon scenario" },
-      { subject: "Legal issuer identity and production custody", classification: "UNPROVEN", detail: "Not established by the retained evidence" },
+      "CLEANVERSE_M11_LIVE_OBSERVED",
+      "CLEANVERSE_TERMS_DOCUMENTED",
+      "N15_GOVERNED_FHE_LOCAL_EXECUTION",
+      "RECOURSE_LOCAL_PROTOCOL_DOUBLE",
+      "SYNTHETIC_PROTECTED_PLEDGE_FIXTURE",
+      "PRODUCTION_CUSTODY_UNPROVEN",
     ],
-    protectionCase: state.protectionCase,
+    protectionCase: publicProtectionCase,
     participantPublicIdentities: [
       { role: "PARTICIPANT_A", id: participants[0].id, signingPublicKey: participants[0].signingPublicKey },
       { role: "PARTICIPANT_B", id: participants[1].id, signingPublicKey: participants[1].signingPublicKey },
@@ -1337,19 +1361,12 @@ function buildProtectionEvidence(
       independentlyRecomputedResultDigest: state.release.trustedRecoursePins.recomputedResultCiphertextDigest,
     },
     governedResult: { digest: state.release.resultDigest, ...result },
-    chronology: {
-      recordDate: state.protectionCase.holderRecordDate,
-      holderAllocationDigest: state.protectionCase.holderAllocationDigest,
-      cureDeadline: state.protectionCase.cureDeadline,
-      events: state.protectionCase.timeline,
-    },
+    chronology,
     recourse: {
       classification: "PROTOCOL_DOUBLE",
       opened: state.recourse.opened,
       refusedReason: state.recourse.reason ?? null,
-      recordDigest: recourseRecord === null
-        ? null
-        : digestPublicFile(join(state.paths.publicRoot, "recourse-record.json")),
+      recordDigest: recourseRecordDigest,
       record: recourseRecord,
     },
     originalReceivablePreservation: {
@@ -1393,24 +1410,17 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       expectedArtifacts: ["product-recourse-attestation.json", "evidence.json", "protection-evidence.json"],
       createdAt: runtime.now().toISOString(),
     });
-    const chronologyPath = join(state.paths.root, "product-chronology.json");
-    if (state.protectionCase.timeline.some((event) => event.evidenceRef === undefined)) {
-      throw new ProtectionProductError("Complete canonical chronology evidence references are required", 500);
-    }
-    writeJsonAtomic(chronologyPath, {
-      recordDate: state.protectionCase.holderRecordDate,
-      holderAllocationDigest: state.protectionCase.holderAllocationDigest,
-      cureDeadline: state.protectionCase.cureDeadline,
-      events: state.protectionCase.timeline,
-    });
-    const attestation = await runJSON<Readonly<{ digest: Sha256Digest; attestation: MordantRecourseAttestation }>>(
+    const attestation = await runJSON<Readonly<{
+      digest: Sha256Digest;
+      attestation: MordantRecourseAttestation;
+      chronology: MordantProtectionEvidence["chronology"];
+    }>>(
       runtime,
       "recourse",
       [
         "-mode", "attest",
         "-public-root", state.paths.publicRoot,
         "-private-root", state.paths.decryptorPrivateRoot,
-        "-request", chronologyPath,
       ],
     );
     if (
@@ -1418,7 +1428,6 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       || attestation.attestation.protectionBindingDigest !== state.keygen.protectionBindingDigest
       || attestation.attestation.governedResultDigest !== state.release.resultDigest
     ) throw new ProtectionProductError("Signed product attestation readback mismatch", 500);
-    if (existsSync(chronologyPath)) rmSync(chronologyPath);
     runtime.failpoint("after-attestation-publication-before-evidence");
     const measurementsPath = join(state.paths.root, "measurements.json");
     const report = state.keygen.report;
@@ -1456,7 +1465,7 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       "-request", measurementsPath,
     ]);
     if (existsSync(measurementsPath)) rmSync(measurementsPath);
-    const evidence = buildProtectionEvidence(state, governedFheEvidence, operation.createdAt);
+    const evidence = buildProtectionEvidence(state, governedFheEvidence, operation.createdAt, attestation.chronology);
     writeJsonAtomic(join(state.paths.root, "protection-evidence.json"), evidence, 0o644);
     runtime.failpoint("after-evidence-publication-before-state-save");
     state = saveState(runtime, { ...state, stage: "COMPLETE", evidence });
@@ -1484,8 +1493,9 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   }
   const allowed = resolve(runtime.importedEvidenceRoot, `${state.protectionCase.productScenario}.json`);
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
-  mkdirSync(runtime.importedEvidenceRoot, { recursive: true, mode: 0o700 });
-  assertNoSymlinkRetentionPath(runtime.importedEvidenceRoot, allowed);
+  if (!existsSync(runtime.importedEvidenceRoot)) {
+    throw new ProtectionProductError("Configured evidence retention capability is unavailable", 503);
+  }
   const operation = beginOperation(runtime.runRoot, runId, {
     operation: "retainProtectionEvidence",
     phase: "RETAINING",
@@ -1500,27 +1510,14 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     expectedArtifacts: [allowed],
     createdAt: runtime.now().toISOString(),
   });
-  if (existsSync(allowed)) {
-    const prior = readJsonNoFollow<MordantProtectionEvidence>(allowed);
-    try {
-      assertPublicProtectionEvidence(prior);
-    } catch {
-      finishOperation(runtime.runRoot, runId, operation.operationId, "ABORTED", runtime.now().toISOString(), "RETAINED_EVIDENCE_INVALID");
-      throw new ProtectionProductError("Existing retained evidence is invalid and was not overwritten", 409);
-    }
-    if (
-      prior.scenario !== state.protectionCase.productScenario
-      || prior.protectionCase.fheCaseId !== state.protectionCase.fheCaseId
-      || prior.manifestDigest !== state.evidence.manifestDigest
-    ) {
-      finishOperation(runtime.runRoot, runId, operation.operationId, "ABORTED", runtime.now().toISOString(), "RETAINED_EVIDENCE_CASE_MISMATCH");
-      throw new ProtectionProductError("A different retained case was not overwritten", 409);
-    }
-    finishOperation(runtime.runRoot, runId, operation.operationId, "RECONCILED", runtime.now().toISOString());
-    return allowed;
-  }
-  writeDurableJsonAtomic(allowed, state.evidence, 0o644, () => runtime.failpoint("during-retention-before-atomic-rename"));
-  assertNoSymlinkRetentionPath(runtime.importedEvidenceRoot, allowed);
+  const retention = await runJSON<Readonly<{ reconciled: boolean }>>(runtime, "retain", [
+    "-retention-root", runtime.importedEvidenceRoot,
+    "-scenario", state.protectionCase.productScenario,
+    "-source", join(state.paths.root, "protection-evidence.json"),
+    "-manifest-digest", state.evidence.manifestDigest,
+    "-case-id", state.protectionCase.fheCaseId,
+  ]);
+  runtime.failpoint("after-capability-retention-before-readback");
   const retained = readJsonNoFollow<MordantProtectionEvidence>(allowed);
   assertPublicProtectionEvidence(retained);
   if (
@@ -1528,7 +1525,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     || retained.protectionCase.fheCaseId !== state.protectionCase.fheCaseId
     || retained.manifestDigest !== state.evidence.manifestDigest
   ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
-  finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
+  finishOperation(runtime.runRoot, runId, operation.operationId, retention.reconciled ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
   return allowed;
 }
 

@@ -69,6 +69,7 @@ func expectedPublicFiles(includeRecourse, includeEvidence bool) map[string]bool 
 	}
 	if includeRecourse {
 		allowed[recourseRecordObject] = true
+		allowed[recourseClockObject] = true
 	}
 	if includeEvidence {
 		allowed[evidenceObject] = true
@@ -128,15 +129,23 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 	if includeRecourse {
 		var recourse RecourseRecord
 		recourseBytes, _, err := publicStore.readJSON(recourseRecordObject, &recourse)
-		if err != nil || validateCompleteRecourseRecord(
+		var clockBinding recourseClockBinding
+		_, _, clockErr := publicStore.readJSON(recourseClockObject, &clockBinding)
+		if err != nil || clockErr != nil || validateCompleteRecourseRecord(
 			recourse, manifest.Binding, result, resultDigest,
 			authorization.Binding.HolderRecordDate, authorization.Binding.HolderAllocationDigest,
-		) != nil {
+		) != nil || func() error {
+			bindingDigest, digestErr := manifest.Binding.Digest()
+			if digestErr != nil {
+				return digestErr
+			}
+			return validateRecourseClockBinding(clockBinding, manifest.Binding, bindingDigest, result, resultDigest, authorization)
+		}() != nil {
 			return PublicEvidence{}, ErrArtifact
 		}
 		recourseDigest = DigestBytes(recourseBytes[:len(recourseBytes)-1])
 	}
-	attestation, err := loadProductAttestation(publicStore, authorization, result, resultDigest, func() *RecourseRecord {
+	attestation, err := loadProductAttestation(publicStore, authorization, manifest, artifact, artifactDigest, result, resultDigest, func() *RecourseRecord {
 		if !includeRecourse {
 			return nil
 		}
@@ -164,7 +173,7 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 	}
 	for _, name := range []string{caseCryptoObject, caseBindingObject, caseManifestObject, bindingSignatureAObject, bindingSignatureBObject,
 		submissionAManifest, submissionBManifest, evaluationAdmissionObject, evaluationCompletedObject, evaluatedArtifactObject,
-		releaseAuthorityObject, publicResultObject, recourseRecordObject, protectionBindingObject, protectionSignatureAObject,
+		releaseAuthorityObject, publicResultObject, recourseClockObject, recourseRecordObject, protectionBindingObject, protectionSignatureAObject,
 		protectionSignatureBObject, productAttestationObject} {
 		if !publicStore.exists(name) {
 			continue

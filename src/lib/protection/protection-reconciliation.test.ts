@@ -127,6 +127,12 @@ async function fakeRuntimeRoot(scenario: "conflict" | "no-conflict" = "no-confli
       return { ...inspection.release, durationNanos: 1 } as T;
     }
     if (binary === "recourse") {
+      if (argument(args, "-mode") === "recourse") {
+        const request = JSON.parse(readFileSync(argument(args, "-request"), "utf8")) as Record<string, unknown>;
+        assert.deepEqual(Object.keys(request).sort(), ["assetIdentity", "caseId", "expectedPins"]);
+        assert.equal(Object.hasOwn(request, "recordDateUnix"), false);
+        assert.equal(Object.hasOwn(request, "nowUnix"), false);
+      }
       return (scenario === "conflict"
         ? { opened: true, record: inspection.recourse }
         : { opened: false, reason: "SIGNED_RESULT_FALSE" }) as T;
@@ -300,6 +306,11 @@ function retainedNoConflict(): MordantProtectionEvidence {
   ), "utf8")) as MordantProtectionEvidence;
 }
 
+const retainedArtifactPath = join(
+  process.cwd(), "docs", "evidence", "conflicting-pledge-protection", "no-conflict.json",
+);
+const artifactTest = existsSync(retainedArtifactPath) ? test : test.skip;
+
 function writeCompleteExecution(root: string, evidence: MordantProtectionEvidence): void {
   const caseRoot = join(root, evidence.runId);
   mkdirSync(caseRoot, { recursive: true });
@@ -315,38 +326,48 @@ function writeCompleteExecution(root: string, evidence: MordantProtectionEvidenc
       participantPrivateRoot: join(caseRoot, "participant-private"),
     },
     evidence,
-    startedAtUnix: Math.floor(new Date(evidence.protectionCase.createdAt).valueOf() / 1000),
+    startedAtUnix: evidence.caseAuthorization.binding.createdAtUnix,
   }, null, 2)}\n`);
+  writeFileSync(join(caseRoot, "protection-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
 }
 
-test("interrupted retention resumes through a fresh orchestrator and exact readback", async () => {
+artifactTest("interrupted retention resumes through a fresh orchestrator and exact readback", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-retention-reconcile-"));
   const evidence = retainedNoConflict();
   const runRoot = join(root, "runs");
   const destinationRoot = join(root, "retained");
   const destination = join(destinationRoot, "no-conflict.json");
   writeCompleteExecution(runRoot, evidence);
+  mkdirSync(destinationRoot, { recursive: true });
   const base: ProtectionRuntimeOptions = {
     runRoot,
     binRoot: join(root, "bin"),
     importedEvidenceRoot: destinationRoot,
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
-    binaryRunner: async <T>(binary: string) => {
-      assert.equal(binary, "inspect");
-      return { finalized: true, evaluationAdmission: true, releaseAdmission: true, ambiguous: false } as T;
+    binaryRunner: async <T>(binary: string, args: readonly string[]) => {
+      if (binary === "inspect") return { finalized: true, evaluationAdmission: true, releaseAdmission: true, ambiguous: false } as T;
+      assert.equal(binary, "retain");
+      const target = join(argument(args, "-retention-root"), `${argument(args, "-scenario")}.json`);
+      const source = readFileSync(argument(args, "-source"));
+      if (existsSync(target)) {
+        assert.deepEqual(readFileSync(target), source);
+        return { reconciled: true } as T;
+      }
+      writeFileSync(target, source);
+      return { reconciled: false } as T;
     },
   };
-  const first = crashing(base, "during-retention-before-atomic-rename");
+  const first = crashing(base, "after-capability-retention-before-readback");
   await assert.rejects(first.retainProtectionEvidence(evidence.runId, destination), /INJECTED_CRASH/);
-  assert.equal(existsSync(destination), false);
+  assert.equal(existsSync(destination), true);
   const restarted = createProtectionOrchestrator(base);
   await restarted.retainProtectionEvidence(evidence.runId, destination);
   assert.equal((JSON.parse(readFileSync(destination, "utf8")) as MordantProtectionEvidence).manifestDigest, evidence.manifestDigest);
-  assert.equal(readOperationJournal(runRoot, evidence.runId).records.at(-1)?.outcome, "COMPLETED");
+  assert.equal(readOperationJournal(runRoot, evidence.runId).records.at(-1)?.outcome, "RECONCILED");
 });
 
-test("retention rejects a symlink destination without reading or replacing its target", async () => {
+artifactTest("retention rejects a symlink destination without reading or replacing its target", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-retention-symlink-"));
   const evidence = retainedNoConflict();
   const runRoot = join(root, "runs");
@@ -364,19 +385,22 @@ test("retention rejects a symlink destination without reading or replacing its t
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {
-      assert.equal(binary, "inspect");
-      assert.equal(argument(args, "-mode"), "public");
-      return {
-        finalized: true, evaluationAdmission: true, releaseAdmission: false,
-        foundationPrivateComplete: false, releasePrivateComplete: false, ambiguous: false,
-      } as T;
+      if (binary === "inspect") {
+        assert.equal(argument(args, "-mode"), "public");
+        return {
+          finalized: true, evaluationAdmission: true, releaseAdmission: false,
+          foundationPrivateComplete: false, releasePrivateComplete: false, ambiguous: false,
+        } as T;
+      }
+      assert.equal(binary, "retain");
+      throw new Error("symlink destination rejected");
     },
   });
-  await assert.rejects(orchestrator.retainProtectionEvidence(evidence.runId, destination), /Symlink/);
+  await assert.rejects(orchestrator.retainProtectionEvidence(evidence.runId, destination), /retain operation failed/);
   assert.equal(readFileSync(target, "utf8"), "outside\n");
 });
 
-test("published evidence reconciles after crash without a second create-only export", async () => {
+artifactTest("published evidence reconciles after crash without a second create-only export", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-evidence-reconcile-"));
   const evidence = retainedNoConflict();
   const runRoot = join(root, "runs");
@@ -427,7 +451,7 @@ test("published evidence reconciles after crash without a second create-only exp
       durationNanos: 0, resultBytes: 1, exactRetry: false, trustedRecoursePins: pins,
     },
     recourse: { opened: false, reason: "SIGNED_RESULT_FALSE" },
-    startedAtUnix: Math.floor(new Date(evidence.protectionCase.createdAt).valueOf() / 1000),
+    startedAtUnix: evidence.caseAuthorization.binding.createdAtUnix,
   };
   writeFileSync(join(caseRoot, "execution.json"), `${JSON.stringify(execution, null, 2)}\n`);
   let attestationExists = false;
@@ -482,10 +506,17 @@ test("published evidence reconciles after crash without a second create-only exp
       return evidence.governedFheEvidence as T;
     },
   };
-  const first = crashing(base, "after-evidence-publication-before-state-save");
-  await assert.rejects(first.exportProtectionEvidence(evidence.runId), /INJECTED_CRASH/);
-  const recovered = await createProtectionOrchestrator(base).readProtectionCase(evidence.runId);
-  assert.equal(recovered.stage, "COMPLETE");
-  assert.equal(recovered.evidence?.runId, evidence.runId);
-  assert.equal(exports, 1);
+  const previousSource = process.env.MORDANT_PROTECTION_SOURCE_COMMIT;
+  process.env.MORDANT_PROTECTION_SOURCE_COMMIT = evidence.sourceCommit;
+  try {
+    const first = crashing(base, "after-evidence-publication-before-state-save");
+    await assert.rejects(first.exportProtectionEvidence(evidence.runId), /INJECTED_CRASH/);
+    const recovered = await createProtectionOrchestrator(base).readProtectionCase(evidence.runId);
+    assert.equal(recovered.stage, "COMPLETE");
+    assert.equal(recovered.evidence?.runId, evidence.runId);
+    assert.equal(exports, 1);
+  } finally {
+    if (previousSource === undefined) delete process.env.MORDANT_PROTECTION_SOURCE_COMMIT;
+    else process.env.MORDANT_PROTECTION_SOURCE_COMMIT = previousSource;
+  }
 });

@@ -121,13 +121,9 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 			t.Fatalf("exact retry did not return the identical signed result")
 		}
 
-		holderAllocation := testDigest("conflict/holder-allocation")
 		adapterNow := time.Unix(result.ReleasedAtUnix, 0).UTC()
 		adapterConfig := RecourseAdapterConfig{
 			RecordRoot: fixture.publicRoot, CaseManifest: fixture.manifest, ExpectedPins: first.TrustedPins,
-			RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
-			CurePeriod:     24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
-			HolderAllocationDigest: holderAllocation, Now: adapterNow,
 		}
 		wrongAsset := adapterConfig
 		wrongAsset.CaseManifest.Binding.AssetIdentity = testDigest("wrong/recourse-asset")
@@ -146,7 +142,7 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		}
 		assertEveryRecoursePinIsRequired(t, adapterConfig, publicResultBytes)
 		assertThresholdModeRejected(t, fixture, result, adapterConfig)
-		record, err := AdaptSignedResultToRecourse(adapterConfig, publicResultBytes)
+		record, err := adaptSignedResultToRecourse(adapterConfig, publicResultBytes, func() time.Time { return adapterNow })
 		if err != nil {
 			t.Fatalf("adapt true result to recourse: %v", err)
 		}
@@ -154,7 +150,7 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 			record.PolicyID != result.PolicyID || record.ReleaseMode != result.ReleaseMode || record.ReleaseAuthorityID != result.ReleaseAuthorityID ||
 			record.RecordDateUnix > fixture.spec.CreatedAtUnix || record.BoundAtUnix != adapterNow.Unix() ||
 			record.CureDeadlineUnix != adapterNow.Add(24*time.Hour).Unix() || record.ReserveBasisPoints != MVPReserveBasisPoints ||
-			record.HolderAllocationDigest != holderAllocation {
+			!nonzero(record.HolderAllocationDigest) {
 			t.Fatalf("recourse chronology or exact binding changed: %+v", record)
 		}
 
@@ -195,9 +191,6 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		}
 		_, err = AdaptSignedResultToRecourse(RecourseAdapterConfig{
 			RecordRoot: fixture.publicRoot, CaseManifest: fixture.manifest, ExpectedPins: release.TrustedPins,
-			RecordDateUnix: fixture.spec.CreatedAtUnix - 60,
-			CurePeriod:     24 * time.Hour, ReserveBasisPoints: MVPReserveBasisPoints,
-			HolderAllocationDigest: testDigest("no-conflict/holder-allocation"), Now: time.Now().UTC(),
 		}, signedResult)
 		if !errors.Is(err, ErrRecourse) {
 			t.Fatalf("false result activated recourse: %v", err)
@@ -724,14 +717,32 @@ func newProductionFixture(t *testing.T, conflict bool) *productionFixture {
 	label := strings.ReplaceAll(t.Name(), "/", "-")
 	now := time.Now().UTC()
 	spec := CaseSpec{
-		CaseID: testDigest(label + "/case"), AssetIdentity: testDigest(label + "/asset"),
-		PolicyID:     testDigest("conflicting-pledge-policy/v1"),
-		ParticipantA: ParticipantIdentity{ID: testDigest(label + "/participant-a"), Role: RoleA, SigningPublicKey: publicA},
-		ParticipantB: ParticipantIdentity{ID: testDigest(label + "/participant-b"), Role: RoleB, SigningPublicKey: publicB},
-		CaseNonce:    testDigest(label + "/case-nonce"), CreatedAtUnix: now.Unix(), ExpiresAtUnix: now.Add(2 * time.Hour).Unix(),
+		AssetIdentity: testDigest(label + "/asset"),
+		PolicyID:      testDigest("conflicting-pledge-policy/v1"),
+		ParticipantA:  ParticipantIdentity{ID: testDigest(label + "/participant-a"), Role: RoleA, SigningPublicKey: publicA},
+		ParticipantB:  ParticipantIdentity{ID: testDigest(label + "/participant-b"), Role: RoleB, SigningPublicKey: publicB},
+		CaseNonce:     testDigest(label + "/case-nonce"), CreatedAtUnix: now.Unix(), ExpiresAtUnix: now.Add(2 * time.Hour).Unix(),
 	}
-	_, keyReport, err := CreateCase(CreateCaseOptions{
-		PublicRoot: publicRoot, PrivateRoot: privateRoot, Spec: spec, SourceProvenance: testDigest("keygen/source"),
+	protection := validProductBinding(t)
+	protection.CleanverseAssetRecordDigest = spec.AssetIdentity
+	spec.PolicyID = protection.PolicyID
+	protection.ProductScenario = map[bool]string{true: "conflict", false: "no-conflict"}[conflict]
+	protection.HolderRecordDate = now.Add(-time.Minute).Format(time.RFC3339Nano)
+	protection.CaseNonce = spec.CaseNonce
+	protection.HolderAllocationDigest, err = protectionHolderAllocationDigest(protection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protection.FHECaseID, err = protectionFHECaseID(protection, protection.HolderAllocationDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.CaseID = protection.FHECaseID
+	_, keyReport, _, err := CreateProductAuthorizedCase(ProductAuthorizedCreateOptions{
+		CreateCaseOptions: CreateCaseOptions{
+			PublicRoot: publicRoot, PrivateRoot: privateRoot, Spec: spec, SourceProvenance: testDigest("keygen/source"),
+		},
+		ProtectionBinding: protection, ParticipantASigningKey: privateA, ParticipantBSigningKey: privateB,
 	})
 	if err != nil {
 		t.Fatalf("real N15 case key generation: %v", err)

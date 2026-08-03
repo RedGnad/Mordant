@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  CHRONOLOGY_PRESENTATION,
   PRIVATE_CONFLICT_STEPS,
   PRODUCT_EXECUTION_LABELS,
+  SOURCE_PRESENTATION,
   evidenceForDisplayedCase,
   recoursePresentation,
   recourseStatePresentation,
@@ -73,8 +75,8 @@ const OPERATION: Readonly<Record<string, Readonly<{ api: string; label: string; 
   },
   completeCureChronology: {
     api: "completeCureChronology",
-    label: "Complete cure chronology",
-    support: "Advances only the local protocol-double chronology beyond the recorded cure deadline.",
+    label: "Simulate cure-window completion",
+    support: "Requests the fixed simulated-protocol-clock branch. The signer chooses and authenticates the simulation time.",
   },
   exportProtectionEvidence: {
     api: "exportProtectionEvidence",
@@ -152,13 +154,16 @@ function EvidenceDrawer({ evidence, onClose }: {
           </dl>
           <section className={styles.classifications}>
             <h3>Source classifications</h3>
-            {evidence.sourceClassifications.map((source) => (
-              <article key={source.subject} data-classification={source.classification}>
-                <strong>{source.classification.replaceAll("_", " ")}</strong>
-                <span>{source.subject}</span>
-                <p>{source.detail}</p>
-              </article>
-            ))}
+            {evidence.sourceClassifications.map((sourceId) => {
+              const source = SOURCE_PRESENTATION[sourceId];
+              return (
+                <article key={sourceId} data-classification={source.classification}>
+                  <strong>{source.classification}</strong>
+                  <span>{source.subject}</span>
+                  <p>{source.detail}</p>
+                </article>
+              );
+            })}
           </section>
           <footer className={styles.drawerDigest}>
             <span>Protection evidence manifest</span>
@@ -189,9 +194,10 @@ export function ProtectionExperience({
   const activeCase = localMode ? localView?.protectionCase ?? null : evidence.protectionCase;
   const activeEvidence = evidenceForDisplayedCase(mode, evidence, localView);
   const completedStep = localMode && localView !== null ? STAGE_INDEX[localView.stage] : localMode ? 0 : 5;
-  const recourse = localMode
-    ? recourseStatePresentation(localView?.protectionCase.recourseState ?? "NOT_OPEN")
-    : recoursePresentation(evidence);
+  const recourse = activeEvidence === null
+    ? recourseStatePresentation("NOT_OPEN")
+    : recoursePresentation(activeEvidence);
+  const signedProductState = activeEvidence?.recourseAttestation.attestation ?? null;
   const conflict = localMode ? localView?.governedResult?.conflict ?? null : evidence.governedResult.conflict;
   const currentOperation = localView?.nextOperation === null || localView?.nextOperation === undefined
     ? null : OPERATION[localView.nextOperation] ?? null;
@@ -338,11 +344,11 @@ export function ProtectionExperience({
               <article><span>Separate reserve · 10%</span><strong>{formatAmount(activeCase.reserve.minorUnits)} <small>aUSDC</small></strong><p>Protocol double</p></article>
             </div>
             <dl>
-              <div><dt>Protection status</dt><dd>{activeCase.incidentState.replaceAll("_", " ")}</dd></div>
+              <div><dt>Protection status</dt><dd>{signedProductState?.finalIncidentState.replaceAll("_", " ") ?? "AWAITING SIGNED PRODUCT ATTESTATION"}</dd></div>
               <div><dt>Holder record date</dt><dd>{new Date(activeCase.holderRecordDate).toLocaleString("en-GB", { timeZone: "UTC" })} UTC</dd></div>
               <div><dt>Snapshot</dt><dd>Holder A 60% · Holder B 40%</dd></div>
               <div><dt>FHE CaseID</dt><dd title={activeCase.fheCaseId}>{compact(activeCase.fheCaseId)}</dd></div>
-              <div><dt>Recourse</dt><dd>{activeCase.recourseState.replaceAll("_", " ")}</dd></div>
+              <div><dt>Recourse</dt><dd>{signedProductState?.finalRecourseState.replaceAll("_", " ") ?? "NOT SIGNED"}</dd></div>
               <div><dt>Original claim</dt><dd className={styles.intact}>Outstanding · 100 units intact</dd></div>
             </dl>
           </section>
@@ -380,13 +386,20 @@ export function ProtectionExperience({
           <section className={styles.timeline} aria-labelledby="timeline-heading">
           <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → recourse</h2></header>
           <ol>
-            {activeCase.timeline.map((event) => (
-              <li key={`${event.ordinal}-${event.kind}`}>
-                <time>{new Date(event.at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}</time>
-                <i aria-hidden="true" />
-                <div><strong>{event.label}</strong><span>{event.classification.replaceAll("_", " ")}</span></div>
-              </li>
-            ))}
+            {activeEvidence === null ? (
+              <li><time>Pending</time><i aria-hidden="true" /><div><strong>Canonical chronology is shown only after signer attestation</strong><span>NO CALLER-SUPPLIED EVENTS</span></div></li>
+            ) : activeEvidence.chronology.events.filter((event, index, events) => (
+              events.findIndex((candidate) => candidate.kind === event.kind) === index
+            )).map((event) => {
+              const presentation = CHRONOLOGY_PRESENTATION[event.kind];
+              return (
+                <li key={`${event.ordinal}-${event.kind}`}>
+                  <time>{event.atUnix === null ? "Ordered" : new Date(event.atUnix * 1000).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}</time>
+                  <i aria-hidden="true" />
+                  <div><strong>{presentation?.label ?? "Unknown chronology event"}</strong><span>{presentation?.classification ?? "REJECTED EVENT ID"}</span></div>
+                </li>
+              );
+            })}
             <li className={styles.claimRetained}>
               <time>Retained</time><i aria-hidden="true" />
               <div><strong>Original receivable claim remains intact</strong><span>RECEIVABLE DOMAIN · NO PROTECTION BURN OR TRANSFER</span></div>
@@ -399,6 +412,9 @@ export function ProtectionExperience({
         <section className={styles.claimBoundary}>
           <p>{PRODUCT_CLAIM}</p>
           <strong>{PRODUCT_DISCLOSURE}</strong>
+          {activeEvidence?.chronology.clockClass === "SIMULATED_PROTOCOL_CLOCK" ? (
+            <strong>Simulation disclosure: cure-window completion and recourse availability are simulated protocol time, not observed wall-clock chronology.</strong>
+          ) : null}
         </section>
       </main>
 

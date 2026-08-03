@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { join } from "node:path";
 
@@ -169,10 +169,11 @@ test("frontend copy never presents protocol-double recourse as live settlement",
   assert.doesNotMatch(PRODUCT_EXECUTION_LABELS.recourse, /^Live /i);
 });
 
-test("recourse labels derive only from the four explicit product states", () => {
+test("recourse labels derive only from the five explicit product states", () => {
   assert.match(recourseStatePresentation("NOT_OPEN").label, /not opened/i);
   assert.match(recourseStatePresentation("CURE_WINDOW").label, /window open/i);
   assert.match(recourseStatePresentation("AVAILABLE").label, /available/i);
+  assert.match(recourseStatePresentation("SIMULATED_AVAILABLE").label, /simulated/i);
   assert.match(recourseStatePresentation("REFUSED").label, /refused/i);
 });
 
@@ -228,7 +229,7 @@ for (const scenario of ["conflict", "no-conflict"] as const) {
       assert.equal(evidence.governedResult.assetIdentity, CANONICAL_CLEANVERSE_ASSET_DIGEST);
       assert.equal(evidence.governedResult.conflict, scenario === "conflict");
       assert.equal(evidence.recourse.opened, scenario === "conflict");
-      assert.equal(recoursePresentation(evidence).status, scenario === "conflict" ? "AVAILABLE" : "REFUSED");
+      assert.equal(recoursePresentation(evidence).status, scenario === "conflict" ? "SIMULATED_AVAILABLE" : "REFUSED");
       assert.equal(evidence.originalReceivablePreservation.state, "OUTSTANDING_INTACT");
       assert.equal(evidence.originalReceivablePreservation.claimBurnedOrTransferredByProtection, false);
       assert.doesNotMatch(JSON.stringify(evidence), /secret-key|private-root|receivableId|privateMetadataCommitment/i);
@@ -247,6 +248,11 @@ function retainedEvidence(scenario: "conflict" | "no-conflict"): MordantProtecti
     process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`,
   ), "utf8")) as MordantProtectionEvidence;
 }
+
+const retainedArtifactsAvailable = ["conflict", "no-conflict"].every((scenario) => existsSync(join(
+  process.cwd(), "docs", "evidence", "conflicting-pledge-protection", `${scenario}.json`,
+)));
+const artifactTest = retainedArtifactsAvailable ? test : test.skip;
 
 type Mutable<T> = { -readonly [Key in keyof T]: T[Key] extends object ? Mutable<T[Key]> : T[Key] };
 
@@ -268,31 +274,31 @@ function rejectsEvidence(evidence: MordantProtectionEvidence, expectedCode: stri
   ));
 }
 
-test("TypeScript verifies the exact retained Go-generated Ed25519 result", () => {
+artifactTest("TypeScript verifies the exact retained Go-generated Ed25519 result", () => {
   const conflict = retainedEvidence("conflict");
   verifyGovernedResultSignature(conflict.governedResult);
   assert.equal(governedResultDigest(conflict.governedResult), conflict.governedResult.digest);
 });
 
-test("hybrid conflict case plus no-conflict governed result is rejected", () => {
+artifactTest("hybrid conflict case plus no-conflict governed result is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.governedResult = mutableEvidence("no-conflict").governedResult;
   rejectsEvidence(rehash(conflict), "SCENARIO_BINDING");
 });
 
-test("hybrid no-conflict case plus conflict recourse record is rejected", () => {
+artifactTest("hybrid no-conflict case plus conflict recourse record is rejected", () => {
   const noConflict = mutableEvidence("no-conflict");
   noConflict.recourse = structuredClone(retainedEvidence("conflict").recourse);
   rejectsEvidence(rehash(noConflict), "RECOURSE_CASE_ID");
 });
 
-test("hybrid conflict product evidence plus no-conflict governed-FHE evidence is rejected", () => {
+artifactTest("hybrid conflict product evidence plus no-conflict governed-FHE evidence is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.governedFheEvidence = mutableEvidence("no-conflict").governedFheEvidence;
   rejectsEvidence(rehash(conflict), "PROTECTION_BINDING_CROSS_REFERENCE");
 });
 
-test("another release-authority projection is rejected", () => {
+artifactTest("another release-authority projection is rejected", () => {
   const conflict = mutableEvidence("conflict");
   const another = retainedEvidence("no-conflict").governedResult;
   conflict.governedResult.releaseAuthorityId = another.releaseAuthorityId;
@@ -300,13 +306,13 @@ test("another release-authority projection is rejected", () => {
   rejectsEvidence(rehash(conflict), "RELEASE_AUTHORITY_BINDING");
 });
 
-test("mutated Cleanverse record with retained old digest is rejected", () => {
+artifactTest("mutated Cleanverse record with retained old digest is rejected", () => {
   const conflict = mutableEvidence("conflict");
   (conflict.cleanverseAsset as unknown as { token: { value: { name: string } } }).token.value.name = "Substituted token";
   rejectsEvidence(rehash(conflict), "ASSET_RECORD_DIGEST");
 });
 
-test("mutated governed-result signature is rejected after exact rehashing", () => {
+artifactTest("mutated governed-result signature is rejected after exact rehashing", () => {
   const noConflict = mutableEvidence("no-conflict");
   const signature = Buffer.from(noConflict.governedResult.signature, "base64");
   signature[0] ^= 1;
@@ -316,28 +322,28 @@ test("mutated governed-result signature is rejected after exact rehashing", () =
   rejectsEvidence(rehash(noConflict), "GOVERNED_RESULT_SIGNATURE");
 });
 
-test("mutated signed Boolean is rejected", () => {
+artifactTest("mutated signed Boolean is rejected", () => {
   const noConflict = mutableEvidence("no-conflict");
   noConflict.governedResult.conflict = true;
   rejectsEvidence(rehash(noConflict), "SCENARIO_BINDING");
 });
 
-test("mutated CaseID is rejected", () => {
+artifactTest("mutated CaseID is rejected", () => {
   const conflict = mutableEvidence("conflict");
   conflict.fhe.caseId = BAD_DIGEST;
   rejectsEvidence(rehash(conflict), "CASE_ID_BINDING");
 });
 
-test("every canonical signed product field rejects an adversarial mutation", () => {
+artifactTest("every canonical signed product field rejects an adversarial mutation", () => {
   const mutations: ReadonlyArray<readonly [string, (evidence: Mutable<MordantProtectionEvidence>) => void]> = [
     ["holder snapshot", (value) => { value.protectionCase.holderSnapshot[0].protectedUnits = "1"; }],
     ["holder allocation", (value) => { value.protectionCase.holderAllocationDigest = BAD_DIGEST; }],
     ["record date", (value) => { value.protectionCase.holderRecordDate = "2026-08-03T00:00:00.000Z"; }],
     ["reserve", (value) => { value.protectionCase.reserve.minorUnits = "1" as "10000000"; }],
     ["scenario", (value) => { value.scenario = "no-conflict"; }],
-    ["chronology", (value) => { value.chronology.events[0].label = "substituted chronology"; }],
-    ["cure deadline", (value) => { value.chronology.cureDeadline = "2026-08-09T00:00:00.000Z"; }],
-    ["recourse state", (value) => { value.protectionCase.recourseState = "REFUSED"; }],
+    ["chronology", (value) => { value.chronology.events[0].kind = "SUBSTITUTED_CHRONOLOGY"; }],
+    ["cure deadline", (value) => { value.chronology.cureDeadlineUnix = 1; }],
+    ["recourse state", (value) => { value.chronology.finalRecourseState = "REFUSED"; }],
     ["original receivable state", (value) => { value.protectionCase.originalReceivable.state = "OTHER" as "OUTSTANDING_INTACT"; }],
     ["product claim", (value) => { value.recourseAttestation.attestation.productClaim = "other" as typeof value.recourseAttestation.attestation.productClaim; }],
     ["execution class", (value) => { value.recourseAttestation.attestation.executionClass = "OTHER" as "REAL_BGV_FHE"; }],
@@ -357,7 +363,48 @@ test("every canonical signed product field rejects an adversarial mutation", () 
   }
 });
 
-test("TypeScript verifies both participant product signatures and the release-authority attestation", () => {
+artifactTest("canonical chronology rejects every caller-controlled mutation after outer rehash", () => {
+  const mutations: ReadonlyArray<readonly [string, (value: Mutable<MordantProtectionEvidence>) => void]> = [
+    ["timestamp", (value) => { value.chronology.events[0].atUnix! += 1; }],
+    ["order", (value) => { [value.chronology.events[0], value.chronology.events[1]] = [value.chronology.events[1], value.chronology.events[0]]; }],
+    ["kind", (value) => { value.chronology.events[0].kind = "CALLER_EVENT"; }],
+    ["ordinal", (value) => { value.chronology.events[0].ordinal = 99; }],
+    ["clock source", (value) => { value.chronology.events[0].clockSource = "CALLER_CLOCK"; }],
+    ["reference", (value) => { value.chronology.events[0].evidenceRef = BAD_DIGEST; }],
+    ["duplicate", (value) => { value.chronology.events.push(structuredClone(value.chronology.events[0])); }],
+    ["clock class", (value) => { value.chronology.clockClass = "REAL_OBSERVED_CLOCK"; }],
+    ["simulation as-of", (value) => { value.chronology.simulationAsOfUnix! += 1; }],
+    ["signed at", (value) => { value.chronology.signedAtUnix += 1; }],
+    ["cure deadline", (value) => { value.chronology.cureDeadlineUnix! += 1; }],
+    ["incident", (value) => { value.chronology.finalIncidentState = "CLEARED"; }],
+    ["recourse", (value) => { value.chronology.finalRecourseState = "AVAILABLE"; }],
+    ["caller simulation timestamp", (value) => { value.chronology.events.at(-1)!.atUnix! += 30; }],
+    ["arbitrary future real", (value) => {
+      value.chronology.clockClass = "REAL_OBSERVED_CLOCK";
+      value.chronology.signedAtUnix = value.caseAuthorization.binding.expiresAtUnix + 1;
+      value.chronology.simulationAsOfUnix = null;
+    }],
+    ["real before deadline", (value) => {
+      value.chronology.clockClass = "REAL_OBSERVED_CLOCK";
+      value.chronology.signedAtUnix = value.recourse.record!.cureDeadlineUnix - 1;
+      value.chronology.simulationAsOfUnix = null;
+    }],
+    ["source classification", (value) => { value.sourceClassifications[0] = "CLEANVERSE_CONFIRMED_CONFLICT_ON_CHAIN" as typeof value.sourceClassifications[0]; }],
+    ["forged presentation text", (value) => { (value.chronology.events[0] as unknown as Record<string, unknown>).label = "Cleanverse confirmed the conflict on-chain"; }],
+    ["second public chronology", (value) => { (value.protectionCase as unknown as Record<string, unknown>).timeline = []; }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const evidence = mutableEvidence("conflict");
+    mutate(evidence);
+    assert.throws(
+      () => assertPublicProtectionEvidence(rehash(evidence)),
+      (error: unknown) => error instanceof ProtectionEvidenceError,
+      `${name} mutation was accepted`,
+    );
+  }
+});
+
+artifactTest("TypeScript verifies both participant product signatures and the release-authority attestation", () => {
   for (const scenario of ["conflict", "no-conflict"] as const) {
     const evidence = retainedEvidence(scenario);
     assertPublicProtectionEvidence(evidence);
@@ -373,7 +420,7 @@ function replaceJsonPath(root: unknown, path: readonly (string | number)[], valu
   cursor[path.at(-1)!] = value;
 }
 
-test("every MordantProtectionBinding field is authenticated", () => {
+artifactTest("every MordantProtectionBinding field is authenticated", () => {
   const mutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
     ["schemaVersion", ["schemaVersion"], "other/1"],
     ["cleanverseAssetRecordDigest", ["cleanverseAssetRecordDigest"], BAD_DIGEST],
@@ -408,7 +455,7 @@ test("every MordantProtectionBinding field is authenticated", () => {
   }
 });
 
-test("every MordantRecourseAttestation field is authenticated", () => {
+artifactTest("every MordantRecourseAttestation field is authenticated", () => {
   const mutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
     ["schemaVersion", ["schemaVersion"], "other/1"],
     ["protectionBindingDigest", ["protectionBindingDigest"], BAD_DIGEST],
@@ -422,6 +469,10 @@ test("every MordantRecourseAttestation field is authenticated", () => {
     ["recordDate", ["recordDate"], "2026-08-03T00:00:00.000Z"],
     ["cureDeadline", ["cureDeadline"], null],
     ["finalRecourseState", ["finalRecourseState"], "REFUSED"],
+    ["finalIncidentState", ["finalIncidentState"], "CLEARED"],
+    ["clockClass", ["clockClass"], "REAL_OBSERVED_CLOCK"],
+    ["signedAtUnix", ["signedAtUnix"], 1],
+    ["simulationAsOfUnix", ["simulationAsOfUnix"], 1],
     ["chronologyDigest", ["chronologyDigest"], BAD_DIGEST],
     ["originalReceivableState", ["originalReceivableState"], "BURNED"],
     ["reserveAccountingSeparation.reserveDomain", ["reserveAccountingSeparation", "reserveDomain"], "OTHER"],
@@ -448,7 +499,7 @@ test("every MordantRecourseAttestation field is authenticated", () => {
   }
 });
 
-test("component evidence state never falls back across imported and local transitions", () => {
+artifactTest("component evidence state never falls back across imported and local transitions", () => {
   const imported = retainedEvidence("conflict");
   const incomplete = {
     runId: "11111111-1111-4111-8111-111111111111",

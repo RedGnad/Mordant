@@ -33,6 +33,7 @@ const (
 	evaluatedArtifactObject    = "evaluated-conflict.json"
 	releaseAuthorityObject     = "release-authority.json"
 	publicResultObject         = "governed-conflict-result.json"
+	recourseClockObject        = "recourse-clock-binding.json"
 	recourseRecordObject       = "recourse-record.json"
 	protectionBindingObject    = "protection-binding.json"
 	protectionSignatureAObject = "protection-binding-signature-a.json"
@@ -135,6 +136,19 @@ func (s *objectStore) verifyPinned() error {
 	}
 	var stat unix.Stat_t
 	if unix.Fstat(s.fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR ||
+		uint64(stat.Dev) != s.device || uint64(stat.Ino) != s.inode {
+		return ErrStore
+	}
+	return nil
+}
+
+func (s *objectStore) verifyPathIdentity() error {
+	if s.verifyPinned() != nil {
+		return ErrStore
+	}
+	resolved, err := filepath.EvalSymlinks(s.root)
+	var stat unix.Stat_t
+	if err != nil || resolved != s.root || unix.Stat(s.root, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR ||
 		uint64(stat.Dev) != s.device || uint64(stat.Ino) != s.inode {
 		return ErrStore
 	}

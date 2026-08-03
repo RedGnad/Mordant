@@ -198,11 +198,20 @@ func InspectProductCase(publicRoot string) (ProductInspection, error) {
 
 	if publicStore.exists(recourseRecordObject) {
 		var record RecourseRecord
+		var clockBinding recourseClockBinding
 		if _, _, err := publicStore.readJSON(recourseRecordObject, &record); err != nil || inspection.Release == nil ||
 			func() error {
 				var result GovernedConflictResult
 				if _, _, resultErr := publicStore.readJSON(publicResultObject, &result); resultErr != nil {
 					return resultErr
+				}
+				bindingDigest, digestErr := binding.Digest()
+				if digestErr != nil {
+					return digestErr
+				}
+				if _, _, clockErr := publicStore.readJSON(recourseClockObject, &clockBinding); clockErr != nil ||
+					validateRecourseClockBinding(clockBinding, binding, bindingDigest, result, inspection.Release.ResultDigest, authorization) != nil {
+					return ErrRecourse
 				}
 				return validateCompleteRecourseRecord(record, binding, result, inspection.Release.ResultDigest,
 					authorization.Binding.HolderRecordDate, authorization.Binding.HolderAllocationDigest)
@@ -223,8 +232,9 @@ func InspectProductCase(publicRoot string) (ProductInspection, error) {
 		if inspection.Recourse != nil {
 			record = inspection.Recourse
 		}
-		attestation, attestationErr := loadProductAttestation(publicStore, authorization, result, DigestBytes(resultBytes[:len(resultBytes)-1]), record)
-		if attestationErr != nil {
+		artifact, _, artifactDigest, artifactErr := loadEvaluatedArtifact(publicStore, manifest)
+		attestation, attestationErr := loadProductAttestation(publicStore, authorization, manifest, artifact, artifactDigest, result, DigestBytes(resultBytes[:len(resultBytes)-1]), record)
+		if artifactErr != nil || attestationErr != nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "INVALID_PRODUCT_ATTESTATION"
 			return inspection, nil
 		}

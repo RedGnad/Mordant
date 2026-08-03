@@ -65,8 +65,19 @@ func TestProductProofBindingDerivations(t *testing.T) {
 
 func TestProductChronologyUsesExactProductSequence(t *testing.T) {
 	binding := validProductBinding(t)
+	fheBinding := FHECaseBinding{
+		CaseID: binding.FHECaseID, AssetIdentity: binding.CleanverseAssetRecordDigest,
+		PolicyID: binding.PolicyID, PolicyVersion: binding.PolicyVersion,
+		CreatedAtUnix: time.Date(2026, 8, 3, 12, 1, 0, 0, time.UTC).Unix(),
+		ExpiresAtUnix: time.Date(2026, 8, 5, 12, 1, 0, 0, time.UTC).Unix(),
+	}
+	bindingDigest, err := fheBinding.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
 	result := GovernedConflictResult{
-		Conflict: true,
+		CaseID: binding.FHECaseID, CaseBindingDigest: bindingDigest, AssetIdentity: binding.CleanverseAssetRecordDigest,
+		PolicyID: binding.PolicyID, PolicyVersion: binding.PolicyVersion, Conflict: true,
 		ParticipantArtifactDigests: []Digest{
 			DigestBytes([]byte("participant-a")),
 			DigestBytes([]byte("participant-b")),
@@ -74,36 +85,42 @@ func TestProductChronologyUsesExactProductSequence(t *testing.T) {
 		EvaluatedArtifactDigest:    DigestBytes([]byte("evaluated")),
 		ResultCiphertextDigest:     DigestBytes([]byte("ciphertext")),
 		ResultCiphertextCommitment: DigestBytes([]byte("commitment")),
+		ReleasedAtUnix:             time.Date(2026, 8, 3, 12, 6, 0, 0, time.UTC).Unix(),
 	}
 	resultDigest, err := result.Digest()
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := "2026-08-04T12:10:00.000Z"
-	record := RecourseRecord{CureDeadlineUnix: time.Date(2026, 8, 4, 12, 10, 0, 0, time.UTC).Unix()}
-	event := func(ordinal uint32, kind, at, label, classification string, evidenceRef Digest) ProductChronologyEvent {
-		return ProductChronologyEvent{Ordinal: ordinal, Kind: kind, At: at, Label: label, Classification: classification, EvidenceRef: evidenceRef}
+	record := RecourseRecord{
+		SchemaVersion: RecourseRecordSchema, CaseID: fheBinding.CaseID, CaseBindingDigest: bindingDigest,
+		AssetIdentity: fheBinding.AssetIdentity, PolicyID: fheBinding.PolicyID, PolicyVersion: fheBinding.PolicyVersion,
+		ResultDigest: resultDigest, ReleaseMode: result.ReleaseMode, ReleaseAuthorityID: result.ReleaseAuthorityID,
+		RecordDateUnix:     time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC).Unix(),
+		BoundAtUnix:        time.Date(2026, 8, 3, 12, 10, 0, 0, time.UTC).Unix(),
+		CureDeadlineUnix:   time.Date(2026, 8, 4, 12, 10, 0, 0, time.UTC).Unix(),
+		ReserveBasisPoints: MVPReserveBasisPoints, HolderAllocationDigest: binding.HolderAllocationDigest,
+		OriginalReceivableIntact: true, Open: true,
 	}
-	chronology := ProductChronology{
-		RecordDate: binding.HolderRecordDate, HolderAllocationDigest: binding.HolderAllocationDigest, CureDeadline: &deadline,
-		Events: []ProductChronologyEvent{
-			event(1, "PROTECTION_ACTIVATED", "2026-08-03T12:01:00.000Z", "Mordant protection activated for the canonical Cleanverse asset", "LOCAL_EXECUTION", binding.CleanverseAssetRecordDigest),
-			event(2, "HOLDER_SNAPSHOT_RECORDED", "2026-08-03T12:02:00.000Z", "Record-date holder allocation fixed at 60 / 40 and reserve held separately", "PROTOCOL_DOUBLE", binding.HolderAllocationDigest),
-			event(3, "PARTICIPANT_A_ENCRYPTED_PLEDGE_RECEIVED", "2026-08-03T12:03:00.000Z", "Participant A encrypted pledge received", "LOCAL_EXECUTION", result.ParticipantArtifactDigests[0]),
-			event(4, "PARTICIPANT_B_ENCRYPTED_PLEDGE_RECEIVED", "2026-08-03T12:04:00.000Z", "Participant B encrypted pledge received", "LOCAL_EXECUTION", result.ParticipantArtifactDigests[1]),
-			event(5, "FHE_EVALUATION_COMPLETE", "2026-08-03T12:05:00.000Z", "Fixed N15 BGV conflict circuit evaluated without an evaluator decryption key", "LOCAL_EXECUTION", result.EvaluatedArtifactDigest),
-			event(6, "GOVERNED_RECOMPUTATION_VERIFIED", "2026-08-03T12:06:00.000Z", "Governed decryptor independently recomputed the fixed circuit", "LOCAL_EXECUTION", result.ResultCiphertextDigest),
-			event(7, "SIGNED_CONFLICT_CONFIRMED", "2026-08-03T12:06:00.000Z", "Signed Boolean confirmed a conflicting pledge", "LOCAL_EXECUTION", resultDigest),
-			event(8, "CURE_WINDOW_OPENED", "2026-08-03T12:10:00.000Z", "Record-date holders remain fixed while the cure / dispute window runs", "PROTOCOL_DOUBLE", binding.HolderAllocationDigest),
-			event(9, "RECOURSE_AVAILABLE_AFTER_CURE", "2026-08-04T12:10:01.000Z", "Local chronology reached the cure deadline; governed recourse is available", "PROTOCOL_DOUBLE", resultDigest),
-		},
+	authorization := ProtectionAuthorization{Binding: binding, Digest: DigestBytes([]byte("protection-authorization"))}
+	artifact := EvaluatedConflictArtifact{CaseID: fheBinding.CaseID}
+	chronology, err := canonicalProductChronology(
+		authorization, FHECaseManifest{Binding: fheBinding}, artifact, result.EvaluatedArtifactDigest,
+		result, resultDigest, &record, ClockClassSimulatedProtocol, result.ReleasedAtUnix,
+	)
+	if err != nil || chronology.FinalRecourseState != RecourseStateSimulated || chronology.SimulationAsOfUnix == nil {
+		t.Fatalf("canonical chronology rejected: state=%s err=%v", chronology.FinalRecourseState, err)
 	}
-	if _, _, state, err := validateChronology(chronology, binding, result, &record); err != nil || state != RecourseStateAvailable {
-		t.Fatalf("canonical chronology rejected: state=%s err=%v", state, err)
+	chronology.Events[1].ClockSource = "CALLER_SUPPLIED_CLOCK"
+	if chronology.validateCanonicalOrder() != nil {
+		// Shape validation alone is intentionally insufficient; reconstruction
+		// below proves substituted values cannot become canonical.
 	}
-	chronology.Events[1].Classification = "REAL_BGV_FHE"
-	if _, _, _, err := validateChronology(chronology, binding, result, &record); err == nil {
-		t.Fatal("evidence-level classification accepted in the product chronology")
+	rebuilt, err := canonicalProductChronology(
+		authorization, FHECaseManifest{Binding: fheBinding}, artifact, result.EvaluatedArtifactDigest,
+		result, resultDigest, &record, ClockClassSimulatedProtocol, result.ReleasedAtUnix,
+	)
+	if err != nil || rebuilt.Events[1].ClockSource == chronology.Events[1].ClockSource {
+		t.Fatal("caller-supplied chronology influenced signer reconstruction")
 	}
 }
 
