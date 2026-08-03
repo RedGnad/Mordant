@@ -223,8 +223,9 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 func TestFreshParticipantCiphertextValidationBeforeAdmission(t *testing.T) {
 	fixture := newProductionFixture(t, true)
 	tests := []struct {
-		name   string
-		mutate func(*testing.T, bgv.Parameters, *rlwe.PublicKey, *fhe.CipherPledge)
+		name     string
+		mutate   func(*testing.T, bgv.Parameters, *rlwe.PublicKey, *fhe.CipherPledge)
+		validate func(*testing.T, bgv.Parameters, *fhe.CipherPledge)
 	}{
 		{
 			name: "insufficient_level",
@@ -251,6 +252,32 @@ func TestFreshParticipantCiphertextValidationBeforeAdmission(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "incorrect_scale_modulus",
+			mutate: func(t *testing.T, params bgv.Parameters, _ *rlwe.PublicKey, pledge *fhe.CipherPledge) {
+				original := pledge.AmountBits
+				if original.Scale.Uint64() != 1 || original.Scale.Mod == nil || original.Scale.Mod.Uint64() != params.PlaintextModulus() {
+					t.Fatalf("official governed client produced unexpected scale: %+v", original.Scale)
+				}
+				pledge.AmountBits = original.CopyNew()
+				pledge.AmountBits.Scale.Mod = nil
+				if !reflect.DeepEqual(pledge.AmountBits.Value, original.Value) {
+					t.Fatal("scale-modulus mutation changed RLWE coefficients")
+				}
+			},
+			validate: func(t *testing.T, params bgv.Parameters, pledge *fhe.CipherPledge) {
+				ciphertext := pledge.AmountBits
+				actual := ciphertext.MetaData
+				expected := bgv.NewPlaintext(params, params.MaxLevel()).MetaData
+				if actual == nil || expected == nil || actual.Scale.Cmp(expected.Scale) != 0 || actual.Scale.Uint64() != 1 ||
+					actual.Scale.Mod != nil || expected.Scale.Mod == nil || expected.Scale.Mod.Uint64() != params.PlaintextModulus() ||
+					actual.IsBatched != expected.IsBatched || actual.IsBitReversed != expected.IsBitReversed ||
+					actual.LogDimensions != expected.LogDimensions || actual.IsNTT != expected.IsNTT ||
+					actual.IsMontgomery != expected.IsMontgomery || ciphertext.Degree() != 1 || ciphertext.Level() != params.MaxLevel() {
+					t.Fatalf("mutation changed more than Scale.Mod or did not retain Value=1: actual=%+v expected=%+v", actual, expected)
+				}
+			},
+		},
 	}
 
 	for _, testCase := range tests {
@@ -268,9 +295,18 @@ func TestFreshParticipantCiphertextValidationBeforeAdmission(t *testing.T) {
 				_ = store.close()
 				t.Fatalf("mutated participant signature or artifact binding is invalid: %v", err)
 			}
-			if _, err := loadParticipantCiphertext(store, fixture.manifest, loadedA); err != nil {
+			loadedPledge, err := loadParticipantCiphertext(store, fixture.manifest, loadedA)
+			if err != nil {
 				_ = store.close()
 				t.Fatalf("mutated ciphertext digest, length, or canonical encoding is stale: %v", err)
+			}
+			if testCase.validate != nil {
+				params, _, err := loadPublicEncryptionMaterial(store, fixture.manifest.Crypto)
+				if err != nil {
+					_ = store.close()
+					t.Fatal(err)
+				}
+				testCase.validate(t, params, loadedPledge)
 			}
 			if err := store.close(); err != nil {
 				t.Fatal(err)
@@ -310,6 +346,7 @@ func TestFreshParticipantCiphertextValidationBeforeAdmission(t *testing.T) {
 			}
 			if recomputationExecutionCount.Load() != beforeRecomputation || releaseSignatureCount.Load() != beforeSignatures ||
 				fileExists(filepath.Join(privateRoot, recomputeAdmissionObject)) || fileExists(filepath.Join(privateRoot, recomputeMismatchObject)) ||
+				fileExists(filepath.Join(privateRoot, recomputedResultObject)) || fileExists(filepath.Join(privateRoot, recomputeVerifiedObject)) ||
 				fileExists(filepath.Join(privateRoot, releaseAdmissionObject)) || fileExists(filepath.Join(privateRoot, releaseConsumedObject)) ||
 				fileExists(filepath.Join(privateRoot, retainedResultObject)) || fileExists(filepath.Join(publicRoot, publicResultObject)) {
 				t.Fatalf("invalid participant input crossed the decryptor admission or release boundary")

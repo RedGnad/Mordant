@@ -110,7 +110,7 @@ func validateFreshGovernedCiphertext(params bgv.Parameters, expectedMetadata *rl
 	expectedLevel := params.MaxLevel()
 	if ciphertext == nil || ciphertext.MetaData == nil || ciphertext.Degree() != 1 || len(ciphertext.Value) != 2 ||
 		ciphertext.Level() != expectedLevel || ciphertext.N() != params.N() ||
-		!ciphertext.MetaData.Equal(expectedMetadata) {
+		!equalExpectedBGVMetadata(ciphertext.MetaData, expectedMetadata) {
 		return ErrCiphertextValidation
 	}
 	moduli := params.Q()
@@ -133,4 +133,16 @@ func validateFreshGovernedCiphertext(params bgv.Parameters, expectedMetadata *rl
 		}
 	}
 	return nil
+}
+
+func equalExpectedBGVMetadata(actual, expected *rlwe.MetaData) bool {
+	if actual == nil || expected == nil || actual.Scale.Cmp(expected.Scale) != 0 ||
+		actual.Scale.Mod == nil || expected.Scale.Mod == nil || actual.Scale.Mod.Cmp(expected.Scale.Mod) != 0 {
+		return false
+	}
+	return actual.IsBatched == expected.IsBatched &&
+		actual.IsBitReversed == expected.IsBitReversed &&
+		actual.LogDimensions == expected.LogDimensions &&
+		actual.IsNTT == expected.IsNTT &&
+		actual.IsMontgomery == expected.IsMontgomery
 }
