@@ -32,6 +32,11 @@ function checkedInSourceCommit(): string {
 const sourceCommit = process.env.MORDANT_PROTECTION_SOURCE_COMMIT ?? checkedInSourceCommit();
 const sharedEnvironment: Record<string, string> = {
   MORDANT_PROTECTION_SOURCE_COMMIT: sourceCommit,
+  // The targeted browser suite explicitly opts the development UI into its
+  // loopback boundary. Without the real-journey gate no adapter is started;
+  // A4-15 recovery tests intercept this origin and cannot reach a backend.
+  MORDANT_LOCAL_EXECUTION_ENABLED: "1",
+  MORDANT_LOCAL_ADAPTER_ORIGIN: `${adapterOrigin}/protection`,
 };
 
 if (runRealLocalJourney) {

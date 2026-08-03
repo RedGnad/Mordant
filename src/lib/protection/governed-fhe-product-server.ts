@@ -466,7 +466,11 @@ function publicView(state: InternalState, runtime: ProtectionRuntime): Protectio
     },
     evidence: state.evidence === undefined
       ? null
-      : verifyAndProjectPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit),
+      : verifyAndProjectPublicProtectionEvidence(
+        state.evidence,
+        runtime.expectedSourceCommit,
+        localCaseManifestDigest(state),
+      ),
     execution: {
       fhe: "REAL_BGV_FHE",
       deployment: "LOCAL_SINGLE_HOST",
@@ -660,14 +664,14 @@ function reconcileProtectionProjection(
       }
       if (!existsSync(productEvidencePath)) return null;
       const evidence = readJson<MordantProtectionEvidence>(productEvidencePath);
-      assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
+      assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit, localCaseManifestDigest(state));
       return { ...state, stage: "COMPLETE", evidence };
     }
     case "RETAINING":
       if (typeof pending.immutableParameters.destination !== "string" || !existsSync(pending.immutableParameters.destination)) return null;
       try {
         const retained = readJsonNoFollow<MordantProtectionEvidence>(pending.immutableParameters.destination);
-        assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
+        assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit, localCaseManifestDigest(state));
         return retained.scenario === state.protectionCase.productScenario
           && retained.protectionCase.fheCaseId === state.protectionCase.fheCaseId
           && retained.manifestDigest === state.evidence?.manifestDigest ? state : null;
@@ -1283,6 +1287,10 @@ function digestPublicFile(path: string): Sha256Digest {
   return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
 }
 
+function localCaseManifestDigest(state: Pick<InternalState, "paths">): Sha256Digest {
+  return digestPublicFile(join(state.paths.publicRoot, "case-manifest.json"));
+}
+
 function buildProtectionEvidence(
   runtime: ProtectionRuntime,
   state: InternalState,
@@ -1296,6 +1304,10 @@ function buildProtectionEvidence(
     || state.release === undefined || state.recourse === undefined
   ) {
     throw new ProtectionProductError("The complete governed FHE run is required", 500);
+  }
+  const expectedCaseManifestDigest = localCaseManifestDigest(state);
+  if (governedFheEvidence.caseManifestDigest !== expectedCaseManifestDigest) {
+    throw new ProtectionProductError("Governed-FHE case manifest digest readback mismatch", 500);
   }
   let sourceCommit: string;
   try {
@@ -1446,7 +1458,7 @@ function buildProtectionEvidence(
     generatedAt,
   };
   const evidence: MordantProtectionEvidence = { ...base, manifestDigest: protectionEvidenceDigest(base) };
-  assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
+  assertPublicProtectionEvidence(evidence, runtime.expectedSourceCommit, expectedCaseManifestDigest);
   return evidence;
 }
 
@@ -1561,7 +1573,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   if (state.stage !== "COMPLETE" || state.evidence === undefined) {
     throw new ProtectionProductError("Only complete public evidence may be retained");
   }
-  assertPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit);
+  assertPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit, localCaseManifestDigest(state));
   const allowed = resolve(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`);
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
   if (!existsSync(runtime.retentionRoot)) {
@@ -1590,7 +1602,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   ]);
   runtime.failpoint("after-capability-retention-before-readback");
   const retained = readJsonNoFollow<MordantProtectionEvidence>(allowed);
-  assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
+  assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit, localCaseManifestDigest(state));
   if (
     retained.runId !== state.runId
     || retained.scenario !== state.protectionCase.productScenario
@@ -1599,6 +1611,48 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
   finishOperation(runtime.runRoot, runId, operation.operationId, retention.reconciled ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
   return allowed;
+}
+
+function readRetainedProtectionEvidenceInConfiguredRootRuntime(
+  runtime: ProtectionRuntime,
+  runId: string,
+): RetainedProtectionEvidenceView {
+  // This boundary is deliberately read-only. In particular it must not call
+  // loadState/reconciliation, beginOperation, or the retention command: a
+  // browser GET may verify an operation already admitted, but may not admit
+  // retention on its own authority.
+  const state = loadStateRaw(runtime, runId);
+  if (state.stage !== "COMPLETE" || state.evidence === undefined) {
+    throw new ProtectionProductError("Complete retained evidence is not yet available", 423);
+  }
+  const scenario = state.protectionCase.productScenario;
+  if (scenario !== "conflict" && scenario !== "no-conflict") {
+    throw new ProtectionProductError("Retained evidence readback mismatch", 500);
+  }
+  const retainedPath = resolve(runtime.retentionRoot, `${scenario}.json`);
+  if (!existsSync(retainedPath)) {
+    throw new ProtectionProductError("Complete retained evidence is not yet available", 423);
+  }
+  const retained = readJsonNoFollow<MordantProtectionEvidence>(retainedPath);
+  const evidence = verifyAndProjectPublicProtectionEvidence(
+    retained,
+    runtime.expectedSourceCommit,
+    localCaseManifestDigest(state),
+  );
+  if (
+    evidence.runId !== state.runId
+    || evidence.scenario !== state.protectionCase.productScenario
+    || evidence.fhe.caseId !== state.protectionCase.fheCaseId
+    || evidence.manifestDigest !== state.evidence.manifestDigest
+  ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
+  return Object.freeze({
+    schemaVersion: "mordant.retained-protection-view/1",
+    runId: state.runId,
+    scenario: evidence.scenario,
+    caseId: evidence.fhe.caseId,
+    manifestDigest: evidence.manifestDigest,
+    evidence,
+  });
 }
 
 async function retainProtectionEvidenceInConfiguredRootRuntime(
@@ -1615,7 +1669,11 @@ async function retainProtectionEvidenceInConfiguredRootRuntime(
     // This is a second independent no-follow read, after the retention command
     // and its own readback, so the adapter only receives the exact durable bytes.
     const retained = readJsonNoFollow<MordantProtectionEvidence>(retainedPath);
-    const evidence = verifyAndProjectPublicProtectionEvidence(retained, runtime.expectedSourceCommit);
+    const evidence = verifyAndProjectPublicProtectionEvidence(
+      retained,
+      runtime.expectedSourceCommit,
+      localCaseManifestDigest(state),
+    );
     if (
       evidence.runId !== state.runId
       || evidence.scenario !== state.protectionCase.productScenario
@@ -1676,6 +1734,9 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     readProtectionCase: (runId: string) => readProtectionCaseRuntime(runtime, runId),
     loadImportedProtectionEvidence: (scenario: ProductScenario = "conflict") => loadImportedProtectionEvidenceRuntime(runtime, scenario),
     retainProtectionEvidence: (runId: string, destination: string) => retainProtectionEvidenceRuntime(runtime, runId, destination),
+    readRetainedProtectionEvidenceInConfiguredRoot: (runId: string) => (
+      readRetainedProtectionEvidenceInConfiguredRootRuntime(runtime, runId)
+    ),
     retainProtectionEvidenceInConfiguredRoot: (runId: string) => (
       retainProtectionEvidenceInConfiguredRootRuntime(runtime, runId)
     ),
@@ -1696,5 +1757,8 @@ export const exportProtectionEvidence = DEFAULT_ORCHESTRATOR.exportProtectionEvi
 export const readProtectionCase = DEFAULT_ORCHESTRATOR.readProtectionCase;
 export const loadImportedProtectionEvidence = DEFAULT_ORCHESTRATOR.loadImportedProtectionEvidence;
 export const retainProtectionEvidence = DEFAULT_ORCHESTRATOR.retainProtectionEvidence;
+export const readRetainedProtectionEvidenceInConfiguredRoot = (
+  DEFAULT_ORCHESTRATOR.readRetainedProtectionEvidenceInConfiguredRoot
+);
 export const retainProtectionEvidenceInConfiguredRoot = DEFAULT_ORCHESTRATOR.retainProtectionEvidenceInConfiguredRoot;
 export const validateRetainedPublicArtifacts = DEFAULT_ORCHESTRATOR.validateRetainedPublicArtifacts;

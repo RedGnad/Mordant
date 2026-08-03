@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,7 +8,11 @@ import { test } from "node:test";
 
 import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./governed-fhe-product-server";
 import type { Sha256Digest } from "./cleanverse-asset";
-import { protectionBindingDigest, type MordantProtectionEvidence } from "./protection-evidence";
+import {
+  protectionBindingDigest,
+  protectionEvidenceDigest,
+  type MordantProtectionEvidence,
+} from "./protection-evidence";
 import type { MordantProtectionBinding } from "./protection-case";
 import { readOperationJournal } from "./protection-operation-journal";
 
@@ -356,7 +361,32 @@ const retainedArtifactPath = join(
 );
 const artifactTest = existsSync(retainedArtifactPath) ? test : test.skip;
 
-function writeCompleteExecution(root: string, evidence: MordantProtectionEvidence): void {
+function bindSyntheticCaseManifest(
+  publicRoot: string,
+  evidence: MordantProtectionEvidence,
+): MordantProtectionEvidence {
+  mkdirSync(publicRoot, { recursive: true });
+  const manifest = JSON.stringify({
+    schemaVersion: "mordant.test-case-manifest/1",
+    caseId: evidence.fhe.caseId,
+  });
+  writeFileSync(join(publicRoot, "case-manifest.json"), manifest);
+  const caseManifestDigest = `sha256:${createHash("sha256").update(manifest).digest("hex")}` as Sha256Digest;
+  const clone = {
+    ...structuredClone(evidence),
+    governedFheEvidence: { ...evidence.governedFheEvidence, caseManifestDigest },
+  };
+  const value = Object.fromEntries(
+    Object.entries(clone).filter(([key]) => key !== "manifestDigest"),
+  ) as Omit<MordantProtectionEvidence, "manifestDigest">;
+  return { ...value, manifestDigest: protectionEvidenceDigest(value) };
+}
+
+function writeCompleteExecution(root: string, sourceEvidence: MordantProtectionEvidence): MordantProtectionEvidence {
+  const evidence = bindSyntheticCaseManifest(
+    join(root, sourceEvidence.runId, "public"),
+    sourceEvidence,
+  );
   const caseRoot = join(root, evidence.runId);
   mkdirSync(caseRoot, { recursive: true });
   writeFileSync(join(caseRoot, "execution.json"), `${JSON.stringify({
@@ -374,15 +404,77 @@ function writeCompleteExecution(root: string, evidence: MordantProtectionEvidenc
     startedAtUnix: evidence.caseAuthorization.binding.createdAtUnix,
   }, null, 2)}\n`);
   writeFileSync(join(caseRoot, "protection-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
+  return evidence;
 }
+
+artifactTest("configured retained-envelope readback is pure, exact, and fail-closed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mordant-retained-readback-"));
+  const runRoot = join(root, "runs");
+  const retentionRoot = join(root, "retained");
+  const evidence = writeCompleteExecution(runRoot, retainedNoConflict());
+  const retainedPath = join(retentionRoot, "no-conflict.json");
+  mkdirSync(retentionRoot, { recursive: true });
+  let binaryCalls = 0;
+  const orchestrator = createProtectionOrchestrator({
+    runRoot,
+    binRoot: join(root, "bin"),
+    importedEvidenceRoot: retentionRoot,
+    retentionRoot,
+    expectedSourceCommit: evidence.sourceCommit,
+    skipBinaryBuild: true,
+    binaryRunner: async () => {
+      binaryCalls += 1;
+      throw new Error("read-only retained readback invoked a binary");
+    },
+  });
+  const journalPath = join(runRoot, evidence.runId, "operation-journal.json");
+  const executionPath = join(runRoot, evidence.runId, "execution.json");
+  const executionBytes = readFileSync(executionPath);
+
+  assert.throws(
+    () => orchestrator.readRetainedProtectionEvidenceInConfiguredRoot(evidence.runId),
+    /not yet available/,
+  );
+  assert.equal(binaryCalls, 0);
+  assert.equal(existsSync(journalPath), false);
+
+  const { manifestDigest: _manifestDigest, ...mismatchedBody } = evidence;
+  const mismatchedValue = {
+    ...mismatchedBody,
+    runId: "77777777-7777-4777-8777-777777777777",
+  };
+  const mismatched: MordantProtectionEvidence = {
+    ...mismatchedValue,
+    manifestDigest: protectionEvidenceDigest(mismatchedValue),
+  };
+  writeFileSync(retainedPath, `${JSON.stringify(mismatched, null, 2)}\n`);
+  const mismatchedBytes = readFileSync(retainedPath);
+  assert.throws(
+    () => orchestrator.readRetainedProtectionEvidenceInConfiguredRoot(evidence.runId),
+    /Retained evidence readback mismatch/,
+  );
+  assert.deepEqual(readFileSync(retainedPath), mismatchedBytes);
+  assert.equal(binaryCalls, 0);
+  assert.equal(existsSync(journalPath), false);
+
+  writeFileSync(retainedPath, `${JSON.stringify(evidence, null, 2)}\n`);
+  const exactBytes = readFileSync(retainedPath);
+  const retained = orchestrator.readRetainedProtectionEvidenceInConfiguredRoot(evidence.runId);
+  assert.equal(retained.runId, evidence.runId);
+  assert.equal(retained.manifestDigest, evidence.manifestDigest);
+  assert.equal(retained.evidence.fhe.caseId, evidence.fhe.caseId);
+  assert.deepEqual(readFileSync(retainedPath), exactBytes);
+  assert.deepEqual(readFileSync(executionPath), executionBytes);
+  assert.equal(binaryCalls, 0);
+  assert.equal(existsSync(journalPath), false);
+});
 
 artifactTest("interrupted retention resumes through a fresh orchestrator and exact readback", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-retention-reconcile-"));
-  const evidence = retainedNoConflict();
   const runRoot = join(root, "runs");
+  const evidence = writeCompleteExecution(runRoot, retainedNoConflict());
   const destinationRoot = join(root, "retained");
   const destination = join(destinationRoot, "no-conflict.json");
-  writeCompleteExecution(runRoot, evidence);
   mkdirSync(destinationRoot, { recursive: true });
   const base: ProtectionRuntimeOptions = {
     runRoot,
@@ -416,12 +508,11 @@ artifactTest("interrupted retention resumes through a fresh orchestrator and exa
 
 artifactTest("retention rejects a symlink destination without reading or replacing its target", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-retention-symlink-"));
-  const evidence = retainedNoConflict();
   const runRoot = join(root, "runs");
+  const evidence = writeCompleteExecution(runRoot, retainedNoConflict());
   const destinationRoot = join(root, "retained");
   const destination = join(destinationRoot, "no-conflict.json");
   const target = join(root, "outside.json");
-  writeCompleteExecution(runRoot, evidence);
   mkdirSync(destinationRoot, { recursive: true });
   writeFileSync(target, "outside\n");
   symlinkSync(target, destination);
@@ -451,15 +542,16 @@ artifactTest("retention rejects a symlink destination without reading or replaci
 
 artifactTest("published evidence reconciles after crash without a second create-only export", async () => {
   const root = await mkdtemp(join(tmpdir(), "mordant-evidence-reconcile-"));
-  const evidence = retainedNoConflict();
+  const retainedEvidence = retainedNoConflict();
   const runRoot = join(root, "runs");
-  const caseRoot = join(runRoot, evidence.runId);
+  const caseRoot = join(runRoot, retainedEvidence.runId);
   const publicRoot = join(caseRoot, "public");
   const privateRoot = join(caseRoot, "decryptor-private");
   const participantRoot = join(caseRoot, "participant-private");
   mkdirSync(publicRoot, { recursive: true });
   mkdirSync(privateRoot, { recursive: true });
   mkdirSync(participantRoot, { recursive: true });
+  const evidence = bindSyntheticCaseManifest(publicRoot, retainedEvidence);
   const signedResult = structuredClone(evidence.governedResult) as unknown as Record<string, unknown>;
   delete signedResult.digest;
   for (const [name, value] of [
@@ -528,6 +620,7 @@ artifactTest("published evidence reconciles after crash without a second create-
     binRoot: join(root, "bin"),
     importedEvidenceRoot: join(root, "retained"),
     expectedSourceCommit: evidence.sourceCommit,
+    now: () => new Date(evidence.generatedAt),
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
     binaryRunner: async <T>(binary: string, args: readonly string[]) => {

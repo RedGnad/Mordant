@@ -142,9 +142,20 @@ function validateBrowserOperation(value) {
   throw new LocalProtectionAdapterError("Unsupported or non-exact product operation", 400);
 }
 
-async function downstreamJson(configuration, fetchImpl, method, query, body) {
+function mutationCorrelation(value) {
+  if (
+    value !== null && !Array.isArray(value) && typeof value === "object"
+    && value.intent === "execute"
+    && typeof value.runId === "string" && RUN_ID.test(value.runId)
+    && typeof value.operation === "string" && OPERATIONS.has(value.operation)
+  ) return { runId: value.runId, operation: value.operation };
+  return null;
+}
+
+async function downstreamJson(configuration, fetchImpl, method, query, body, onDispatch) {
   const target = new URL("/api/protection/conflicting-pledge", configuration.downstreamOrigin);
   for (const [name, value] of Object.entries(query ?? {})) target.searchParams.set(name, value);
+  onDispatch();
   const response = await fetchImpl(target, {
     method,
     cache: "no-store",
@@ -184,13 +195,13 @@ function retainedEvidence(value, configuration, exported) {
   return value.evidence;
 }
 
-async function executeBrowserOperation(configuration, fetchImpl, operation) {
-  const view = await downstreamJson(configuration, fetchImpl, "POST", undefined, operation);
+async function executeBrowserOperation(configuration, fetchImpl, operation, onDispatch) {
+  const view = await downstreamJson(configuration, fetchImpl, "POST", undefined, operation, onDispatch);
   if (operation.intent !== "execute" || operation.operation !== "exportProtectionEvidence") return view;
-  return ensureDurablyRetained(configuration, fetchImpl, view);
+  return ensureDurablyRetained(configuration, fetchImpl, view, onDispatch);
 }
 
-async function ensureDurablyRetained(configuration, fetchImpl, view) {
+async function ensureDurablyRetained(configuration, fetchImpl, view, onDispatch) {
   if (view === null || typeof view !== "object" || view.stage !== "COMPLETE") {
     throw new LocalProtectionAdapterError("Evidence export did not reach COMPLETE", 502);
   }
@@ -198,7 +209,7 @@ async function ensureDurablyRetained(configuration, fetchImpl, view) {
     intent: "execute",
     runId: view.runId,
     operation: "retainProtectionEvidence",
-  });
+  }, onDispatch);
   const evidence = retainedEvidence(retained, configuration, view);
   return { ...view, evidence };
 }
@@ -212,6 +223,9 @@ export function createLocalProtectionAdapter(configuration, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   return createServer(async (request, response) => {
     const origin = requestOrigin(request);
+    let downstreamDispatched = false;
+    let correlatedMutation = null;
+    const markDownstreamDispatched = () => { downstreamDispatched = true; };
     try {
       // Only the kernel-derived peer address is authority. Host, URL,
       // Forwarded and X-Forwarded-For are deliberately ignored.
@@ -242,33 +256,43 @@ export function createLocalProtectionAdapter(configuration, options = {}) {
           fetchImpl,
           "GET",
           { runId: url.searchParams.get("runId") },
+          undefined,
+          markDownstreamDispatched,
         );
-        send(
-          response,
-          configuration.browserOrigin,
-          200,
-          view?.stage === "COMPLETE"
-            ? await ensureDurablyRetained(configuration, fetchImpl, view)
-            : view,
-        );
+        // Resume is a readback boundary. It may observe/reconcile work that was
+        // already admitted, but it must never admit the separate retention
+        // operation. A COMPLETE downstream view is returned only after the API
+        // has independently verified the configured retained envelope.
+        send(response, configuration.browserOrigin, 200, view);
         return;
       }
       if (request.method !== "POST" || request.headers["content-type"]?.split(";", 1)[0] !== "application/json") {
         throw new LocalProtectionAdapterError("Only fixed JSON GET/POST operations are available", 405);
       }
+      const body = await readJsonBody(request);
+      correlatedMutation = mutationCorrelation(body);
+      const operation = validateBrowserOperation(body);
       if (url.search !== "") throw new LocalProtectionAdapterError("Query parameters are not accepted", 400);
-      const operation = validateBrowserOperation(await readJsonBody(request));
       send(
         response,
         configuration.browserOrigin,
         200,
-        await executeBrowserOperation(configuration, fetchImpl, operation),
+        await executeBrowserOperation(configuration, fetchImpl, operation, markDownstreamDispatched),
       );
     } catch (error) {
       const status = error instanceof LocalProtectionAdapterError ? error.status : 502;
-      send(response, configuration.browserOrigin, status, {
-        error: status >= 500 ? "Local protection adapter operation failed" : error.message,
-      });
+      const message = status >= 500 ? "Local protection adapter operation failed" : error.message;
+      const definitelyNotAdmitted = request.method === "POST"
+        && status >= 400 && status < 500
+        && !downstreamDispatched
+        && correlatedMutation !== null;
+      send(response, configuration.browserOrigin, status, definitelyNotAdmitted ? {
+        schemaVersion: "mordant.local-mutation-error/1",
+        mutationAdmission: "NOT_ADMITTED",
+        runId: correlatedMutation.runId,
+        operation: correlatedMutation.operation,
+        error: message,
+      } : { error: message });
     }
   });
 }

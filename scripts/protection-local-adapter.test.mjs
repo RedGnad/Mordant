@@ -103,8 +103,83 @@ test("origin, unknown operations and every additional private field are refused 
         body: JSON.stringify(body),
       });
       assert.equal(response.status, 400);
+      const refusal = await response.json();
+      if (body.intent === "execute" && body.operation === "retainProtectionEvidence") {
+        assert.deepEqual(refusal, { error: "Unsupported or non-exact product operation" });
+      }
     }
     assert.equal(forwarded, 0);
+  });
+});
+
+test("NOT_ADMITTED is exact and correlated only for a known mutation rejected before forwarding", async () => {
+  let forwarded = 0;
+  const runId = "11111111-1111-4111-8111-111111111111";
+  await withAdapter(async () => {
+    forwarded += 1;
+    return Response.json({});
+  }, async (url) => {
+    const response = await browserFetch(`${url}?unexpected=1`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        intent: "execute",
+        runId,
+        operation: "evaluatePrivateConflict",
+      }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      schemaVersion: "mordant.local-mutation-error/1",
+      mutationAdmission: "NOT_ADMITTED",
+      runId,
+      operation: "evaluatePrivateConflict",
+      error: "Query parameters are not accepted",
+    });
+    assert.equal(forwarded, 0);
+  });
+});
+
+test("a downstream-dispatched 4xx is UNKNOWN and never carries NOT_ADMITTED", async () => {
+  let forwarded = 0;
+  const runId = "11111111-1111-4111-8111-111111111111";
+  await withAdapter(async () => {
+    forwarded += 1;
+    return Response.json({ error: "DOWNSTREAM_REJECTED_AFTER_DISPATCH" }, { status: 423 });
+  }, async (url) => {
+    const response = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intent: "execute", runId, operation: "evaluatePrivateConflict" }),
+    });
+    assert.equal(response.status, 423);
+    assert.deepEqual(await response.json(), { error: "DOWNSTREAM_REJECTED_AFTER_DISPATCH" });
+    assert.equal(forwarded, 1);
+  });
+});
+
+test("a retention rejection after terminal export dispatch remains UNKNOWN", async () => {
+  const runId = "11111111-1111-4111-8111-111111111111";
+  const view = {
+    runId,
+    stage: "COMPLETE",
+    protectionCase: { productScenario: "conflict", fheCaseId: "sha256:case" },
+    evidence: { runId, scenario: "conflict", sourceCommit: "1".repeat(40), manifestDigest: "sha256:manifest", fhe: { caseId: "sha256:case" } },
+  };
+  let forwarded = 0;
+  await withAdapter(async () => {
+    forwarded += 1;
+    if (forwarded === 1) return Response.json(view);
+    return Response.json({ error: "RETENTION_REJECTED_AFTER_DISPATCH" }, { status: 409 });
+  }, async (url) => {
+    const response = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intent: "execute", runId, operation: "exportProtectionEvidence" }),
+    });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error: "RETENTION_REJECTED_AFTER_DISPATCH" });
+    assert.equal(forwarded, 2);
   });
 });
 
@@ -152,7 +227,7 @@ test("export performs fixed retention and exact durable readback", async () => {
   });
 });
 
-test("a COMPLETE refresh resumes fixed retention after export-to-retain interruption", async () => {
+test("a COMPLETE refresh performs exactly one downstream GET and never admits retention", async () => {
   const calls = [];
   const runId = "11111111-1111-4111-8111-111111111111";
   const evidence = {
@@ -166,23 +241,38 @@ test("a COMPLETE refresh resumes fixed retention after export-to-retain interrup
   };
   await withAdapter(async (url, init) => {
     calls.push({ url: String(url), init });
-    if (init.method === "GET") return Response.json(view);
-    return Response.json({
-      schemaVersion: "mordant.retained-protection-view/1",
-      runId,
-      scenario: evidence.scenario,
-      caseId: evidence.fhe.caseId,
-      manifestDigest: evidence.manifestDigest,
-      evidence,
-    });
+    assert.equal(init.method, "GET");
+    return Response.json(view);
   }, async (url) => {
     const response = await browserFetch(`${url}?runId=${runId}`);
     assert.equal(response.status, 200);
     assert.equal((await response.json()).evidence.manifestDigest, evidence.manifestDigest);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
     assert.equal(calls[0].init.method, "GET");
-    assert.match(calls[1].init.body, /retainProtectionEvidence/);
+    assert.equal(calls[0].init.body, undefined);
   });
+});
+
+test("an absent or mismatched retained envelope fails COMPLETE readback without any downstream POST", async () => {
+  const runId = "11111111-1111-4111-8111-111111111111";
+  for (const [status, message] of [
+    [423, "Complete retained evidence is not yet available"],
+    [500, "Retained evidence readback mismatch"],
+  ]) {
+    const calls = [];
+    await withAdapter(async (url, init) => {
+      calls.push({ url: String(url), init });
+      assert.equal(init.method, "GET");
+      return Response.json({ error: message }, { status });
+    }, async (url) => {
+      const response = await browserFetch(`${url}?runId=${runId}`);
+      assert.equal(response.status, status);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].init.method, "GET");
+      assert.equal(calls[0].init.body, undefined);
+      assert.doesNotMatch(JSON.stringify(await response.json()), /retainProtectionEvidence/);
+    });
+  }
 });
 
 test("GET cardinality and every POST or OPTIONS query parameter are rejected", async () => {

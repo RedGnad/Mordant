@@ -15,6 +15,10 @@ import {
   type MordantProtectionCase,
   type ProductScenario,
 } from "./protection-case";
+import {
+  ProtectionEvidenceMetadataError,
+  assertRawProtectionEvidenceMetadata,
+} from "./protection-evidence-metadata";
 
 export const EXPECTED_GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
 export const PRODUCT_CLAIM_IDENTIFIER = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1" as const;
@@ -1004,6 +1008,7 @@ function assertExactPublicEvidenceShape(evidence: MordantProtectionEvidence): vo
 function assertPublicProtectionEvidenceUnchecked(
   evidence: MordantProtectionEvidence,
   expectedSourceCommit: unknown,
+  expectedCaseManifestDigest?: unknown,
 ): void {
   if (!Object.hasOwn(objectValue(evidence, "PROTECTION_EVIDENCE_STRUCTURE"), "sourceCommit")) {
     fail("SOURCE_COMMIT", "Protection evidence source commit is missing");
@@ -1198,6 +1203,12 @@ function assertPublicProtectionEvidenceUnchecked(
   }
   assertSignedRecourseAttestation(evidence, protectionDigest, resultDigest);
 
+  // Raw metadata is validated only after the stronger signed-root and
+  // cross-reference checks, but still before a public projection is reachable.
+  // This preserves precise cryptographic rejection reasons while ensuring
+  // unsigned transport metadata can never enter the projected DTO unchecked.
+  assertRawProtectionEvidenceMetadata(evidence, expectedCaseManifestDigest);
+
   const serialized = JSON.stringify(evidence).toLowerCase();
   for (const forbidden of [
     "secret-key.bin", "decryptor-signing-key.bin", "participant-a.ed25519", "participant-b.ed25519",
@@ -1210,12 +1221,18 @@ function assertPublicProtectionEvidenceUnchecked(
 export function assertPublicProtectionEvidence(
   evidence: unknown,
   expectedSourceCommit: unknown,
+  expectedCaseManifestDigest?: unknown,
 ): asserts evidence is MordantProtectionEvidence {
   try {
     objectValue(evidence, "PROTECTION_EVIDENCE_STRUCTURE");
-    assertPublicProtectionEvidenceUnchecked(evidence as MordantProtectionEvidence, expectedSourceCommit);
+    assertPublicProtectionEvidenceUnchecked(
+      evidence as MordantProtectionEvidence,
+      expectedSourceCommit,
+      expectedCaseManifestDigest,
+    );
   } catch (error) {
     if (error instanceof ProtectionEvidenceError) throw error;
+    if (error instanceof ProtectionEvidenceMetadataError) fail(error.code, "Protection evidence metadata rejected");
     fail("PROTECTION_EVIDENCE_STRUCTURE", "Malformed protection evidence was rejected");
   }
 }

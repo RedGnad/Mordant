@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   ProtectionProductError,
   loadImportedProtectionEvidence,
+  readRetainedProtectionEvidenceInConfiguredRoot,
   readProtectionCase,
 } from "../../../../lib/protection/governed-fhe-product-server";
 import { createProtectionPostHandler } from "../../../../lib/protection/protection-api-route";
@@ -34,7 +35,10 @@ export async function GET(request: Request) {
       ) {
         return response({ error: "Only an exact protection runId may be read." }, 400);
       }
-      return response(await readProtectionCase(runId));
+      const view = await readProtectionCase(runId);
+      if (view.stage !== "COMPLETE") return response(view);
+      const retained = readRetainedProtectionEvidenceInConfiguredRoot(runId);
+      return response({ ...view, evidence: retained.evidence });
     }
     const requestedScenario = url.searchParams.get("scenario") ?? "conflict";
     if (

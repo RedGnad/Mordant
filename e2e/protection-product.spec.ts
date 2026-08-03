@@ -17,6 +17,7 @@ type ImportedPayload = Readonly<{
 
 const IMPORTED_API = "/api/protection/conflicting-pledge";
 const REAL_LOCAL = process.env.MORDANT_RUN_REAL_PROTECTION_E2E === "1";
+const LOCAL_ADAPTER = `http://127.0.0.1:${process.env.MORDANT_LOCAL_ADAPTER_PORT ?? "43125"}/protection`;
 const LOCAL_OPERATION_LABELS = [
   "Prepare private match",
   "Submit participant A",
@@ -65,8 +66,79 @@ async function fulfillJson(route: Route, value: unknown, status = 200): Promise<
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(value) });
 }
 
+async function fulfillAdapterJson(route: Route, value: unknown, status = 200): Promise<void> {
+  const origin = route.request().headers().origin ?? "http://127.0.0.1:3112";
+  await route.fulfill({
+    status,
+    body: JSON.stringify(value),
+    headers: {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": "content-type",
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+      vary: "Origin",
+    },
+  });
+}
+
+async function fulfillAdapterPreflight(route: Route): Promise<void> {
+  const origin = route.request().headers().origin ?? "http://127.0.0.1:3112";
+  await route.fulfill({
+    status: 204,
+    headers: {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": "content-type",
+      "access-control-max-age": "600",
+      vary: "Origin",
+    },
+  });
+}
+
 function evidenceRecord(payload: ImportedPayload): Record<string, unknown> {
   return payload.evidence as Record<string, unknown>;
+}
+
+function localCase(
+  evidence: Record<string, unknown>,
+  incidentState: "PRIVATE_MATCH_OPEN" | "EVALUATED" | "CONFLICT_CONFIRMED",
+  recourseState: "NOT_OPEN" | "SIMULATED_AVAILABLE",
+): Record<string, unknown> {
+  return {
+    ...(evidence.protectionCase as Record<string, unknown>),
+    incidentState,
+    cureDeadline: recourseState === "SIMULATED_AVAILABLE" ? "2026-08-04T00:00:00.000Z" : null,
+    recourseState,
+  };
+}
+
+function localView(
+  runId: string,
+  stage: string,
+  nextOperation: string | null,
+  protectionCase: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    schemaVersion: "mordant.protection-product-view/1",
+    runId,
+    stage,
+    nextOperation,
+    protectionCase,
+    participantArtifactDigests: { participantA: null, participantB: null },
+    evaluatedArtifactDigest: null,
+    governedResult: null,
+    recourse: null,
+    evidence: null,
+    execution: {
+      fhe: "REAL_BGV_FHE",
+      deployment: "LOCAL_SINGLE_HOST",
+      webPresentation: "PUBLIC_EVIDENCE_READBACK",
+      recourse: "LOCAL_PROTOCOL_DOUBLE",
+    },
+    ...overrides,
+  };
 }
 
 function evidenceRow(dialog: Locator, label: string): Locator {
@@ -398,6 +470,158 @@ test.describe("verified public projection and evidence dialog", () => {
   });
 });
 
+test.describe("uncertain mutation durable readback barrier", () => {
+  test("an aborted evaluation response blocks mutations and Back until GET-only durable replacement", async ({ page, request }) => {
+    const evidence = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "44444444-4444-4444-8444-444444444444";
+    const beforeEvaluation = localCase(evidence, "PRIVATE_MATCH_OPEN", "NOT_OPEN");
+    const afterEvaluation = localCase(evidence, "EVALUATED", "NOT_OPEN");
+    const calls: { method: string; operation: string | null }[] = [];
+    let readbacks = 0;
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const request = route.request();
+      if (request.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      if (request.method() === "GET") {
+        calls.push({ method: "GET", operation: null });
+        readbacks += 1;
+        if (readbacks === 1) {
+          return fulfillAdapterJson(route, { error: "OPERATION_STILL_RUNNING_AFTER_DISPATCH" }, 423);
+        }
+        return fulfillAdapterJson(route, localView(runId, "EVALUATED", "releaseGovernedResult", afterEvaluation, {
+          evaluatedArtifactDigest: (evidence.fhe as Record<string, unknown>).evaluatedArtifactDigest,
+        }));
+      }
+      const body = request.postDataJSON() as { intent: string; operation?: string };
+      calls.push({ method: "POST", operation: body.operation ?? "create" });
+      if (body.intent === "create") {
+        return fulfillAdapterJson(route, localView(
+          runId,
+          "PARTICIPANT_B_SUBMITTED",
+          "evaluatePrivateConflict",
+          beforeEvaluation,
+        ));
+      }
+      expect(body.operation).toBe("evaluatePrivateConflict");
+      await route.abort("connectionreset");
+    });
+
+    await page.goto("/protection?scenario=conflict");
+    await page.getByRole("button", { name: "Run this case locally" }).click();
+    await expect(page.getByRole("button", { name: "Evaluate private conflict" })).toBeVisible();
+    const durableURL = page.url();
+    await page.getByRole("button", { name: "Evaluate private conflict" }).click();
+
+    await expect(page.getByTestId("protection-product")).toHaveAttribute("data-readback-required", "true");
+    await expect(page.getByTestId("durable-readback-required")).toContainText("evaluatePrivateConflict");
+    await expect(page.getByRole("button", { name: "Evaluate private conflict" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start a fresh local case" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Conflict", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "No conflict", exact: true })).toBeDisabled();
+
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(durableURL);
+    await expect(productAlert(page)).toHaveText("OPERATION_STILL_RUNNING_AFTER_DISPATCH");
+    await expect(page.getByTestId("durable-readback-required")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resume durable run" })).toBeEnabled();
+    expect(calls.filter((call) => call.method === "POST" && call.operation === "evaluatePrivateConflict")).toHaveLength(1);
+
+    await page.getByRole("button", { name: "Resume durable run" }).click();
+    await expect(page.getByTestId("protection-product")).toHaveAttribute("data-readback-required", "false");
+    await expect(page.getByTestId("durable-readback-required")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Evaluate private conflict" })).toHaveCount(0);
+    expect(calls.map((call) => call.method)).toEqual(["POST", "POST", "GET", "GET"]);
+  });
+
+  test("an admitted governed-result release exposes only Resume until durable GET replacement", async ({ page, request }) => {
+    const evidence = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "55555555-5555-4555-8555-555555555555";
+    const evaluatedCase = localCase(evidence, "EVALUATED", "NOT_OPEN");
+    const governedResult = evidence.governedResult as Record<string, unknown>;
+    const result = {
+      conflict: true,
+      digest: governedResult.digest,
+      releaseMode: "governed-decryptor-v1",
+    };
+    const calls: { method: string; operation: string | null }[] = [];
+    let releaseDurablyAdmitted = false;
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const request = route.request();
+      if (request.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      if (request.method() === "GET") {
+        calls.push({ method: "GET", operation: null });
+        expect(releaseDurablyAdmitted, "release must be durably admitted before response loss").toBeTruthy();
+        return fulfillAdapterJson(route, localView(runId, "RELEASED", "openRecourseCase", evaluatedCase, {
+          evaluatedArtifactDigest: (evidence.fhe as Record<string, unknown>).evaluatedArtifactDigest,
+          governedResult: result,
+        }));
+      }
+      const body = request.postDataJSON() as { intent: string; operation?: string };
+      calls.push({ method: "POST", operation: body.operation ?? "create" });
+      if (body.intent === "create") {
+        return fulfillAdapterJson(route, localView(runId, "EVALUATED", "releaseGovernedResult", evaluatedCase, {
+          evaluatedArtifactDigest: (evidence.fhe as Record<string, unknown>).evaluatedArtifactDigest,
+        }));
+      }
+      expect(body.operation).toBe("releaseGovernedResult");
+      releaseDurablyAdmitted = true;
+      await route.abort("connectionreset");
+    });
+
+    await page.goto("/protection?scenario=conflict");
+    await page.getByRole("button", { name: "Run this case locally" }).click();
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toBeVisible();
+    await page.getByRole("button", { name: "Verify and release Boolean" }).click();
+
+    await expect(page.getByTestId("durable-readback-required")).toContainText("releaseGovernedResult");
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start a fresh local case" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Evidence", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "Resume durable run" }).click();
+
+    await expect(page.getByTestId("durable-readback-required")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Apply governed result" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Evidence", exact: true })).toBeDisabled();
+    expect(calls.map((call) => call.method)).toEqual(["POST", "POST", "GET"]);
+    expect(calls.filter((call) => call.operation === "releaseGovernedResult")).toHaveLength(1);
+  });
+
+  test("a durable URL remount keeps the barrier after 423 and unlocks only after a valid second GET", async ({ page, request }) => {
+    const evidence = evidenceRecord(await importedPayload(request, "conflict"));
+    const runId = "66666666-6666-4666-8666-666666666666";
+    const durableCase = localCase(evidence, "EVALUATED", "NOT_OPEN");
+    const calls: string[] = [];
+
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const request = route.request();
+      if (request.method() === "OPTIONS") return fulfillAdapterPreflight(route);
+      expect(request.method()).toBe("GET");
+      calls.push("GET");
+      if (calls.length === 1) return fulfillAdapterJson(route, { error: "DURABLE_READBACK_STILL_RUNNING" }, 423);
+      return fulfillAdapterJson(route, localView(runId, "EVALUATED", "releaseGovernedResult", durableCase, {
+        evaluatedArtifactDigest: (evidence.fhe as Record<string, unknown>).evaluatedArtifactDigest,
+      }));
+    });
+
+    await page.goto(`/protection?scenario=conflict&runId=${runId}`);
+    await expect(productAlert(page)).toHaveText("DURABLE_READBACK_STILL_RUNNING");
+    await expect(page.getByTestId("protection-product")).toHaveAttribute("data-readback-required", "true");
+    await expect(page.getByTestId("durable-readback-required")).toContainText("UNKNOWN_AFTER_RELOAD");
+    await expect(page.getByRole("button", { name: "Conflict", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "No conflict", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Start a fresh local case" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Resume durable run" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Resume durable run" }).click();
+    await expect(page.getByTestId("protection-product")).toHaveAttribute("data-readback-required", "false");
+    await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toBeVisible();
+    expect(calls).toEqual(["GET", "GET"]);
+  });
+});
+
 async function currentLocalOperation(page: Page): Promise<{ label: typeof LOCAL_OPERATION_LABELS[number]; button: Locator } | null> {
   for (const label of LOCAL_OPERATION_LABELS) {
     const button = page.getByRole("button", { name: label, exact: true });
@@ -409,26 +633,6 @@ async function currentLocalOperation(page: Page): Promise<{ label: typeof LOCAL_
 async function completeEvidenceReady(page: Page): Promise<boolean> {
   const button = page.getByRole("button", { name: "Open complete evidence" });
   return await button.count() > 0 && await button.first().isEnabled();
-}
-
-async function pollGetOnlyUntilLiveOperationSettles(page: Page, durableURL: string): Promise<void> {
-  await expect.poll(async () => {
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(durableURL);
-    await expect(page.getByTestId("protection-product")).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
-    if (await completeEvidenceReady(page)) return "ready";
-    if (await currentLocalOperation(page) !== null) return "ready";
-    const alert = productAlert(page);
-    if (await alert.count() > 0) {
-      const text = await alert.textContent();
-      if (text?.includes("operation is still running")) return "waiting";
-      throw new Error(`Unexpected durable readback error: ${text ?? "unknown"}`);
-    }
-    if (await page.getByText("ABORTED", { exact: true }).count() > 0) {
-      throw new Error("Live evaluation refresh produced an ABORTED durable run");
-    }
-    return "waiting";
-  }, { timeout: 360_000, intervals: [500, 1_000, 2_000, 5_000] }).toBe("ready");
 }
 
 async function runCurrentOperation(page: Page, label: string): Promise<void> {
@@ -457,6 +661,23 @@ async function completeRealJourney(
 ): Promise<void> {
   const expectedOutcome = scenario === "conflict" ? "Conflict confirmed" : "No conflict found";
   const observedOperations: string[] = [];
+  let evaluationResponseLostAfterCompletion = false;
+  if (interrupt) {
+    await page.route(`${LOCAL_ADAPTER}**`, async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST") return route.continue();
+      try {
+        const body = request.postDataJSON() as { operation?: string };
+        if (body.operation !== "evaluatePrivateConflict") return route.continue();
+      } catch {
+        return route.continue();
+      }
+      const completed = await route.fetch({ timeout: 360_000 });
+      expect(completed.ok(), "real evaluation must durably finish before its browser response is lost").toBeTruthy();
+      evaluationResponseLostAfterCompletion = true;
+      await route.abort("connectionreset");
+    });
+  }
   page.on("request", (request) => {
     if (request.method() !== "POST" || !request.url().endsWith("/protection")) return;
     try {
@@ -489,27 +710,16 @@ async function completeRealJourney(
 
     if (interrupt && interruptedLabel === null && operation!.label === "Evaluate private conflict") {
       interruptedLabel = operation!.label;
-      const issued = page.waitForRequest((request) => {
-        if (request.method() !== "POST" || !request.url().endsWith("/protection")) return false;
-        try {
-          return (request.postDataJSON() as { operation?: string }).operation === "evaluatePrivateConflict";
-        } catch {
-          return false;
-        }
-      });
       await operation!.button.click();
-      await issued;
-      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("durable-readback-required")).toContainText(
+        "evaluatePrivateConflict",
+        { timeout: 360_000 },
+      );
+      expect(evaluationResponseLostAfterCompletion).toBeTruthy();
       await expect(page).toHaveURL(durableURL);
-      await pollGetOnlyUntilLiveOperationSettles(page, durableURL);
-      await expect(page).toHaveURL(durableURL);
-
-      const afterResume = await currentLocalOperation(page);
-      if (afterResume?.label === interruptedLabel) {
-        // Durable readback says the interrupted operation did not commit. Retry
-        // that exact operation once; never guess or skip to another stage.
-        await runCurrentOperation(page, afterResume.label);
-      }
+      await page.getByRole("button", { name: "Resume durable run" }).click();
+      await expect(page.getByTestId("durable-readback-required")).toHaveCount(0, { timeout: 120_000 });
+      await expect(page.getByRole("button", { name: "Verify and release Boolean" })).toBeVisible();
       continue;
     }
 
@@ -540,7 +750,11 @@ async function completeRealJourney(
   for (const [operation, count] of counts) {
     expect(count, `${operation} must not be retried more than once`).toBeLessThanOrEqual(2);
   }
-  if (interrupt) expect(interruptedLabel).toBe("Evaluate private conflict");
+  if (interrupt) {
+    expect(interruptedLabel).toBe("Evaluate private conflict");
+    expect(counts.get("evaluatePrivateConflict")).toBe(1);
+    expect(evaluationResponseLostAfterCompletion).toBeTruthy();
+  }
 }
 
 test.describe.serial("supervised loopback real-BGV browser journeys", () => {

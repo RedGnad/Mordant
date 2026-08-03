@@ -34,6 +34,7 @@ import {
   verifyGovernedResultSignature,
   type MordantProtectionEvidence,
 } from "./protection-evidence";
+import { assertRawProtectionEvidenceMetadata } from "./protection-evidence-metadata";
 import {
   projectPublicProtectionCase,
   verifyAndProjectPublicProtectionEvidence,
@@ -306,6 +307,253 @@ function rejectsEvidence(evidence: MordantProtectionEvidence, expectedCode: stri
 function addOwnKey(value: object, key: string, entry: unknown): void {
   Object.defineProperty(value, key, { value: entry, enumerable: true, configurable: true, writable: true });
 }
+
+function sha256ValuePaths(
+  value: unknown,
+  path: readonly (string | number)[] = [],
+  output: Array<readonly (string | number)[]> = [],
+): Array<readonly (string | number)[]> {
+  if (typeof value === "string" && value.startsWith("sha256:")) {
+    output.push(path);
+  } else if (Array.isArray(value)) {
+    value.forEach((entry, index) => sha256ValuePaths(entry, [...path, index], output));
+  } else if (value !== null && typeof value === "object") {
+    Object.entries(value).forEach(([key, entry]) => sha256ValuePaths(entry, [...path, key], output));
+  }
+  return output;
+}
+
+const R1_RECEIVABLE_LITERAL_CASES = [
+  ["case principal", ["protectionCase", "originalReceivable", "principalMinorUnits"], "910000001", "110000000"],
+  ["case units", ["protectionCase", "originalReceivable", "units"], "910000002", "100000000"],
+  ["preservation principal", ["originalReceivablePreservation", "principalMinorUnits"], "910000003", "110000000"],
+  ["preservation units", ["originalReceivablePreservation", "units"], "910000004", "100000000"],
+] as const;
+
+for (const [field, path, marker] of R1_RECEIVABLE_LITERAL_CASES) {
+  artifactTest(`A4-01-R1 ${field} exact literal rejects its unique rehashed marker`, () => {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, path, marker);
+    const rehashed = rehash(evidence);
+    let rejected: unknown;
+    try {
+      verifyAndProjectPublicProtectionEvidence(rehashed, RETAINED_SOURCE_COMMIT);
+    } catch (error) {
+      rejected = error;
+    }
+    assert.ok(rejected instanceof ProtectionEvidenceError, `${field} marker reached public projection`);
+    assert.equal(JSON.stringify(rejected).includes(marker), false, `${field} marker leaked through the validator error`);
+  });
+}
+
+artifactTest("A4-01-R1 all four receivable literals reject wrong type and non-canonical variants", () => {
+  for (const [field, path, , expected] of R1_RECEIVABLE_LITERAL_CASES) {
+    const variants: ReadonlyArray<readonly [string, unknown]> = [
+      ["another numeric string", `${Number(expected) + 1}`],
+      ["number", Number(expected)],
+      ["empty", ""],
+      ["leading whitespace", ` ${expected}`],
+      ["trailing whitespace", `${expected} `],
+      ["leading zero", `0${expected}`],
+      ["null", null],
+    ];
+    for (const [variant, replacement] of variants) {
+      const evidence = mutableEvidence("conflict");
+      replaceJsonPath(evidence, path, replacement);
+      assert.throws(
+        () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+        ProtectionEvidenceError,
+        `${field} accepted ${variant}`,
+      );
+    }
+    const evidence = mutableEvidence("conflict") as unknown as Record<string, unknown>;
+    let parent = evidence;
+    for (const part of path.slice(0, -1)) parent = parent[part] as Record<string, unknown>;
+    delete parent[path.at(-1)!];
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(
+        rehash(evidence as unknown as MordantProtectionEvidence),
+        RETAINED_SOURCE_COMMIT,
+      ),
+      ProtectionEvidenceError,
+      `${field} accepted a missing literal`,
+    );
+  }
+});
+
+artifactTest("A4-01-R2 every accepted raw schema literal is required at runtime", () => {
+  const schemaPaths: ReadonlyArray<readonly [string, readonly (string | number)[]]> = [
+    ["protection evidence", ["schemaVersion"]],
+    ["protection case", ["protectionCase", "schemaVersion"]],
+    ["Cleanverse asset", ["cleanverseAsset", "schemaVersion"]],
+    ["case Cleanverse asset", ["protectionCase", "cleanverseAsset", "schemaVersion"]],
+    ["protection binding", ["protectionAuthorization", "binding", "schemaVersion"]],
+    ["FHE case binding", ["caseAuthorization", "binding", "schemaVersion"]],
+    ["governed result", ["governedResult", "schemaVersion"]],
+    ["chronology", ["chronology", "schemaVersion"]],
+    ["recourse record", ["recourse", "record", "schemaVersion"]],
+    ["recourse attestation", ["recourseAttestation", "attestation", "schemaVersion"]],
+    ["governed-FHE manifest", ["governedFheEvidence", "schemaVersion"]],
+  ];
+  for (const [field, path] of schemaPaths) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, path, `mordant.invalid-${field.replaceAll(" ", "-")}/99`);
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${field} schema mutation was accepted`,
+    );
+  }
+});
+
+artifactTest("A4-01-R2 evidence references require the exact canonical relative set and order", () => {
+  const replacements: ReadonlyArray<readonly [string, unknown]> = [
+    ["non-string", 7],
+    ["absolute Unix", "/tmp/evidence.json"],
+    ["absolute Windows", "C:\\evidence.json"],
+    ["parent traversal", "docs/evidence/../secret.json"],
+    ["empty segment", "docs//evidence.json"],
+    ["backslash", "docs\\evidence\\item.json"],
+    ["NUL", "docs/evidence/item.json\0private"],
+    ["URL", "https://example.test/evidence.json"],
+    ["query", "docs/evidence/item.json?raw=1"],
+    ["fragment", "docs/evidence/item.json#private"],
+  ];
+  for (const [name, replacement] of replacements) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, ["protectionCase", "evidenceReferences", 0], replacement);
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${name} evidence reference was accepted`,
+    );
+  }
+  for (const mutation of ["missing", "extra", "reordered"] as const) {
+    const evidence = mutableEvidence("conflict");
+    if (mutation === "missing") evidence.protectionCase.evidenceReferences.pop();
+    else if (mutation === "extra") evidence.protectionCase.evidenceReferences.push("docs/evidence/extra.json");
+    else [evidence.protectionCase.evidenceReferences[0], evidence.protectionCase.evidenceReferences[1]] = [
+      evidence.protectionCase.evidenceReferences[1], evidence.protectionCase.evidenceReferences[0],
+    ];
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${mutation} evidence-reference set was accepted`,
+    );
+  }
+});
+
+artifactTest("A4-01-R2 digest metadata rejects malformed syntax field by field", () => {
+  for (const scenario of ["conflict", "no-conflict"] as const) {
+    const pristine = mutableEvidence(scenario);
+    const paths = sha256ValuePaths(pristine);
+    assert.ok(paths.length > 80, `${scenario} fixture unexpectedly exposes only ${paths.length} digest fields`);
+    for (const path of paths) {
+      const evidence = mutableEvidence(scenario);
+      replaceJsonPath(evidence, path, `sha256:${"A".repeat(64)}`);
+      const candidate = path.length === 1 && path[0] === "manifestDigest" ? evidence : rehash(evidence);
+      assert.throws(
+        () => verifyAndProjectPublicProtectionEvidence(candidate, RETAINED_SOURCE_COMMIT),
+        ProtectionEvidenceError,
+        `${scenario}:${path.join(".")} accepted a non-canonical digest`,
+      );
+    }
+  }
+  for (const replacement of [
+    `sha256:${"0".repeat(64)}`,
+    `sha256:${"a".repeat(63)}`,
+    `sha256:${"a".repeat(65)}`,
+    "sha256:not-hex",
+    7,
+  ]) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, ["fhe", "circuitDigest"], replacement);
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+    );
+  }
+});
+
+artifactTest("A4-01-R2 caseManifestDigest is pinned by CaseID or a derived local expectation", () => {
+  const evidence = mutableEvidence("conflict");
+  evidence.governedFheEvidence.caseManifestDigest = BAD_DIGEST;
+  rejectsEvidence(rehash(evidence), "CASE_MANIFEST_DIGEST_CROSS_REFERENCE");
+
+  const unknown = mutableEvidence("conflict");
+  unknown.fhe.caseId = BAD_DIGEST;
+  assert.throws(
+    () => assertRawProtectionEvidenceMetadata(rehash(unknown)),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "CASE_MANIFEST_DIGEST_PIN",
+  );
+
+  const dynamicExpected = `sha256:${"1".repeat(64)}` as Sha256Digest;
+  const dynamic = mutableEvidence("conflict");
+  dynamic.governedFheEvidence.caseManifestDigest = dynamicExpected;
+  assert.doesNotThrow(() => assertRawProtectionEvidenceMetadata(rehash(dynamic), dynamicExpected));
+
+  const mismatchedExpected = `sha256:${"2".repeat(64)}` as Sha256Digest;
+  assert.throws(
+    () => assertRawProtectionEvidenceMetadata(rehash(dynamic), mismatchedExpected),
+    (error: unknown) => (
+      error instanceof Error && "code" in error && error.code === "CASE_MANIFEST_DIGEST_CROSS_REFERENCE"
+    ),
+  );
+});
+
+artifactTest("A4-01-R2 canonical dates, timestamp semantics and exactRetry types are enforced", () => {
+  const dateMutations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
+    ["normalized impossible generatedAt", ["generatedAt"], "2026-02-30T14:50:45.846Z"],
+    ["generatedAt without milliseconds", ["generatedAt"], "2026-08-03T14:50:45Z"],
+    ["holder date offset", ["protectionCase", "holderRecordDate"], "2026-08-03T16:48:49.163+02:00"],
+    ["documentation impossible date", ["cleanverseAsset", "documentationTerms", "value", "consultedAtRaw"], "2026-02-30"],
+    ["observation offset", ["cleanverseAsset", "aPass", "observedAt"], "2026-07-28T01:23:14.605+02:00"],
+    ["issuedAt normalized overflow", ["cleanverseAsset", "issuance", "value", "issuedAtRaw"], "2026-07-32 03:22:22"],
+    ["negative Unix", ["governedFheEvidence", "generatedAtUnix"], -1],
+    ["fractional Unix", ["chronology", "signedAtUnix"], 1.5],
+    ["export timestamp drift", ["generatedAt"], "2026-08-03T14:40:45.846Z"],
+  ];
+  for (const [name, path, replacement] of dateMutations) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, path, replacement);
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `${name} was accepted`,
+    );
+  }
+  for (const replacement of ["false", 0, 1, null, {}, []]) {
+    const evidence = mutableEvidence("conflict");
+    replaceJsonPath(evidence, ["governedFheEvidence", "measurements", "release", "exactRetry"], replacement);
+    assert.throws(
+      () => verifyAndProjectPublicProtectionEvidence(rehash(evidence), RETAINED_SOURCE_COMMIT),
+      ProtectionEvidenceError,
+      `exactRetry accepted ${JSON.stringify(replacement)}`,
+    );
+  }
+  const exactRetry = mutableEvidence("conflict");
+  exactRetry.governedFheEvidence.measurements.release.exactRetry = true;
+  assertPublicProtectionEvidence(rehash(exactRetry), RETAINED_SOURCE_COMMIT);
+
+  const forbiddenTrueRelations: ReadonlyArray<readonly [string, readonly (string | number)[], unknown]> = [
+    ["non-terminal release ordinal", ["governedResult", "releaseOrdinal"], 2],
+    ["different governed result", ["governedFheEvidence", "governedResultDigest"], BAD_DIGEST],
+    ["different result ciphertext", ["governedFheEvidence", "resultCiphertextDigest"], BAD_DIGEST],
+    ["unvalidated public structure", ["governedFheEvidence", "publicStructureValidated"], false],
+  ];
+  for (const [name, path, replacement] of forbiddenTrueRelations) {
+    const evidence = mutableEvidence("conflict");
+    evidence.governedFheEvidence.measurements.release.exactRetry = true;
+    replaceJsonPath(evidence, path, replacement);
+    assert.throws(
+      () => assertRawProtectionEvidenceMetadata(rehash(evidence)),
+      (error: unknown) => (
+        error instanceof Error && "code" in error && error.code === "EXACT_RETRY_TERMINAL_RELATION"
+      ),
+      `exactRetry=true accepted ${name}`,
+    );
+  }
+});
 
 artifactTest("A4 source provenance requires the exact non-zero server/build pin", () => {
   const rejected: ReadonlyArray<readonly [string, string | undefined]> = [

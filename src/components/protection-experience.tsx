@@ -51,6 +51,12 @@ type UrlAuthority = Readonly<{
   runId: string | null;
   error: string | null;
 }>;
+type ReadbackRequirement = Readonly<{
+  runId: string;
+  scenario: ProductScenario;
+  operation: string;
+  operationLabel: string;
+}>;
 
 const STAGE_INDEX: Readonly<Record<ProtectionCaseView["stage"], number>> = {
   CASE_CREATED: 0,
@@ -213,9 +219,44 @@ function parseProtectionCaseView(value: unknown, runId?: string, scenario?: Prod
   return structuredClone(value) as ProtectionCaseView;
 }
 
+class ProtectionResponseFailure extends Error {
+  readonly notAdmitted: Readonly<{ runId: string; operation: string }> | null;
+
+  constructor(message: string, notAdmitted: Readonly<{ runId: string; operation: string }> | null) {
+    super(message);
+    this.name = "ProtectionResponseFailure";
+    this.notAdmitted = notAdmitted;
+  }
+}
+
 async function responseBody(response: Response): Promise<unknown> {
-  const value = await response.json() as unknown;
-  if (!response.ok) throw new Error(record(value) && typeof value.error === "string" ? value.error : "Protection backend refused the operation.");
+  let value: unknown;
+  try {
+    value = await response.json() as unknown;
+  } catch (error) {
+    if (!response.ok) {
+      throw new ProtectionResponseFailure("Protection backend returned a non-JSON refusal.", null);
+    }
+    throw error;
+  }
+  if (!response.ok) {
+    const correlatedNotAdmitted = response.status >= 400 && response.status < 500
+      && exactRecord(value, ["schemaVersion", "mutationAdmission", "runId", "operation", "error"])
+      && value.schemaVersion === "mordant.local-mutation-error/1"
+      && value.mutationAdmission === "NOT_ADMITTED"
+      && typeof value.runId === "string"
+      && RUN_ID.test(value.runId)
+      && typeof value.operation === "string"
+      && Object.values(OPERATION).some((operation) => operation.api === value.operation)
+      && typeof value.error === "string"
+      && value.error.length > 0
+      ? { runId: value.runId, operation: value.operation }
+      : null;
+    throw new ProtectionResponseFailure(
+      record(value) && typeof value.error === "string" ? value.error : "Protection backend refused the operation.",
+      correlatedNotAdmitted,
+    );
+  }
   return value;
 }
 
@@ -410,6 +451,16 @@ export function ProtectionExperience({
           : null);
     return { evidence: initialRunId === null ? projected : null, error: initialError };
   });
+  const [initialReadbackRequirement] = useState<ReadbackRequirement | null>(() => (
+    initialRunId !== null && localAdapterOrigin !== null
+      ? {
+        runId: initialRunId,
+        scenario: initialScenario,
+        operation: "UNKNOWN_AFTER_RELOAD",
+        operationLabel: "interrupted local operation",
+      }
+      : null
+  ));
   const [scenario, setScenario] = useState<ProductScenario>(initialScenario);
   const [evidence, setEvidence] = useState<ProtectionEvidencePresentation | null>(initialAuthority.evidence);
   const [localView, setLocalView] = useState<ProtectionCaseView | null>(null);
@@ -421,8 +472,11 @@ export function ProtectionExperience({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [resumeRunId, setResumeRunId] = useState<string | null>(initialRunId);
   const [drawerTrigger, setDrawerTrigger] = useState<HTMLButtonElement | null>(null);
+  const [readbackRequired, setReadbackRequired] = useState<ReadbackRequirement | null>(initialReadbackRequirement);
   const requestGeneration = useRef(0);
   const requestController = useRef<AbortController | null>(null);
+  const pendingMutation = useRef<ReadbackRequirement | null>(null);
+  const readbackRequirementRef = useRef<ReadbackRequirement | null>(initialReadbackRequirement);
 
   const localMode = mode === "local";
   const activeCase = localMode ? localView?.protectionCase ?? null : evidence?.protectionCase ?? null;
@@ -434,7 +488,7 @@ export function ProtectionExperience({
     : provisionalStage?.recourse ?? recourseStatePresentation("NOT_OPEN");
   const signedProductState = activeEvidence?.recourseAttestation.attestation ?? null;
   const conflict = localMode ? localView?.governedResult?.conflict ?? null : evidence?.governedResult.conflict ?? null;
-  const currentOperation = localView?.nextOperation === null || localView?.nextOperation === undefined
+  const currentOperation = readbackRequired !== null || localView?.nextOperation === null || localView?.nextOperation === undefined
     ? null : OPERATION[localView.nextOperation] ?? null;
   const currentRunId = localView?.runId ?? resumeRunId;
   const busy = requestState !== "idle";
@@ -449,15 +503,45 @@ export function ProtectionExperience({
     return { controller, generation };
   }, []);
 
-  const clearAuthority = useCallback((nextScenario: ProductScenario, nextMode: "imported" | "local") => {
+  const clearAuthority = useCallback((
+    nextScenario: ProductScenario,
+    nextMode: "imported" | "local",
+    preserveReadbackRequirement = false,
+  ) => {
     setScenario(nextScenario);
     setEvidence(null);
     setLocalView(null);
     setMode(nextMode);
     setDrawerOpen(false);
+    if (!preserveReadbackRequirement) {
+      readbackRequirementRef.current = null;
+      setReadbackRequired(null);
+    }
+  }, []);
+
+  const requireDurableReadback = useCallback((requirement: ReadbackRequirement, reason: string) => {
+    pendingMutation.current = null;
+    readbackRequirementRef.current = requirement;
+    setScenario(requirement.scenario);
+    setEvidence(null);
+    setLocalView(null);
+    setMode("local");
+    setResumeRunId(requirement.runId);
+    setReadbackRequired(requirement);
+    setDrawerOpen(false);
+    setError(
+      `The outcome of ${requirement.operationLabel} is uncertain. Durable GET-only readback is required before any further mutation. ${reason}`,
+    );
   }, []);
 
   const loadImportedScenario = useCallback(async (next: ProductScenario, history: HistoryMode = "none") => {
+    const requiredReadback = readbackRequirementRef.current;
+    if (pendingMutation.current !== null || requiredReadback !== null) {
+      if (requiredReadback !== null) {
+        writeProtectionUrl("replace", requiredReadback.scenario, requiredReadback.runId);
+      }
+      return;
+    }
     const request = beginRequest("loading");
     clearAuthority(next, "imported");
     setResumeRunId(null);
@@ -481,7 +565,13 @@ export function ProtectionExperience({
   }, [beginRequest, clearAuthority]);
 
   const resumeLocalRun = useCallback(async (runId: string, expectedScenario: ProductScenario, history: HistoryMode = "none") => {
-    clearAuthority(expectedScenario, "local");
+    const matchingRequirement = readbackRequirementRef.current?.runId === runId
+      && readbackRequirementRef.current.scenario === expectedScenario
+      ? readbackRequirementRef.current
+      : null;
+    readbackRequirementRef.current = matchingRequirement;
+    setReadbackRequired(matchingRequirement);
+    clearAuthority(expectedScenario, "local", true);
     setResumeRunId(runId);
     setError(null);
     if (history !== "none") writeProtectionUrl(history, expectedScenario, runId);
@@ -500,6 +590,8 @@ export function ProtectionExperience({
       if (requestGeneration.current !== request.generation) return;
       setLocalView(view);
       setResumeRunId(view.runId);
+      readbackRequirementRef.current = null;
+      setReadbackRequired(null);
     } catch (nextError) {
       if (requestGeneration.current !== request.generation) return;
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
@@ -510,7 +602,7 @@ export function ProtectionExperience({
   }, [beginRequest, clearAuthority, localAdapterOrigin]);
 
   const startLocalRun = useCallback(async () => {
-    if (localAdapterOrigin === null) return;
+    if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
     clearAuthority(scenario, "local");
     setResumeRunId(null);
     setError(null);
@@ -538,7 +630,17 @@ export function ProtectionExperience({
   }, [beginRequest, clearAuthority, localAdapterOrigin, scenario]);
 
   const executeNext = useCallback(async () => {
-    if (localAdapterOrigin === null || localView === null || currentOperation === null) return;
+    if (
+      localAdapterOrigin === null || localView === null || currentOperation === null
+      || readbackRequired !== null || pendingMutation.current !== null
+    ) return;
+    const attemptedMutation: ReadbackRequirement = {
+      runId: localView.runId,
+      scenario,
+      operation: currentOperation.api,
+      operationLabel: currentOperation.label,
+    };
+    pendingMutation.current = attemptedMutation;
     const request = beginRequest("executing");
     setError(null);
     setDrawerOpen(false);
@@ -551,20 +653,51 @@ export function ProtectionExperience({
       });
       const view = parseProtectionCaseView(await responseBody(response), localView.runId, scenario);
       if (view === null) throw new Error("Local operation readback did not match the durable run.");
-      if (requestGeneration.current !== request.generation) return;
+      if (requestGeneration.current !== request.generation) {
+        requireDurableReadback(attemptedMutation, "The mutating request was superseded after dispatch.");
+        return;
+      }
+      pendingMutation.current = null;
       setLocalView(view);
+      readbackRequirementRef.current = null;
+      setReadbackRequired(null);
     } catch (nextError) {
-      if (requestGeneration.current !== request.generation) return;
-      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
-      setError(nextError instanceof Error ? nextError.message : "Local protection operation failed");
+      if (pendingMutation.current !== attemptedMutation) return;
+      const reason = nextError instanceof Error ? nextError.message : "Local protection operation failed";
+      if (
+        nextError instanceof ProtectionResponseFailure
+        && nextError.notAdmitted?.runId === attemptedMutation.runId
+        && nextError.notAdmitted.operation === attemptedMutation.operation
+        && requestGeneration.current === request.generation
+      ) {
+        pendingMutation.current = null;
+        setError(reason);
+        return;
+      }
+      requireDurableReadback(attemptedMutation, reason);
     } finally {
       if (requestGeneration.current === request.generation) setRequestState("idle");
     }
-  }, [beginRequest, currentOperation, localAdapterOrigin, localView, scenario]);
+  }, [beginRequest, currentOperation, localAdapterOrigin, localView, readbackRequired, requireDurableReadback, scenario]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const popstate = () => {
+      const dispatchedMutation = pendingMutation.current;
+      if (dispatchedMutation !== null) {
+        requestController.current?.abort();
+        requestGeneration.current += 1;
+        requireDurableReadback(dispatchedMutation, "Browser navigation interrupted the mutating response after dispatch.");
+        setRequestState("idle");
+        writeProtectionUrl("replace", dispatchedMutation.scenario, dispatchedMutation.runId);
+        return;
+      }
+      const requiredReadback = readbackRequirementRef.current;
+      if (requiredReadback !== null) {
+        writeProtectionUrl("replace", requiredReadback.scenario, requiredReadback.runId);
+        void resumeLocalRun(requiredReadback.runId, requiredReadback.scenario, "replace");
+        return;
+      }
       const authority = readProtectionUrl(window.location.search);
       if (authority.error !== null) {
         requestController.current?.abort();
@@ -592,8 +725,9 @@ export function ProtectionExperience({
       window.removeEventListener("popstate", popstate);
       requestController.current?.abort();
       requestGeneration.current += 1;
+      pendingMutation.current = null;
     };
-  }, [clearAuthority, initialRunId, initialScenario, initialUrlError, loadImportedScenario, resumeLocalRun]);
+  }, [clearAuthority, initialRunId, initialScenario, initialUrlError, loadImportedScenario, requireDurableReadback, resumeLocalRun]);
 
   function openEvidence(event: ReactMouseEvent<HTMLButtonElement>) {
     if (activeEvidence === null) return;
@@ -611,12 +745,20 @@ export function ProtectionExperience({
       ? "Creating a new durable local case. The browser is waiting for backend readback."
       : requestState === "resuming"
         ? "Reading the last durable backend stage. No operation is being started."
-        : requestState === "executing"
-          ? currentOperation?.waiting ?? "Waiting for the fixed backend operation to return its durable stage."
-          : provisionalStage?.detail ?? "Verified retained public evidence is ready.";
+    : requestState === "executing"
+      ? currentOperation?.waiting ?? "Waiting for the fixed backend operation to return its durable stage."
+      : readbackRequired !== null
+        ? `Durable GET-only readback required after the uncertain ${readbackRequired.operationLabel} response. No mutation is available.`
+      : provisionalStage?.detail ?? "Verified retained public evidence is ready.";
 
   return (
-    <div className={styles.page} data-testid="protection-product" data-execution={localMode ? "local" : "imported"} aria-busy={busy}>
+    <div
+      className={styles.page}
+      data-testid="protection-product"
+      data-execution={localMode ? "local" : "imported"}
+      data-readback-required={readbackRequired === null ? "false" : "true"}
+      aria-busy={busy}
+    >
       <div className={styles.pageContent} inert={drawerOpen ? true : undefined} aria-hidden={drawerOpen ? "true" : undefined}>
         <a className={styles.skip} href="#protection-main">Skip to protection case</a>
         <header className={styles.chrome}>
@@ -664,7 +806,7 @@ export function ProtectionExperience({
                     key={option}
                     type="button"
                     aria-pressed={!localMode && scenario === option}
-                    disabled={requestState === "creating" || requestState === "executing"}
+                    disabled={requestState === "creating" || requestState === "executing" || requestState === "resuming" || readbackRequired !== null}
                     onClick={() => void loadImportedScenario(option, "push")}
                   >
                     {option === "conflict" ? "Conflict" : "No conflict"}
@@ -674,7 +816,7 @@ export function ProtectionExperience({
             </div>
             <p>{progressText}</p>
             {localAdapterOrigin !== null ? (
-              <button className={styles.localButton} type="button" disabled={busy} onClick={() => void startLocalRun()}>
+              <button className={styles.localButton} type="button" disabled={busy || readbackRequired !== null} onClick={() => void startLocalRun()}>
                 {localMode ? "Start a fresh local case" : "Run this case locally"}
               </button>
             ) : null}
@@ -684,11 +826,22 @@ export function ProtectionExperience({
 
           {activeCase === null ? (
             <section className={styles.localStatus} data-testid="case-loading-status" aria-live="polite" aria-busy={busy}>
-              <p>{busy ? "Verified case loading" : "Verified case unavailable"}</p>
-              <strong>{busy ? progressText : error ?? "No authoritative case is selected."}</strong>
+              <p>{readbackRequired !== null ? "Durable readback required" : busy ? "Verified case loading" : "Verified case unavailable"}</p>
+              <strong>{busy
+                ? progressText
+                : readbackRequired !== null
+                  ? `The ${readbackRequired.operationLabel} mutation may or may not have committed. Read durable state before retrying or advancing.`
+                  : error ?? "No authoritative case is selected."}</strong>
               {currentRunId === null ? null : <code>Durable run · {currentRunId}</code>}
+              {readbackRequired === null ? null : (
+                <code data-testid="durable-readback-required">
+                  Blocked mutation · {readbackRequired.operation} · GET readback only
+                </code>
+              )}
               {currentRunId !== null && localAdapterOrigin !== null && !busy ? (
-                <button type="button" onClick={() => void resumeLocalRun(currentRunId, scenario, "replace")}>Resume durable run</button>
+                <button type="button" onClick={() => void resumeLocalRun(currentRunId, scenario, "replace")}>
+                  Resume durable run
+                </button>
               ) : null}
             </section>
           ) : (

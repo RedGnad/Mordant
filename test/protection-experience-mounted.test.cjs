@@ -59,6 +59,11 @@ function response(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
+async function flushAsyncState() {
+  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 function view(runId, stage, nextOperation, protectionCase, extra = {}) {
   return {
     schemaVersion: "mordant.protection-product-view/1",
@@ -141,6 +146,281 @@ artifactTest("mounted local states show admitted cure window provisionally befor
   assert.equal(button(renderer.root, "Evidence").props.disabled, false);
   assert.equal(renderer.root.findByProps({ "data-execution": "local" }).props["data-execution"], "local");
   await act(async () => { renderer.unmount(); });
+});
+
+artifactTest("uncertain evaluation blocks every mutation until repeated GET-only durable readback succeeds", async () => {
+  const imported = evidence("conflict");
+  const runId = "11111111-1111-4111-8111-111111111111";
+  const preEvaluationCase = {
+    ...imported.protectionCase,
+    incidentState: "PRIVATE_MATCH_OPEN",
+    recourseState: "NOT_OPEN",
+    cureDeadline: null,
+  };
+  const evaluatedCase = { ...preEvaluationCase, incidentState: "EVALUATED" };
+  const calls = [];
+  let call = 0;
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method ?? "GET", body: options.body });
+    call += 1;
+    if (call === 1) {
+      return response(view(runId, "PARTICIPANT_B_SUBMITTED", "evaluatePrivateConflict", preEvaluationCase));
+    }
+    if (call === 2) throw new DOMException("EVALUATION_RESPONSE_ABORTED", "AbortError");
+    if (call === 3) return response({ error: "operation is still running; resume durable readback" }, 423);
+    if (call === 4) {
+      return response(view(runId, "EVALUATED", "releaseGovernedResult", evaluatedCase, {
+        evaluatedArtifactDigest: imported.fhe.evaluatedArtifactDigest,
+      }));
+    }
+    throw new Error("unexpected fetch");
+  };
+
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(ProtectionExperience, props(imported, {
+      localAdapterOrigin: "http://127.0.0.1:4040/protection",
+    })));
+  });
+  await act(async () => {
+    button(renderer.root, "Run this case locally").props.onClick();
+    await flushAsyncState();
+  });
+  assert.ok(button(renderer.root, "Evaluate private conflict"));
+
+  await act(async () => {
+    button(renderer.root, "Evaluate private conflict").props.onClick();
+    await flushAsyncState();
+  });
+  assert.match(text(renderer.root.findByProps({ "data-testid": "durable-readback-required" })), /evaluatePrivateConflict/);
+  assert.match(text(renderer.root), /Durable GET-only readback is required before any further mutation/);
+  assert.equal(button(renderer.root, "Evaluate private conflict"), undefined);
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
+  assert.ok(button(renderer.root, "Resume durable run"));
+
+  await act(async () => {
+    button(renderer.root, "Resume durable run").props.onClick();
+    await flushAsyncState();
+  });
+  assert.ok(renderer.root.findByProps({ "data-testid": "durable-readback-required" }));
+  assert.equal(button(renderer.root, "Evaluate private conflict"), undefined);
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
+
+  await act(async () => {
+    button(renderer.root, "Resume durable run").props.onClick();
+    await flushAsyncState();
+  });
+  assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
+  assert.equal(button(renderer.root, "Evaluate private conflict"), undefined);
+  assert.ok(button(renderer.root, "Verify and release Boolean"));
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, false);
+  assert.deepEqual(calls.map(({ method }) => method), ["POST", "POST", "GET", "GET"]);
+  for (const readback of calls.slice(2)) {
+    assert.match(readback.url, new RegExp(`\\?runId=${runId}$`));
+    assert.equal(readback.body, undefined);
+  }
+  await act(async () => { renderer.unmount(); });
+});
+
+artifactTest("uncertain governed result release requires GET replacement before recourse can advance", async () => {
+  const imported = evidence("conflict");
+  const runId = "22222222-2222-4222-8222-222222222222";
+  const evaluatedCase = {
+    ...imported.protectionCase,
+    incidentState: "EVALUATED",
+    recourseState: "NOT_OPEN",
+    cureDeadline: null,
+  };
+  const result = {
+    conflict: true,
+    digest: imported.governedResult.digest,
+    releaseMode: "governed-decryptor-v1",
+  };
+  const calls = [];
+  let call = 0;
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method ?? "GET", body: options.body });
+    call += 1;
+    if (call === 1) {
+      return response(view(runId, "EVALUATED", "releaseGovernedResult", evaluatedCase, {
+        evaluatedArtifactDigest: imported.fhe.evaluatedArtifactDigest,
+      }));
+    }
+    if (call === 2) return response({ error: "RELEASE_RESPONSE_UNKNOWN", privateReleaseSentinel: "MUST_NOT_ENTER_STATE" }, 503);
+    if (call === 3) {
+      return response(view(runId, "RELEASED", "openRecourseCase", evaluatedCase, {
+        evaluatedArtifactDigest: imported.fhe.evaluatedArtifactDigest,
+        governedResult: result,
+      }));
+    }
+    throw new Error("unexpected fetch");
+  };
+
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(ProtectionExperience, props(imported, {
+      localAdapterOrigin: "http://127.0.0.1:4040/protection",
+    })));
+  });
+  await act(async () => {
+    button(renderer.root, "Run this case locally").props.onClick();
+    await flushAsyncState();
+  });
+  assert.ok(button(renderer.root, "Verify and release Boolean"));
+
+  await act(async () => {
+    button(renderer.root, "Verify and release Boolean").props.onClick();
+    await flushAsyncState();
+  });
+  assert.match(text(renderer.root.findByProps({ "data-testid": "durable-readback-required" })), /releaseGovernedResult/);
+  assert.doesNotMatch(text(renderer.root), /MUST_NOT_ENTER_STATE/);
+  assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+
+  await act(async () => {
+    button(renderer.root, "Resume durable run").props.onClick();
+    await flushAsyncState();
+  });
+  assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
+  assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
+  assert.ok(button(renderer.root, "Apply governed result"));
+  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.deepEqual(calls.map(({ method }) => method), ["POST", "POST", "GET"]);
+  assert.match(calls[2].url, new RegExp(`\\?runId=${runId}$`));
+  assert.equal(calls[2].body, undefined);
+  await act(async () => { renderer.unmount(); });
+});
+
+artifactTest("only an exact machine-validated NOT_ADMITTED 4xx permits mutation retry without readback", async () => {
+  const imported = evidence("conflict");
+  const runId = "33333333-3333-4333-8333-333333333333";
+  const preEvaluationCase = {
+    ...imported.protectionCase,
+    incidentState: "PRIVATE_MATCH_OPEN",
+    recourseState: "NOT_OPEN",
+    cureDeadline: null,
+  };
+  let call = 0;
+  global.fetch = async () => {
+    call += 1;
+    if (call === 1) {
+      return response(view(runId, "PARTICIPANT_B_SUBMITTED", "evaluatePrivateConflict", preEvaluationCase));
+    }
+    if (call === 2) {
+      return response({
+        schemaVersion: "mordant.local-mutation-error/1",
+        mutationAdmission: "NOT_ADMITTED",
+        runId,
+        operation: "evaluatePrivateConflict",
+        error: "EXPLICIT_PRE_DISPATCH_REJECTION",
+      }, 409);
+    }
+    if (call === 3) {
+      return response({
+        schemaVersion: "mordant.local-mutation-error/1",
+        mutationAdmission: "NOT_ADMITTED",
+        runId,
+        operation: "releaseGovernedResult",
+        error: "MISMATCHED_SAFE_CORRELATION",
+      }, 409);
+    }
+    throw new Error("unexpected fetch");
+  };
+
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(ProtectionExperience, props(imported, {
+      localAdapterOrigin: "http://127.0.0.1:4040/protection",
+    })));
+  });
+  await act(async () => {
+    button(renderer.root, "Run this case locally").props.onClick();
+    await flushAsyncState();
+  });
+  await act(async () => {
+    button(renderer.root, "Evaluate private conflict").props.onClick();
+    await flushAsyncState();
+  });
+  assert.match(text(renderer.root), /EXPLICIT_PRE_DISPATCH_REJECTION/);
+  assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
+  assert.ok(button(renderer.root, "Evaluate private conflict"));
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, false);
+
+  await act(async () => {
+    button(renderer.root, "Evaluate private conflict").props.onClick();
+    await flushAsyncState();
+  });
+  assert.ok(renderer.root.findByProps({ "data-testid": "durable-readback-required" }));
+  assert.equal(button(renderer.root, "Evaluate private conflict"), undefined);
+  assert.equal(button(renderer.root, "Conflict").props.disabled, true);
+  assert.equal(button(renderer.root, "No conflict").props.disabled, true);
+  assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
+  await act(async () => { renderer.unmount(); });
+});
+
+artifactTest("durable URL remount keeps readback required across 423 until a later valid GET", async () => {
+  const imported = evidence("conflict");
+  const runId = "44444444-4444-4444-8444-444444444444";
+  const durableCase = {
+    ...imported.protectionCase,
+    incidentState: "EVALUATED",
+    recourseState: "NOT_OPEN",
+    cureDeadline: null,
+  };
+  const previousWindow = global.window;
+  const calls = [];
+  global.window = {
+    location: { pathname: "/protection", search: `?scenario=conflict&runId=${runId}` },
+    history: { pushState() {}, replaceState() {} },
+    addEventListener() {},
+    removeEventListener() {},
+    setTimeout,
+    clearTimeout,
+  };
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method ?? "GET", body: options.body });
+    if (calls.length === 1) return response({ error: "REMOUNT_READBACK_STILL_RUNNING" }, 423);
+    return response(view(runId, "EVALUATED", "releaseGovernedResult", durableCase, {
+      evaluatedArtifactDigest: imported.fhe.evaluatedArtifactDigest,
+    }));
+  };
+
+  let renderer;
+  try {
+    await act(async () => {
+      renderer = create(React.createElement(ProtectionExperience, props(null, {
+        initialScenario: "conflict",
+        initialRunId: runId,
+        localAdapterOrigin: "http://127.0.0.1:4040/protection",
+      })));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await flushAsyncState();
+    });
+    assert.match(text(renderer.root), /REMOUNT_READBACK_STILL_RUNNING/);
+    assert.match(text(renderer.root.findByProps({ "data-testid": "durable-readback-required" })), /UNKNOWN_AFTER_RELOAD/);
+    assert.equal(button(renderer.root, "Conflict").props.disabled, true);
+    assert.equal(button(renderer.root, "No conflict").props.disabled, true);
+    assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
+    assert.ok(button(renderer.root, "Resume durable run"));
+    assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
+
+    await act(async () => {
+      button(renderer.root, "Resume durable run").props.onClick();
+      await flushAsyncState();
+    });
+    assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
+    assert.ok(button(renderer.root, "Verify and release Boolean"));
+    assert.deepEqual(calls.map(({ method }) => method), ["GET", "GET"]);
+    assert.equal(calls[0].body, undefined);
+    assert.equal(calls[1].body, undefined);
+  } finally {
+    if (renderer !== undefined) await act(async () => { renderer.unmount(); });
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
+  }
 });
 
 artifactTest("failed imported scenario load clears every previous case authority", async () => {

@@ -50,15 +50,22 @@ export default async function ProtectionPage({ searchParams }: {
   const scenarioValid = rawScenario === null || rawScenario === "conflict" || rawScenario === "no-conflict";
   const runIdValid = rawRunId === null || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(rawRunId);
   const runHasScenario = rawRunId === null || rawScenario === "conflict" || rawScenario === "no-conflict";
-  const initialUrlError = unknownQueryKey !== undefined || !scenarioValid
+  let initialUrlError = unknownQueryKey !== undefined || !scenarioValid
     ? "The protection scenario URL is invalid. Choose Conflict or No conflict."
     : !runIdValid || !runHasScenario
       ? "The durable local run URL is invalid. A run requires its validated scenario and run identifier."
       : null;
   const initialRunId = initialUrlError === null ? rawRunId : null;
-  const evidence = initialUrlError === null && initialRunId === null
-    ? loadImportedProtectionEvidence(scenario)
-    : null;
+  let evidence: ReturnType<typeof loadImportedProtectionEvidence> | null = null;
+  if (initialUrlError === null && initialRunId === null) {
+    try {
+      evidence = loadImportedProtectionEvidence(scenario);
+    } catch {
+      // A rejected retained manifest is never serialized into SSR, RSC or the
+      // hydration payload. The public surface receives one bounded message.
+      initialUrlError = "Verified protection evidence is unavailable.";
+    }
+  }
   return (
     <ProtectionExperience
       initialEvidence={evidence}

@@ -276,7 +276,8 @@ function projectVerifiedEvidence(evidence: MordantProtectionEvidence): VerifiedP
 export function verifyAndProjectPublicProtectionEvidence(
   evidence: unknown,
   expectedSourceCommit: unknown,
+  expectedCaseManifestDigest?: unknown,
 ): VerifiedPublicProtectionEvidence {
-  assertPublicProtectionEvidence(evidence, expectedSourceCommit);
+  assertPublicProtectionEvidence(evidence, expectedSourceCommit, expectedCaseManifestDigest);
   return projectVerifiedEvidence(evidence);
 }
