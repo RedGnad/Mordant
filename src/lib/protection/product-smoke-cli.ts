@@ -39,8 +39,8 @@ async function main() {
     "conflicting-pledge-protection",
     `${scenario}.json`,
   );
-  retainProtectionEvidence(view.runId, destination);
-  const validation = validateRetainedPublicArtifacts(view.runId);
+  await retainProtectionEvidence(view.runId, destination);
+  const validation = await validateRetainedPublicArtifacts(view.runId);
   process.stdout.write(`${JSON.stringify({
     schemaVersion: "mordant.protection-smoke/1",
     scenario,
