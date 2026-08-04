@@ -155,6 +155,29 @@ jobs:
           fi
           echo "large reproducible artifacts pruned"
 
+      - name: Verify operation counts from the durable journal
+        id: counts
+        run: |
+          JOURNAL="$(sudo find "$RUNNER_TEMP/mordant-volume/runs" -name operation-journal.json | head -1)"
+          test -n "$JOURNAL" || { echo "no operation journal on the volume"; exit 1; }
+          sudo cat "$JOURNAL" > /tmp/journal.json
+          node -e '
+            const j = require("/tmp/journal.json");
+            const records = j.records ?? [];
+            const outcomes = {};
+            for (const r of records) { const o = r.outcome ?? r.status; outcomes[o] = (outcomes[o] ?? 0) + 1; }
+            const aborted = outcomes.ABORTED ?? 0;
+            const completed = outcomes.COMPLETED ?? 0;
+            console.log("operations:", records.length, JSON.stringify(outcomes));
+            for (const r of records) console.log("  -", r.operation, r.outcome ?? r.status);
+            if (aborted !== 0) { console.error("ABORTED operations present"); process.exit(1); }
+            if (completed !== records.length) { console.error("not every operation completed"); process.exit(1); }
+            if (records.length !== 9) { console.error(`expected 9 operations, saw ${records.length}`); process.exit(1); }
+            console.log("9 completed operations, 0 ABORTED");
+          '
+          echo "operations=9" >> "$GITHUB_OUTPUT"
+          echo "aborted=0" >> "$GITHUB_OUTPUT"
+
       - name: Verify no raw input survives on the volume
         run: |
           if sudo grep -rlE '"(activeFrom|activeUntil|supervisedPledgeWindows)"' "$RUNNER_TEMP/mordant-volume" 2>/dev/null | grep -q .; then
@@ -229,6 +252,7 @@ jobs:
             echo "| Volume after pruning | ${{ steps.prune.outputs.volume_kb }} KB |"
             echo "| Receipt digest | \`${{ steps.restart.outputs.receipt_digest }}\` |"
             echo "| Governed result digest | \`${{ steps.restart.outputs.result_digest }}\` |"
+            echo "| Operations / ABORTED | ${{ steps.counts.outputs.operations }} / ${{ steps.counts.outputs.aborted }} |"
             if [ -f "$S" ]; then
               echo ""
               echo '```json'
