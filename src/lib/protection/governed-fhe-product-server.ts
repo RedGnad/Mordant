@@ -78,6 +78,10 @@ import {
   type SupervisedPledgeWindows,
 } from "./supervised-pledge-windows";
 import {
+  CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  type CustomSupervisedProtectionView,
+} from "./custom-supervised-view";
+import {
   CUSTOM_SUPERVISED_RECEIPT_SCHEMA,
   assertCustomSupervisedReceipt,
   customSupervisedReceiptDigest,
@@ -453,6 +457,22 @@ function saveState(runtime: ProtectionRuntime, state: InternalState): InternalSt
   return state;
 }
 
+/**
+ * Stages before a governed release never depend on a scenario, so this branch
+ * never has to name one. Reaching RECOURSE_OPENED here would be a defect.
+ */
+function nextOperationBeforeRelease(stage: ExecutionStage): string | null {
+  switch (stage) {
+    case "CASE_CREATED": return "preparePrivateMatch";
+    case "MATCH_PREPARED": return "submitParticipantPledge:PARTICIPANT_A";
+    case "PARTICIPANT_A_SUBMITTED": return "submitParticipantPledge:PARTICIPANT_B";
+    case "PARTICIPANT_B_PUBLISHED": return "submitParticipantPledge:PARTICIPANT_B";
+    case "PARTICIPANT_B_SUBMITTED": return "evaluatePrivateConflict";
+    case "EVALUATED": return "releaseGovernedResult";
+    default: return null;
+  }
+}
+
 function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string | null {
   switch (stage) {
     case "CASE_CREATED": return "preparePrivateMatch";
@@ -469,16 +489,51 @@ function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string
   }
 }
 
+/**
+ * A custom run is projected into its own schema rather than being forced into
+ * the V1 view. Before a verified governed release it carries no scenario at
+ * all, which is the honest state: there is nothing to report yet.
+ */
+function customSupervisedView(state: InternalState): CustomSupervisedProtectionView {
+  const governedResult = state.release === undefined ? null : {
+    conflict: state.release.conflict,
+    digest: state.release.resultDigest,
+    releaseMode: "governed-decryptor-v1" as const,
+  };
+  return {
+    schemaVersion: CUSTOM_SUPERVISED_VIEW_SCHEMA,
+    runId: state.runId,
+    executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+    stage: state.stage,
+    // The scenario argument is consulted only at RECOURSE_OPENED, which implies
+    // a release exists, so the guard is never asked to invent one.
+    nextOperation: state.release === undefined
+      ? nextOperationBeforeRelease(state.stage)
+      : nextOperation(state.stage, terminalScenarioAfterRelease(state)),
+    terminalScenario: governedResult === null ? null : (governedResult.conflict ? "conflict" : "no-conflict"),
+    protectionCase: {
+      cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
+      fheCaseId: state.protectionCase.fheCaseId,
+      incidentState: state.protectionCase.incidentState,
+      recourseState: state.protectionCase.recourseState,
+      cureDeadline: state.protectionCase.cureDeadline,
+    },
+    participantArtifactDigests: {
+      participantA: state.submissions?.PARTICIPANT_A?.artifactDigest ?? null,
+      participantB: state.submissions?.PARTICIPANT_B?.artifactDigest ?? null,
+    },
+    evaluatedArtifactDigest: state.evaluation?.artifactDigest ?? null,
+    governedResult,
+    recourse: state.recourse === undefined ? null : {
+      opened: state.recourse.opened,
+      reason: state.recourse.reason ?? null,
+    },
+    receipt: state.customReceipt ?? null,
+  };
+}
+
 function publicView(state: InternalState, runtime: ProtectionRuntime): ProtectionCaseView {
-  const projected = projectPublicProtectionCase(state.protectionCase);
-  // A custom run has no outcome until the governed decryptor releases one, so
-  // every browser-visible and evaluator-visible field stays neutral until then.
-  // The placeholder scenario carried internally must never surface.
-  const neutralPreRelease = state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
-    && state.release === undefined;
-  const protectionCase = neutralPreRelease
-    ? { ...projected, productScenario: CUSTOM_SUPERVISED_EXECUTION_VARIANT as unknown as ProductScenario }
-    : projected;
+  const protectionCase = projectPublicProtectionCase(state.protectionCase);
   const view: ProtectionCaseView = {
     schemaVersion: "mordant.protection-product-view/1",
     runId: state.runId,
@@ -2024,6 +2079,20 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     completeCureChronology: (runId: string) => completeCureChronologyRuntime(runtime, runId),
     exportProtectionEvidence: (runId: string) => exportProtectionEvidenceRuntime(runtime, runId),
     readProtectionCase: (runId: string) => readProtectionCaseRuntime(runtime, runId),
+    /**
+     * Custom V2 readback. A custom run is never projected into the V1 view, so
+     * the browser must ask for it under its own schema.
+     */
+    readCustomSupervisedCase: async (runId: string): Promise<CustomSupervisedProtectionView> => {
+      if (locks.has(runId)) {
+        throw new ProtectionProductError("A protection operation is still running; resume durable readback after it completes", 423);
+      }
+      const state = await loadState(runtime, runId, false);
+      if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+        throw new ProtectionProductError("This run is not a supervised custom case", 400);
+      }
+      return customSupervisedView(state);
+    },
     readProtectionCreation: (creationRequestId: string) => readProtectionCreationRuntime(runtime, creationRequestId),
     loadImportedProtectionEvidence: (scenario: ProductScenario = "conflict") => loadImportedProtectionEvidenceRuntime(runtime, scenario),
     retainProtectionEvidence: (runId: string, destination: string) => retainProtectionEvidenceRuntime(runtime, runId, destination),
