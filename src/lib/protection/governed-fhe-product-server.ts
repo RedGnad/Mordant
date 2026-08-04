@@ -393,10 +393,17 @@ function pathForBinary(runtime: ProtectionRuntime, name: keyof typeof BINARIES):
 
 async function ensureBinaries(runtime: ProtectionRuntime): Promise<void> {
   if (runtime.skipBinaryBuild || runtime.binaryRunner !== undefined) return;
+  mkdirSync(runtime.binRoot, { recursive: true, mode: 0o700 });
+  const names = Object.keys(BINARIES) as Array<keyof typeof BINARIES>;
+  // Compiling the FHE binaries on demand is a development affordance. What must
+  // never happen in a deployed runtime is shelling out to the Go toolchain, so
+  // the refusal belongs to the build itself: a purpose-built worker image ships
+  // every binary prebuilt and therefore never reaches it, while the deployed web
+  // runtime has none and is refused exactly as before.
+  if (names.every((name) => existsSync(pathForBinary(runtime, name)))) return;
   if (process.env.NODE_ENV === "production") {
     throw new ProtectionProductError("Local BGV execution is unavailable in the deployed web runtime.", 404);
   }
-  mkdirSync(runtime.binRoot, { recursive: true, mode: 0o700 });
   const goCache = join(runtime.runRoot, "go-build-cache");
   mkdirSync(goCache, { recursive: true, mode: 0o700 });
   for (const [name, binary] of Object.entries(BINARIES) as Array<[keyof typeof BINARIES, string]>) {
