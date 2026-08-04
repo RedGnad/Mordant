@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+.mordant
+.product-test-dist
+.cleanverse-test-dist
+test-results
+playwright-report
+docs/design
+*.log

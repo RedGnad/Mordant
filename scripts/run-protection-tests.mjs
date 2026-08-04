@@ -66,4 +66,6 @@ command(process.execPath, [
   ".product-test-dist/src/lib/protection/custom-supervised-view.test.js",
   "test/protection-experience-mounted.test.cjs",
   "scripts/protection-local-adapter.test.mjs",
+  "scripts/mordant-live-worker.test.mjs",
+  ".product-test-dist/src/lib/protection/live-launch-token.test.js",
 ], { stdio: "inherit", env: environment });

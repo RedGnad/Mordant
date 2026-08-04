@@ -104,6 +104,46 @@ pnpm protection:smoke:conflict
 pnpm protection:smoke:no-conflict
 ```
 
+## Live execution
+
+The deployed site can start a real BGV execution. A visitor enters two demo
+pledge windows on `/protection/live` and receives a governed answer produced by
+the same engine that generated the retained evidence.
+
+A managed Mordant execution service prepares and encrypts the demo inputs, then
+runs the fixed conflict circuit. The evaluator processes ciphertexts only: it
+holds no decrypt key and cannot inspect the windows or steer the outcome. A
+designated governed decryptor independently recomputes the circuit and must land
+on the same ciphertext digest before anything is released.
+
+The governed signed Boolean determines the result. Nothing before that release
+reports an outcome, and the case is authorized under a neutral execution intent
+that carries no expected answer. A confirmed conflict opens governed recourse; a
+false result produces an explicit signed refusal. Either way the run ends in a
+receipt that binds the authorization, the participant artifacts, the evaluated
+artifact, the governed result and the recourse outcome, with the original
+receivable intact.
+
+Deployment settings and the measured resource profile are in
+[`docs/railway-deployment.md`](docs/railway-deployment.md).
+
+## Roadmap
+
+Where this goes next, in order:
+
+1. **Participant-side encryption.** Each lender prepares and encrypts its pledge
+   on its own device, so plaintext never reaches a shared service.
+2. **Independent participant clients.** Separate lender applications hold their
+   own signing keys and input boundaries.
+3. **Distributed governed release.** Replace the designated release service with
+   an independently operated 2-of-3 release.
+4. **Independent operator deployment.** Separate intake, evaluator and release
+   administration across organizations.
+5. **Cleanverse production integration.** Live CVI admission, asset workflows and
+   governed settlement on Monad.
+
+None of these are implemented today.
+
 ## Cleanverse and Monad
 
 Mordant combines Cleanverse-observed asset and participant provenance on Monad with confidential

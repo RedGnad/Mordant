@@ -1,0 +1,19 @@
+# Railway configuration for the Mordant live execution worker.
+#
+# One replica, one attached volume, no serverless. The engine runs one N15 BGV
+# case at a time; horizontal scaling would break the single-active-case
+# guarantee and the durable journal authority.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node /app/scripts/mordant-live-worker.mjs"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ALWAYS"
+numReplicas = 1
+# Serverless / app-sleeping must stay disabled: a sleeping worker would drop an
+# in-flight BGV case and lose its cooldown and admission state.
+sleepApplication = false
