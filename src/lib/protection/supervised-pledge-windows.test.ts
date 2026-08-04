@@ -138,7 +138,10 @@ test("custom windows never reach the public view or the operation journal", asyn
     participantB: { activeFrom: 918_273_642, activeUntil: 918_273_646 },
   };
   const view = await createProtectionOrchestrator(base).createProtectionCase("conflict", RUN_A, distinctive);
-  assert.equal(view.protectionCase.productScenario, "conflict");
+  // Pre-release, a custom case exposes the neutral execution variant and never
+  // a scenario, so the browser cannot read an outcome that does not exist yet.
+  assert.equal(view.protectionCase.productScenario, "CUSTOM_SUPERVISED");
+  assert.equal(view.governedResult, null);
 
   const serializedView = JSON.stringify(view);
   for (const secret of [

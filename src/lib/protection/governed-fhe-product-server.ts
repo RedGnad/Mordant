@@ -470,7 +470,15 @@ function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string
 }
 
 function publicView(state: InternalState, runtime: ProtectionRuntime): ProtectionCaseView {
-  const protectionCase = projectPublicProtectionCase(state.protectionCase);
+  const projected = projectPublicProtectionCase(state.protectionCase);
+  // A custom run has no outcome until the governed decryptor releases one, so
+  // every browser-visible and evaluator-visible field stays neutral until then.
+  // The placeholder scenario carried internally must never surface.
+  const neutralPreRelease = state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+    && state.release === undefined;
+  const protectionCase = neutralPreRelease
+    ? { ...projected, productScenario: CUSTOM_SUPERVISED_EXECUTION_VARIANT as unknown as ProductScenario }
+    : projected;
   const view: ProtectionCaseView = {
     schemaVersion: "mordant.protection-product-view/1",
     runId: state.runId,
@@ -958,7 +966,11 @@ function buildCustomSupervisedReceipt(
       recourseState: state.protectionCase.recourseState,
       recourseOpened: state.recourse?.opened === true,
       recourseRefusal: state.recourse?.reason ?? null,
-      recourseRecordDigest: (state.recourse?.record?.digest as Sha256Digest | undefined) ?? null,
+      // Same derivation the V1 evidence uses: the digest of the published
+      // recourse record file, not a field of the record itself.
+      recourseRecordDigest: state.recourse?.record === undefined || state.recourse.record === null
+        ? null
+        : digestPublicFile(join(state.paths.publicRoot, "recourse-record.json")),
       originalReceivableState: state.protectionCase.originalReceivable.state,
     },
     chronology: {
