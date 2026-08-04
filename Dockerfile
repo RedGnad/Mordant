@@ -7,7 +7,7 @@
 # the attached volume at MORDANT_WORKER_DATA_ROOT (/data/mordant on Railway).
 
 # ---------------------------------------------------------------- Go binaries
-FROM golang:1.22-bookworm AS fhe
+FROM golang:1.24-bookworm AS fhe
 WORKDIR /src
 COPY fhe-lab/lattigo/go.mod fhe-lab/lattigo/go.sum ./
 RUN go mod download
@@ -31,7 +31,6 @@ COPY test/stubs/ ./test/stubs/
 COPY docs/evidence/ ./docs/evidence/
 # Emits .product-test-dist, the runnable server build the worker imports.
 RUN ./node_modules/.bin/tsc -p tsconfig.product-tests.json
-RUN pnpm prune --prod
 
 # ---------------------------------------------------------------- runtime
 FROM node:22-bookworm-slim AS runtime
@@ -41,13 +40,15 @@ ENV NODE_ENV=production \
     MORDANT_WORKER_DATA_ROOT=/data/mordant \
     MORDANT_GOVERNED_FHE_BIN_DIR=/app/bin
 
-COPY --from=fhe   /out/                      /app/bin/
-COPY --from=engine /build/.product-test-dist/ /app/.product-test-dist/
-COPY --from=engine /build/node_modules/       /app/node_modules/
-COPY --from=engine /build/test/stubs/         /app/test/stubs/
-COPY --from=engine /build/docs/evidence/      /app/docs/evidence/
-COPY scripts/mordant-live-worker.mjs          /app/scripts/
-COPY package.json                             /app/
+# The worker imports only node: builtins, and the compiled engine resolves only
+# relative modules plus the `server-only` stub. `next/server` lives solely in the
+# API route, which the worker never loads. So no node_modules reaches runtime.
+COPY --from=fhe    /out/                       /app/bin/
+COPY --from=engine /build/.product-test-dist/  /app/.product-test-dist/
+COPY --from=engine /build/test/stubs/          /app/test/stubs/
+COPY --from=engine /build/docs/evidence/       /app/docs/evidence/
+COPY scripts/mordant-live-worker.mjs           /app/scripts/
+COPY package.json                              /app/
 
 # The worker owns the volume mount point; Railway attaches the volume here.
 RUN chmod 0755 /app/bin/* && mkdir -p /data/mordant
