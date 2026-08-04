@@ -61,6 +61,7 @@ command(process.execPath, [
   "--test",
   ".product-test-dist/src/lib/protection/protection-product.test.js",
   ".product-test-dist/src/lib/protection/protection-reconciliation.test.js",
+  ".product-test-dist/src/lib/protection/supervised-pledge-windows.test.js",
   "test/protection-experience-mounted.test.cjs",
   "scripts/protection-local-adapter.test.mjs",
 ], { stdio: "inherit", env: environment });

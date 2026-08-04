@@ -72,6 +72,10 @@ import {
   writeDurableJsonAtomic,
   type ProductOperationRecord,
 } from "./protection-operation-journal";
+import {
+  assertSupervisedPledgeWindows,
+  type SupervisedPledgeWindows,
+} from "./supervised-pledge-windows";
 
 const execFileAsync = promisify(execFile);
 
@@ -242,6 +246,13 @@ type InternalState = Readonly<{
   evidence?: MordantProtectionEvidence;
   abortedReason?: string;
   startedAtUnix: number;
+  /**
+   * Operator-entered private pledge windows for a supervised local run. Present
+   * only for a custom run. This is private execution input: `publicView` never
+   * reads it, `beginOperation` never records it, and no error message quotes
+   * it. Its only use is writing the transient participant pledge files.
+   */
+  supervisedPledgeWindows?: SupervisedPledgeWindows;
 }>;
 
 export type ProtectionCaseView = Readonly<{
@@ -827,14 +838,44 @@ async function exclusive<T>(runId: string, operation: () => Promise<T>): Promise
   }
 }
 
+/**
+ * The conflict predicate is `overlap AND exclusiveA AND exclusiveB AND
+ * currencyEqual AND receivableIdEqual`. In a supervised run every conjunct
+ * except the window overlap is constant-true by construction: `pledgeFor`
+ * derives one currency, one receivable identity and `exclusive: true` for both
+ * roles. So the operator's two windows alone decide the outcome, and the
+ * outcome is knowable in plaintext on this single host, which already writes
+ * both pledge files.
+ *
+ * This is used only to fix the scenario carried by the signed protection
+ * binding, which both participants sign before anything executes and which
+ * therefore cannot be rewritten afterwards. The governed Boolean stays the
+ * authority for every displayed conclusion, and a disagreement between this
+ * prediction and the FHE result is treated as a hard defect rather than
+ * tolerated.
+ */
+function scenarioFromSupervisedWindows(windows: SupervisedPledgeWindows): ProductScenario {
+  const overlaps = windows.participantA.activeFrom < windows.participantB.activeUntil
+    && windows.participantB.activeFrom < windows.participantA.activeUntil;
+  return overlaps ? "conflict" : "no-conflict";
+}
+
 async function createProtectionCaseRuntime(
   runtime: ProtectionRuntime,
   scenario: ProductScenario,
   creationRequestId: string,
+  supervisedPledgeWindows?: SupervisedPledgeWindows,
 ): Promise<ProtectionCaseView> {
   if (scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Unsupported product scenario", 400);
   }
+  // A custom run ignores the caller's routing value entirely: the scenario that
+  // enters the signed binding comes from the operator's own windows, never from
+  // a label the caller chose.
+  const windows = supervisedPledgeWindows === undefined
+    ? undefined
+    : assertSupervisedPledgeWindows(supervisedPledgeWindows);
+  const boundScenario = windows === undefined ? scenario : scenarioFromSupervisedWindows(windows);
   // The browser-generated creation request ID is the durable one-to-one map to
   // the run. Identity mapping makes a lost create response recoverable without
   // admitting another create or maintaining a second fallible registry.
@@ -844,7 +885,7 @@ async function createProtectionCaseRuntime(
     const existingPath = statePath(runtime, runId);
     if (existsSync(existingPath)) {
       const existing = await loadState(runtime, runId, false);
-      if (existing.protectionCase.productScenario !== scenario) {
+      if (existing.protectionCase.productScenario !== boundScenario) {
         throw new ProtectionProductError("Creation request scenario mismatch", 409);
       }
       return publicView(existing, runtime);
@@ -852,7 +893,7 @@ async function createProtectionCaseRuntime(
     const root = join(runtime.runRoot, runId);
     const createdAt = runtime.now().toISOString();
     const protectionCase = createProtectionCaseModel({
-      scenario,
+      scenario: boundScenario,
       createdAt,
       caseNonce: randomBytes(32).toString("hex"),
     });
@@ -861,6 +902,7 @@ async function createProtectionCaseRuntime(
       runId,
       stage: "CASE_CREATED",
       protectionCase,
+      ...(windows === undefined ? {} : { supervisedPledgeWindows: windows }),
       paths: {
         root,
         publicRoot: join(root, "public"),
@@ -977,8 +1019,19 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
 
 function pledgeFor(state: InternalState, role: "PARTICIPANT_A" | "PARTICIPANT_B") {
   const base = state.protectionCase.cleanverseAssetDigest;
-  const activeFrom = role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
-  const activeUntil = role === "PARTICIPANT_A" ? 400 : state.protectionCase.productScenario === "conflict" ? 500 : 700;
+  // A supervised custom run substitutes only the two window bounds. Every other
+  // field, and every derivation below, is identical to the fixed fixture, so
+  // the Go pledge schema, the circuit and all signing semantics are unchanged.
+  const custom = state.supervisedPledgeWindows;
+  const window = custom === undefined
+    ? undefined
+    : role === "PARTICIPANT_A" ? custom.participantA : custom.participantB;
+  const activeFrom = window !== undefined
+    ? window.activeFrom
+    : role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
+  const activeUntil = window !== undefined
+    ? window.activeUntil
+    : role === "PARTICIPANT_A" ? 400 : state.protectionCase.productScenario === "conflict" ? 500 : 700;
   return {
     activeFrom,
     activeUntil,
@@ -1155,9 +1208,15 @@ async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: s
       "-private-root", state.paths.decryptorPrivateRoot,
     ]);
     runtime.failpoint("after-release-publication-before-state-save");
+    // A fixed-fixture run still asserts the pre-declared scenario, because its
+    // inputs are known and any divergence is a real defect. A supervised custom
+    // run has operator-authored windows, so the governed Boolean is the
+    // authority: the terminal scenario is derived from it below, never asserted
+    // against the caller's routing value.
+    const customRun = state.supervisedPledgeWindows !== undefined;
     if (
       output.releaseMode !== state.protectionCase.releaseMode
-      || output.conflict !== (state.protectionCase.productScenario === "conflict")
+      || (!customRun && output.conflict !== (state.protectionCase.productScenario === "conflict"))
     ) {
       throw new ProtectionProductError("Governed release does not match the protection scenario", 500);
     }
@@ -1607,15 +1666,33 @@ function loadImportedProtectionEvidenceRuntime(
   return verifyAndProjectPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
 }
 
+/**
+ * A supervised custom run retains under its own run directory, never into the
+ * shared retention root whose two scenario files back the published evidence.
+ * A custom run can therefore fail, repeat or produce either outcome without
+ * touching the validated public fallback.
+ */
+function retentionTargetFor(state: InternalState, runtime: ProtectionRuntime): Readonly<{ root: string; path: string }> {
+  const root = state.supervisedPledgeWindows === undefined
+    ? runtime.retentionRoot
+    : join(state.paths.root, "custom-retained-evidence");
+  return Object.freeze({ root, path: resolve(root, `${state.protectionCase.productScenario}.json`) });
+}
+
 async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId: string, destination: string): Promise<string> {
   const state = await loadState(runtime, runId);
   if (state.stage !== "COMPLETE" || state.evidence === undefined) {
     throw new ProtectionProductError("Only complete public evidence may be retained");
   }
   assertPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit, localCaseManifestDigest(state));
-  const allowed = resolve(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`);
+  const target = retentionTargetFor(state, runtime);
+  const allowed = target.path;
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
-  if (!existsSync(runtime.retentionRoot)) {
+  // A custom run owns its retention directory, so it is created on demand. The
+  // shared public retention root stays an externally configured capability that
+  // is never created implicitly.
+  if (state.supervisedPledgeWindows !== undefined) mkdirSync(target.root, { recursive: true, mode: 0o700 });
+  if (!existsSync(target.root)) {
     throw new ProtectionProductError("Configured evidence retention capability is unavailable", 503);
   }
   const operation = beginOperation(runtime.runRoot, runId, {
@@ -1633,7 +1710,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     createdAt: runtime.now().toISOString(),
   });
   const retention = await runJSON<Readonly<{ reconciled: boolean }>>(runtime, "retain", [
-    "-retention-root", runtime.retentionRoot,
+    "-retention-root", target.root,
     "-scenario", state.protectionCase.productScenario,
     "-source", join(state.paths.root, "protection-evidence.json"),
     "-manifest-digest", state.evidence.manifestDigest,
@@ -1668,7 +1745,7 @@ function readRetainedProtectionEvidenceInConfiguredRootRuntime(
   if (scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Retained evidence readback mismatch", 500);
   }
-  const retainedPath = resolve(runtime.retentionRoot, `${scenario}.json`);
+  const retainedPath = retentionTargetFor(state, runtime).path;
   if (!existsSync(retainedPath)) {
     throw new ProtectionProductError("Complete retained evidence is not yet available", 423);
   }
@@ -1718,7 +1795,7 @@ async function retainProtectionEvidenceInConfiguredRootRuntime(
     const retainedPath = await retainProtectionEvidenceRuntime(
       runtime,
       runId,
-      join(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`),
+      retentionTargetFor(state, runtime).path,
     );
     // This is a second independent no-follow read, after the retention command
     // and its own readback, so the adapter only receives the exact durable bytes.
@@ -1771,8 +1848,12 @@ async function validateRetainedPublicArtifactsRuntime(runtime: ProtectionRuntime
 export function createProtectionOrchestrator(options: ProtectionRuntimeOptions = {}) {
   const runtime = runtimeFrom(options);
   return Object.freeze({
-    createProtectionCase: (scenario: ProductScenario, creationRequestId: string = randomUUID()) => (
-      createProtectionCaseRuntime(runtime, scenario, creationRequestId)
+    createProtectionCase: (
+      scenario: ProductScenario,
+      creationRequestId: string = randomUUID(),
+      supervisedPledgeWindows?: SupervisedPledgeWindows,
+    ) => (
+      createProtectionCaseRuntime(runtime, scenario, creationRequestId, supervisedPledgeWindows)
     ),
     preparePrivateMatch: (runId: string) => preparePrivateMatchRuntime(runtime, runId),
     submitParticipantPledge: (

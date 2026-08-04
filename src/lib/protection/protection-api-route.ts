@@ -15,6 +15,10 @@ import {
   submitParticipantPledge,
 } from "./governed-fhe-product-server";
 import { protectionMutationGate } from "./protection-api-gate";
+import {
+  SupervisedPledgeWindowsError,
+  assertSupervisedPledgeWindows,
+} from "./supervised-pledge-windows";
 
 function response(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -55,6 +59,28 @@ export function createProtectionPostHandler(environment: NodeJS.ProcessEnv = pro
         && typeof body.creationRequestId === "string"
       ) {
         return response(await createProtectionCase(body.scenario, body.creationRequestId));
+      }
+      // Supervised custom create. The scenario stays a routing value only: the
+      // scenario that enters the signed binding is derived from the operator's
+      // own windows, so this field cannot predict or constrain the result.
+      if (
+        body.intent === "create"
+        && exactKeys(body, ["intent", "scenario", "creationRequestId", "pledges"])
+        && (body.scenario === "conflict" || body.scenario === "no-conflict")
+        && typeof body.creationRequestId === "string"
+      ) {
+        let windows;
+        try {
+          windows = assertSupervisedPledgeWindows(body.pledges);
+        } catch (error) {
+          // The message names the offending field, never the entered values.
+          return response({
+            error: error instanceof SupervisedPledgeWindowsError
+              ? error.message
+              : "Supervised pledge windows rejected.",
+          }, 400);
+        }
+        return response(await createProtectionCase(body.scenario, body.creationRequestId, windows));
       }
       if (
         body.intent !== "execute"
