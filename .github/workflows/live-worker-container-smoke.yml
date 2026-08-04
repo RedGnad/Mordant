@@ -4,8 +4,23 @@ name: Live worker container smoke
 # runs one real custom V2 BGV conflict journey inside the resulting container.
 # It publishes no image, needs no repository secret and touches no Railway or
 # Vercel resource.
+# `workflow_dispatch` alone cannot be triggered from a feature branch: GitHub
+# only exposes it once the file is on the default branch, and main is protected
+# here. So the gate also fires on a push to this one branch, restricted to the
+# paths that can actually invalidate the container.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/custom-supervised-pledges
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'scripts/mordant-live-worker.mjs'
+      - 'scripts/live-worker-container-smoke.mjs'
+      - '.github/workflows/live-worker-container-smoke.yml'
+      - 'fhe-lab/lattigo/**'
+      - 'src/lib/protection/**'
 
 concurrency:
   group: live-worker-container-smoke
