@@ -132,6 +132,12 @@ jobs:
         run: |
           MORDANT_WORKER_TOKEN_SECRET="$SMOKE_SECRET" node scripts/live-worker-container-smoke.mjs
 
+      - name: Dump worker logs on failure
+        if: failure()
+        run: |
+          echo "--- worker container logs (sanitized) ---"
+          docker logs mordant-worker 2>&1 | tail -60
+
       - name: Record disk during the case and verify pruning
         id: prune
         run: |

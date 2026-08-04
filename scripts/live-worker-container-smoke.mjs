@@ -109,10 +109,22 @@ async function main() {
   const created = await fetch(`${BASE}/v1/custom-cases`, {
     method: "POST", headers: createHeaders(admissionToken), body: JSON.stringify(WINDOWS),
   });
-  check(created.status === 201, "one case is admitted");
   const first = await json(created);
+  if (!check(created.status === 201, `one case is admitted (status ${created.status})`)) {
+    // Surface the worker's own refusal instead of crashing on a missing runId.
+    process.stdout.write(`  refusal: ${JSON.stringify(first)}\n`);
+  }
   const runId = first?.view?.runId;
-  check(typeof runId === "string", "a run identifier is returned");
+  if (!check(typeof runId === "string", "a run identifier is returned")) {
+    summary.failures = failures;
+    summary.result = "FAIL";
+    summary.admissionStatus = created.status;
+    summary.admissionRefusal = first;
+    writeFileSync(SUMMARY_PATH, JSON.stringify(summary, null, 1));
+    process.stdout.write("\nFAIL: admission did not produce a run\n");
+    process.exitCode = 1;
+    return;
+  }
   check(first?.view?.terminalScenario === null, "terminalScenario is null at admission");
   check(first?.view?.governedResult === null, "governedResult is null at admission");
   assertNoRawInput("admission response", first);
@@ -136,7 +148,7 @@ async function main() {
   for (let attempt = 0; attempt < 400; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     const body = await json(await fetch(`${BASE}/v1/custom-cases/${runId}`));
-    if (body === null) continue;
+    if (body === null || body.view === undefined) continue;
     last = body;
     const seconds = Math.round((Date.now() - startedAt) / 1_000);
     if (timeline.at(-1)?.stage !== body.view.stage) {
