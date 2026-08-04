@@ -876,10 +876,10 @@ export function ProtectionExperience({
       const response = await fetch(adapterUrl(localAdapterOrigin), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // `scenario` is a routing value only. The bound scenario is derived
-        // server-side from these windows, so the view is parsed WITHOUT an
-        // expected scenario: the caller cannot predict the governed outcome.
-        body: JSON.stringify({ intent: "create", scenario, creationRequestId, pledges: windows }),
+        // No scenario is sent at all. The case is authorized under a neutral
+        // execution variant, and the view is parsed WITHOUT an expected scenario
+        // because only the governed signed Boolean can produce an outcome.
+        body: JSON.stringify({ intent: "create", creationRequestId, executionVariant: "CUSTOM_SUPERVISED", pledges: windows }),
         signal: request.controller.signal,
       });
       const view = parseProtectionCaseView(await responseBody(response));

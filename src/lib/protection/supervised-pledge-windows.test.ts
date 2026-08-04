@@ -109,18 +109,24 @@ test("the fixed-fixture create path is unchanged and stores no override", async 
   assert.equal("supervisedPledgeWindows" in state, false);
 });
 
-test("the bound scenario comes from the operator windows, not the caller label", async () => {
+test("a custom case is authorized under the neutral V2 variant, whatever the windows", async () => {
   const { base } = await harness();
-  // The caller says "no-conflict" while supplying overlapping windows. The
-  // operator's values win; the caller's label cannot predict the outcome.
+  // Overlapping and non-overlapping windows must produce the SAME neutral
+  // pre-release shape. Nothing about the expected result is derivable here.
   const overlapping = await createProtectionOrchestrator(base)
-    .createProtectionCase("no-conflict", RUN_A, structuredClone(CONFLICTING));
-  assert.equal(overlapping.protectionCase.productScenario, "conflict");
-
-  // And the converse: the caller says "conflict" with disjoint windows.
+    .createProtectionCase("conflict", RUN_A, structuredClone(CONFLICTING));
   const disjoint = await createProtectionOrchestrator(base)
     .createProtectionCase("conflict", RUN_B, structuredClone(DISJOINT));
-  assert.equal(disjoint.protectionCase.productScenario, "no-conflict");
+
+  for (const runId of [RUN_A, RUN_B]) {
+    const state = JSON.parse(readFileSync(join(base.runRoot!, runId, "execution.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(state.executionVariant, "CUSTOM_SUPERVISED");
+  }
+  // Neither case exposes a governed result before release.
+  assert.equal(overlapping.governedResult, null);
+  assert.equal(disjoint.governedResult, null);
+  // The two cases differ only by their random nonce, never by an outcome.
+  assert.notEqual(overlapping.protectionCase.fheCaseId, disjoint.protectionCase.fheCaseId);
 });
 
 test("custom windows never reach the public view or the operation journal", async () => {

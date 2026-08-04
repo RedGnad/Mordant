@@ -189,8 +189,8 @@ test("the exact supervised custom create is admitted and forwarded unchanged", a
   await withAdapter(fetchImpl, async (url) => {
     const body = {
       intent: "create",
-      scenario: "conflict",
       creationRequestId: CREATION_REQUEST_ID,
+      executionVariant: "CUSTOM_SUPERVISED",
       pledges: {
         participantA: { activeFrom: 120, activeUntil: 420 },
         participantB: { activeFrom: 220, activeUntil: 520 },
@@ -235,7 +235,7 @@ test("every malformed supervised custom create is refused before forwarding", as
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID, pledges,
+          intent: "create", creationRequestId: CREATION_REQUEST_ID, executionVariant: "CUSTOM_SUPERVISED", pledges,
         }),
       });
       assert.equal(response.status, 400, `pledges ${JSON.stringify(pledges)} must be refused`);
@@ -247,7 +247,7 @@ test("every malformed supervised custom create is refused before forwarding", as
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        intent: "create", scenario: "conflict", creationRequestId: CREATION_REQUEST_ID,
+        intent: "create", creationRequestId: CREATION_REQUEST_ID, executionVariant: "CUSTOM_SUPERVISED",
         pledges: windows(), privateKey: CAPABILITY,
       }),
     });

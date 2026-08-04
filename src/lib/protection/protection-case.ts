@@ -7,6 +7,10 @@ import {
   type Sha256Digest,
   type SourceClassification,
 } from "./cleanverse-asset";
+import {
+  CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+  customSupervisedFheCaseIdV2,
+} from "./custom-supervised-v2";
 
 export const PROTECTION_SERVICE = "Conflicting Pledge Protection" as const;
 export const PROTECTION_SERVICE_VERSION = 1 as const;
@@ -200,6 +204,14 @@ export function createProtectionCase(options: Readonly<{
   createdAt: string;
   caseNonce: string;
   assetRecord?: CleanverseAssetRecord;
+  /**
+   * Present only for a supervised custom run. When set, the case is authorized
+   * under the neutral V2 execution intent: `scenario` becomes an unused
+   * placeholder that never reaches the V2 binding, the V2 case identity or the
+   * custom receipt, and reading it before governed release is a programming
+   * error guarded by `terminalScenarioAfterRelease`.
+   */
+  executionVariant?: typeof CUSTOM_SUPERVISED_EXECUTION_VARIANT;
 }>): MordantProtectionCase {
   const asset = options.assetRecord ?? CANONICAL_CLEANVERSE_ASSET_RECORD;
   const assetDigest = assertCanonicalCleanverseAssetRecord(asset);
@@ -214,13 +226,22 @@ export function createProtectionCase(options: Readonly<{
   ] satisfies [HolderAllocation, HolderAllocation]);
   const allocationDigest = holderAllocationDigest(assetDigest, holderRecordDate, holders);
   const caseNonce = sha256Digest("MordantProtectionCaseNonce/v1", { entropy: options.caseNonce });
-  const fheCaseId = protectionFheCaseId({
-    assetDigest,
-    scenario: options.scenario,
-    caseNonce,
-    policyId: protectionPolicyId(),
-    holderAllocationDigest: allocationDigest,
-  });
+  // A custom run derives its identity from the neutral V2 domain. Nothing about
+  // an expected result takes part: no scenario, no window, no overlap.
+  const fheCaseId = options.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+    ? customSupervisedFheCaseIdV2({
+      assetDigest,
+      caseNonce,
+      holderAllocationDigest: allocationDigest,
+      policyId: protectionPolicyId(),
+    })
+    : protectionFheCaseId({
+      assetDigest,
+      scenario: options.scenario,
+      caseNonce,
+      policyId: protectionPolicyId(),
+      holderAllocationDigest: allocationDigest,
+    });
   const protectionCase: MordantProtectionCase = {
     schemaVersion: "mordant.protection-case/1",
     productScenario: options.scenario,

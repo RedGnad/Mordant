@@ -60,13 +60,13 @@ export function createProtectionPostHandler(environment: NodeJS.ProcessEnv = pro
       ) {
         return response(await createProtectionCase(body.scenario, body.creationRequestId));
       }
-      // Supervised custom create. The scenario stays a routing value only: the
-      // scenario that enters the signed binding is derived from the operator's
-      // own windows, so this field cannot predict or constrain the result.
+      // Supervised custom create. No caller-selected scenario exists: the case is
+      // authorized under a neutral execution variant and only the governed signed
+      // Boolean can produce a terminal outcome.
       if (
         body.intent === "create"
-        && exactKeys(body, ["intent", "scenario", "creationRequestId", "pledges"])
-        && (body.scenario === "conflict" || body.scenario === "no-conflict")
+        && exactKeys(body, ["intent", "creationRequestId", "executionVariant", "pledges"])
+        && body.executionVariant === "CUSTOM_SUPERVISED"
         && typeof body.creationRequestId === "string"
       ) {
         let windows;
@@ -80,7 +80,9 @@ export function createProtectionPostHandler(environment: NodeJS.ProcessEnv = pro
               : "Supervised pledge windows rejected.",
           }, 400);
         }
-        return response(await createProtectionCase(body.scenario, body.creationRequestId, windows));
+        // The first argument is an unused placeholder for a custom run: the
+        // neutral V2 binding omits any product scenario entirely.
+        return response(await createProtectionCase("conflict", body.creationRequestId, windows));
       }
       if (
         body.intent !== "execute"

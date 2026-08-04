@@ -150,12 +150,13 @@ function validateBrowserOperation(value) {
     && typeof value.creationRequestId === "string"
     && RUN_ID.test(value.creationRequestId)
   ) return value;
-  // Supervised custom create. The scenario remains a routing value; the bound
-  // scenario is derived server-side from these windows.
+  // Supervised custom create. There is no caller-selected scenario at all: the
+  // case is authorized under a neutral execution variant, and only the governed
+  // signed Boolean can produce a terminal outcome.
   if (
-    exactKeys(value, ["intent", "scenario", "creationRequestId", "pledges"])
+    exactKeys(value, ["intent", "creationRequestId", "executionVariant", "pledges"])
     && value.intent === "create"
-    && (value.scenario === "conflict" || value.scenario === "no-conflict")
+    && value.executionVariant === "CUSTOM_SUPERVISED"
     && typeof value.creationRequestId === "string"
     && RUN_ID.test(value.creationRequestId)
     && exactPledgeWindows(value.pledges)
