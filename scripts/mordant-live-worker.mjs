@@ -304,21 +304,28 @@ export function progressFor(stage) {
  * signed Boolean the engine already produced.
  */
 export async function runFixedJourney(orchestrator, runId, onStage) {
-  await onStage(await orchestrator.preparePrivateMatch(runId));
-  await onStage(await orchestrator.submitParticipantPledge(runId, "PARTICIPANT_A"));
-  await onStage(await orchestrator.submitParticipantPledge(runId, "PARTICIPANT_B"));
-  await onStage(await orchestrator.evaluatePrivateConflict(runId));
-  const released = await orchestrator.releaseGovernedResult(runId);
-  await onStage(released);
-  await onStage(await orchestrator.openRecourseCase(runId));
-  // Only a true governed Boolean opens a cure chronology. This reads the
-  // engine's released result, never an anticipated one.
-  const custom = await orchestrator.readCustomSupervisedCase(runId);
-  if (custom.governedResult?.conflict === true) {
-    await onStage(await orchestrator.completeCureChronology(runId));
+  // Engine operations return the V1 product view, which carries a placeholder
+  // productScenario and no terminalScenario. That must never reach a public
+  // response, so after every step the custom V2 projection is read back and it
+  // is that projection, and only that, which is cached and served.
+  const step = async (operation) => {
+    await operation();
+    const view = await orchestrator.readCustomSupervisedCase(runId);
+    await onStage(view);
+    return view;
+  };
+  await step(() => orchestrator.preparePrivateMatch(runId));
+  await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_A"));
+  await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_B"));
+  await step(() => orchestrator.evaluatePrivateConflict(runId));
+  await step(() => orchestrator.releaseGovernedResult(runId));
+  const afterRecourse = await step(() => orchestrator.openRecourseCase(runId));
+  // Only a released true Boolean opens a cure chronology, read from the engine's
+  // own governed result and never anticipated.
+  if (afterRecourse.governedResult?.conflict === true) {
+    await step(() => orchestrator.completeCureChronology(runId));
   }
-  await onStage(await orchestrator.exportProtectionEvidence(runId));
-  return orchestrator.readCustomSupervisedCase(runId);
+  return step(() => orchestrator.exportProtectionEvidence(runId));
 }
 
 /**
@@ -441,7 +448,7 @@ export function createLiveWorker(options) {
       const started = now();
       try {
         const terminal = await runFixedJourney(orchestrator, runId, (next) => persistStage(runId, next));
-        if (terminal.receipt === null) throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
+        if (terminal?.receipt == null) throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
         const pruned = pruneReproducibleArtifacts(paths.runRoot, runId);
         await persistStage(runId, terminal);
         state.lastProgress.set(runId, progressFor("COMPLETE"));
