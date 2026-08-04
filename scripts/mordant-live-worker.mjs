@@ -335,6 +335,18 @@ export function pruneReproducibleArtifacts(runRoot, runId) {
       removed.push(directory);
     }
   }
+  // The operator windows are private execution input. They are needed only
+  // until both participant submissions are published, so a terminal case keeps
+  // no copy of them on the volume. The receipt and journal never carried them.
+  const executionPath = join(runRoot, runId, "execution.json");
+  if (existsSync(executionPath)) {
+    const state = readJson(executionPath, null);
+    if (state !== null && state.supervisedPledgeWindows !== undefined) {
+      delete state.supervisedPledgeWindows;
+      writeFileSync(executionPath, JSON.stringify(state), { mode: 0o600 });
+      removed.push("private-input");
+    }
+  }
   return removed;
 }
 

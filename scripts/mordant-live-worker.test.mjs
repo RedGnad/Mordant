@@ -348,8 +348,19 @@ test("pruning removes reproducible artifacts and preserves the receipt", () => {
   writeFileSync(join(runDir, "operation-journal.json"), JSON.stringify({ records: [] }));
   writeFileSync(join(runDir, "execution.json"), JSON.stringify({ stage: "COMPLETE" }));
 
+  writeFileSync(join(runDir, "execution.json"), JSON.stringify({
+    stage: "COMPLETE",
+    executionVariant: "CUSTOM_SUPERVISED",
+    supervisedPledgeWindows: { participantA: { activeFrom: 120, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+  }));
   const removed = pruneReproducibleArtifacts(paths.runRoot, runId);
-  assert.deepEqual(removed.sort(), ["decryptor-private", "participant-private", "public"]);
+  assert.deepEqual(removed.sort(), ["decryptor-private", "participant-private", "private-input", "public"]);
+  // The private operator input must not survive on the volume.
+  const persisted = readFileSync(join(runDir, "execution.json"), "utf8");
+  for (const forbidden of ["supervisedPledgeWindows", "activeFrom", "activeUntil", "120", "420", "220", "520"]) {
+    assert.equal(persisted.includes(forbidden), false, `durable state kept ${forbidden}`);
+  }
+  assert.equal(JSON.parse(persisted).executionVariant, "CUSTOM_SUPERVISED");
   assert.equal(existsSync(join(runDir, "public")), false);
   // Everything needed to present and verify the terminal result survives.
   for (const kept of ["custom-supervised-receipt.json", "operation-journal.json", "execution.json"]) {
