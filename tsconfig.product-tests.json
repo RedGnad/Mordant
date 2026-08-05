@@ -12,6 +12,7 @@
     "types": ["node"]
   },
   "include": [
+    "src/app/api/live-protection/token/route.ts",
     "src/app/api/protection/conflicting-pledge/route.ts",
     "src/components/protection-experience.tsx",
     "src/lib/protection/**/*.ts",

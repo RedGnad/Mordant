@@ -89,10 +89,24 @@ function receiptRows(receipt: Readonly<Record<string, unknown>>): ReadonlyArray<
   ];
 }
 
-export function LiveExecution({ workerOrigin, initialRunId }: {
+type CcpEligibility = Readonly<{
+  chainId: number;
+  validatorAddress: string;
+  gateAddress: string;
+  holderAddress: string;
+  eligible: boolean;
+  observedBlock: number;
+}>;
+
+export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: {
   readonly workerOrigin: string;
   readonly initialRunId: string | null;
+  readonly publicTestHolder: string;
 }) {
+  const [holder, setHolder] = useState("");
+  const [eligibility, setEligibility] = useState<CcpEligibility | null>(null);
+  const [eligibilityState, setEligibilityState] = useState<"idle" | "checking" | "verified" | "refused">("idle");
+  const [eligibilityError, setEligibilityError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<FieldKey, string>>({ aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" });
   const [invalid, setInvalid] = useState<ReadonlySet<FieldKey>>(new Set());
   const [formError, setFormError] = useState<string | null>(null);
@@ -136,6 +150,35 @@ export function LiveExecution({ workerOrigin, initialRunId }: {
     };
   }, [values]);
 
+  /**
+   * Asks the server whether this holder satisfies the active Monad policy. The server
+   * reads the verdict on-chain and refuses a launch token when it is false, so this is
+   * a preview of a decision the browser cannot influence.
+   */
+  const checkEligibility = useCallback(async (candidate: string) => {
+    setEligibilityError(null);
+    setEligibilityState("checking");
+    try {
+      const response = await fetch("/api/live-protection/token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ holderAddress: candidate.trim() }),
+        cache: "no-store",
+      });
+      const body = await response.json() as { eligibility?: CcpEligibility; error?: string };
+      if (body.eligibility === undefined) {
+        setEligibilityState("idle");
+        setEligibilityError(body.error ?? "Eligibility could not be checked right now.");
+        return;
+      }
+      setEligibility(body.eligibility);
+      setEligibilityState(body.eligibility.eligible ? "verified" : "refused");
+    } catch {
+      setEligibilityState("idle");
+      setEligibilityError("Eligibility could not be checked right now.");
+    }
+  }, []);
+
   const start = useCallback(async () => {
     const { windows, bad, message } = parse();
     setInvalid(bad);
@@ -143,8 +186,15 @@ export function LiveExecution({ workerOrigin, initialRunId }: {
     if (windows === null) return;
     setStatus("starting");
     try {
-      const tokenResponse = await fetch("/api/live-protection/token", { method: "POST", cache: "no-store" });
-      if (!tokenResponse.ok) throw new Error("Live execution is not available right now.");
+      // A fresh token is minted at submit time, so the server re-checks eligibility
+      // against the chain rather than trusting the earlier answer.
+      const tokenResponse = await fetch("/api/live-protection/token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ holderAddress: eligibility!.holderAddress }),
+        cache: "no-store",
+      });
+      if (!tokenResponse.ok) throw new Error("This holder is no longer eligible under the active policy.");
       const issued = await tokenResponse.json() as { token: string; workerOrigin: string };
       // The windows go straight to the worker. Vercel never sees them.
       const created = await fetch(`${issued.workerOrigin}/v1/custom-cases`, {
@@ -167,7 +217,7 @@ export function LiveExecution({ workerOrigin, initialRunId }: {
       setFormError(error instanceof Error ? error.message : "Live execution could not be started.");
       setStatus("idle");
     }
-  }, [parse]);
+  }, [parse, eligibility]);
 
   useEffect(() => {
     if (runId === null || !RUN_ID.test(runId) || status === "terminal") return;
@@ -223,11 +273,94 @@ export function LiveExecution({ workerOrigin, initialRunId }: {
     );
   }
 
+  // Eligibility comes first: the pledge form only appears once the active Monad policy
+  // has admitted a holder, because a refused holder can never obtain a launch token.
+  if (runId === null && eligibilityState !== "verified") {
+    return (
+      <section className={styles.panel}>
+        <p className={styles.eyebrow}>Cleanverse eligibility</p>
+        <h1 className={styles.title}>Verify this holder against the active Monad policy.</h1>
+        <p className={styles.lede}>
+          Mordant reads the verdict from the Cleanverse compliance validator on Monad testnet.
+          Entering an address checks that address; it does not claim you own it.
+        </p>
+        {eligibilityError === null ? null : <p className={styles.error} role="alert">{eligibilityError}</p>}
+        {eligibilityState !== "refused" ? null : (
+          <p className={styles.error} role="alert">
+            This holder is not eligible under the active policy. Live execution stays closed for it.
+          </p>
+        )}
+        <div className={styles.grid}>
+          <label htmlFor="ccp-holder">
+            Holder address
+            <input
+              id="ccp-holder"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="0x..."
+              value={holder}
+              disabled={eligibilityState === "checking"}
+              onChange={(event) => {
+                const next = event.target.value;
+                setHolder(next);
+                setEligibilityState("idle");
+                setEligibilityError(null);
+              }}
+            />
+          </label>
+        </div>
+        <div className={styles.fixed}>
+          <strong>Public test holder</strong>
+          <ul>
+            <li>
+              <code>{publicTestHolder}</code>
+            </li>
+            <li>A Cleanverse UAT A-Pass holder, published for testing this policy.</li>
+          </ul>
+          <button
+            className={styles.secondary}
+            type="button"
+            disabled={eligibilityState === "checking"}
+            onClick={() => {
+              setHolder(publicTestHolder);
+              setEligibilityState("idle");
+              setEligibilityError(null);
+              void checkEligibility(publicTestHolder);
+            }}
+          >
+            Use the public test holder
+          </button>
+        </div>
+        {eligibility === null ? null : (
+          <code className={styles.run}>
+            chain {eligibility.chainId} · gate {eligibility.gateAddress} · block {eligibility.observedBlock}
+          </code>
+        )}
+        <button
+          className={styles.primary}
+          type="button"
+          disabled={eligibilityState === "checking" || holder.trim() === ""}
+          onClick={() => void checkEligibility(holder)}
+        >
+          {eligibilityState === "checking" ? "Checking eligibility" : "Check Cleanverse eligibility"}
+        </button>
+        <a className={styles.secondary} href="/protection?scenario=conflict">View verified protection evidence</a>
+      </section>
+    );
+  }
+
   if (runId === null) {
     return (
       <section className={styles.panel}>
-        <p className={styles.eyebrow}>Live encrypted execution</p>
+        <p className={styles.eyebrow}>Cleanverse eligibility verified</p>
         <h1 className={styles.title}>Run a real encrypted conflict check.</h1>
+        {eligibility === null ? null : (
+          <code className={styles.run}>
+            {eligibility.holderAddress} · chain {eligibility.chainId} · block {eligibility.observedBlock}
+          </code>
+        )}
         <p className={styles.lede}>
           Mordant encrypts the submitted demo pledge windows before the FHE evaluator processes them.
           The evaluator receives ciphertexts only.

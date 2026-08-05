@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LiveExecution } from "@/components/live-execution";
+import { CCP_PUBLIC_TEST_HOLDER } from "@/lib/protection/ccp-eligibility";
 import { readLiveTokenConfiguration } from "@/lib/protection/live-launch-token";
 
 export const metadata: Metadata = {
@@ -42,7 +43,7 @@ export default async function LiveProtectionPage({ searchParams }: {
 
   return (
     <main>
-      <LiveExecution workerOrigin={workerOrigin} initialRunId={runId} />
+      <LiveExecution workerOrigin={workerOrigin} initialRunId={runId} publicTestHolder={CCP_PUBLIC_TEST_HOLDER} />
     </main>
   );
 }
