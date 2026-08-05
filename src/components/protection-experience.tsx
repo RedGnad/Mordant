@@ -1074,28 +1074,43 @@ export function ProtectionExperience({
     };
     window.addEventListener("popstate", popstate);
     let resumeTimer: number | null = null;
-    let disclosureTimer: number | null = null;
+    let disposed = false;
     let rawStoredRecovery: string | null = null;
     // The block itself is the ref, and it is still set synchronously here. Only the
     // rendered disclosure is flushed on a timer, so this effect sets no state
     // synchronously. Nothing can start a local run in between: every entry point also
     // reads `invalidStoredRecoveryRef`, which is already true by then.
-    let recoveryDisclosure: string | null = null;
-    // Only the malformed-record path settled the request state; unavailable storage
-    // never did, and `requestState` may legitimately start as "resuming".
-    let recoveryClearsRequestState = false;
+    //
+    // A microtask, not a timer: it settles before the resume scheduled below, which is
+    // the same position the inline call held. A later request can then supersede this
+    // message exactly as it did before, and a timer would have inverted that.
+    const discloseInvalidRecovery = (message: string, settleRequestState: boolean) => {
+      queueMicrotask(() => {
+        if (disposed) return;
+        if (settleRequestState) {
+          clearAuthority(initialScenario, "local", true);
+          setRequestState("idle");
+        }
+        setInvalidStoredRecovery(true);
+        setError(message);
+      });
+    };
     try {
       rawStoredRecovery = window.sessionStorage.getItem(PROTECTION_RECOVERY_STORAGE_KEY);
     } catch {
       invalidStoredRecoveryRef.current = true;
-      recoveryDisclosure = "Browser recovery storage is unavailable. Local execution remains blocked.";
+      // Unavailable storage never settled the request state, and `requestState` may
+      // legitimately still be "resuming".
+      discloseInvalidRecovery("Browser recovery storage is unavailable. Local execution remains blocked.", false);
     }
     if (rawStoredRecovery !== null) {
       const stored = parseProtectionBrowserRecovery(rawStoredRecovery);
       if (stored === null) {
         invalidStoredRecoveryRef.current = true;
-        recoveryClearsRequestState = true;
-        recoveryDisclosure = "The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.";
+        discloseInvalidRecovery(
+          "The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.",
+          true,
+        );
       } else {
         resumeTimer = window.setTimeout(() => resumeStoredAuthority(stored), 0);
       }
@@ -1104,21 +1119,9 @@ export function ProtectionExperience({
         resumeTimer = window.setTimeout(() => void resumeLocalRun(initialRunId, initialScenario), 0);
       } else writeProtectionUrl("replace", initialScenario, null);
     }
-    if (recoveryDisclosure !== null) {
-      const disclosure = recoveryDisclosure;
-      const clearsRequestState = recoveryClearsRequestState;
-      disclosureTimer = window.setTimeout(() => {
-        if (clearsRequestState) {
-          clearAuthority(initialScenario, "local", true);
-          setRequestState("idle");
-        }
-        setInvalidStoredRecovery(true);
-        setError(disclosure);
-      }, 0);
-    }
     return () => {
+      disposed = true;
       if (resumeTimer !== null) window.clearTimeout(resumeTimer);
-      if (disclosureTimer !== null) window.clearTimeout(disclosureTimer);
       window.removeEventListener("popstate", popstate);
       requestController.current?.abort();
       requestGeneration.current += 1;
