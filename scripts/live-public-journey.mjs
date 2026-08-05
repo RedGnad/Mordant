@@ -19,6 +19,17 @@ const WORKER = process.env.WORKER_ORIGIN ?? "https://mordant-production.up.railw
 const HOLDER = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
 const WINDOWS = { aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" };
 const BOUNDS = ["120", "420", "220", "520"];
+const PRIVATE_FIELDS = /activeFrom|activeUntil|supervisedPledgeWindows/u;
+
+/** Digests are hex and routinely contain these digits by chance; they are not inputs. */
+function withoutDigests(text) {
+  return text.replace(/sha256:[0-9a-f]{64}/gu, "").replace(/\b[0-9a-f]{32,}\b/gu, "");
+}
+
+function carriesSubmittedBound(text) {
+  const stripped = withoutDigests(text);
+  return BOUNDS.some((bound) => new RegExp(`(?<![0-9a-fA-F])${bound}(?![0-9a-fA-F])`, "u").test(stripped)) || PRIVATE_FIELDS.test(stripped);
+}
 const OUTCOME_WORDS = /conflict confirmed|no conflict found|recourse opened/iu;
 
 const failures = [];
@@ -59,13 +70,15 @@ async function runJourney(page, log, label) {
   const startedAt = Date.now();
   await page.getByRole("button", { name: /Start encrypted check/iu }).click();
 
-  await page.waitForURL(/runId=[0-9a-f-]{36}/u, { timeout: 60_000 });
+  // The page writes the run into the URL with pushState, which is not a navigation, so
+  // the URL is polled rather than waited on.
+  await page.waitForFunction(() => new URL(location.href).searchParams.get("runId") !== null, undefined, { timeout: 90_000 });
   const runId = new URL(page.url()).searchParams.get("runId");
   evidence.runId = runId;
   check(typeof runId === "string" && runId.length === 36, `${label}: a runId is written into the URL`, { runId });
 
   const bodyText = await page.locator("body").innerText();
-  check(!BOUNDS.some((bound) => bodyText.includes(bound)), `${label}: the submitted bounds leave the rendered page after admission`);
+  check(!carriesSubmittedBound(bodyText), `${label}: the submitted bounds leave the rendered page after admission`);
   check(!OUTCOME_WORDS.test(bodyText), `${label}: no outcome wording at admission`);
 
   process.stdout.write(`${label}: execution\n`);
@@ -75,16 +88,20 @@ async function runJourney(page, log, label) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     await page.waitForTimeout(2_000);
     const text = await page.locator("body").innerText();
-    const stage = (text.match(/Case authorized|Private encryption prepared|Participant [AB] encrypted|Encrypted evaluation running|Governed result verification|Recourse application|Receipt sealed/gu) ?? []).at(-1) ?? null;
+    const stage = await page.locator('li[data-state="active"]').first().innerText().catch(() => null);
     const seconds = Math.round((Date.now() - startedAt) / 1_000);
     if (evidence.timeline.at(-1)?.stage !== stage && stage !== null) {
       evidence.timeline.push({ atSeconds: seconds, stage });
       process.stdout.write(`  [${String(seconds).padStart(3)}s] ${stage}\n`);
     }
     const released = OUTCOME_WORDS.test(text);
-    if (released && releasedAt === null) releasedAt = seconds;
-    // Before the governed release nothing may name an outcome.
-    if (!released && /Private evaluation in progress/iu.test(text) === false && stage === null) sawPrematureOutcome = true;
+    // An outcome may only be named once the evaluation has actually run: seeing one
+    // before the encrypted evaluation stage would mean the page anticipated a result.
+    if (released && releasedAt === null) {
+      releasedAt = seconds;
+      const stagesSeen = evidence.timeline.map((entry) => entry.stage);
+      if (!stagesSeen.includes("Encrypted evaluation running")) sawPrematureOutcome = true;
+    }
 
     // One refresh mid-execution proves recovery is GET-only.
     if (!refreshed && seconds > 8 && releasedAt === null) {
@@ -92,7 +109,7 @@ async function runJourney(page, log, label) {
       refreshed = true;
       const afterReload = await page.locator("body").innerText();
       check(afterReload.includes(runId), `${label}: the run survives a browser refresh`);
-      check(!BOUNDS.some((bound) => afterReload.includes(bound)), `${label}: no raw bounds reappear after refresh`);
+      check(!carriesSubmittedBound(afterReload), `${label}: no raw bounds reappear after refresh`);
     }
 
     if (/View execution receipt/iu.test(text)) break;
@@ -113,7 +130,7 @@ async function runJourney(page, log, label) {
   evidence.receiptDigest = digest;
   check(digest !== null, `${label}: the receipt carries a digest`, { digest });
   check(/OUTSTANDING_INTACT/u.test(drawerText), `${label}: the original receivable is intact`);
-  check(!BOUNDS.some((bound) => drawerText.includes(bound)), `${label}: the receipt carries no submitted bound`);
+  check(!carriesSubmittedBound(drawerText), `${label}: the receipt carries no submitted bound`);
 
   // Long digests must wrap rather than push the page sideways.
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
