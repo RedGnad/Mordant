@@ -1320,7 +1320,17 @@ func mustReadDirectory(t *testing.T, path string) []os.DirEntry {
 
 func taskTempDir(t *testing.T, pattern string) string {
 	t.Helper()
-	root, err := os.MkdirTemp("/private/tmp", pattern)
+	// The empty root asks the operating system for its own temporary directory, so the
+	// fixture is no longer tied to one platform's layout.
+	//
+	// The case store deliberately refuses any root that is not already symlink-free, and
+	// on some systems the temporary directory is reached through a symlink. Resolving it
+	// here satisfies that invariant from the test side; the store's check is untouched.
+	created, err := os.MkdirTemp("", pattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(created)
 	if err != nil {
 		t.Fatal(err)
 	}
