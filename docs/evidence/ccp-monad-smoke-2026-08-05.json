@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "mordant.ccp-monad-smoke/1",
+  "chain": {
+    "slug": "monad",
+    "chainId": 10143
+  },
+  "validator": "0xaC7e5179C2C7f03f209136886c172eb34F161792",
+  "steps": [
+    {
+      "step": "chain id is 10143",
+      "status": "PASS",
+      "observed": 10143
+    },
+    {
+      "step": "validator carries bytecode and is an EIP-1967 proxy",
+      "status": "PASS",
+      "proxyBytes": 122,
+      "implementation": "0x68ce853d660444ffd98d6d5d98ac8ad58241d5a9",
+      "implementationBytes": 13961
+    },
+    {
+      "step": "the derived CCP V2 interface is present in the dispatch table",
+      "status": "PASS",
+      "selectorCount": 48,
+      "missing": []
+    },
+    {
+      "step": "gate deployed",
+      "status": "PASS",
+      "gate": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+      "txHash": "0x31553f889a631f6a68a6f04701f4b109d599e0d1d3ff8e609414121c8c993a70"
+    },
+    {
+      "step": "gate exposes Ownable.owner() equal to the signer",
+      "status": "PASS",
+      "owner": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0"
+    },
+    {
+      "step": "owner signature produced over the exact supplied construction",
+      "status": "PASS",
+      "message": "monad0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+      "signatureLength": 132
+    },
+    {
+      "step": "POST /validator/register accepted",
+      "status": "PASS",
+      "alreadyRegistered": true,
+      "httpStatus": 200,
+      "code": "0000",
+      "note": "0x8d5578486d98b3d7bdf9d6929114683ccd5c3fee3c41b8ac9820a0579573d17f"
+    },
+    {
+      "step": "validator.isRegistered(gate) is true on-chain",
+      "status": "PASS",
+      "gate": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280"
+    },
+    {
+      "step": "POST /validator/is_register reports registered",
+      "status": "PASS",
+      "httpStatus": 200,
+      "code": "0000",
+      "note": "{\"chain\":\"monad\",\"registered\":true,\"contract_address\":\"0x3ffb28a13fd6dc372ae952f15b55263285d5a280\"}"
+    },
+    {
+      "step": "POST /validator/set_rule",
+      "status": "PASS",
+      "httpStatus": 200,
+      "code": "0000",
+      "note": "{\"code\":\"0000\",\"message\":\"success\",\"data\":{\"chain\":\"monad\",\"rule\":{\"allowed_group\":\"\",\"allowed_sub_group\":\"\",\"min_tier\":1,\"min_sub_tier\":0,\"is_black_list\":false,\"countries\":[\"FR\"]},\"contract_address\":\"0x3ffb28a13fd6dc372"
+    },
+    {
+      "step": "the RuleV2 transaction is mined against the validator",
+      "status": "PASS",
+      "txHash": "0xda5212746efb246e0ed22de480e971504264678eaf44b225aace5eb06b0d6fc8",
+      "blockNumber": 51142197
+    },
+    {
+      "step": "validator.getRulesV2(gate) returns a rule set",
+      "status": "PASS",
+      "rawBytes": 256,
+      "ruleCount": 1,
+      "fieldsPerRule": 6
+    },
+    {
+      "step": "the readback carries the written min_tier and country bit",
+      "status": "PASS",
+      "minTierField": "1",
+      "countriesField": "0x4000000000000000000"
+    },
+    {
+      "step": "validator.complianceVerify(gate, probe) answered",
+      "status": "PASS",
+      "verdict": false
+    },
+    {
+      "step": "POST /validator/verify answered",
+      "status": "PASS",
+      "httpStatus": 200,
+      "code": "0000",
+      "note": "{\"chain\":\"monad\",\"valid\":false,\"contract_address\":\"0x3ffb28a13fd6dc372ae952f15b55263285d5a280\",\"user_address\":\"0x981f6e0ea94f45fdb8ee7680dc862212e3c720e0\"}"
+    }
+  ],
+  "pinnedBlock": 51142186,
+  "validatorProxyBytes": 122,
+  "validatorImplementation": "0x68ce853d660444ffd98d6d5d98ac8ad58241d5a9",
+  "validatorImplementationBytes": 13961,
+  "validatorSelectors": [
+    "0x011cc5e7",
+    "0x01ffc9a7",
+    "0x02fb0bab",
+    "0x078008f6",
+    "0x1208acfa",
+    "0x19fbbc2e",
+    "0x248a9ca3",
+    "0x26aa101f",
+    "0x2f2ff15d",
+    "0x36169089",
+    "0x36568abe",
+    "0x3762dd01",
+    "0x46de0fb1",
+    "0x473cce42",
+    "0x485cc955",
+    "0x4f1ef286",
+    "0x52d1902d",
+    "0x550363ec",
+    "0x5b14f183",
+    "0x6a069f61",
+    "0x74f53317",
+    "0x7a28eae6",
+    "0x7b6c63cb",
+    "0x8503dd49",
+    "0x89eba0d2",
+    "0x8eecfafa",
+    "0x91d14854",
+    "0x9fa830fb",
+    "0x9fb5b88e",
+    "0xa159e012",
+    "0xa17620c1",
+    "0xa217fddf",
+    "0xaa93e346",
+    "0xad3cb1cc",
+    "0xaf375463",
+    "0xb69b3f5e",
+    "0xb8dd3664",
+    "0xc3c5a547",
+    "0xc3f4c2a7",
+    "0xc56608d5",
+    "0xc96aec2c",
+    "0xd547741f",
+    "0xd64eca6b",
+    "0xd69e70ba",
+    "0xe1fc07cc",
+    "0xe2b9ec06",
+    "0xe2d971e2",
+    "0xf6903774"
+  ],
+  "resolvedInterface": {
+    "isRegistered(address)": "0xc3c5a547",
+    "getRulesV2(address)": "0x02fb0bab",
+    "removeRuleV2FromContract(uint256)": "0xa159e012",
+    "complianceVerify(address,address)": "0xaf375463",
+    "isPaused(address)": "0x5b14f183"
+  },
+  "gate": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+  "signedMessage": "monad0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+  "registration": {
+    "httpStatus": 200,
+    "envelope": {
+      "code": "0000",
+      "message": "success",
+      "data": {
+        "chain": "monad",
+        "contract_address": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+        "tx_hash": "0x8d5578486d98b3d7bdf9d6929114683ccd5c3fee3c41b8ac9820a0579573d17f"
+      }
+    }
+  },
+  "isRegistered": {
+    "onChain": true,
+    "api": {
+      "httpStatus": 200,
+      "envelope": {
+        "code": "0000",
+        "message": "success",
+        "data": {
+          "chain": "monad",
+          "registered": true,
+          "contract_address": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280"
+        }
+      }
+    }
+  },
+  "ruleWrite": [
+    {
+      "path": "/validator/set_rule",
+      "httpStatus": 200,
+      "envelope": {
+        "code": "0000",
+        "message": "success",
+        "data": {
+          "chain": "monad",
+          "rule": {
+            "allowed_group": "",
+            "allowed_sub_group": "",
+            "min_tier": 1,
+            "min_sub_tier": 0,
+            "is_black_list": false,
+            "countries": [
+              "FR"
+            ]
+          },
+          "contract_address": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+          "tx_hash": "0xda5212746efb246e0ed22de480e971504264678eaf44b225aace5eb06b0d6fc8"
+        }
+      }
+    }
+  ],
+  "ruleTx": {
+    "hash": "0xda5212746efb246e0ed22de480e971504264678eaf44b225aace5eb06b0d6fc8",
+    "status": "success",
+    "blockNumber": 51142197
+  },
+  "getRulesV2Raw": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000",
+  "getRulesV2Decoded": {
+    "ruleCount": 1,
+    "fieldsPerRule": 6,
+    "encoding": "static tuple",
+    "rules": [
+      [
+        "0",
+        "0",
+        "1",
+        "0",
+        "0",
+        "18889465931478580854784"
+      ]
+    ]
+  },
+  "ruleFieldLayout": {
+    "measured": "0:allowed_group 1:allowed_sub_group 2:min_tier 3:min_sub_tier 4:is_black_list 5:countries-bitmask",
+    "countryBitsObserved": {
+      "AF": 2,
+      "FR": 74,
+      "US": 232
+    }
+  },
+  "complianceVerify": {
+    "probeUser": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+    "onChain": false,
+    "api": {
+      "code": "0000",
+      "message": "success",
+      "data": {
+        "chain": "monad",
+        "valid": false,
+        "contract_address": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+        "user_address": "0x981f6e0ea94f45fdb8ee7680dc862212e3c720e0"
+      }
+    }
+  },
+  "result": "PASS",
+  "failureCount": 0
+}
