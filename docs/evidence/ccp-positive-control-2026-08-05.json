@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "mordant.ccp-positive-control/1",
+  "chain": {
+    "slug": "monad",
+    "chainId": 10143
+  },
+  "validator": "0xaC7e5179C2C7f03f209136886c172eb34F161792",
+  "gate": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+  "steps": [
+    {
+      "step": "validator.isRegistered(gate) is true",
+      "status": "PASS"
+    },
+    {
+      "step": "POST /validator/set_rule returns 0000",
+      "status": "PASS",
+      "httpStatus": 200,
+      "code": "0000",
+      "note": "0xada507c8c23dd9c5aee925a1483de171b047672ceb218c6879d42e6fc6bff77a"
+    },
+    {
+      "step": "the RuleV2 transaction is mined against the validator",
+      "status": "PASS",
+      "blockNumber": 51147597
+    },
+    {
+      "step": "getRulesV2 readback is entirely unrestricted",
+      "status": "PASS",
+      "group": "0",
+      "subGroup": "0",
+      "minTier": "0",
+      "minSubTier": "0",
+      "blacklist": "0",
+      "countryBitmap": "0"
+    },
+    {
+      "step": "positive candidate A-Pass status",
+      "status": "INFO",
+      "note": "onChain isValidAPass=true apiCode=0000 tier=50 status=1 expired=false"
+    },
+    {
+      "step": "negative candidate A-Pass status",
+      "status": "INFO",
+      "note": "onChain isValidAPass=false apiCode=0002 no record"
+    },
+    {
+      "step": "positive candidate complianceVerify",
+      "status": "INFO",
+      "note": "onChain=true api.valid=true"
+    },
+    {
+      "step": "negative candidate complianceVerify",
+      "status": "INFO",
+      "note": "onChain=false api.valid=false"
+    },
+    {
+      "step": "positive candidate is true",
+      "status": "PASS",
+      "verdict": true
+    },
+    {
+      "step": "negative control is false",
+      "status": "PASS",
+      "verdict": false
+    }
+  ],
+  "ruleTx": {
+    "hash": "0xada507c8c23dd9c5aee925a1483de171b047672ceb218c6879d42e6fc6bff77a",
+    "status": "success",
+    "blockNumber": 51147597
+  },
+  "rulesV2": {
+    "ruleCount": 1,
+    "fields": [
+      "0",
+      "0",
+      "0",
+      "0",
+      "0",
+      "0"
+    ]
+  },
+  "candidates": {
+    "positive": {
+      "address": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+      "onChainAPass": true,
+      "apiCode": "0000",
+      "apiMessage": "success",
+      "record": {
+        "tier": "50",
+        "subTier": 0,
+        "group": "",
+        "subGroup": "",
+        "status": 1,
+        "hasExpiration": true,
+        "expired": false
+      },
+      "complianceVerify": {
+        "onChain": true,
+        "apiValid": true,
+        "apiCode": "0000"
+      }
+    },
+    "negative": {
+      "address": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "onChainAPass": false,
+      "apiCode": "0002",
+      "apiMessage": "[CN_001]get apass err: apass not found for user 0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "record": null,
+      "complianceVerify": {
+        "onChain": false,
+        "apiValid": false,
+        "apiCode": "0000"
+      }
+    }
+  },
+  "pinnedBlock": 51147603,
+  "result": "CCP MONAD POSITIVE CONTROL PASS"
+}
