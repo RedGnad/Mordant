@@ -199,7 +199,13 @@ test("public ceremony inspection fails closed on context, status, and manifest d
     const fixture = await completedPublicFixture();
     const path = join(fixture.root, "public", "operator-status-2.json");
     const status = JSON.parse(await readFile(path, "utf8"));
-    status.signature = `${status.signature.slice(0, -2)}00`;
+    // Flip a bit rather than overwrite the last byte: the key pair is freshly generated, so
+    // roughly one signature in 256 already ended in 00 and the overwrite changed nothing. The
+    // valid signature was then accepted, exactly as it should be, and the test read that as a
+    // missing rejection.
+    const signature = Buffer.from(status.signature, "hex");
+    signature[signature.length - 1] ^= 1;
+    status.signature = signature.toString("hex");
     await writeFile(path, `${JSON.stringify(status, null, 2)}\n`);
     await assert.rejects(() => inspectCeremonyPublic(fixture.root), { code: "CEREMONY_STATUS_SIGNATURE_INVALID" });
   });
