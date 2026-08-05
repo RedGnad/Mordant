@@ -831,7 +831,9 @@ export function ProtectionExperience({
 
   const startLocalRun = useCallback(async () => {
     if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
-    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery) return;
+    // The ref is set the moment the stored record is judged invalid; the state follows
+    // one flush later. Reading both keeps the block independent of that ordering.
+    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery || invalidStoredRecoveryRef.current) return;
     const creationRequestId = globalThis.crypto.randomUUID();
     const creationAuthority = pendingCreationRecovery(scenario, creationRequestId);
     if (!retainRecoveryAuthority(creationAuthority)) return;
@@ -864,7 +866,9 @@ export function ProtectionExperience({
 
   const startCustomLocalRun = useCallback(async (windows: SupervisedWindowsInput) => {
     if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
-    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery) return;
+    // The ref is set the moment the stored record is judged invalid; the state follows
+    // one flush later. Reading both keeps the block independent of that ordering.
+    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery || invalidStoredRecoveryRef.current) return;
     const creationRequestId = globalThis.crypto.randomUUID();
     const creationAuthority = pendingCreationRecovery(scenario, creationRequestId);
     if (!retainRecoveryAuthority(creationAuthority)) return;
@@ -1070,22 +1074,28 @@ export function ProtectionExperience({
     };
     window.addEventListener("popstate", popstate);
     let resumeTimer: number | null = null;
+    let disclosureTimer: number | null = null;
     let rawStoredRecovery: string | null = null;
+    // The block itself is the ref, and it is still set synchronously here. Only the
+    // rendered disclosure is flushed on a timer, so this effect sets no state
+    // synchronously. Nothing can start a local run in between: every entry point also
+    // reads `invalidStoredRecoveryRef`, which is already true by then.
+    let recoveryDisclosure: string | null = null;
+    // Only the malformed-record path settled the request state; unavailable storage
+    // never did, and `requestState` may legitimately start as "resuming".
+    let recoveryClearsRequestState = false;
     try {
       rawStoredRecovery = window.sessionStorage.getItem(PROTECTION_RECOVERY_STORAGE_KEY);
     } catch {
       invalidStoredRecoveryRef.current = true;
-      setInvalidStoredRecovery(true);
-      setError("Browser recovery storage is unavailable. Local execution remains blocked.");
+      recoveryDisclosure = "Browser recovery storage is unavailable. Local execution remains blocked.";
     }
     if (rawStoredRecovery !== null) {
       const stored = parseProtectionBrowserRecovery(rawStoredRecovery);
       if (stored === null) {
-        clearAuthority(initialScenario, "local", true);
-        setRequestState("idle");
         invalidStoredRecoveryRef.current = true;
-        setInvalidStoredRecovery(true);
-        setError("The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.");
+        recoveryClearsRequestState = true;
+        recoveryDisclosure = "The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.";
       } else {
         resumeTimer = window.setTimeout(() => resumeStoredAuthority(stored), 0);
       }
@@ -1094,8 +1104,21 @@ export function ProtectionExperience({
         resumeTimer = window.setTimeout(() => void resumeLocalRun(initialRunId, initialScenario), 0);
       } else writeProtectionUrl("replace", initialScenario, null);
     }
+    if (recoveryDisclosure !== null) {
+      const disclosure = recoveryDisclosure;
+      const clearsRequestState = recoveryClearsRequestState;
+      disclosureTimer = window.setTimeout(() => {
+        if (clearsRequestState) {
+          clearAuthority(initialScenario, "local", true);
+          setRequestState("idle");
+        }
+        setInvalidStoredRecovery(true);
+        setError(disclosure);
+      }, 0);
+    }
     return () => {
       if (resumeTimer !== null) window.clearTimeout(resumeTimer);
+      if (disclosureTimer !== null) window.clearTimeout(disclosureTimer);
       window.removeEventListener("popstate", popstate);
       requestController.current?.abort();
       requestGeneration.current += 1;
