@@ -36,6 +36,12 @@ type NamedPattern = Readonly<{
   pattern: RegExp;
   /** Only environment assignments may legitimately hold a reference instead of a value. */
   allowsReference?: boolean;
+  /**
+   * Set only where the same name is both a header and an ordinary program symbol. Source files
+   * declare, destructure and interpolate `authorization` constantly, and none of that is a
+   * credential. A value is admitted only when it carries no credential material at all.
+   */
+  allowsSourceReference?: boolean;
 }>;
 
 /**
@@ -57,9 +63,20 @@ function assignmentPattern(name: string): RegExp {
  * Headers carry the credential in the rest of the line, e.g. `Authorization: Bearer <token>`.
  * The value must start with a non-space character, otherwise the separator's `\s*` can backtrack
  * and re-match an already redacted line.
+ *
+ * The leading boundary matters because this scanner also reads source files: without it the name
+ * matches inside a longer identifier, so `ErrAuthorization = ...` or `runtimeFaultAfterAuthorization
+ * = ...` were read as authorization headers. A header name is a whole word; a suffix of an
+ * identifier is not one.
  */
 function headerPattern(name: string): RegExp {
-  return new RegExp(String.raw`(${name}[ \t]*[:=][ \t]*)(?!\[REDACTED\])([^\s\n\r][^\n\r]*)`, "gi");
+  return new RegExp(
+    // The optional closing quote reaches the quoted-key JSON form, which the bare name could never
+    // match because the closing quote sat between the name and the colon. A committed artifact is
+    // exactly where a credential does the most damage, so that gap mattered.
+    String.raw`(?<![A-Za-z0-9_$])(${name}["']?[ \t]*[:=][ \t]*)(?!\[REDACTED\])([^\s\n\r][^\n\r]*)`,
+    "gi",
+  );
 }
 
 /**
@@ -84,6 +101,7 @@ const SECRET_PATTERNS: readonly NamedPattern[] = Object.freeze([
   },
   {
     kind: "authorization-header",
+    allowsSourceReference: true,
     pattern: headerPattern("authorization"),
   },
   {
@@ -189,6 +207,56 @@ function isEnvironmentReference(rawValue: string): boolean {
 }
 
 /**
+ * Credential material, wherever it appears. This is the fail-closed half of the source-reference
+ * decision: a value is admitted only when none of these shapes is present.
+ *
+ * A scheme keyword alone proves nothing (`Bearer ${token}` carries no secret), so what matters is
+ * whether *literal* token text follows it. The standalone rule requires both a digit and a
+ * lowercase letter so that SCREAMING_SNAKE enum names and ordinary prose are not mistaken for
+ * tokens, while real base64, hex and JWT credentials still are.
+ */
+const CREDENTIAL_SHAPES: readonly RegExp[] = Object.freeze([
+  /\b(?:bearer|basic|digest|token|apikey)[ \t]+[A-Za-z0-9._+/=-]{6,}/i,
+  /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+  /\b(?:0x)?[0-9a-f]{32,}\b/i,
+]);
+
+function containsCredentialMaterial(value: string): boolean {
+  if (CREDENTIAL_SHAPES.some((shape) => shape.test(value))) {
+    return true;
+  }
+  return (/[A-Za-z0-9+/=_-]{20,}/g.exec(value) ?? []).some(
+    (run) => /[0-9]/.test(run) && /[a-z]/.test(run),
+  );
+}
+
+/**
+ * Distinguishes a reference written in source code from a committed credential.
+ *
+ * Quoted string literals are never references: a literal assigned to an authorization field is
+ * exactly what this scanner exists to catch, whatever it happens to contain. Template literals are
+ * the one exception, and only for their interpolated parts: their static text is still inspected,
+ * so a real credential cannot hide next to a `${...}`.
+ */
+function isSafeSourceReference(rawValue: string): boolean {
+  const value = rawValue.trim();
+  if (value.length === 0 || value === REDACTED) {
+    return true;
+  }
+  if (isPlaceholderValue(value.replace(/^["'`]|["'`]$/g, ""))) {
+    return true;
+  }
+  if (value.startsWith("`")) {
+    // Only the parts the source actually commits are judged.
+    return !containsCredentialMaterial(value.replace(/\$\{[^}]*\}/g, " "));
+  }
+  if (value.startsWith("\"") || value.startsWith("'")) {
+    return false;
+  }
+  return !containsCredentialMaterial(value);
+}
+
+/**
  * @param text the artifact about to be written
  * @param knownSecretValues values the caller knows are secret (never logged, only compared)
  */
@@ -198,12 +266,16 @@ export function findSecretLeaks(
 ): readonly SecretLeak[] {
   const leaks: SecretLeak[] = [];
 
-  for (const { kind, pattern, allowsReference } of SECRET_PATTERNS) {
+  for (const { kind, pattern, allowsReference, allowsSourceReference } of SECRET_PATTERNS) {
     const scanner = new RegExp(pattern.source, pattern.flags);
     let match = scanner.exec(text);
     while (match !== null) {
       const value = match[2];
-      if (value === undefined || allowsReference !== true || !isEnvironmentReference(value)) {
+      const admitted = value !== undefined && (
+        (allowsReference === true && isEnvironmentReference(value))
+        || (allowsSourceReference === true && isSafeSourceReference(value))
+      );
+      if (!admitted) {
         leaks.push({
           kind,
           location: locate(text, match.index),
