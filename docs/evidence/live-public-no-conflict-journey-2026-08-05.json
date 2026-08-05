@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "mordant.live-public-journey/1",
+  "scenario": "no-conflict",
+  "alias": "https://mordant-git-feature-custom-supervised-pledges-redgnads-projects.vercel.app",
+  "worker": "https://mordant-production.up.railway.app",
+  "checks": [
+    {
+      "label": "desktop: the eligibility step is shown first",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the pledge form is withheld before eligibility",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the public UAT holder is verified against the active policy",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: a runId is written into the URL",
+      "status": "PASS",
+      "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4"
+    },
+    {
+      "label": "desktop: the submitted bounds leave the rendered page after admission",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: no outcome wording at admission",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the run survives a browser refresh",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: no raw bounds reappear after refresh",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: no premature outcome during execution",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the terminal heading matches the no-conflict outcome",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the recourse state matches the no-conflict outcome",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the receipt drawer opens",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the receipt carries a digest",
+      "status": "PASS",
+      "digest": "sha256:d78bd81f627ee7798c07f804e8919d19878dc89fa266dcc10b5cdcba5bf8a8fa"
+    },
+    {
+      "label": "desktop: the original receivable is intact",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: the receipt carries no submitted bound",
+      "status": "PASS"
+    },
+    {
+      "label": "desktop: no horizontal overflow",
+      "status": "PASS",
+      "overflowPx": 0
+    },
+    {
+      "label": "desktop: no pledge window is ever sent to Vercel",
+      "status": "PASS",
+      "count": 0
+    },
+    {
+      "label": "desktop: the pledge windows go straight to Railway exactly once",
+      "status": "PASS",
+      "count": 1
+    },
+    {
+      "label": "mobile: the eligibility step renders",
+      "status": "PASS"
+    },
+    {
+      "label": "mobile: no horizontal overflow",
+      "status": "PASS",
+      "overflowPx": 0
+    },
+    {
+      "label": "mobile: the primary control is not clipped",
+      "status": "PASS",
+      "box": {
+        "x": 42,
+        "y": 429.75,
+        "width": 185.53125,
+        "height": 42.1875
+      }
+    },
+    {
+      "label": "mobile: a refused holder gets an ordinary product state, not a crash",
+      "status": "PASS"
+    },
+    {
+      "label": "mobile: the fallback link to /protection remains",
+      "status": "PASS"
+    },
+    {
+      "label": "mobile: an unknown run is refused by the worker",
+      "status": 404
+    }
+  ],
+  "timeline": [
+    {
+      "atSeconds": 2,
+      "stage": "Case authorized"
+    },
+    {
+      "atSeconds": 7,
+      "stage": "Private encryption prepared"
+    },
+    {
+      "atSeconds": 9,
+      "stage": "Participant A encrypted"
+    },
+    {
+      "atSeconds": 11,
+      "stage": "Participant B encrypted"
+    },
+    {
+      "atSeconds": 19,
+      "stage": "Encrypted evaluation running"
+    },
+    {
+      "atSeconds": 27,
+      "stage": "Recourse application"
+    },
+    {
+      "atSeconds": 29,
+      "stage": "Receipt sealed"
+    }
+  ],
+  "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
+  "releasedAtSeconds": 27,
+  "receiptDigest": "sha256:d78bd81f627ee7798c07f804e8919d19878dc89fa266dcc10b5cdcba5bf8a8fa",
+  "result": "PASS",
+  "failures": []
+}

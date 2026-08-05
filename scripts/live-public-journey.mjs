@@ -17,8 +17,28 @@ import { chromium, devices } from "@playwright/test";
 const ALIAS = process.env.PUBLIC_ALIAS ?? "https://mordant-git-feature-custom-supervised-pledges-redgnads-projects.vercel.app";
 const WORKER = process.env.WORKER_ORIGIN ?? "https://mordant-production.up.railway.app";
 const HOLDER = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
-const WINDOWS = { aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" };
-const BOUNDS = ["120", "420", "220", "520"];
+
+// Two public demo inputs. Overlapping windows must produce a conflict; disjoint ones
+// must produce a signed refusal. Which one runs is chosen by SCENARIO so the same
+// browser path proves both terminal outcomes.
+const SCENARIOS = {
+  conflict: {
+    windows: { aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" },
+    terminalHeading: /Conflict confirmed/iu,
+    terminalLede: /Recourse opened/iu,
+  },
+  "no-conflict": {
+    windows: { aFrom: "120", aUntil: "300", bFrom: "420", bUntil: "620" },
+    terminalHeading: /No conflict found/iu,
+    terminalLede: /Signed result cleared the case/iu,
+  },
+};
+
+const SCENARIO = process.env.SCENARIO ?? "conflict";
+const PLAN = SCENARIOS[SCENARIO];
+if (PLAN === undefined) throw new Error(`unknown scenario ${SCENARIO}`);
+const WINDOWS = PLAN.windows;
+const BOUNDS = Object.values(WINDOWS);
 const PRIVATE_FIELDS = /activeFrom|activeUntil|supervisedPledgeWindows/u;
 
 /** Digests are hex and routinely contain these digits by chance; they are not inputs. */
@@ -33,7 +53,7 @@ function carriesSubmittedBound(text) {
 const OUTCOME_WORDS = /conflict confirmed|no conflict found|recourse opened/iu;
 
 const failures = [];
-const evidence = { schemaVersion: "mordant.live-public-journey/1", alias: ALIAS, worker: WORKER, checks: [], timeline: [] };
+const evidence = { schemaVersion: "mordant.live-public-journey/1", scenario: SCENARIO, alias: ALIAS, worker: WORKER, checks: [], timeline: [] };
 
 function check(condition, label, detail = {}) {
   if (!condition) failures.push(label);
@@ -118,8 +138,8 @@ async function runJourney(page, log, label) {
   check(!sawPrematureOutcome, `${label}: no premature outcome during execution`);
 
   const terminal = await page.locator("body").innerText();
-  check(/Conflict confirmed/iu.test(terminal), `${label}: the terminal state is conflict confirmed`);
-  check(/Recourse opened/iu.test(terminal), `${label}: recourse is opened`);
+  check(PLAN.terminalHeading.test(terminal), `${label}: the terminal heading matches the ${SCENARIO} outcome`);
+  check(PLAN.terminalLede.test(terminal), `${label}: the recourse state matches the ${SCENARIO} outcome`);
 
   process.stdout.write(`${label}: receipt\n`);
   await page.getByRole("button", { name: /View execution receipt/iu }).click();
@@ -183,7 +203,7 @@ async function main() {
 
   evidence.result = failures.length === 0 ? "PASS" : "FAIL";
   evidence.failures = failures;
-  writeFileSync(new URL(`../docs/evidence/live-public-journey-${new Date().toISOString().slice(0, 10)}.json`, import.meta.url), JSON.stringify(evidence, null, 2));
+  writeFileSync(new URL(`../docs/evidence/live-public-${SCENARIO}-journey-${new Date().toISOString().slice(0, 10)}.json`, import.meta.url), JSON.stringify(evidence, null, 2));
   process.stdout.write(`\n${evidence.result}: ${failures.length} failing check(s)\n`);
   for (const failure of failures) process.stdout.write(`  - ${failure}\n`);
   if (failures.length > 0) process.exitCode = 1;
