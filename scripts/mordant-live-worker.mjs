@@ -367,13 +367,32 @@ export function retainedReceiptRunIds(runRoot) {
 
 // ---------------------------------------------------------------- http surface
 
-function send(response, status, body) {
+/**
+ * Cross-origin headers for the one browser origin this worker serves.
+ *
+ * The page runs on Vercel and posts here directly, so without these the browser blocks
+ * the response before the origin allowlist is ever consulted. The configured origin is
+ * echoed verbatim and never `*`: a wildcard would let any page read a run.
+ */
+function corsHeaders(requestOrigin, allowedOrigin) {
+  if (allowedOrigin === null || requestOrigin !== allowedOrigin) return { vary: "Origin" };
+  return {
+    "access-control-allow-origin": allowedOrigin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type",
+    "access-control-max-age": "600",
+    vary: "Origin",
+  };
+}
+
+function send(response, status, body, cors = {}) {
   const encoded = JSON.stringify(body);
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store, max-age=0",
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
+    ...cors,
   });
   response.end(encoded);
 }
@@ -468,6 +487,17 @@ export function createLiveWorker(options) {
   async function handle(request, response) {
     const nowMs = now();
     const url = new URL(request.url ?? "/", "http://worker.invalid");
+    const cors = corsHeaders(request.headers.origin ?? null, configuration.allowedOrigin ?? null);
+
+    // Preflight is answered for the known routes only, and never reveals which of them
+    // currently holds a run.
+    if (request.method === "OPTIONS") {
+      const known = url.pathname === "/v1/custom-cases" || url.pathname.startsWith("/v1/custom-cases/") || url.pathname === "/health";
+      if (!known) throw new WorkerError(404, "ROUTE", "Unknown route");
+      response.writeHead(204, { "cache-control": "no-store, max-age=0", ...cors });
+      response.end();
+      return undefined;
+    }
 
     if (request.method === "GET" && url.pathname === "/health") {
       return send(response, 200, healthBody({
@@ -476,7 +506,7 @@ export function createLiveWorker(options) {
         accepting: accepting(nowMs),
         diskSufficient: diskSufficient(),
         version: configuration.version,
-      }));
+      }), cors);
     }
 
     if (request.method === "POST" && url.pathname === "/v1/custom-cases") {
@@ -499,7 +529,7 @@ export function createLiveWorker(options) {
       claimToken(paths, claims.tokenId, nowMs);
       recordAdmission(paths, claims.tokenId, nowMs, configuration.dailyCaseLimit);
       const admitted = await admitCase(windows, nowMs);
-      return send(response, 201, liveCaseBody(admitted.view, progressFor(admitted.view.stage)));
+      return send(response, 201, liveCaseBody(admitted.view, progressFor(admitted.view.stage)), cors);
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/v1/custom-cases/")) {
@@ -509,12 +539,12 @@ export function createLiveWorker(options) {
       try {
         const view = await orchestrator.readCustomSupervisedCase(runId);
         state.lastView.set(runId, view);
-        return send(response, 200, liveCaseBody(view, progressFor(view.stage)));
+        return send(response, 200, liveCaseBody(view, progressFor(view.stage)), cors);
       } catch (error) {
         // While an engine operation holds the run, the last durably observed
         // view is the honest answer. It is never fabricated.
         const cached = state.lastView.get(runId);
-        if (cached !== undefined) return send(response, 200, liveCaseBody(cached, state.lastProgress.get(runId) ?? progressFor(cached.stage)));
+        if (cached !== undefined) return send(response, 200, liveCaseBody(cached, state.lastProgress.get(runId) ?? progressFor(cached.stage)), cors);
         throw error instanceof WorkerError ? error : new WorkerError(404, "UNKNOWN_CASE", "Unknown case");
       }
     }
@@ -527,7 +557,8 @@ export function createLiveWorker(options) {
       const status = error instanceof WorkerError ? error.status : (error?.status ?? 500);
       const code = error instanceof WorkerError ? error.code : "WORKER";
       const message = error instanceof WorkerError ? error.message : "The execution service refused the request";
-      send(response, status, { schemaVersion: WORKER_SCHEMA, error: message, code });
+      send(response, status, { schemaVersion: WORKER_SCHEMA, error: message, code },
+        corsHeaders(request.headers.origin ?? null, configuration.allowedOrigin ?? null));
     });
   });
 

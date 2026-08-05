@@ -402,3 +402,59 @@ test("configuration is fail-closed", () => {
     assert.throws(() => readWorkerConfiguration(broken), (error) => error instanceof WorkerError, `${name} must be refused`);
   }
 });
+
+test("the browser origin is allowed to read the worker across origins", async () => {
+  // A curl-based gate cannot catch this: only a browser enforces CORS, and without these
+  // headers the page fails before the origin allowlist is ever consulted.
+  await withWorker(configuration(), mockEngineOrchestrator({}), async (base) => {
+    const preflight = await fetch(`${base}/v1/custom-cases`, {
+      method: "OPTIONS",
+      headers: {
+        origin: ORIGIN,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), ORIGIN);
+    assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/u);
+    assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /authorization/iu);
+
+    const health = await fetch(`${base}/health`, { headers: { origin: ORIGIN } });
+    assert.equal(health.headers.get("access-control-allow-origin"), ORIGIN);
+
+    // A refusal must stay readable, otherwise the page can only say "network error".
+    const refused = await fetch(`${base}/v1/custom-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(refused.status, 401);
+    assert.equal(refused.headers.get("access-control-allow-origin"), ORIGIN);
+  });
+});
+
+test("an unknown origin is never granted cross-origin access", async () => {
+  await withWorker(configuration(), mockEngineOrchestrator({}), async (base) => {
+    for (const origin of ["https://evil.example", "null"]) {
+      const preflight = await fetch(`${base}/v1/custom-cases`, {
+        method: "OPTIONS",
+        headers: { origin, "access-control-request-method": "POST" },
+      });
+      assert.equal(preflight.headers.get("access-control-allow-origin"), null);
+      const health = await fetch(`${base}/health`, { headers: { origin } });
+      assert.equal(health.headers.get("access-control-allow-origin"), null);
+      assert.equal(health.headers.get("vary"), "Origin");
+    }
+  });
+});
+
+test("preflight on an unknown route is refused", async () => {
+  await withWorker(configuration(), mockEngineOrchestrator({}), async (base) => {
+    const preflight = await fetch(`${base}/nope`, {
+      method: "OPTIONS",
+      headers: { origin: ORIGIN, "access-control-request-method": "POST" },
+    });
+    assert.equal(preflight.status, 404);
+  });
+});
