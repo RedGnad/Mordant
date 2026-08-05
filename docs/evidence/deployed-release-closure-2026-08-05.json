@@ -1,8 +1,7 @@
 {
-  "schemaVersion": "mordant.deployed-release-closure/1",
+  "schemaVersion": "mordant.deployed-release-closure/2",
   "closedAt": "2026-08-05T18:13:48.539Z",
   "productCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
-  "workerVersionServed": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
   "publicApplication": "https://mordant-git-feature-custom-supervised-pledges-redgnads-projects.vercel.app",
   "worker": "https://mordant-production.up.railway.app",
   "cleanverse": {
@@ -107,7 +106,8 @@
         "governedDigestIdentical": true,
         "newExecution": false,
         "rawWindows": false
-      }
+      },
+      "runtimeSourceCommit": "bccc47faa700db0c117372c6d841790b023913c2"
     },
     "no-conflict": {
       "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
@@ -184,29 +184,67 @@
         "newExecution": false,
         "rawWindows": false,
         "signedRefusalPreserved": true
-      }
+      },
+      "runtimeSourceCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0"
     }
   },
   "goProductionPathsBaseline": {
     "test": "TestGovernedFHEProductionPaths",
-    "command": "go test ./governedfhe/ -run TestGovernedFHEProductionPaths",
-    "workingDirectory": "fhe-lab/lattigo",
-    "environment": "MORDANT_FHE_EVALUATOR_BIN and MORDANT_FHE_DECRYPTOR_BIN set to binaries built from the checkout under test",
-    "base": {
-      "commit": "47ba4e542892c0fccd03aa392d6899885248e5c8",
-      "exitStatus": 1,
-      "failure": "production_test.go:164: export public evidence: governed FHE binding rejected"
+    "history": {
+      "base": {
+        "commit": "47ba4e542892c0fccd03aa392d6899885248e5c8",
+        "exitStatus": 1
+      },
+      "previousHead": {
+        "commit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
+        "exitStatus": 1
+      },
+      "failureSites": [
+        "production_test.go:164",
+        "production_test.go:211"
+      ],
+      "failureMessage": "export public evidence: governed FHE binding rejected",
+      "actualCause": "The Go test fixture never produced product-recourse-attestation.json, which evidence export legitimately requires. Both ExportPublicEvidence call sites therefore failed.",
+      "supersededExplanation": "An earlier closure described this as environment-gated. That was wrong: identical base and head results established non-regression only, and never established a cause."
     },
-    "head": {
-      "commit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
-      "exitStatus": 1,
-      "failure": "production_test.go:164: export public evidence: governed FHE binding rejected"
+    "correction": {
+      "kind": "test-only",
+      "change": "production_test.go now calls the production CreateRecourseAttestation before each ExportPublicEvidence call, and verifies it loads back from the public root. In no_conflict_cannot_activate_recourse it is published before the private root is taken offline, so the export itself still runs public-root-only.",
+      "productionBehaviourChanged": false
     },
-    "verdict": "Identical failure at base and head. Pre-existing environment-gated baseline failure, not a regression of this work."
+    "finalResult": {
+      "command": "go test ./governedfhe/ -run TestGovernedFHEProductionPaths -count=1",
+      "workingDirectory": "fhe-lab/lattigo",
+      "prerequisite": "MORDANT_FHE_EVALUATOR_BIN and MORDANT_FHE_DECRYPTOR_BIN built from the checkout under test",
+      "result": "ok"
+    }
   },
   "volumeAccess": {
     "method": "railway ssh, read-only cat of the operation journals",
     "mutations": "none",
-    "note": "A dedicated read-only SSH key was registered to reach the mounted volume; no diagnostic endpoint was added."
-  }
+    "temporaryKey": {
+      "name": "mordant-deployed-evidence-readonly",
+      "fingerprint": "SHA256:p6lRFYObyOJ/pshSe090NGWJ+F55wfNBeo2VQ6gf6fA",
+      "publicKeyRevokedFromRailwayAccount": true,
+      "localKeyFilesObservedAbsent": true,
+      "localKeyFilesDeletedByThisWork": false,
+      "agentIdentityCleared": true,
+      "verification": "railway ssh keys list reports no registered keys; ~/.ssh contains only config and known_hosts; ssh-add -l reports no identities."
+    }
+  },
+  "correctedAt": "2026-08-05T19:15:20.556Z",
+  "correctionNote": "Corrected at release/live-ccp-rc2-hardening after independent review: per-run runtime provenance, and the real cause of the red Go test.",
+  "workerRuntimeProvenance": {
+    "note": "Each run executed on the container source served at that moment. These are distinct.",
+    "conflictRun": {
+      "runId": "693a1cfc-a8c0-4024-a3de-3e17e38eb99c",
+      "runtimeSourceCommit": "bccc47faa700db0c117372c6d841790b023913c2"
+    },
+    "noConflictRun": {
+      "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
+      "runtimeSourceCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0"
+    },
+    "servedAtPreviousAudit": "c22ebbce4c36069fb9ec99d357f6196515365e63"
+  },
+  "claimPrecision": "Mordant verifies that a submitted holder address satisfies the active Cleanverse policy before issuing a launch token. No wallet ownership challenge is implemented, and no claim is made that the visitor controls the address."
 }
