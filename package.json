@@ -34,7 +34,7 @@
     "m05:dryrun": "node scripts/m05-dryrun-monad.mjs",
     "m05:check": "node scripts/m05-runner.mjs --check",
     "m05:fork": "node scripts/m05-runner.mjs --fork",
-    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs scripts/m14-manifest.test.mjs scripts/m15-phase.test.mjs scripts/m15-engine.test.mjs",
+    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs scripts/m14-manifest.test.mjs scripts/m15-phase.test.mjs scripts/m15-engine.test.mjs scripts/verify-recourse-v2-demo-config.test.mjs",
     "revalidate:ausdc": "node --env-file=.env scripts/m06-ausdc-revalidation.mjs",
     "m07:check": "node --env-file=.env scripts/m07-ausdc-transfer.mjs --check",
     "m08:check": "node --env-file=.env scripts/m08-contract-apass.mjs --check",
