@@ -65,7 +65,10 @@ export function WalletModal({
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
-  const [announcement, setAnnouncement] = useState("");
+  // Transient messages the visitor caused (a copy, a blocked Escape). The wallet
+  // state announcement is derived below rather than stored, so no effect writes
+  // state during render.
+  const [transient, setTransient] = useState("");
 
   const injected = wallet.options.filter((option) => option.kind !== "walletconnect");
   const walletConnect = wallet.options.find((option) => option.kind === "walletconnect") ?? null;
@@ -89,7 +92,7 @@ export function WalletModal({
     // would leave a native prompt with nothing behind it.
     if (event.key === "Escape") {
       if (requestPending) {
-        setAnnouncement("A wallet request is open. Finish or dismiss it in your wallet first.");
+        setTransient("A wallet request is open. Finish or dismiss it in your wallet first.");
         return;
       }
       event.stopPropagation();
@@ -110,11 +113,13 @@ export function WalletModal({
     }
   }, [onClose, requestPending]);
 
-  useEffect(() => {
-    if (wallet.view.state === "CONNECTED") setAnnouncement("Wallet connected on Monad testnet.");
-    else if (wallet.view.state === "WRONG_NETWORK") setAnnouncement("Wallet connected on the wrong network.");
-    else if (wallet.view.state === "REJECTED") setAnnouncement("The wallet request was declined.");
-  }, [wallet.view.state]);
+  const walletAnnouncement =
+    wallet.view.state === "CONNECTED" ? "Wallet connected on Monad testnet."
+      : wallet.view.state === "WRONG_NETWORK" ? "Wallet connected on the wrong network."
+        : wallet.view.state === "REJECTED" ? "The wallet request was declined."
+          : wallet.view.state === "CONNECTING" ? "Waiting for the wallet to respond."
+            : "";
+  const announcement = transient === "" ? walletAnnouncement : transient;
 
   if (!open) return null;
 
@@ -184,7 +189,7 @@ export function WalletModal({
                     className={styles.copy}
                     onClick={() => {
                       void navigator.clipboard?.writeText(wallet.pairingUri ?? "");
-                      setAnnouncement("Pairing link copied.");
+                      setTransient("Pairing link copied.");
                     }}
                   >
                     Copy pairing link
