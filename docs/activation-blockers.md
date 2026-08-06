@@ -12,6 +12,19 @@ non-negotiable.
 Integration checkpoint: `f7bd68d048739987c6abb000bbe44cae97a10035`.
 Activation environment: a normal clone, not a linked worktree (see B0).
 
+## Qualification results
+
+- Go/Lattigo, full suite from the normal clone with
+  `MORDANT_FHE_EVALUATOR_BIN` and `MORDANT_FHE_DECRYPTOR_BIN` set to absolute
+  binaries built from this checkout: **8/8 packages ok, exit 0**, including
+  `oneshotceremony` F-09.
+- Live Monad readback against the deployed adapter: **32/32 checks** at block
+  `51501230`, retained in
+  `docs/evidence/activation-preflight-readback-2026-08-07.json`.
+- Protection suite (protection, worker, participant authorization/admission,
+  bridge/executor, recourse-compatibility route): **276/276**.
+- Typecheck, production build and secret scan: clean.
+
 ## What did run
 
 One real journey, run `d91d389c-1d86-439a-8444-d2e42b5a3bf6`, case code
