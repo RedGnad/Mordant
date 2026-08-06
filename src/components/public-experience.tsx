@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
-import { PublicFooter, PublicHeader } from "./public-chrome";
+import { PublicFooter, PublicHeader } from "./public-shell";
 import styles from "./public-experience.module.css";
 
 type PublicProof = {
@@ -273,7 +273,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
-      <PublicHeader />
+      <PublicHeader surface="landing" />
 
       <section className={styles.publicTruthBoundary} aria-label="MVP evidence and execution boundaries">
         <p><strong>Observed provenance</strong> Cleanverse / Monad testnet asset identity is retained real evidence.</p>

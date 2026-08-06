@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LiveExecution } from "@/components/live-execution";
+import { LiveUnavailable } from "@/components/live-unavailable";
+import { PublicShell } from "@/components/public-shell";
 import { CCP_PUBLIC_TEST_HOLDER } from "@/lib/protection/ccp-eligibility";
 import { readLiveTokenConfiguration } from "@/lib/protection/live-launch-token";
 
@@ -31,19 +33,15 @@ export default async function LiveProtectionPage({ searchParams }: {
 
   if (workerOrigin === null) {
     return (
-      <main>
-        <section style={{ maxWidth: 940, margin: "0 auto", padding: "58px 26px" }}>
-          <h1>Live execution is not enabled here.</h1>
-          <p>The verified protection evidence remains available.</p>
-          <a href="/protection?scenario=conflict">View verified protection evidence</a>
-        </section>
-      </main>
+      <PublicShell surface="live">
+        <LiveUnavailable />
+      </PublicShell>
     );
   }
 
   return (
-    <main>
+    <PublicShell surface="live">
       <LiveExecution workerOrigin={workerOrigin} initialRunId={runId} publicTestHolder={CCP_PUBLIC_TEST_HOLDER} />
-    </main>
+    </PublicShell>
   );
 }
