@@ -1,0 +1,277 @@
+{
+  "schemaVersion": "mordant.activation-preflight-readback/1",
+  "observedAtIso": "2026-08-06T22:13:31.196Z",
+  "network": {
+    "chainId": 10143,
+    "blockNumber": 51501230
+  },
+  "adapter": {
+    "address": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+    "codeHash": "0x244c372d9896c267289555b2ebede9ae02ceb6f3d7f42186877088df8bd0099f",
+    "runtimeBytes": 10088,
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "cviVerifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "attestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "expectedGovernedReleaseAuthorityId": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+    "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "circuitHash": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "cureWindowSeconds": 600,
+    "domainSeparator": "0x25db3cc3d1a2eb59ddcde376ee7b976d7147bf9cfb7f910701afa40a5308d0f3",
+    "roleHolder": 4,
+    "roleFacility": 3
+  },
+  "reserve": {
+    "availableReserve": "4000",
+    "openReserved": "0",
+    "entitledUnpaid": "0",
+    "tokenBalance": "4000",
+    "solvent": true,
+    "payoutA": "2400",
+    "payoutB": "1600",
+    "payoutTotal": "4000"
+  },
+  "participants": {
+    "holderA": {
+      "address": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "roleHolderEligible": true,
+      "aUsdcBalance": "0"
+    },
+    "holderB": {
+      "address": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "roleHolderEligible": true,
+      "aUsdcBalance": "0"
+    },
+    "facility": {
+      "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "roleFacilityEligible": true
+    },
+    "negativeControl": {
+      "address": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "roleHolderEligible": false,
+      "adapterTransferPermitted": false
+    },
+    "uncontrolledApassWallet": {
+      "address": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+      "roleHolderEligible": true,
+      "canonicalParticipant": false
+    }
+  },
+  "minv01": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "adapterBalance": "0",
+    "touched": false
+  },
+  "retainedGovernedResult": {
+    "runId": "30ef645f-8047-45ee-8b7c-19952a54555f",
+    "governedResultDigest": "0xf53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+    "releaseAuthorityId": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+    "conflict": true,
+    "consumed": false
+  },
+  "bridgeAttestor": {
+    "runtimeVariableName": "MORDANT_BRIDGE_ATTESTOR_PRIVATE_KEY",
+    "derivedSignerAddress": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "deployedAttestorAddress": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "equality": true,
+    "note": "Derivation only. The private key is never printed, serialized, returned or written."
+  },
+  "checks": [
+    {
+      "name": "configured adapter == committed adapter",
+      "actual": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "expected": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "ok": true
+    },
+    {
+      "name": "chainId",
+      "actual": "10143",
+      "expected": "10143",
+      "ok": true
+    },
+    {
+      "name": "deployed code hash",
+      "actual": "0x244c372d9896c267289555b2ebede9ae02ceb6f3d7f42186877088df8bd0099f",
+      "expected": "0x244c372d9896c267289555b2ebede9ae02ceb6f3d7f42186877088df8bd0099f",
+      "ok": true
+    },
+    {
+      "name": "runtime bytes",
+      "actual": "10088",
+      "expected": "10088",
+      "ok": true
+    },
+    {
+      "name": "settlementToken",
+      "actual": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "expected": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "ok": true
+    },
+    {
+      "name": "cviVerifier",
+      "actual": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+      "expected": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+      "ok": true
+    },
+    {
+      "name": "attestor immutable",
+      "actual": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+      "expected": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+      "ok": true
+    },
+    {
+      "name": "facility immutable",
+      "actual": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "expected": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+      "ok": true
+    },
+    {
+      "name": "owner immutable",
+      "actual": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "expected": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "ok": true
+    },
+    {
+      "name": "assetIdentityDigest",
+      "actual": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+      "expected": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+      "ok": true
+    },
+    {
+      "name": "governed authority pin",
+      "actual": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+      "expected": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+      "ok": true
+    },
+    {
+      "name": "releaseMode",
+      "actual": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+      "expected": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+      "ok": true
+    },
+    {
+      "name": "circuitHash",
+      "actual": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+      "expected": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+      "ok": true
+    },
+    {
+      "name": "parameterFingerprint",
+      "actual": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+      "expected": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+      "ok": true
+    },
+    {
+      "name": "cureWindowSeconds",
+      "actual": "600",
+      "expected": "600",
+      "ok": true
+    },
+    {
+      "name": "domainSeparator",
+      "actual": "0x25db3cc3d1a2eb59ddcde376ee7b976d7147bf9cfb7f910701afa40a5308d0f3",
+      "expected": "0x25db3cc3d1a2eb59ddcde376ee7b976d7147bf9cfb7f910701afa40a5308d0f3",
+      "ok": true
+    },
+    {
+      "name": "retained governed authority == on-chain pin",
+      "actual": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+      "expected": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+      "ok": true
+    },
+    {
+      "name": "retained governed result already consumed",
+      "actual": "false",
+      "expected": "false",
+      "ok": true
+    },
+    {
+      "name": "derived signer == adapter attestor immutable",
+      "actual": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+      "expected": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+      "ok": true
+    },
+    {
+      "name": "holderA ROLE_HOLDER eligible",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "holderB ROLE_HOLDER eligible",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "facility ROLE_FACILITY eligible",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "negative control excluded (not ROLE_HOLDER)",
+      "actual": "false",
+      "expected": "false",
+      "ok": true
+    },
+    {
+      "name": "adapter -> holderA permitted",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "adapter -> holderB permitted",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "adapter -> negative control refused",
+      "actual": "false",
+      "expected": "false",
+      "ok": true
+    },
+    {
+      "name": "adapter solvent",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "openReserved is zero",
+      "actual": "0",
+      "expected": "0",
+      "ok": true
+    },
+    {
+      "name": "entitledUnpaid is zero",
+      "actual": "0",
+      "expected": "0",
+      "ok": true
+    },
+    {
+      "name": "availableReserve covers payout total",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    },
+    {
+      "name": "MINV01 balance of adapter unchanged (0)",
+      "actual": "0",
+      "expected": "0",
+      "ok": true
+    },
+    {
+      "name": "holders distinct",
+      "actual": "true",
+      "expected": "true",
+      "ok": true
+    }
+  ],
+  "allChecksPass": true
+}

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "mordant.activation-fresh-journey-evidence/1",
+  "generatedAt": "2026-08-07",
+  "environment": {
+    "kind": "normal clone (not a linked worktree)",
+    "path": "Mordant-activation-clone",
+    "reason": "Go buildvcs resolves a linked worktree's .git file past the repo and stamps the enclosing repository's revision; a normal clone stamps the checkpoint revision.",
+    "activationCommit": "68ab53bf3edb20297251609c48985b9204dc7924"
+  },
+  "integrationCheckpoint": "f7bd68d048739987c6abb000bbe44cae97a10035",
+  "runId": "d91d389c-1d86-439a-8444-d2e42b5a3bf6",
+  "caseCode": "4XP6F7184R847X4G",
+  "executionVariant": "CUSTOM_SUPERVISED",
+  "sourceCommit": "68ab53bf3edb20297251609c48985b9204dc7924",
+  "governedFheCommit": "68ab53bf3edb20297251609c48985b9204dc7924",
+  "participants": [
+    {
+      "role": "PARTICIPANT_A",
+      "participantWallet": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "authorizationDigest": "0x67441f4ccd7a9017e513e1a9c010949fc875ed51ff1445575d336609b4ada22d",
+      "claimCommitment": "0xfe23408d72fd91f420250ad8a7914cb574e2dbc5e89f5182a8f9a29749503896",
+      "authorizationNonce": "0xb90b8ad5a7aae9e49405f2e796f83e98201555d03746bf8979d3cdcb453b26d5",
+      "chainId": 10143,
+      "eligibilityBlock": 51507855
+    },
+    {
+      "role": "PARTICIPANT_B",
+      "participantWallet": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "authorizationDigest": "0x86fff7f2055ca4db0595d44f0d55767092de873816129af84192603b00f4bebd",
+      "claimCommitment": "0xb17175d85d83800b01e3bb7dd9ea134f39c2f1716479ef30ddaf743e2148a7bc",
+      "authorizationNonce": "0x832ec5041206e629cf0bead97e4a6c419fede31bf53e75ff8f88a93ccce4fc7f",
+      "chainId": 10143,
+      "eligibilityBlock": 51507874
+    }
+  ],
+  "authorization": {
+    "protectionBindingSchema": "mordant.protection-binding/2",
+    "protectionBindingDigest": "sha256:c7a2b4863b5d209a1701e0ccfb26e4cf93ca8de9f6ab0af2790ec0f1e7d231f4",
+    "fheCaseId": "sha256:70d080ce25f4a6dcf61b8a8124e0b45fbcc61d2b0189d92ef9214247c49468d5",
+    "caseBindingDigest": "sha256:c7a2b4863b5d209a1701e0ccfb26e4cf93ca8de9f6ab0af2790ec0f1e7d231f4"
+  },
+  "execution": {
+    "participantArtifactDigests": [
+      "sha256:ea274003f7cde807d1129de3fc81dcda77da3c67116a673369cd0687558a46a3",
+      "sha256:df72e7f7833a7ab7a18b1e71d867ad55d17985ddbb4bdd29b27dbc45a67d2a0d"
+    ],
+    "evaluatedArtifactDigest": "sha256:e97904ee400340466f578be3a5a6602faa82482bd7f4371470e7f3977ad19d16",
+    "evaluatorProvenance": "sha256:0098a32e0da5d22f827cc2219e0657e74616765d31346378af1633e4fd083f9c",
+    "decryptorProvenance": "sha256:cbe3410ec4a99bf25841d52c43c295702507334a8cee9f8529cb362d2293baa4",
+    "circuitId": "mordant.identity-full-fhe-256",
+    "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1"
+  },
+  "governedResult": {
+    "conflict": true,
+    "digest": "sha256:3e2979d52f4ac4de2465b18f1c809c8c8004e9c3ea18892568a9c673feea879e",
+    "releaseMode": "governed-decryptor-v1",
+    "releaseOrdinal": 1,
+    "resultCiphertextDigest": "sha256:4d201fb06b5ef679ad49faae12f795b792a9eed1dcd0b883f060407eb1be5b7c",
+    "independentlyRecomputedResultDigest": "sha256:4d201fb06b5ef679ad49faae12f795b792a9eed1dcd0b883f060407eb1be5b7c",
+    "releaseAuthorityId": "sha256:fa4d9d2e5e8237c4d6f4584814f30bb3f37b33cc58d515c5bd387a90eb5338bc"
+  },
+  "recourseRecord": {
+    "schemaVersion": "mordant.fhe-recourse-adapter-record/1",
+    "caseId": "sha256:70d080ce25f4a6dcf61b8a8124e0b45fbcc61d2b0189d92ef9214247c49468d5",
+    "caseBindingDigest": "sha256:e8cdc231a8e7afec5117d874acd54278505489155459a2d103f7bbb927c155f3",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "policyVersion": 1,
+    "resultDigest": "sha256:3e2979d52f4ac4de2465b18f1c809c8c8004e9c3ea18892568a9c673feea879e",
+    "releaseMode": "governed-decryptor-v1",
+    "releaseAuthorityId": "sha256:fa4d9d2e5e8237c4d6f4584814f30bb3f37b33cc58d515c5bd387a90eb5338bc",
+    "recordDateUnix": 1786056335,
+    "boundAtUnix": 1786056476,
+    "cureDeadlineUnix": 1786142876,
+    "reserveBasisPoints": 1000,
+    "holderAllocationDigest": "sha256:1058772b1a9459d3b138e32473620bf429c192775e6f94af29180da206770a7f",
+    "originalReceivableIntact": true,
+    "open": true
+  },
+  "terminal": {
+    "incidentState": "CONFLICT_CONFIRMED",
+    "recourseState": "CURE_WINDOW",
+    "recourseOpened": true,
+    "recourseRefusal": null,
+    "recourseRecordDigest": "sha256:9c72d613d8233d3ef2f864a2e0716224daacb4dd314ab9ae318f9c29bff68729",
+    "originalReceivableState": "OUTSTANDING_INTACT"
+  },
+  "receiptDigest": "sha256:5620c364c1e269b13eb16f99750b5b37bd14ba82b6709d7ace7147adf04bba32",
+  "notDone": [
+    "no adapter was deployed",
+    "no bridge attestation was signed",
+    "no transaction was broadcast"
+  ],
+  "containsNoSecrets": true
+}

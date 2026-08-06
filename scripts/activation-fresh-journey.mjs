@@ -39,7 +39,8 @@ function launchToken(secret, audience) {
   const claims = {
     tokenId: randomUUID(),
     issuedAt,
-    expiresAt: issuedAt + 10 * 60 * 1_000,
+    // The worker caps a launch token at five minutes; stay inside it.
+    expiresAt: issuedAt + 4 * 60 * 1_000,
     audience,
     action: "CREATE_CUSTOM_CASE",
   };
@@ -141,7 +142,7 @@ async function main() {
   const holderB = config.participants.holderB.address;
 
   const health = await call(`${base}/health`);
-  process.stdout.write(`worker health: accepting=${health.accepting} version=${health.version ?? "unknown"}\n`);
+  process.stdout.write(`worker health: accepting=${health.acceptingCases} version=${health.version ?? "unknown"}\n`);
 
   const token = launchToken(required("MORDANT_WORKER_TOKEN_SECRET"), required("MORDANT_WORKER_TOKEN_AUDIENCE"));
   const created = await call(`${base}/v1/participant-cases`, { method: "POST", origin, token, body: {} });
