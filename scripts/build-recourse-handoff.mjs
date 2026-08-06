@@ -90,16 +90,14 @@ const pins = {
 // state. Without the committed configuration the fixture still binds everything
 // that is verifiable, and records exactly what is missing.
 const demoPresent = existsSync(join(ROOT, DEMO_CONFIG));
-const demo = demoPresent ? JSON.parse(readFileSync(join(ROOT, DEMO_CONFIG), "utf8")) : null;
-const participants = demo?.participants ?? demo ?? {};
-const payouts = demo?.payouts ?? demo ?? {};
-
-// Provisional values, used only so a deterministic encoding vector exists. They
-// are 60/40 of a bounded amount, matching the committed record-date allocation.
-const holderA = getAddress(participants.holderA ?? "0x911F99f424D47F08a15fcC771e94dcc2f7252B02");
-const holderB = getAddress(participants.holderB ?? "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0");
-const payoutA = BigInt(payouts.payoutA ?? 600);
-const payoutB = BigInt(payouts.payoutB ?? 400);
+if (!demoPresent) throw new Error(`The canonical configuration ${DEMO_CONFIG} is required`);
+const executor = await import("../.product-test-dist/src/lib/protection/bridge-executor.js");
+// Parsed and gated by the runtime's own validator, not read field by field here.
+const demo = executor.loadRecourseDemoConfiguration(ROOT, DEMO_CONFIG);
+const holderA = demo.holderA;
+const holderB = demo.holderB;
+const payoutA = demo.payoutA;
+const payoutB = demo.payoutB;
 
 const eligibility = {};
 for (const [label, holder] of [["holderA", holderA], ["holderB", holderB]]) {
@@ -171,6 +169,20 @@ const fixture = {
   runtimeCandidateBranch: "feat/live-participant-admission-v1-runtime-candidate",
   sourceRetainedGovernedResult: SOURCE,
   sourceCommitPin: SOURCE_COMMIT_PIN,
+  canonicalConfiguration: {
+    path: DEMO_CONFIG,
+    contractBranch: "feat/autonomous-recourse-contract-v2",
+    contractConfigurationCommit: process.env.MORDANT_CONTRACT_CONFIG_COMMIT ?? null,
+    holderA, holderB,
+    payoutAAtomic: payoutA.toString(),
+    payoutBAtomic: payoutB.toString(),
+    facility: demo.facility,
+    verifier: demo.verifier,
+    settlementToken: demo.settlementToken,
+    bridgeAttestor: demo.bridgeAttestor,
+    availableReserve: demo.availableReserve.toString(),
+    excludedFromParticipation: demo.excluded,
+  },
 
   adapter: {
     address, chainId, network: "monad-testnet", generation: "V2",
@@ -232,8 +244,8 @@ const fixture = {
   },
 
   encodingVector: {
-    purpose: "Proves the runtime and Adapter V2 agree on the EIP-712 encoding. Verified by eth_call against the deployed adapter. This is NOT a submission payload.",
-    participantsAreProvisional: !demoPresent,
+    purpose: "The deployment-bound payload the bridge attestor signs. Every value derives from the verified governed result and the canonical committed configuration. Verified byte for byte against the deployed adapter hashRelease view.",
+    participantsAreProvisional: false,
     payload: {
       runId: m.runId, fheCaseId: m.fheCaseId, caseBindingDigest: m.caseBindingDigest,
       assetIdentityDigest: m.assetIdentityDigest, governedResultDigest: m.governedResultDigest,

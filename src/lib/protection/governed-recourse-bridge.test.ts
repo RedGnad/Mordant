@@ -306,11 +306,25 @@ test("the handoff fixture records participant eligibility as measured", () => {
   }
 });
 
-test("a pending submission names exactly what is missing", () => {
-  if (HANDOFF.submissionPayload.status === "PENDING") {
-    const blocked = HANDOFF.submissionPayload.blockedOn as string[];
-    assert.ok(Array.isArray(blocked) && blocked.length > 0, "a pending submission must say why");
+test("the submission is deployment bound and no longer pending", () => {
+  assert.equal(HANDOFF.submissionPayload.status, "READY");
+  assert.equal(HANDOFF.encodingVector.payload.participantsAreProvisional, undefined);
+  const canonical = (HANDOFF as unknown as { canonicalConfiguration: Record<string, string> }).canonicalConfiguration;
+  assert.equal(canonical.path, "docs/evidence/recourse-v2-demo-config-2026-08-06.json");
+  assert.match(canonical.contractConfigurationCommit, /^[0-9a-f]{40}$/u);
+  assert.equal(canonical.payoutAAtomic, "2400");
+  assert.equal(canonical.payoutBAtomic, "1600");
+});
+
+test("neither excluded wallet appears as a participant", () => {
+  const canonical = (HANDOFF as unknown as {
+    canonicalConfiguration: { holderA: string; holderB: string; excludedFromParticipation: Record<string, string> };
+  }).canonicalConfiguration;
+  const excluded = Object.values(canonical.excludedFromParticipation).map((a) => a.toLowerCase());
+  for (const holder of [canonical.holderA, canonical.holderB]) {
+    assert.equal(excluded.includes(holder.toLowerCase()), false, `${holder} must not be an excluded wallet`);
   }
+  assert.notEqual(canonical.holderA.toLowerCase(), canonical.holderB.toLowerCase());
 });
 
 test("the handoff fixture carries no secret material", () => {

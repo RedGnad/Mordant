@@ -4,6 +4,24 @@
   "runtimeCandidateBranch": "feat/live-participant-admission-v1-runtime-candidate",
   "sourceRetainedGovernedResult": "docs/evidence/conflicting-pledge-protection/conflict.json",
   "sourceCommitPin": "b5587f6489933c6dc462da7fda56e57bd5f9e31b",
+  "canonicalConfiguration": {
+    "path": "docs/evidence/recourse-v2-demo-config-2026-08-06.json",
+    "contractBranch": "feat/autonomous-recourse-contract-v2",
+    "contractConfigurationCommit": "73f528526a73e7a397e6203d095d634604f978c8",
+    "holderA": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+    "holderB": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+    "payoutAAtomic": "2400",
+    "payoutBAtomic": "1600",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "verifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "bridgeAttestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "availableReserve": "4000",
+    "excludedFromParticipation": {
+      "negativeControl": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "uncontrolledApassWallet": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02"
+    }
+  },
   "adapter": {
     "address": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
     "chainId": 10143,
@@ -168,8 +186,8 @@
     ]
   },
   "encodingVector": {
-    "purpose": "Proves the runtime and Adapter V2 agree on the EIP-712 encoding. Verified by eth_call against the deployed adapter. This is NOT a submission payload.",
-    "participantsAreProvisional": true,
+    "purpose": "The deployment-bound payload the bridge attestor signs. Every value derives from the verified governed result and the canonical committed configuration. Verified byte for byte against the deployed adapter hashRelease view.",
+    "participantsAreProvisional": false,
     "payload": {
       "runId": "0x1d41624ec568c2b5948a5453ef294568a63cd81b971bd4404cfde2ea0de456de",
       "fheCaseId": "0x806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
@@ -179,10 +197,10 @@
       "resultCiphertextDigest": "0xc9e91f5cb13f2b63e4b0f8ae024b3593b9766bf338de5f2651b93c5f908bcf4e",
       "participantArtifactDigestA": "0x13843298b396c0ba36618479f6e45184297bac431dbef640c138561c5ba4c562",
       "participantArtifactDigestB": "0x6236e12424aa7fdcd0a50fb678b51a3e565a5a4d2c63bff2d8a82a9a22947591",
-      "holderA": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
-      "holderB": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
-      "payoutA": "600",
-      "payoutB": "400",
+      "holderA": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "holderB": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "payoutA": "2400",
+      "payoutB": "1600",
       "conflict": true,
       "releaseAuthorityId": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
       "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
@@ -195,9 +213,9 @@
     "expectedDigests": {
       "viemDomainSeparator": "0x25db3cc3d1a2eb59ddcde376ee7b976d7147bf9cfb7f910701afa40a5308d0f3",
       "adapterDomainSeparator": "0x25db3cc3d1a2eb59ddcde376ee7b976d7147bf9cfb7f910701afa40a5308d0f3",
-      "viemStructHash": "0x7affbb5dcda80133549607d7bb7d1700a2da4881a39924bc503feb3699d26daa",
-      "viemTypedDataDigest": "0xc8a40c3aff4261851f6887ee20d001622fb875aa31c7c310a8367cefdfe1001d",
-      "soliditySolidityHashReleaseResult": "0xc8a40c3aff4261851f6887ee20d001622fb875aa31c7c310a8367cefdfe1001d",
+      "viemStructHash": "0x1a5433eca369c6a022dda7847ab2d80e3a0a36feb433bafbb038cf361ea0c825",
+      "viemTypedDataDigest": "0xdac5763c3e0020e89d83351db246aa27766337176e2091e189a6d6c1100bb88f",
+      "soliditySolidityHashReleaseResult": "0xdac5763c3e0020e89d83351db246aa27766337176e2091e189a6d6c1100bb88f",
       "byteIdentical": true
     }
   },
@@ -205,28 +223,18 @@
     "verifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
     "role": 4,
     "holderA": {
-      "address": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+      "address": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
       "eligible": true
     },
     "holderB": {
-      "address": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
-      "eligible": false
+      "address": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "eligible": true
     },
     "method": "eth_call cviVerifier.isEligible(address, ROLE_HOLDER)"
   },
   "submissionPayload": {
-    "status": "PENDING",
-    "blockedOn": [
-      "the committed configuration docs/evidence/recourse-v2-demo-config-2026-08-06.json does not exist on any ref",
-      "holderB 0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0 is not eligible under the adapter compliance verifier"
-    ],
-    "requiredInputs": [
-      "participants.holderA",
-      "participants.holderB",
-      "payouts.payoutA",
-      "payouts.payoutB"
-    ],
-    "constraint": "payoutA + payoutB must not exceed availableReserve (4000)"
+    "status": "READY",
+    "note": "Derived from the committed demo configuration and verified above."
   },
   "expectedBridgeSigner": {
     "address": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
