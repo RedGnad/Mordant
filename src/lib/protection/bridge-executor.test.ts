@@ -14,6 +14,7 @@ import {
   defaultSigner,
   loadRecourseDemoConfiguration,
   parseRecourseDemoConfiguration,
+  validateRecourseDemoConfiguration,
   readBridgeConfiguration,
   readBridgeRecord,
   type AdapterReader,
@@ -51,6 +52,8 @@ const V2_CHAIN = HANDOFF.adapter.chainId as number;
 const CVI = "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB" as const;
 const HOLDER_A = HANDOFF.encodingVector.payload.holderA as `0x${string}`;
 const HOLDER_B = HANDOFF.encodingVector.payload.holderB as `0x${string}`;
+const NEGATIVE_CONTROL = "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0" as const;
+const UNCONTROLLED_APASS = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02" as const;
 const governed = HANDOFF.governedResult as Record<string, string>;
 
 function release(overrides: Partial<VerifiedGovernedRelease> = {}): VerifiedGovernedRelease {
@@ -80,6 +83,7 @@ function adapterState(overrides: Partial<AdapterState> = {}): AdapterState {
     chainId: V2_CHAIN,
     settlementToken: HANDOFF.adapter.settlementToken as `0x${string}`,
     cviVerifier: CVI,
+    // The stub reports what the canonical configuration names, so the drift check passes.
     // The test signer stands in for the attestor, so signing can be exercised.
     attestor: TEST_ACCOUNT.address,
     facility: HANDOFF.adapter.facility as `0x${string}`,
@@ -137,17 +141,33 @@ function environment(overrides: Record<string, string | undefined> = {}) {
   };
 }
 
-const DEMO = {
-  adapterAddress: V2_ADDRESS,
-  network: { chainId: V2_CHAIN },
-  participants: { holderA: HOLDER_A, holderB: HOLDER_B },
-  payouts: { payoutA: "600", payoutB: "400" },
-};
+/** The committed canonical configuration, parsed exactly as production parses it. */
+const CANONICAL = JSON.parse(
+  readFileSync("docs/evidence/recourse-v2-demo-config-2026-08-06.json", "utf8"),
+) as Record<string, unknown>;
+
+function canonicalWith(mutate: (draft: Record<string, unknown>) => void) {
+  const draft = JSON.parse(JSON.stringify(CANONICAL)) as Record<string, unknown>;
+  mutate(draft);
+  return draft;
+}
+
+/**
+ * The canonical configuration with the attestor pointed at the test key.
+ *
+ * Production requires the configured attestor to equal the adapter immutable, and
+ * that check is exercised separately. Here the stub adapter reports the test
+ * signer, so the configuration must name the same address or the drift check
+ * would, correctly, refuse every prepare.
+ */
+const TEST_CANONICAL = canonicalWith((d) => {
+  (d.bridgeAttestor as Record<string, unknown>).address = TEST_ACCOUNT.address;
+});
 
 function prepareInput(overrides: Partial<PrepareInput> = {}): PrepareInput {
   return {
     release: release(),
-    demo: parseRecourseDemoConfiguration(DEMO),
+    demo: parseRecourseDemoConfiguration(TEST_CANONICAL),
     nonce: 1n,
     issuedAt: 1_785_000_000,
     expiry: 1_785_003_600,
@@ -215,13 +235,61 @@ test("submission stays disarmed unless explicitly armed", () => {
 
 // ------------------------------------------------------------------ demo configuration
 
-test("the demo configuration is exact", () => {
-  const parsed = parseRecourseDemoConfiguration(DEMO);
+test("the canonical configuration parses to the committed values", () => {
+  const parsed = parseRecourseDemoConfiguration(CANONICAL);
   assert.equal(parsed.holderA, getAddress(HOLDER_A));
-  assert.equal(parsed.payoutA, 600n);
-  throwsCode(() => parseRecourseDemoConfiguration({ ...DEMO, participants: { holderA: "nope", holderB: HOLDER_B } }), "DEMO_CONFIG_HOLDER_A");
-  throwsCode(() => parseRecourseDemoConfiguration({ ...DEMO, payouts: { payoutA: -1, payoutB: "400" } }), "DEMO_CONFIG_PAYOUT_A");
-  throwsCode(() => parseRecourseDemoConfiguration({ ...DEMO, network: {} }), "DEMO_CONFIG_CHAIN");
+  assert.equal(parsed.holderB, getAddress(HOLDER_B));
+  assert.equal(parsed.payoutA, 2_400n);
+  assert.equal(parsed.payoutB, 1_600n);
+  assert.equal(parsed.payoutA + parsed.payoutB, parsed.availableReserve);
+  assert.equal(parsed.chainId, 10_143);
+  assert.equal(getAddress(parsed.excluded.negativeControl), getAddress(NEGATIVE_CONTROL));
+  assert.equal(getAddress(parsed.excluded.uncontrolledApassWallet), getAddress(UNCONTROLLED_APASS));
+  assert.doesNotThrow(() => validateRecourseDemoConfiguration(parsed));
+});
+
+test("every required section is mandatory", () => {
+  for (const [section, code] of [
+    ["network", "DEMO_CONFIG_SECTION"], ["contracts", "DEMO_CONFIG_SECTION"],
+    ["participants", "DEMO_CONFIG_SECTION"], ["settlement", "DEMO_CONFIG_SECTION"],
+    ["facility", "DEMO_CONFIG_SECTION"], ["bridgeAttestor", "DEMO_CONFIG_SECTION"],
+    ["aUsdcTransferPolicyReadbacks", "DEMO_CONFIG_SECTION"], ["walletControl", "DEMO_CONFIG_SECTION"],
+  ] as const) {
+    throwsCode(() => parseRecourseDemoConfiguration(canonicalWith((d) => { delete d[section]; })), code);
+  }
+  throwsCode(() => parseRecourseDemoConfiguration(canonicalWith((d) => { (d.network as Record<string, unknown>).chainId = "10143"; })), "DEMO_CONFIG_CHAIN");
+});
+
+test("the negative control and the uncontrolled A-Pass wallet cannot be participants", () => {
+  // A valid A-Pass is not custody: the uncontrolled wallet passes every policy
+  // gate on-chain and still must never hold a role.
+  for (const excluded of [NEGATIVE_CONTROL, UNCONTROLLED_APASS]) {
+    throwsCode(
+      () => validateRecourseDemoConfiguration(parseRecourseDemoConfiguration(canonicalWith((d) => {
+        ((d.participants as Record<string, Record<string, unknown>>).holderB).address = excluded;
+      }))),
+      "DEMO_CONFIG_EXCLUDED_PARTICIPANT",
+    );
+  }
+});
+
+test("the configuration gates are enforced, not merely recorded", () => {
+  const cases: ReadonlyArray<readonly [string, (d: Record<string, unknown>) => void]> = [
+    ["DEMO_CONFIG_DUPLICATE", (d) => { ((d.participants as Record<string, Record<string, unknown>>).holderB).address = HOLDER_A; }],
+    ["DEMO_CONFIG_INELIGIBLE", (d) => { ((d.participants as Record<string, Record<string, unknown>>).holderA).roleHolderEligible = false; }],
+    ["DEMO_CONFIG_TRANSFER_REFUSED", (d) => { ((d.aUsdcTransferPolicyReadbacks as Record<string, Record<string, unknown>>).adapterToHolderB).allowed = false; }],
+    ["DEMO_CONFIG_INSOLVENT", (d) => { ((d.settlement as Record<string, Record<string, unknown>>).reserve).solvent = false; }],
+    ["DEMO_CONFIG_RESERVE", (d) => { (d.settlement as Record<string, unknown>).payoutAAtomic = "9999"; }],
+  ];
+  for (const [code, mutate] of cases) {
+    throwsCode(() => validateRecourseDemoConfiguration(parseRecourseDemoConfiguration(canonicalWith(mutate))), code);
+  }
+});
+
+test("the committed configuration on disk loads and passes every gate", () => {
+  const loaded = loadRecourseDemoConfiguration(process.cwd());
+  assert.equal(loaded.holderA, getAddress(HOLDER_A));
+  assert.equal(loaded.payoutA + loaded.payoutB, 4_000n);
 });
 
 test("a missing committed demo configuration fails closed", () => {
@@ -253,7 +321,10 @@ test("a wrong adapter or chain is refused", async () => {
     const other = "0x0000000000000000000000000000000000000009" as const;
     let executor = createBridgeExecutor({ configuration, reader: reader(), runRoot: root });
     await rejectsCode(
-      executor.prepare(prepareInput({ demo: parseRecourseDemoConfiguration({ ...DEMO, adapterAddress: other }) })),
+      executor.prepare(prepareInput({ demo: parseRecourseDemoConfiguration(canonicalWith((d) => {
+        (d.bridgeAttestor as Record<string, unknown>).address = TEST_ACCOUNT.address;
+        ((d.contracts as Record<string, Record<string, unknown>>).adapter).address = other;
+      })) })),
       "ADAPTER_MISMATCH",
     );
     executor = createBridgeExecutor({ configuration, reader: reader({ state: { chainId: 1 } }), runRoot: root });
@@ -297,9 +368,10 @@ test("the same wallet in both roles is refused", async () => {
     const executor = createBridgeExecutor({ configuration, reader: reader(), runRoot: root });
     await rejectsCode(
       executor.prepare(prepareInput({
-        demo: parseRecourseDemoConfiguration({ ...DEMO, participants: { holderA: HOLDER_A, holderB: HOLDER_A } }),
+        demo: { ...parseRecourseDemoConfiguration(TEST_CANONICAL), holderB: getAddress(HOLDER_A) },
       })),
-      "PARTICIPANT_DUPLICATE",
+      // Caught by the configuration gate, which runs before any chain read.
+      "DEMO_CONFIG_DUPLICATE",
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -403,7 +475,11 @@ test("a changed payload for the same governed result is refused", async () => {
     await executor.sign(await executor.prepare(prepareInput()));
     // Same governed result, different payouts: a second, different authorization.
     const changed = await executor.prepare(prepareInput({
-      demo: parseRecourseDemoConfiguration({ ...DEMO, payouts: { payoutA: "700", payoutB: "300" } }),
+      demo: parseRecourseDemoConfiguration(canonicalWith((d) => {
+        (d.bridgeAttestor as Record<string, unknown>).address = TEST_ACCOUNT.address;
+        (d.settlement as Record<string, unknown>).payoutAAtomic = "2500";
+        (d.settlement as Record<string, unknown>).payoutBAtomic = "1500";
+      })),
     }));
     await rejectsCode(executor.sign(changed), "CHANGED_PAYLOAD");
   } finally {
@@ -535,4 +611,28 @@ test("the executor source carries no private key literal", () => {
   const source = readFileSync("src/lib/protection/bridge-executor.ts", "utf8");
   assert.equal(/0x[0-9a-fA-F]{64}(?![0-9a-fA-F])/u.test(source), false, "no 32-byte literal may appear");
   assert.equal(source.includes("server-only"), true, "the executor must be server-only");
+});
+
+test("a configuration that disagrees with the deployed adapter is refused", async () => {
+  const configuration = readBridgeConfiguration(environment());
+  const root = temporaryRoot();
+  try {
+    // The real canonical configuration names the production attestor, which is
+    // not the test signer the stub adapter reports.
+    const executor = createBridgeExecutor({ configuration, reader: reader(), runRoot: root });
+    await rejectsCode(
+      executor.prepare(prepareInput({ demo: parseRecourseDemoConfiguration(CANONICAL) })),
+      "CONFIGURATION_DRIFT",
+    );
+    for (const [section, key] of [["facility", "address"], ["contracts", "verifier"]] as const) {
+      const drifted = parseRecourseDemoConfiguration(canonicalWith((d) => {
+        (d.bridgeAttestor as Record<string, unknown>).address = TEST_ACCOUNT.address;
+        if (section === "facility") (d.facility as Record<string, unknown>)[key] = "0x0000000000000000000000000000000000000007";
+        else (d.contracts as Record<string, unknown>)[key] = "0x0000000000000000000000000000000000000007";
+      }));
+      await rejectsCode(executor.prepare(prepareInput({ demo: drifted })), "CONFIGURATION_DRIFT");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

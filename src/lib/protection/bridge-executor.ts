@@ -172,6 +172,21 @@ export type RecourseDemoConfiguration = Readonly<{
   holderB: `0x${string}`;
   payoutA: bigint;
   payoutB: bigint;
+  facility: `0x${string}`;
+  verifier: `0x${string}`;
+  settlementToken: `0x${string}`;
+  bridgeAttestor: `0x${string}`;
+  availableReserve: bigint;
+  /** Recorded observations, re-checked against the live chain before signing. */
+  observations: Readonly<{
+    holderAEligible: boolean;
+    holderBEligible: boolean;
+    adapterToHolderAPermitted: boolean;
+    adapterToHolderBPermitted: boolean;
+    solvent: boolean;
+  }>;
+  /** Addresses that must never take a participant role. */
+  excluded: Readonly<{ negativeControl: `0x${string}`; uncontrolledApassWallet: `0x${string}` }>;
 }>;
 
 function exactAddress(value: unknown, code: string, label: string): `0x${string}` {
@@ -187,26 +202,117 @@ function exactAmount(value: unknown, code: string, label: string): bigint {
   return fail(code, `${label} must be a whole non-negative amount`);
 }
 
+function section(raw: Record<string, unknown>, name: string): Record<string, unknown> {
+  const value = raw[name];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("DEMO_CONFIG_SECTION", `The demo configuration must carry a ${name} section`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactFlag(value: unknown, code: string, label: string): boolean {
+  if (typeof value !== "boolean") fail(code, `${label} must be a boolean observation`);
+  return value;
+}
+
+/**
+ * Exact parse of the contract developer's committed configuration.
+ *
+ * Every value the runtime is not allowed to invent lives here, and every one of
+ * them is required: a section that is missing is a refusal, never a default. The
+ * shape mirrors the committed artifact rather than a convenience flattening, so a
+ * reader can compare the two side by side.
+ */
 export function parseRecourseDemoConfiguration(value: unknown): RecourseDemoConfiguration {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("DEMO_CONFIG_SHAPE", "The demo configuration must be a JSON object");
   }
   const raw = value as Record<string, unknown>;
-  const participants = (raw.participants ?? raw) as Record<string, unknown>;
-  const payouts = (raw.payouts ?? raw) as Record<string, unknown>;
-  const network = (raw.network ?? raw) as Record<string, unknown>;
+  const network = section(raw, "network");
   const chainId = network.chainId;
   if (typeof chainId !== "number" || !Number.isSafeInteger(chainId) || chainId <= 0) {
     fail("DEMO_CONFIG_CHAIN", "The demo configuration must declare a chainId");
   }
+  const contracts = section(raw, "contracts");
+  const adapter = section(contracts, "adapter");
+  const settlementToken = section(contracts, "settlementToken");
+  const participants = section(raw, "participants");
+  const holderA = section(participants, "holderA");
+  const holderB = section(participants, "holderB");
+  const negativeControl = section(participants, "negativeControl");
+  const settlement = section(raw, "settlement");
+  const reserve = section(settlement, "reserve");
+  const transfers = section(raw, "aUsdcTransferPolicyReadbacks");
+  const walletControl = section(raw, "walletControl");
+  const superseded = section(walletControl, "supersededHolderA");
+
   return Object.freeze({
-    adapterAddress: exactAddress(raw.adapterAddress ?? raw.adapter, "DEMO_CONFIG_ADAPTER", "adapterAddress"),
+    adapterAddress: exactAddress(adapter.address, "DEMO_CONFIG_ADAPTER", "contracts.adapter.address"),
     chainId,
-    holderA: exactAddress(participants.holderA, "DEMO_CONFIG_HOLDER_A", "holderA"),
-    holderB: exactAddress(participants.holderB, "DEMO_CONFIG_HOLDER_B", "holderB"),
-    payoutA: exactAmount(payouts.payoutA, "DEMO_CONFIG_PAYOUT_A", "payoutA"),
-    payoutB: exactAmount(payouts.payoutB, "DEMO_CONFIG_PAYOUT_B", "payoutB"),
+    holderA: exactAddress(holderA.address, "DEMO_CONFIG_HOLDER_A", "participants.holderA.address"),
+    holderB: exactAddress(holderB.address, "DEMO_CONFIG_HOLDER_B", "participants.holderB.address"),
+    payoutA: exactAmount(settlement.payoutAAtomic, "DEMO_CONFIG_PAYOUT_A", "settlement.payoutAAtomic"),
+    payoutB: exactAmount(settlement.payoutBAtomic, "DEMO_CONFIG_PAYOUT_B", "settlement.payoutBAtomic"),
+    facility: exactAddress(section(raw, "facility").address, "DEMO_CONFIG_FACILITY", "facility.address"),
+    verifier: exactAddress(contracts.verifier, "DEMO_CONFIG_VERIFIER", "contracts.verifier"),
+    settlementToken: exactAddress(settlementToken.address, "DEMO_CONFIG_TOKEN", "contracts.settlementToken.address"),
+    bridgeAttestor: exactAddress(section(raw, "bridgeAttestor").address, "DEMO_CONFIG_ATTESTOR", "bridgeAttestor.address"),
+    availableReserve: exactAmount(reserve.availableReserve, "DEMO_CONFIG_RESERVE", "settlement.reserve.availableReserve"),
+    observations: Object.freeze({
+      holderAEligible: exactFlag(holderA.roleHolderEligible, "DEMO_CONFIG_ELIGIBILITY", "holderA.roleHolderEligible"),
+      holderBEligible: exactFlag(holderB.roleHolderEligible, "DEMO_CONFIG_ELIGIBILITY", "holderB.roleHolderEligible"),
+      adapterToHolderAPermitted: exactFlag(
+        section(transfers, "adapterToHolderA").allowed, "DEMO_CONFIG_TRANSFER", "adapterToHolderA.allowed",
+      ),
+      adapterToHolderBPermitted: exactFlag(
+        section(transfers, "adapterToHolderB").allowed, "DEMO_CONFIG_TRANSFER", "adapterToHolderB.allowed",
+      ),
+      solvent: exactFlag(reserve.solvent, "DEMO_CONFIG_SOLVENCY", "settlement.reserve.solvent"),
+    }),
+    excluded: Object.freeze({
+      negativeControl: exactAddress(negativeControl.address, "DEMO_CONFIG_NEGATIVE", "participants.negativeControl.address"),
+      uncontrolledApassWallet: exactAddress(
+        superseded.address, "DEMO_CONFIG_UNCONTROLLED", "walletControl.supersededHolderA.address",
+      ),
+    }),
   });
+}
+
+/**
+ * The gates the configuration must satisfy before any payload is built from it.
+ *
+ * A wallet holding a valid A-Pass is not automatically a participant: the
+ * uncontrolled UAT wallet passes every policy gate and still cannot sign, and the
+ * negative control must never qualify at all. Both are refused by address.
+ */
+export function validateRecourseDemoConfiguration(configuration: RecourseDemoConfiguration): void {
+  const { holderA, holderB, excluded, observations } = configuration;
+  if (getAddress(holderA) === getAddress(holderB)) {
+    fail("DEMO_CONFIG_DUPLICATE", "holderA and holderB must be different wallets");
+  }
+  for (const [label, address] of [
+    ["the negative control", excluded.negativeControl],
+    ["the uncontrolled A-Pass wallet", excluded.uncontrolledApassWallet],
+  ] as const) {
+    for (const holder of [holderA, holderB]) {
+      if (getAddress(holder) === getAddress(address)) {
+        fail("DEMO_CONFIG_EXCLUDED_PARTICIPANT", `${label} must never take a participant role`);
+      }
+    }
+  }
+  if (!observations.holderAEligible || !observations.holderBEligible) {
+    fail("DEMO_CONFIG_INELIGIBLE", "Both holders must be recorded eligible for the holder role");
+  }
+  if (!observations.adapterToHolderAPermitted || !observations.adapterToHolderBPermitted) {
+    fail("DEMO_CONFIG_TRANSFER_REFUSED", "Both adapter-to-holder transfers must be recorded permitted");
+  }
+  if (!observations.solvent) fail("DEMO_CONFIG_INSOLVENT", "The adapter must be recorded solvent");
+  if (configuration.payoutA + configuration.payoutB > configuration.availableReserve) {
+    fail("DEMO_CONFIG_RESERVE", "The configured payouts exceed the recorded available reserve");
+  }
+  if (configuration.payoutA <= 0n || configuration.payoutB <= 0n) {
+    fail("DEMO_CONFIG_PAYOUT", "Both payouts must be positive");
+  }
 }
 
 export function loadRecourseDemoConfiguration(
@@ -217,7 +323,9 @@ export function loadRecourseDemoConfiguration(
   if (!existsSync(full)) {
     fail("DEMO_CONFIG_MISSING", `The committed demo configuration is missing at ${path}`);
   }
-  return parseRecourseDemoConfiguration(JSON.parse(readFileSync(full, "utf8")));
+  const configuration = parseRecourseDemoConfiguration(JSON.parse(readFileSync(full, "utf8")));
+  validateRecourseDemoConfiguration(configuration);
+  return configuration;
 }
 
 // ------------------------------------------------------------------ live adapter
@@ -353,7 +461,25 @@ export async function prepareBridge(
   reader: AdapterReader,
   input: PrepareInput,
 ): Promise<PreparedBridge> {
+  // The committed configuration is re-validated here, not merely at load time, so
+  // a caller cannot hand in a hand-built one that skipped the gates.
+  validateRecourseDemoConfiguration(input.demo);
+
   const adapter = await reader.readAdapterState();
+
+  // Every address the configuration names must be the address the adapter itself
+  // reports. A configuration that disagrees with the deployment is not a source of
+  // truth about it.
+  for (const [label, configured, live] of [
+    ["facility", input.demo.facility, adapter.facility],
+    ["verifier", input.demo.verifier, adapter.cviVerifier],
+    ["settlementToken", input.demo.settlementToken, adapter.settlementToken],
+    ["bridgeAttestor", input.demo.bridgeAttestor, adapter.attestor],
+  ] as const) {
+    if (getAddress(configured) !== getAddress(live)) {
+      fail("CONFIGURATION_DRIFT", `The demo configuration ${label} is not the deployed adapter ${label}`);
+    }
+  }
 
   if (adapter.address.toLowerCase() !== input.demo.adapterAddress.toLowerCase()) {
     fail("ADAPTER_MISMATCH", "The configured adapter is not the adapter the demo configuration names");
