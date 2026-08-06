@@ -29,10 +29,13 @@ export function useAdapterCompatibility(enabled: boolean): AdapterCompatibilityL
 
   useEffect(() => {
     if (!enabled) {
+      // This reset is the state boundary for a governed release becoming unavailable.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoad(IDLE);
       return;
     }
     const controller = new AbortController();
+    // A newly enabled one-shot read must not display the previous report while loading.
     setLoad(Object.freeze({ state: "LOADING", report: null }));
     void (async () => {
       try {

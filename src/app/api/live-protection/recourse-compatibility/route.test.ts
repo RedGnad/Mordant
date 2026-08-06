@@ -6,7 +6,7 @@ import {
   type CanonicalAdapterV2CompatibilityReport,
 } from "../../../../lib/protection/bridge-executor";
 
-import { createRecourseCompatibilityGetHandler } from "./route";
+import { createRecourseCompatibilityGetHandler } from "./handler";
 
 const REPORT = Object.freeze({
   schemaVersion: "mordant.adapter-v2-compatibility-report/1",

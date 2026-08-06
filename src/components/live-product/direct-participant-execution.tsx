@@ -183,7 +183,7 @@ export function DirectParticipantExecution({
   const [notice, setNotice] = useState<LiveProductViewModel["notice"]>(null);
   const [noticeState, setNoticeState] = useState<LiveProductState | null>(null);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const [restoring, setRestoring] = useState(initialCaseCode !== null);
+  const [restoring, setRestoring] = useState(initialCaseCode !== null && CASE_CODE.test(initialCaseCode));
   const [elapsed, setElapsed] = useState<number | null>(null);
   const failures = useRef(0);
   const startedAt = useRef<number | null>(null);
@@ -197,6 +197,8 @@ export function DirectParticipantExecution({
     const stillBound = wallet.view.state === "CONNECTED" && wallet.view.address !== null
       && sameAddress(wallet.view.address, eligibility.holderAddress);
     if (!stillBound && (eligibility.state !== "IDLE" || launchAuthorization !== null)) {
+      // Wallet changes synchronously invalidate every wallet-bound authorization view.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEligibility(IDLE_ELIGIBILITY);
       setLaunchAuthorization(null);
     }
@@ -235,7 +237,6 @@ export function DirectParticipantExecution({
 
   useEffect(() => {
     if (initialCaseCode === null || !CASE_CODE.test(initialCaseCode)) {
-      setRestoring(false);
       return;
     }
     let cancelled = false;
