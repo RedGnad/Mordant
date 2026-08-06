@@ -208,22 +208,19 @@ export type BridgeInput = Readonly<{
   nonce: bigint;
   issuedAt: number;
   expiry: number;
-  /** Must have already verified the Ed25519 signature and every cross-reference. */
-  governedSignatureVerified: true;
-  crossReferencesVerified: true;
 }>;
 
 /**
  * Builds the typed payload.
  *
- * The two verification flags are required literals rather than booleans a caller
- * can compute, so this cannot be reached by code that has not run the governed
- * signature check and the cross-reference check first.
+ * This is deliberately a pure encoding function. A TypeScript literal such as
+ * `{ governedSignatureVerified: true }` is not proof of an Ed25519 verification,
+ * so proof ownership belongs at the server-side authorization boundary rather
+ * than in a forgeable input flag. The bridge executor only calls this function
+ * after it has loaded and reconciled the committed handoff itself.
  */
 export function buildGovernedBridgePayload(input: BridgeInput): GovernedBridgePayload {
   const { release, participants, pins, interpretation } = input;
-  if (input.governedSignatureVerified !== true) fail("UNVERIFIED", "The governed signature must be verified first");
-  if (input.crossReferencesVerified !== true) fail("UNVERIFIED", "The governed cross-references must be verified first");
   if (typeof release.conflict !== "boolean") fail("BOOLEAN", "The terminal Boolean must come from the governed result");
 
   const problems = reconcileAdapter(release, pins, interpretation);

@@ -30,7 +30,7 @@ const OUTPUT = "docs/evidence/runtime-contract-handoff-2026-08-06.json";
 const SOURCE_COMMIT_PIN = "b5587f6489933c6dc462da7fda56e57bd5f9e31b";
 const SUPERSEDED_ADAPTER = "0x27677c837287b060D285d5C90096f06fBe675938";
 
-const rpcUrl = process.env.MORDANT_MONAD_RPC_URL ?? process.env.MONAD_RPC_URL;
+const rpcUrl = process.env.MORDANT_MONAD_RPC_URL;
 const adapterAddress = process.env.MORDANT_RECOURSE_ADAPTER_ADDRESS;
 if (!rpcUrl) throw new Error("MORDANT_MONAD_RPC_URL is required");
 if (!adapterAddress) throw new Error("MORDANT_RECOURSE_ADAPTER_ADDRESS is required");
@@ -91,13 +91,13 @@ const pins = {
 // that is verifiable, and records exactly what is missing.
 const demoPresent = existsSync(join(ROOT, DEMO_CONFIG));
 if (!demoPresent) throw new Error(`The canonical configuration ${DEMO_CONFIG} is required`);
-const executor = await import("../.product-test-dist/src/lib/protection/bridge-executor.js");
+const compatibility = await import("../.product-test-dist/src/lib/protection/adapter-compatibility.js");
 // Parsed and gated by the runtime's own validator, not read field by field here.
-const demo = executor.loadRecourseDemoConfiguration(ROOT, DEMO_CONFIG);
-const holderA = demo.holderA;
-const holderB = demo.holderB;
-const payoutA = demo.payoutA;
-const payoutB = demo.payoutB;
+const demo = compatibility.loadCanonicalRecourseConfiguration(ROOT);
+const holderA = demo.participants.holderA;
+const holderB = demo.participants.holderB;
+const payoutA = demo.participants.payoutA;
+const payoutB = demo.participants.payoutB;
 
 const eligibility = {};
 for (const [label, holder] of [["holderA", holderA], ["holderB", holderB]]) {
@@ -176,12 +176,12 @@ const fixture = {
     holderA, holderB,
     payoutAAtomic: payoutA.toString(),
     payoutBAtomic: payoutB.toString(),
-    facility: demo.facility,
-    verifier: demo.verifier,
-    settlementToken: demo.settlementToken,
-    bridgeAttestor: demo.bridgeAttestor,
-    availableReserve: demo.availableReserve.toString(),
-    excludedFromParticipation: demo.excluded,
+    facility: demo.adapter.facility,
+    verifier: demo.adapter.verifier,
+    settlementToken: demo.adapter.settlementToken,
+    bridgeAttestor: demo.adapter.attestor,
+    availableReserve: demo.reserve.availableReserve.toString(),
+    excludedFromParticipation: demo.participants.excluded,
   },
 
   adapter: {
