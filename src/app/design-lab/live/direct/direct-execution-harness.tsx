@@ -6,7 +6,9 @@ import { PublicShell } from "@/components/public-shell";
 import { WalletProvider } from "@/components/wallet/wallet-provider";
 
 /** Local-only wiring harness for deterministic wallet/request-discipline tests. */
-export function DirectExecutionHarness() {
+export function DirectExecutionHarness({ initialCaseCode = null }: {
+  readonly initialCaseCode?: string | null;
+}) {
   return (
     <PublicShell surface="live">
       <p
@@ -26,7 +28,7 @@ export function DirectExecutionHarness() {
       <WalletProvider walletConnectProjectId={null}>
         <DirectParticipantExecution
           workerOrigin="https://mordant-worker.test"
-          initialCaseCode={null}
+          initialCaseCode={initialCaseCode}
           publicTestHolder="0x911F99f424D47F08a15fcC771e94dcc2f7252B02"
           capabilitySet={capabilities("DIRECT_PARTICIPANT_ADMISSION")}
         />
