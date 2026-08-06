@@ -311,6 +311,54 @@ async function responseBody(response: Response): Promise<unknown> {
   return value;
 }
 
+type SupervisedWindowsInput = Readonly<{
+  participantA: Readonly<{ activeFrom: number; activeUntil: number }>;
+  participantB: Readonly<{ activeFrom: number; activeUntil: number }>;
+}>;
+
+const CUSTOM_WINDOW_FIELDS = [
+  { key: "aFrom", label: "Participant A pledge start", role: "participantA", bound: "activeFrom" },
+  { key: "aUntil", label: "Participant A pledge end", role: "participantA", bound: "activeUntil" },
+  { key: "bFrom", label: "Participant B pledge start", role: "participantB", bound: "activeFrom" },
+  { key: "bUntil", label: "Participant B pledge end", role: "participantB", bound: "activeUntil" },
+] as const;
+
+type CustomWindowKey = (typeof CUSTOM_WINDOW_FIELDS)[number]["key"];
+
+/**
+ * Mirrors the server validator. This is operator convenience only: the
+ * authoritative rejection happens server-side, and the governed Boolean, not
+ * this form, decides the outcome.
+ */
+function parseCustomWindows(
+  values: Readonly<Record<CustomWindowKey, string>>,
+): Readonly<{ windows: SupervisedWindowsInput | null; invalid: ReadonlySet<CustomWindowKey>; message: string | null }> {
+  const invalid = new Set<CustomWindowKey>();
+  const parsed: Partial<Record<CustomWindowKey, number>> = {};
+  for (const field of CUSTOM_WINDOW_FIELDS) {
+    const raw = values[field.key].trim();
+    const value = /^\d+$/u.test(raw) ? Number(raw) : Number.NaN;
+    if (!Number.isSafeInteger(value) || value < 0) invalid.add(field.key);
+    else parsed[field.key] = value;
+  }
+  if (invalid.size > 0) {
+    return { windows: null, invalid, message: "Each bound must be a whole number, zero or greater. Decimals, signs and text are refused." };
+  }
+  const windows: SupervisedWindowsInput = {
+    participantA: { activeFrom: parsed.aFrom!, activeUntil: parsed.aUntil! },
+    participantB: { activeFrom: parsed.bFrom!, activeUntil: parsed.bUntil! },
+  };
+  for (const [role, keys] of [["A", ["aFrom", "aUntil"]], ["B", ["bFrom", "bUntil"]]] as const) {
+    const from = parsed[keys[0]]!;
+    const until = parsed[keys[1]]!;
+    if (from >= until) {
+      keys.forEach((key) => invalid.add(key));
+      return { windows: null, invalid, message: `Participant ${role} must start strictly before it ends.` };
+    }
+  }
+  return { windows, invalid, message: null };
+}
+
 function writeProtectionUrl(mode: Exclude<HistoryMode, "none">, scenario: ProductScenario, runId: string | null): void {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams({ scenario });
@@ -528,6 +576,14 @@ export function ProtectionExperience({
       : null
   ));
   const [scenario, setScenario] = useState<ProductScenario>(initialScenario);
+  // Operator form state for a supervised custom case. It is local component
+  // state only: never persisted, never put in the URL, never echoed back after
+  // dispatch because the form unmounts once a run is admitted.
+  const [customWindows, setCustomWindows] = useState<Record<CustomWindowKey, string>>({
+    aFrom: "", aUntil: "", bFrom: "", bUntil: "",
+  });
+  const [customInvalid, setCustomInvalid] = useState<ReadonlySet<CustomWindowKey>>(new Set());
+  const [customError, setCustomError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<ProtectionEvidencePresentation | null>(initialAuthority.evidence);
   const [localView, setLocalView] = useState<ProtectionCaseView | null>(null);
   const [mode, setMode] = useState<"imported" | "local">(initialRunId === null ? "imported" : "local");
@@ -775,7 +831,9 @@ export function ProtectionExperience({
 
   const startLocalRun = useCallback(async () => {
     if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
-    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery) return;
+    // The ref is set the moment the stored record is judged invalid; the state follows
+    // one flush later. Reading both keeps the block independent of that ordering.
+    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery || invalidStoredRecoveryRef.current) return;
     const creationRequestId = globalThis.crypto.randomUUID();
     const creationAuthority = pendingCreationRecovery(scenario, creationRequestId);
     if (!retainRecoveryAuthority(creationAuthority)) return;
@@ -796,6 +854,47 @@ export function ProtectionExperience({
       setLocalView(view);
       setResumeRunId(view.runId);
       writeProtectionUrl("push", scenario, view.runId);
+      clearVerifiedRecoveryAuthority();
+    } catch (nextError) {
+      if (requestGeneration.current !== request.generation) return;
+      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      setError(`${nextError instanceof Error ? nextError.message : "Local case creation failed"} Creation recovery remains available; no second create will be sent.`);
+    } finally {
+      if (requestGeneration.current === request.generation) setRequestState("idle");
+    }
+  }, [beginRequest, clearAuthority, clearVerifiedRecoveryAuthority, invalidStoredRecovery, localAdapterOrigin, retainRecoveryAuthority, scenario]);
+
+  const startCustomLocalRun = useCallback(async (windows: SupervisedWindowsInput) => {
+    if (localAdapterOrigin === null || pendingMutation.current !== null || readbackRequirementRef.current !== null) return;
+    // The ref is set the moment the stored record is judged invalid; the state follows
+    // one flush later. Reading both keeps the block independent of that ordering.
+    if (recoveryAuthorityRef.current !== null || invalidStoredRecovery || invalidStoredRecoveryRef.current) return;
+    const creationRequestId = globalThis.crypto.randomUUID();
+    const creationAuthority = pendingCreationRecovery(scenario, creationRequestId);
+    if (!retainRecoveryAuthority(creationAuthority)) return;
+    clearAuthority(scenario, "local");
+    setResumeRunId(null);
+    setError(null);
+    const request = beginRequest("creating");
+    try {
+      const response = await fetch(adapterUrl(localAdapterOrigin), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // No scenario is sent at all. The case is authorized under a neutral
+        // execution variant, and the view is parsed WITHOUT an expected scenario
+        // because only the governed signed Boolean can produce an outcome.
+        body: JSON.stringify({ intent: "create", creationRequestId, executionVariant: "CUSTOM_SUPERVISED", pledges: windows }),
+        signal: request.controller.signal,
+      });
+      const view = parseProtectionCaseView(await responseBody(response));
+      if (view === null) throw new Error("Local case creation returned a mismatched public view.");
+      if (requestGeneration.current !== request.generation) return;
+      setLocalView(view);
+      setResumeRunId(view.runId);
+      // Adopt the scenario the server actually bound, never the routing label.
+      const bound = view.protectionCase.productScenario;
+      setScenario(bound);
+      writeProtectionUrl("push", bound, view.runId);
       clearVerifiedRecoveryAuthority();
     } catch (nextError) {
       if (requestGeneration.current !== request.generation) return;
@@ -975,22 +1074,43 @@ export function ProtectionExperience({
     };
     window.addEventListener("popstate", popstate);
     let resumeTimer: number | null = null;
+    let disposed = false;
     let rawStoredRecovery: string | null = null;
+    // The block itself is the ref, and it is still set synchronously here. Only the
+    // rendered disclosure is flushed on a timer, so this effect sets no state
+    // synchronously. Nothing can start a local run in between: every entry point also
+    // reads `invalidStoredRecoveryRef`, which is already true by then.
+    //
+    // A microtask, not a timer: it settles before the resume scheduled below, which is
+    // the same position the inline call held. A later request can then supersede this
+    // message exactly as it did before, and a timer would have inverted that.
+    const discloseInvalidRecovery = (message: string, settleRequestState: boolean) => {
+      queueMicrotask(() => {
+        if (disposed) return;
+        if (settleRequestState) {
+          clearAuthority(initialScenario, "local", true);
+          setRequestState("idle");
+        }
+        setInvalidStoredRecovery(true);
+        setError(message);
+      });
+    };
     try {
       rawStoredRecovery = window.sessionStorage.getItem(PROTECTION_RECOVERY_STORAGE_KEY);
     } catch {
       invalidStoredRecoveryRef.current = true;
-      setInvalidStoredRecovery(true);
-      setError("Browser recovery storage is unavailable. Local execution remains blocked.");
+      // Unavailable storage never settled the request state, and `requestState` may
+      // legitimately still be "resuming".
+      discloseInvalidRecovery("Browser recovery storage is unavailable. Local execution remains blocked.", false);
     }
     if (rawStoredRecovery !== null) {
       const stored = parseProtectionBrowserRecovery(rawStoredRecovery);
       if (stored === null) {
-        clearAuthority(initialScenario, "local", true);
-        setRequestState("idle");
         invalidStoredRecoveryRef.current = true;
-        setInvalidStoredRecovery(true);
-        setError("The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.");
+        discloseInvalidRecovery(
+          "The retained browser recovery record is malformed or expired. Confirm supervised abandonment before starting another case.",
+          true,
+        );
       } else {
         resumeTimer = window.setTimeout(() => resumeStoredAuthority(stored), 0);
       }
@@ -1000,6 +1120,7 @@ export function ProtectionExperience({
       } else writeProtectionUrl("replace", initialScenario, null);
     }
     return () => {
+      disposed = true;
       if (resumeTimer !== null) window.clearTimeout(resumeTimer);
       window.removeEventListener("popstate", popstate);
       requestController.current?.abort();
@@ -1141,6 +1262,67 @@ export function ProtectionExperience({
               </button>
             ) : null}
           </section>
+
+          {/* Supervised custom case. Local execution mode only, and only until a
+              run has been admitted: afterwards the durable step-by-step flow
+              takes over. Never rendered in production or imported-evidence mode,
+              because localAdapterOrigin is null there. */}
+          {localAdapterOrigin !== null && localView === null && !unresolvedRecovery ? (
+            <section className={styles.customCase} aria-labelledby="custom-case-title">
+              <h3 id="custom-case-title">Custom supervised case</h3>
+              <p>
+                Enter two private pledge windows. They are encrypted and evaluated by the real BGV
+                circuit; the governed decryptor, not this form, determines the result.
+              </p>
+              {customError === null ? null : (
+                <p className={styles.customError} role="alert">{customError}</p>
+              )}
+              <div className={styles.customGrid}>
+                {CUSTOM_WINDOW_FIELDS.map((field) => (
+                  <label key={field.key} htmlFor={`custom-${field.key}`}>
+                    {field.label}
+                    <input
+                      id={`custom-${field.key}`}
+                      name={field.key}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={customWindows[field.key]}
+                      aria-invalid={customInvalid.has(field.key)}
+                      disabled={busy}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setCustomWindows((current) => ({ ...current, [field.key]: next }));
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className={styles.customFixed}>
+                <strong>Fixed by this MVP</strong>
+                <ul>
+                  <li>Cleanverse asset: MINV01, and its canonical receivable identity</li>
+                  <li>Currency, protected amount and the exclusive policy flag</li>
+                  <li>Locally generated participant keys</li>
+                  <li>The fixed BGV circuit and its parameter profile</li>
+                </ul>
+              </div>
+              <button
+                className={styles.localButton}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const parsed = parseCustomWindows(customWindows);
+                  setCustomInvalid(parsed.invalid);
+                  setCustomError(parsed.message);
+                  if (parsed.windows === null) return;
+                  void startCustomLocalRun(parsed.windows);
+                }}
+              >
+                Run this custom case locally
+              </button>
+            </section>
+          ) : null}
 
           {error === null ? null : <p className={styles.error} role="alert">{error}</p>}
 

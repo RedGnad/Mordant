@@ -15,6 +15,10 @@ import {
   submitParticipantPledge,
 } from "./governed-fhe-product-server";
 import { protectionMutationGate } from "./protection-api-gate";
+import {
+  SupervisedPledgeWindowsError,
+  assertSupervisedPledgeWindows,
+} from "./supervised-pledge-windows";
 
 function response(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -55,6 +59,30 @@ export function createProtectionPostHandler(environment: NodeJS.ProcessEnv = pro
         && typeof body.creationRequestId === "string"
       ) {
         return response(await createProtectionCase(body.scenario, body.creationRequestId));
+      }
+      // Supervised custom create. No caller-selected scenario exists: the case is
+      // authorized under a neutral execution variant and only the governed signed
+      // Boolean can produce a terminal outcome.
+      if (
+        body.intent === "create"
+        && exactKeys(body, ["intent", "creationRequestId", "executionVariant", "pledges"])
+        && body.executionVariant === "CUSTOM_SUPERVISED"
+        && typeof body.creationRequestId === "string"
+      ) {
+        let windows;
+        try {
+          windows = assertSupervisedPledgeWindows(body.pledges);
+        } catch (error) {
+          // The message names the offending field, never the entered values.
+          return response({
+            error: error instanceof SupervisedPledgeWindowsError
+              ? error.message
+              : "Supervised pledge windows rejected.",
+          }, 400);
+        }
+        // The first argument is an unused placeholder for a custom run: the
+        // neutral V2 binding omits any product scenario entirely.
+        return response(await createProtectionCase("conflict", body.creationRequestId, windows));
       }
       if (
         body.intent !== "execute"

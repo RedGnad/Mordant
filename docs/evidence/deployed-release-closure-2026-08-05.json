@@ -1,0 +1,250 @@
+{
+  "schemaVersion": "mordant.deployed-release-closure/2",
+  "closedAt": "2026-08-05T18:13:48.539Z",
+  "productCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
+  "publicApplication": "https://mordant-git-feature-custom-supervised-pledges-redgnads-projects.vercel.app",
+  "worker": "https://mordant-production.up.railway.app",
+  "cleanverse": {
+    "chainId": 10143,
+    "validator": "0xaC7e5179C2C7f03f209136886c172eb34F161792",
+    "gate": "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+    "observedBlock": 51160360,
+    "activePolicy": {
+      "ruleCount": 1,
+      "allowedGroup": "unrestricted",
+      "allowedSubGroup": "unrestricted",
+      "minTier": 0,
+      "minSubTier": 0,
+      "blacklist": false,
+      "countryBitmap": 0,
+      "statement": "Active A-Pass required, with no group, tier, sub-tier or country restriction."
+    },
+    "positiveHolder": {
+      "address": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+      "isValidAPassOnChain": true,
+      "tier": 50,
+      "subTier": 0,
+      "status": 1,
+      "expirationUnix": 1817423999,
+      "expirationIso": "2027-08-04T23:59:59.000Z",
+      "validThroughExpectedJudging": true,
+      "complianceVerifyOnChain": true,
+      "complianceVerifyApi": true
+    },
+    "negativeControl": {
+      "address": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "isValidAPassOnChain": false,
+      "apassRecord": "absent (api code 0002)",
+      "complianceVerifyOnChain": false,
+      "complianceVerifyApi": false
+    }
+  },
+  "deployedRuns": {
+    "conflict": {
+      "runId": "693a1cfc-a8c0-4024-a3de-3e17e38eb99c",
+      "timeline": [
+        {
+          "atSeconds": 2,
+          "stage": "Case authorized"
+        },
+        {
+          "atSeconds": 6,
+          "stage": "Private encryption prepared"
+        },
+        {
+          "atSeconds": 10,
+          "stage": "Participant B encrypted"
+        },
+        {
+          "atSeconds": 17,
+          "stage": "Encrypted evaluation running"
+        },
+        {
+          "atSeconds": 27,
+          "stage": "Receipt sealed"
+        }
+      ],
+      "releasedAtSeconds": 27,
+      "terminal": {
+        "stage": "COMPLETE",
+        "terminalScenario": "conflict",
+        "governedResult": {
+          "conflict": true,
+          "digest": "sha256:4339b325df70e151ce572131354810e3a6d2b365f10a6e28afbf70380f7ede94",
+          "releaseMode": "governed-decryptor-v1"
+        },
+        "recourse": {
+          "opened": true,
+          "reason": null
+        },
+        "incidentState": "CONFLICT_CONFIRMED",
+        "recourseState": "CURE_WINDOW",
+        "originalReceivableState": "OUTSTANDING_INTACT",
+        "receiptDigest": "sha256:a50354efadd56583e008a84685c8ab1548a8cdac98678aad171a3b16866c115b"
+      },
+      "journal": {
+        "total": 9,
+        "outcomes": {
+          "COMPLETED": 9
+        },
+        "aborted": 0,
+        "reconciled": 0,
+        "operations": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult",
+          "openRecourseCase",
+          "completeCureChronology",
+          "exportProtectionEvidence"
+        ]
+      },
+      "restartPersistence": {
+        "receiptDigestIdentical": true,
+        "governedDigestIdentical": true,
+        "newExecution": false,
+        "rawWindows": false
+      },
+      "runtimeSourceCommit": "bccc47faa700db0c117372c6d841790b023913c2"
+    },
+    "no-conflict": {
+      "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
+      "timeline": [
+        {
+          "atSeconds": 2,
+          "stage": "Case authorized"
+        },
+        {
+          "atSeconds": 7,
+          "stage": "Private encryption prepared"
+        },
+        {
+          "atSeconds": 9,
+          "stage": "Participant A encrypted"
+        },
+        {
+          "atSeconds": 11,
+          "stage": "Participant B encrypted"
+        },
+        {
+          "atSeconds": 19,
+          "stage": "Encrypted evaluation running"
+        },
+        {
+          "atSeconds": 27,
+          "stage": "Recourse application"
+        },
+        {
+          "atSeconds": 29,
+          "stage": "Receipt sealed"
+        }
+      ],
+      "releasedAtSeconds": 27,
+      "terminal": {
+        "stage": "COMPLETE",
+        "terminalScenario": "no-conflict",
+        "governedResult": {
+          "conflict": false,
+          "digest": "sha256:2096ed4cea7246cc48ff13e864ab19272f15d1837c7da9f8ca471a3498a7f6d7",
+          "releaseMode": "governed-decryptor-v1"
+        },
+        "recourse": {
+          "opened": false,
+          "reason": "SIGNED_RESULT_FALSE"
+        },
+        "incidentState": "CLEARED",
+        "recourseState": "REFUSED",
+        "originalReceivableState": "OUTSTANDING_INTACT",
+        "receiptDigest": "sha256:d78bd81f627ee7798c07f804e8919d19878dc89fa266dcc10b5cdcba5bf8a8fa"
+      },
+      "journal": {
+        "total": 8,
+        "outcomes": {
+          "COMPLETED": 8
+        },
+        "aborted": 0,
+        "reconciled": 0,
+        "operations": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult",
+          "openRecourseCase",
+          "exportProtectionEvidence"
+        ],
+        "note": "Eight rather than nine: completeCureChronology only runs on a released true Boolean."
+      },
+      "restartPersistence": {
+        "receiptDigestIdentical": true,
+        "governedDigestIdentical": true,
+        "newExecution": false,
+        "rawWindows": false,
+        "signedRefusalPreserved": true
+      },
+      "runtimeSourceCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0"
+    }
+  },
+  "goProductionPathsBaseline": {
+    "test": "TestGovernedFHEProductionPaths",
+    "history": {
+      "base": {
+        "commit": "47ba4e542892c0fccd03aa392d6899885248e5c8",
+        "exitStatus": 1
+      },
+      "previousHead": {
+        "commit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0",
+        "exitStatus": 1
+      },
+      "failureSites": [
+        "production_test.go:164",
+        "production_test.go:211"
+      ],
+      "failureMessage": "export public evidence: governed FHE binding rejected",
+      "actualCause": "The Go test fixture never produced product-recourse-attestation.json, which evidence export legitimately requires. Both ExportPublicEvidence call sites therefore failed.",
+      "supersededExplanation": "An earlier closure described this as environment-gated. That was wrong: identical base and head results established non-regression only, and never established a cause."
+    },
+    "correction": {
+      "kind": "test-only",
+      "change": "production_test.go now calls the production CreateRecourseAttestation before each ExportPublicEvidence call, and verifies it loads back from the public root. In no_conflict_cannot_activate_recourse it is published before the private root is taken offline, so the export itself still runs public-root-only.",
+      "productionBehaviourChanged": false
+    },
+    "finalResult": {
+      "command": "go test ./governedfhe/ -run TestGovernedFHEProductionPaths -count=1",
+      "workingDirectory": "fhe-lab/lattigo",
+      "prerequisite": "MORDANT_FHE_EVALUATOR_BIN and MORDANT_FHE_DECRYPTOR_BIN built from the checkout under test",
+      "result": "ok"
+    }
+  },
+  "volumeAccess": {
+    "method": "railway ssh, read-only cat of the operation journals",
+    "mutations": "none",
+    "temporaryKey": {
+      "name": "mordant-deployed-evidence-readonly",
+      "fingerprint": "SHA256:p6lRFYObyOJ/pshSe090NGWJ+F55wfNBeo2VQ6gf6fA",
+      "publicKeyRevokedFromRailwayAccount": true,
+      "localKeyFilesObservedAbsent": true,
+      "localKeyFilesDeletedByThisWork": false,
+      "agentIdentityCleared": true,
+      "verification": "railway ssh keys list reports no registered keys; ~/.ssh contains only config and known_hosts; ssh-add -l reports no identities."
+    }
+  },
+  "correctedAt": "2026-08-05T19:15:20.556Z",
+  "correctionNote": "Corrected at release/live-ccp-rc2-hardening after independent review: per-run runtime provenance, and the real cause of the red Go test.",
+  "workerRuntimeProvenance": {
+    "note": "Each run executed on the container source served at that moment. These are distinct.",
+    "conflictRun": {
+      "runId": "693a1cfc-a8c0-4024-a3de-3e17e38eb99c",
+      "runtimeSourceCommit": "bccc47faa700db0c117372c6d841790b023913c2"
+    },
+    "noConflictRun": {
+      "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
+      "runtimeSourceCommit": "c01cd124eea25cf5e5ea2aea5339886ccd8c92e0"
+    },
+    "servedAtPreviousAudit": "c22ebbce4c36069fb9ec99d357f6196515365e63"
+  },
+  "claimPrecision": "Mordant verifies that a submitted holder address satisfies the active Cleanverse policy before issuing a launch token. No wallet ownership challenge is implemented, and no claim is made that the visitor controls the address."
+}

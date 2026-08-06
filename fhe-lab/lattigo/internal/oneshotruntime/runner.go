@@ -481,7 +481,12 @@ func (r *Runner) VerifyRestartConsumed(ctx context.Context, session AuthorizedSe
 		var phase PhaseResponse
 		prepareErr := r.call(ctx, client, "/v1/prepare", PrepareRequest{Context: r.contextBytes}, &phase)
 		code := remoteCode(prepareErr)
-		if prepareErr == nil || code != "REPLAY_REJECTED" && code != "PERSISTENCE_REJECTED" && code != "TERMINAL_REJECTED" {
+		// Every accepted code is a terminal rejection of the restarted attempt, never a
+		// successful reuse: a nil error is refused above, and the indeterminate code is
+		// returned only when the session is already tombstoned or when the bilateral
+		// sequence guard tombstones it on the spot.
+		if prepareErr == nil || code != "REPLAY_REJECTED" && code != "PERSISTENCE_REJECTED" &&
+			code != "TERMINAL_REJECTED" && code != indeterminateCode {
 			return ErrProtocol
 		}
 		if beginErr := r.call(ctx, client, "/v1/begin-secrets", HeadsRequest{Heads: [][]byte{{1}}}, &phase); beginErr == nil {

@@ -1,0 +1,26 @@
+# The build context must stay small and deliberate. Only what the Dockerfile
+# actually copies belongs here; large reproducible or unrelated material is
+# excluded explicitly, including the ceremony artifacts under fhe-lab.
+.git
+node_modules
+.next
+.mordant
+.product-test-dist
+.cleanverse-test-dist
+test-results
+playwright-report
+coverage
+*.log
+
+# Only fhe-lab/lattigo is built. Everything else there is experiment output.
+fhe-lab/monad-testnet
+fhe-lab/monad-adapter
+fhe-lab/privacy-v4
+fhe-lab/shared
+fhe-lab/lattigo/artifacts
+
+# Not referenced by the worker image.
+contracts
+docs/design
+docs/evidence/private-matching-v4
+docs/evidence/private-matching-v5

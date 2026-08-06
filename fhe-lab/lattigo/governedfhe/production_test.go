@@ -154,6 +154,7 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 			t.Fatalf("recourse chronology or exact binding changed: %+v", record)
 		}
 
+		publishProductRecourseAttestation(t, fixture)
 		measurements := SmokeMeasurements{
 			KeyGeneration: fixture.keyReport, Submissions: []SubmissionReport{fixture.reportA, fixture.reportB},
 			Evaluation: EvaluationReport{Duration: time.Duration(evaluation.DurationNanos), ResultCiphertextBytes: evaluation.ResultBytes, ArtifactBytes: evaluation.ArtifactBytes},
@@ -195,6 +196,9 @@ func TestGovernedFHEProductionPaths(t *testing.T) {
 		if !errors.Is(err, ErrRecourse) {
 			t.Fatalf("false result activated recourse: %v", err)
 		}
+		// Published while the private root is still reachable; the export below then runs
+		// against the public root alone, which is the property under test.
+		publishProductRecourseAttestation(t, fixture)
 		offlinePrivateRoot := fixture.privateRoot + "-offline"
 		if err := os.Rename(fixture.privateRoot, offlinePrivateRoot); err != nil {
 			t.Fatalf("take private root offline before evidence export: %v", err)
@@ -698,6 +702,35 @@ func TestAcceptedOneShotBoundariesAreNotImported(t *testing.T) {
 		if bytes.Contains(data, []byte("oneshotceremony")) || bytes.Contains(data, []byte("oneshotruntime")) {
 			t.Fatalf("governed FHE package references accepted one-shot boundary in %s", entry.Name())
 		}
+	}
+}
+
+// publishProductRecourseAttestation produces the attestation the real product path
+// produces before evidence export. It calls the production implementation rather than
+// writing a synthetic object, so the fixture cannot drift away from what the product
+// actually publishes, and it verifies the attestation loads back from the public root
+// alone. Evidence export legitimately requires this object; its absence was a gap in
+// the fixture, never a weakness in ExportPublicEvidence.
+func publishProductRecourseAttestation(t *testing.T, fixture *productionFixture) {
+	t.Helper()
+	created, err := CreateRecourseAttestation(fixture.publicRoot, fixture.privateRoot)
+	if err != nil {
+		t.Fatalf("create product recourse attestation: %v", err)
+	}
+	loaded, err := LoadProductRecourseAttestation(fixture.publicRoot)
+	if err != nil {
+		t.Fatalf("load product recourse attestation from the public root: %v", err)
+	}
+	createdDigest, err := created.Digest()
+	if err != nil {
+		t.Fatalf("digest the created attestation: %v", err)
+	}
+	loadedDigest, err := loaded.Digest()
+	if err != nil {
+		t.Fatalf("digest the loaded attestation: %v", err)
+	}
+	if createdDigest != loadedDigest || !nonzero(createdDigest) {
+		t.Fatalf("attestation digest is not stable between create and load")
 	}
 }
 
@@ -1287,7 +1320,17 @@ func mustReadDirectory(t *testing.T, path string) []os.DirEntry {
 
 func taskTempDir(t *testing.T, pattern string) string {
 	t.Helper()
-	root, err := os.MkdirTemp("/private/tmp", pattern)
+	// The empty root asks the operating system for its own temporary directory, so the
+	// fixture is no longer tied to one platform's layout.
+	//
+	// The case store deliberately refuses any root that is not already symlink-free, and
+	// on some systems the temporary directory is reached through a symlink. Resolving it
+	// here satisfies that invariant from the test side; the store's check is untouched.
+	created, err := os.MkdirTemp("", pattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(created)
 	if err != nil {
 		t.Fatal(err)
 	}

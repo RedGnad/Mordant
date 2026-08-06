@@ -827,3 +827,57 @@ test("generated artifacts contain no secret pattern and no session URL", async (
   assert.doesNotMatch(artifacts.json, /authorization|cookie|api[-_]?key/i);
   assert.match(artifacts.markdown, /No transaction was signed or broadcast/);
 });
+
+test("the authorization rule separates a source reference from a committed credential", () => {
+  const authorizationLeaks = (source: string): number => findSecretLeaks(source)
+    .filter((leak) => leak.kind === "authorization-header").length;
+
+  // Source files declare, destructure and interpolate this name constantly. None of it is a
+  // credential, and a scanner that says otherwise is switched off, which protects nothing.
+  const safeSources = [
+    "authorization: token",
+    "authorization: request.authorization",
+    "authorization: config.headers.authorization",
+    "  authorization: string;",
+    "  authorization?: Readonly<{ scheme: string }>;",
+    "const authorization = String(request.headers.authorization ?? \"\");",
+    "headers: { authorization: `Bearer ${token}` },",
+    "const headers = { authorization: `Bearer ${issued.token}` };",
+    "const { authorization: _discarded, ...rest } = headers;",
+  ];
+  for (const source of safeSources) {
+    assert.equal(authorizationLeaks(source), 0, `expected no finding for ${source}`);
+  }
+
+  // A header name is a whole word. These are ordinary symbols that merely end in it.
+  const identifierSuffixes = [
+    "var ErrAuthorization = errors.New(\"one-shot runtime authorization rejected\")",
+    "runtimeFaultAfterAuthorization    = \"AFTER_AUTHORIZATION\"",
+    "protectionAuthorization: { digest: value },",
+  ];
+  for (const source of identifierSuffixes) {
+    assert.equal(authorizationLeaks(source), 0, `expected no finding for ${source}`);
+  }
+
+  // Everything that actually commits a credential stays a finding.
+  const leaking = [
+    "Authorization: Bearer literal-secret-value",
+    "authorization = \"Bearer literal-secret-value\"",
+    "{\"authorization\": \"Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk\"}",
+    "authorization: \"a7f3c9e21b8d4056af12\"",
+    // A single interpolation must not launder the static credential beside it.
+    "authorization: `Bearer sk_live_51H8xQ2eZvKYlo2C ${suffix}`",
+    "Authorization: Bearer abcdef0123456789",
+  ];
+  for (const source of leaking) {
+    assert.ok(authorizationLeaks(source) > 0, `expected a finding for ${source}`);
+  }
+
+  // The relaxation is scoped to this one rule: a cookie value is still a credential.
+  assert.ok(findSecretLeaks("cookie: session=abc123def456ghi789").some(
+    (leak) => leak.kind === "cookie-header",
+  ));
+  assert.ok(findSecretLeaks("CLEANVERSE_API_KEY=\"bGl0ZXJhbC1rZXktdmFsdWUtMTIz\"").some(
+    (leak) => leak.kind === "cleanverse-api-key",
+  ));
+});

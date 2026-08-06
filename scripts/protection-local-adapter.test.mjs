@@ -180,6 +180,83 @@ test("origin, unknown operations and every additional private field are refused 
   });
 });
 
+test("the exact supervised custom create is admitted and forwarded unchanged", async () => {
+  let forwardedBody = null;
+  const fetchImpl = async (_target, init) => {
+    forwardedBody = JSON.parse(init.body);
+    return Response.json({ stage: "CASE_CREATED", runId: CREATION_REQUEST_ID });
+  };
+  await withAdapter(fetchImpl, async (url) => {
+    const body = {
+      intent: "create",
+      creationRequestId: CREATION_REQUEST_ID,
+      executionVariant: "CUSTOM_SUPERVISED",
+      pledges: {
+        participantA: { activeFrom: 120, activeUntil: 420 },
+        participantB: { activeFrom: 220, activeUntil: 520 },
+      },
+    };
+    const response = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 200);
+    // The windows reach the downstream product boundary byte for byte.
+    assert.deepEqual(forwardedBody, body);
+  });
+});
+
+test("every malformed supervised custom create is refused before forwarding", async () => {
+  let forwarded = 0;
+  const fetchImpl = async () => { forwarded += 1; return Response.json({}); };
+  const windows = () => ({
+    participantA: { activeFrom: 120, activeUntil: 420 },
+    participantB: { activeFrom: 220, activeUntil: 520 },
+  });
+  await withAdapter(fetchImpl, async (url) => {
+    for (const pledges of [
+      null,
+      [],
+      "conflict",
+      { participantA: { activeFrom: 120, activeUntil: 420 } },
+      { ...windows(), participantC: { activeFrom: 1, activeUntil: 2 } },
+      { participantA: { activeFrom: "120", activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 1.5, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: null, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: -1, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 420, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 500, activeUntil: 420 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 120, activeUntil: 420, note: "x" }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 120 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+      { participantA: { activeFrom: 120, activeUntil: Number.MAX_SAFE_INTEGER + 2 }, participantB: { activeFrom: 220, activeUntil: 520 } },
+    ]) {
+      const response = await browserFetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          intent: "create", creationRequestId: CREATION_REQUEST_ID, executionVariant: "CUSTOM_SUPERVISED", pledges,
+        }),
+      });
+      assert.equal(response.status, 400, `pledges ${JSON.stringify(pledges)} must be refused`);
+      assert.deepEqual(await response.json(), { error: "Unsupported or non-exact product operation" });
+    }
+    // An additional field alongside a valid pledges block is still refused: the
+    // custom form widens the contract by exactly one known member, nothing more.
+    const extra = await browserFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        intent: "create", creationRequestId: CREATION_REQUEST_ID, executionVariant: "CUSTOM_SUPERVISED",
+        pledges: windows(), privateKey: CAPABILITY,
+      }),
+    });
+    assert.equal(extra.status, 400);
+    assert.deepEqual(await extra.json(), { error: "Unsupported or non-exact product operation" });
+    assert.equal(forwarded, 0);
+  });
+});
+
 test("NOT_ADMITTED is exact and correlated only for a known mutation rejected before forwarding", async () => {
   let forwarded = 0;
   const runId = "11111111-1111-4111-8111-111111111111";

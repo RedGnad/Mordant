@@ -1,0 +1,274 @@
+name: Live worker container smoke
+
+# Manual only. This gate builds the real Dockerfile on a GitHub-hosted runner and
+# runs one real custom V2 BGV conflict journey inside the resulting container.
+# It publishes no image, needs no repository secret and touches no Railway or
+# Vercel resource.
+# `workflow_dispatch` alone cannot be triggered from a feature branch: GitHub
+# only exposes it once the file is on the default branch, and main is protected
+# here. So the gate also fires on a push to this one branch, restricted to the
+# paths that can actually invalidate the container.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/custom-supervised-pledges
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'scripts/mordant-live-worker.mjs'
+      - 'scripts/live-worker-container-smoke.mjs'
+      - '.github/workflows/live-worker-container-smoke.yml'
+      - 'fhe-lab/lattigo/**'
+      - 'src/lib/protection/**'
+
+concurrency:
+  group: live-worker-container-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  container-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out the exact working-branch commit
+        uses: actions/checkout@v4
+
+      - name: Resolve source commit and record disk before build
+        id: prepare
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Source commit: $SHA"
+          DISK_BEFORE="$(df -BM --output=avail / | tail -1 | tr -dc '0-9')"
+          echo "disk_before=$DISK_BEFORE" >> "$GITHUB_OUTPUT"
+          echo "Disk available before build: ${DISK_BEFORE} MB"
+
+      - name: Build the worker image
+        id: build
+        run: |
+          START=$(date +%s)
+          docker build --progress=plain -t mordant-live-worker:gate . 2>&1 | tail -120
+          END=$(date +%s)
+          echo "duration=$((END-START))" >> "$GITHUB_OUTPUT"
+          SIZE="$(docker image inspect mordant-live-worker:gate --format '{{.Size}}')"
+          echo "size_mb=$((SIZE/1024/1024))" >> "$GITHUB_OUTPUT"
+          echo "Build duration: $((END-START))s, image size: $((SIZE/1024/1024)) MB"
+
+      - name: Verify every runtime path the image promises
+        run: |
+          docker run --rm --entrypoint sh mordant-live-worker:gate -c '
+            set -eu
+            for b in keygen client evaluator decryptor recourse inspect retain; do
+              test -x "/app/bin/mordant-fhe-$b" || { echo "missing binary $b"; exit 1; }
+            done
+            echo "seven Go binaries present and executable"
+            file /app/bin/mordant-fhe-keygen 2>/dev/null || true
+            test -f /app/.product-test-dist/src/lib/protection/governed-fhe-product-server.js
+            test -f /app/test/stubs/server-only.js
+            test -f /app/scripts/mordant-live-worker.mjs
+            echo "engine, stubs and worker present"
+          '
+
+      - name: Record disk after image build
+        id: disk_after_build
+        run: |
+          AVAIL="$(df -BM --output=avail / | tail -1 | tr -dc '0-9')"
+          echo "value=$AVAIL" >> "$GITHUB_OUTPUT"
+          echo "Disk available after build: ${AVAIL} MB"
+
+      - name: Start the worker on a mounted data directory
+        id: start
+        run: |
+          # Ephemeral, job-scoped secret. Never printed, never stored.
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "SMOKE_SECRET=$SECRET" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/mordant-volume"
+          START=$(date +%s)
+          docker run -d --name mordant-worker \
+            -p 127.0.0.1:8080:8080 \
+            -v "$RUNNER_TEMP/mordant-volume:/data/mordant" \
+            -e PORT=8080 \
+            -e MORDANT_WORKER_DATA_ROOT=/data/mordant \
+            -e MORDANT_WORKER_TOKEN_SECRET="$SECRET" \
+            -e MORDANT_WORKER_TOKEN_AUDIENCE=MORDANT_RAILWAY_WORKER \
+            -e MORDANT_WORKER_ALLOWED_ORIGIN=https://preview.example \
+            -e MORDANT_WORKER_MAX_ACTIVE_CASES=1 \
+            -e MORDANT_WORKER_DAILY_CASE_LIMIT=4 \
+            -e MORDANT_WORKER_COOLDOWN_MS=1000 \
+            -e MORDANT_WORKER_DISK_FLOOR_BYTES=2187329536 \
+            -e MORDANT_PROTECTION_SOURCE_COMMIT="${{ steps.prepare.outputs.sha }}" \
+            mordant-live-worker:gate
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/health > /tmp/health.json 2>/dev/null; then
+              END=$(date +%s)
+              echo "startup=$((END-START))" >> "$GITHUB_OUTPUT"
+              echo "Worker healthy after $((END-START))s"
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "worker did not become healthy"
+          docker logs mordant-worker 2>&1 | tail -40
+          exit 1
+
+      - name: Set up Node for the smoke driver
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run one real BGV conflict journey through the container API
+        env:
+          SMOKE_BASE_URL: http://127.0.0.1:8080
+          SMOKE_ORIGIN: https://preview.example
+          MORDANT_WORKER_TOKEN_AUDIENCE: MORDANT_RAILWAY_WORKER
+          MORDANT_PROTECTION_SOURCE_COMMIT: ${{ steps.prepare.outputs.sha }}
+          SMOKE_SUMMARY_PATH: ${{ runner.temp }}/smoke-summary.json
+        run: |
+          MORDANT_WORKER_TOKEN_SECRET="$SMOKE_SECRET" node scripts/live-worker-container-smoke.mjs
+
+      - name: Dump worker logs on failure
+        if: failure()
+        run: |
+          echo "--- worker container logs (sanitized) ---"
+          docker logs mordant-worker 2>&1 | tail -60
+
+      - name: Record disk during the case and verify pruning
+        id: prune
+        run: |
+          AVAIL="$(df -BM --output=avail / | tail -1 | tr -dc '0-9')"
+          echo "value=$AVAIL" >> "$GITHUB_OUTPUT"
+          echo "Disk available after the case: ${AVAIL} MB"
+          echo "Volume contents after pruning:"
+          sudo find "$RUNNER_TEMP/mordant-volume" -maxdepth 3 | head -20
+          VOLUME_KB="$(sudo du -sk "$RUNNER_TEMP/mordant-volume" | cut -f1)"
+          echo "volume_kb=$VOLUME_KB" >> "$GITHUB_OUTPUT"
+          echo "Volume size after pruning: ${VOLUME_KB} KB"
+          # Large reproducible artifacts must be gone.
+          if sudo find "$RUNNER_TEMP/mordant-volume" -type d -name public | grep -q .; then
+            echo "public artifacts were not pruned"; exit 1
+          fi
+          echo "large reproducible artifacts pruned"
+
+      - name: Verify operation counts from the durable journal
+        id: counts
+        run: |
+          JOURNAL="$(sudo find "$RUNNER_TEMP/mordant-volume/runs" -name operation-journal.json | head -1)"
+          test -n "$JOURNAL" || { echo "no operation journal on the volume"; exit 1; }
+          sudo cat "$JOURNAL" > /tmp/journal.json
+          node -e '
+            const j = require("/tmp/journal.json");
+            const records = j.records ?? [];
+            const outcomes = {};
+            for (const r of records) { const o = r.outcome ?? r.status; outcomes[o] = (outcomes[o] ?? 0) + 1; }
+            const aborted = outcomes.ABORTED ?? 0;
+            const completed = outcomes.COMPLETED ?? 0;
+            console.log("operations:", records.length, JSON.stringify(outcomes));
+            for (const r of records) console.log("  -", r.operation, r.outcome ?? r.status);
+            if (aborted !== 0) { console.error("ABORTED operations present"); process.exit(1); }
+            if (completed !== records.length) { console.error("not every operation completed"); process.exit(1); }
+            if (records.length !== 9) { console.error(`expected 9 operations, saw ${records.length}`); process.exit(1); }
+            console.log("9 completed operations, 0 ABORTED");
+          '
+          echo "operations=9" >> "$GITHUB_OUTPUT"
+          echo "aborted=0" >> "$GITHUB_OUTPUT"
+
+      - name: Verify no raw input survives on the volume
+        run: |
+          if sudo grep -rlE '"(activeFrom|activeUntil|supervisedPledgeWindows)"' "$RUNNER_TEMP/mordant-volume" 2>/dev/null | grep -q .; then
+            echo "private window fields survived on the volume"; exit 1
+          fi
+          echo "no private window field on the volume"
+
+      - name: Restart the container on the same volume
+        id: restart
+        run: |
+          BEFORE_RECEIPT="$(node -e 'console.log(require(process.env.S).receiptDigest)' )"
+          echo "Receipt before restart: $BEFORE_RECEIPT"
+          docker rm -f mordant-worker > /dev/null
+          docker run -d --name mordant-worker-2 \
+            -p 127.0.0.1:8080:8080 \
+            -v "$RUNNER_TEMP/mordant-volume:/data/mordant" \
+            -e PORT=8080 \
+            -e MORDANT_WORKER_DATA_ROOT=/data/mordant \
+            -e MORDANT_WORKER_TOKEN_SECRET="$SMOKE_SECRET" \
+            -e MORDANT_WORKER_TOKEN_AUDIENCE=MORDANT_RAILWAY_WORKER \
+            -e MORDANT_WORKER_ALLOWED_ORIGIN=https://preview.example \
+            -e MORDANT_WORKER_DISK_FLOOR_BYTES=2187329536 \
+            -e MORDANT_PROTECTION_SOURCE_COMMIT="${{ steps.prepare.outputs.sha }}" \
+            mordant-live-worker:gate
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8080/health > /tmp/health2.json 2>/dev/null && break
+            sleep 1
+          done
+          cat /tmp/health2.json
+          RUN_ID="$(node -e 'console.log(require(process.env.S).runId)')"
+          curl -fsS "http://127.0.0.1:8080/v1/custom-cases/$RUN_ID" > /tmp/after.json
+          AFTER_RECEIPT="$(node -e 'console.log(require("/tmp/after.json").view.receipt.receiptDigest)')"
+          AFTER_RESULT="$(node -e 'console.log(require("/tmp/after.json").view.governedResult.digest)')"
+          echo "Receipt after restart:  $AFTER_RECEIPT"
+          test "$BEFORE_RECEIPT" = "$AFTER_RECEIPT" || { echo "receipt digest changed across restart"; exit 1; }
+          echo "receipt_digest=$AFTER_RECEIPT" >> "$GITHUB_OUTPUT"
+          echo "result_digest=$AFTER_RESULT" >> "$GITHUB_OUTPUT"
+          # A restart must not have run anything new.
+          node -e '
+            const a = require("/tmp/after.json");
+            if (a.view.stage !== "COMPLETE") { console.error("run is no longer COMPLETE"); process.exit(1); }
+            if (/activeFrom|activeUntil/.test(JSON.stringify(a))) { console.error("raw windows reappeared"); process.exit(1); }
+            console.log("terminal state preserved, no raw windows");
+          '
+        env:
+          S: ${{ runner.temp }}/smoke-summary.json
+
+      - name: Verify A8 envelopes are byte-identical
+        run: |
+          shasum -a 256 docs/evidence/conflicting-pledge-protection/conflict.json | grep -q '^e24dfd8aebcda4802e66a4ac08c1b5e49b494e40aea26fedee16548103f9d635' || { echo "A8 conflict changed"; exit 1; }
+          shasum -a 256 docs/evidence/conflicting-pledge-protection/no-conflict.json | grep -q '^844edf04d3b66fc691f817b0ee49856d94fe219ee7930b89b983fedb71f6c308' || { echo "A8 no-conflict changed"; exit 1; }
+          echo "A8 envelopes byte-identical"
+
+      - name: Write the job summary
+        if: always()
+        env:
+          S: ${{ runner.temp }}/smoke-summary.json
+        run: |
+          {
+            echo "## Live worker container gate"
+            echo ""
+            echo "| Check | Value |"
+            echo "| --- | --- |"
+            echo "| Source commit | \`${{ steps.prepare.outputs.sha }}\` |"
+            echo "| Docker build | ${{ steps.build.outcome }} |"
+            echo "| Build duration | ${{ steps.build.outputs.duration }} s |"
+            echo "| Image size | ${{ steps.build.outputs.size_mb }} MB |"
+            echo "| Worker startup | ${{ steps.start.outputs.startup }} s |"
+            echo "| Disk before build | ${{ steps.prepare.outputs.disk_before }} MB |"
+            echo "| Disk after build | ${{ steps.disk_after_build.outputs.value }} MB |"
+            echo "| Disk after case | ${{ steps.prune.outputs.value }} MB |"
+            echo "| Volume after pruning | ${{ steps.prune.outputs.volume_kb }} KB |"
+            echo "| Receipt digest | \`${{ steps.restart.outputs.receipt_digest }}\` |"
+            echo "| Governed result digest | \`${{ steps.restart.outputs.result_digest }}\` |"
+            echo "| Operations / ABORTED | ${{ steps.counts.outputs.operations }} / ${{ steps.counts.outputs.aborted }} |"
+            if [ -f "$S" ]; then
+              echo ""
+              echo '```json'
+              cat "$S"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the sanitized summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-gate-summary
+          path: ${{ runner.temp }}/smoke-summary.json
+          if-no-files-found: warn
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f mordant-worker mordant-worker-2 2>/dev/null || true

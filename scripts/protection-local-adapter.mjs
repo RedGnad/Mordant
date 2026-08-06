@@ -126,6 +126,22 @@ async function readJsonBody(request) {
   }
 }
 
+function exactPledgeWindow(value) {
+  if (!exactKeys(value, ["activeFrom", "activeUntil"])) return false;
+  for (const bound of [value.activeFrom, value.activeUntil]) {
+    // No coercion: strings, floats, booleans, null and unsafe integers are
+    // rejections, never conversions.
+    if (typeof bound !== "number" || !Number.isSafeInteger(bound) || bound < 0 || Object.is(bound, -0)) return false;
+  }
+  return value.activeFrom < value.activeUntil;
+}
+
+function exactPledgeWindows(value) {
+  return exactKeys(value, ["participantA", "participantB"])
+    && exactPledgeWindow(value.participantA)
+    && exactPledgeWindow(value.participantB);
+}
+
 function validateBrowserOperation(value) {
   if (
     exactKeys(value, ["intent", "scenario", "creationRequestId"])
@@ -133,6 +149,17 @@ function validateBrowserOperation(value) {
     && (value.scenario === "conflict" || value.scenario === "no-conflict")
     && typeof value.creationRequestId === "string"
     && RUN_ID.test(value.creationRequestId)
+  ) return value;
+  // Supervised custom create. There is no caller-selected scenario at all: the
+  // case is authorized under a neutral execution variant, and only the governed
+  // signed Boolean can produce a terminal outcome.
+  if (
+    exactKeys(value, ["intent", "creationRequestId", "executionVariant", "pledges"])
+    && value.intent === "create"
+    && value.executionVariant === "CUSTOM_SUPERVISED"
+    && typeof value.creationRequestId === "string"
+    && RUN_ID.test(value.creationRequestId)
+    && exactPledgeWindows(value.pledges)
   ) return value;
   if (
     exactKeys(value, ["intent", "runId", "operation"])

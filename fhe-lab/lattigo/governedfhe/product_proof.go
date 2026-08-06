@@ -10,24 +10,29 @@ import (
 )
 
 const (
-	ProtectionBindingSchema     = "mordant.protection-binding/1"
-	ProtectionAttestationSchema = "mordant.recourse-attestation/2"
-	ProductChronologySchema     = "mordant.product-chronology/1"
-	ProtectionService           = "Conflicting Pledge Protection"
-	ProtectionServiceVersion    = uint32(1)
-	ProtectionPolicyVersion     = uint32(1)
-	ProtectionFixtureClass      = "SYNTHETIC_HACKATHON_FIXTURE"
-	ProductClaimIdentifier      = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1"
-	SimulatedProductClaim       = "mordant.conflicting-pledge-protection/governed-fhe-mvp-simulated-protocol-clock-v1"
-	RealObservedProductClaim    = "mordant.conflicting-pledge-protection/governed-fhe-mvp-real-observed-clock-v1"
-	ProductClaim                = ProductClaimIdentifier
-	RecourseRefusalNone         = "NONE"
-	RecourseRefusalSignedFalse  = "SIGNED_RESULT_FALSE"
-	RecourseStateAvailable      = "AVAILABLE"
-	RecourseStateSimulated      = "SIMULATED_AVAILABLE"
-	RecourseStateRefused        = "REFUSED"
-	ClockClassRealObserved      = "REAL_OBSERVED_CLOCK"
-	ClockClassSimulatedProtocol = "SIMULATED_PROTOCOL_CLOCK"
+	ProtectionBindingSchema = "mordant.protection-binding/1"
+	// V2 is the isolated custom-supervised authorization. It carries a neutral
+	// execution variant instead of a product scenario, so nothing about the
+	// expected conflict Boolean is bound or signed before governed release.
+	ProtectionBindingSchemaV2        = "mordant.protection-binding/2"
+	ExecutionVariantCustomSupervised = "CUSTOM_SUPERVISED"
+	ProtectionAttestationSchema      = "mordant.recourse-attestation/2"
+	ProductChronologySchema          = "mordant.product-chronology/1"
+	ProtectionService                = "Conflicting Pledge Protection"
+	ProtectionServiceVersion         = uint32(1)
+	ProtectionPolicyVersion          = uint32(1)
+	ProtectionFixtureClass           = "SYNTHETIC_HACKATHON_FIXTURE"
+	ProductClaimIdentifier           = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1"
+	SimulatedProductClaim            = "mordant.conflicting-pledge-protection/governed-fhe-mvp-simulated-protocol-clock-v1"
+	RealObservedProductClaim         = "mordant.conflicting-pledge-protection/governed-fhe-mvp-real-observed-clock-v1"
+	ProductClaim                     = ProductClaimIdentifier
+	RecourseRefusalNone              = "NONE"
+	RecourseRefusalSignedFalse       = "SIGNED_RESULT_FALSE"
+	RecourseStateAvailable           = "AVAILABLE"
+	RecourseStateSimulated           = "SIMULATED_AVAILABLE"
+	RecourseStateRefused             = "REFUSED"
+	ClockClassRealObserved           = "REAL_OBSERVED_CLOCK"
+	ClockClassSimulatedProtocol      = "SIMULATED_PROTOCOL_CLOCK"
 )
 
 type ProductAmount struct {
@@ -42,23 +47,28 @@ type ProductHolderAllocation struct {
 }
 
 type MordantProtectionBinding struct {
-	SchemaVersion               string                    `json:"schemaVersion"`
-	CleanverseAssetRecordDigest Digest                    `json:"cleanverseAssetRecordDigest"`
-	ProtectionService           string                    `json:"protectionService"`
-	ProtectionServiceVersion    uint32                    `json:"protectionServiceVersion"`
-	PolicyID                    Digest                    `json:"policyId"`
-	PolicyVersion               uint32                    `json:"policyVersion"`
-	ProductScenario             string                    `json:"productScenario"`
-	FixtureClassification       string                    `json:"fixtureClassification"`
-	ProtectedAmount             ProductAmount             `json:"protectedAmount"`
-	ReserveBasisPoints          uint32                    `json:"reserveBasisPoints"`
-	ReserveAmount               ProductAmount             `json:"reserveAmount"`
-	HolderRecordDate            string                    `json:"holderRecordDate"`
-	HolderSnapshot              []ProductHolderAllocation `json:"holderSnapshot"`
-	HolderAllocationDigest      Digest                    `json:"holderAllocationDigest"`
-	CaseNonce                   Digest                    `json:"caseNonce"`
-	FHECaseID                   Digest                    `json:"fheCaseId"`
-	GovernedReleaseMode         string                    `json:"governedReleaseMode"`
+	SchemaVersion               string `json:"schemaVersion"`
+	CleanverseAssetRecordDigest Digest `json:"cleanverseAssetRecordDigest"`
+	ProtectionService           string `json:"protectionService"`
+	ProtectionServiceVersion    uint32 `json:"protectionServiceVersion"`
+	PolicyID                    Digest `json:"policyId"`
+	PolicyVersion               uint32 `json:"policyVersion"`
+	// V1 only. Empty and omitted for V2, so a custom case binds no expected
+	// result. `omitempty` leaves V1 bytes untouched because V1 always sets it.
+	ProductScenario        string                    `json:"productScenario,omitempty"`
+	FixtureClassification  string                    `json:"fixtureClassification"`
+	ProtectedAmount        ProductAmount             `json:"protectedAmount"`
+	ReserveBasisPoints     uint32                    `json:"reserveBasisPoints"`
+	ReserveAmount          ProductAmount             `json:"reserveAmount"`
+	HolderRecordDate       string                    `json:"holderRecordDate"`
+	HolderSnapshot         []ProductHolderAllocation `json:"holderSnapshot"`
+	HolderAllocationDigest Digest                    `json:"holderAllocationDigest"`
+	CaseNonce              Digest                    `json:"caseNonce"`
+	FHECaseID              Digest                    `json:"fheCaseId"`
+	GovernedReleaseMode    string                    `json:"governedReleaseMode"`
+	// V2 only, and last in the struct so that an omitted V2 field cannot move a
+	// single byte of the retained V1 encoding.
+	ExecutionVariant string `json:"executionVariant,omitempty"`
 }
 
 func digestDomainCanonical(domain string, value any) (Digest, error) {
@@ -96,6 +106,18 @@ func protectionHolderAllocationDigest(binding MordantProtectionBinding) (Digest,
 }
 
 func protectionFHECaseID(binding MordantProtectionBinding, allocation Digest) (Digest, error) {
+	// V2 uses its own domain and binds the neutral execution variant in place of
+	// the product scenario. No function of the entered pledge windows, and no
+	// prediction of the circuit output, enters this derivation.
+	if binding.SchemaVersion == ProtectionBindingSchemaV2 {
+		return digestDomainCanonical("MordantProtectionFHECase/v2", struct {
+			AssetDigest            Digest `json:"assetDigest"`
+			CaseNonce              Digest `json:"caseNonce"`
+			ExecutionVariant       string `json:"executionVariant"`
+			HolderAllocationDigest Digest `json:"holderAllocationDigest"`
+			PolicyID               Digest `json:"policyId"`
+		}{binding.CleanverseAssetRecordDigest, binding.CaseNonce, binding.ExecutionVariant, allocation, binding.PolicyID})
+	}
 	return digestDomainCanonical("MordantProtectionFHECase/v1", struct {
 		AssetDigest            Digest `json:"assetDigest"`
 		CaseNonce              Digest `json:"caseNonce"`
@@ -109,11 +131,30 @@ func (binding MordantProtectionBinding) Validate() error {
 	policy, policyErr := protectionPolicyID()
 	allocation, allocationErr := protectionHolderAllocationDigest(binding)
 	caseID, caseErr := protectionFHECaseID(binding, allocation)
+	// Schema-discriminated, never permissive: exactly one of the two authorization
+	// shapes must hold, and each rejects the other's discriminating member.
+	switch binding.SchemaVersion {
+	case ProtectionBindingSchema:
+		if binding.ProductScenario != "conflict" && binding.ProductScenario != "no-conflict" {
+			return ErrBinding
+		}
+		if binding.ExecutionVariant != "" {
+			return ErrBinding
+		}
+	case ProtectionBindingSchemaV2:
+		if binding.ExecutionVariant != ExecutionVariantCustomSupervised {
+			return ErrBinding
+		}
+		if binding.ProductScenario != "" {
+			return ErrBinding
+		}
+	default:
+		return ErrBinding
+	}
 	if policyErr != nil || allocationErr != nil || caseErr != nil ||
-		binding.SchemaVersion != ProtectionBindingSchema || binding.ProtectionService != ProtectionService ||
+		binding.ProtectionService != ProtectionService ||
 		binding.ProtectionServiceVersion != ProtectionServiceVersion || binding.PolicyID != policy ||
 		binding.PolicyVersion != ProtectionPolicyVersion ||
-		(binding.ProductScenario != "conflict" && binding.ProductScenario != "no-conflict") ||
 		binding.FixtureClassification != ProtectionFixtureClass ||
 		binding.ProtectedAmount != (ProductAmount{Asset: "aUSDC", MinorUnits: "100000000"}) ||
 		binding.ReserveBasisPoints != MVPReserveBasisPoints ||

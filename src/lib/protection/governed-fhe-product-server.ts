@@ -36,6 +36,7 @@ import {
   createProtectionCase as createProtectionCaseModel,
   FHE_CIRCUIT,
   FHE_PARAMETER_PROFILE,
+  PROTECTION_FIXTURE_CLASSIFICATION,
   protectionBindingFromCase,
   type MordantProtectionCase,
   type ProductScenario,
@@ -72,6 +73,27 @@ import {
   writeDurableJsonAtomic,
   type ProductOperationRecord,
 } from "./protection-operation-journal";
+import {
+  assertSupervisedPledgeWindows,
+  type SupervisedPledgeWindows,
+} from "./supervised-pledge-windows";
+import {
+  CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  type CustomSupervisedProtectionView,
+} from "./custom-supervised-view";
+import {
+  CUSTOM_SUPERVISED_RECEIPT_SCHEMA,
+  assertCustomSupervisedReceipt,
+  customSupervisedReceiptDigest,
+  type CustomSupervisedProtectionReceipt,
+} from "./custom-supervised-receipt";
+import {
+  CUSTOM_SUPERVISED_BINDING_SCHEMA,
+  CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+  assertNeutralCustomBinding,
+  customSupervisedBindingDigestV2,
+  type MordantCustomSupervisedBindingV2,
+} from "./custom-supervised-v2";
 
 const execFileAsync = promisify(execFile);
 
@@ -242,6 +264,20 @@ type InternalState = Readonly<{
   evidence?: MordantProtectionEvidence;
   abortedReason?: string;
   startedAtUnix: number;
+  /**
+   * Operator-entered private pledge windows for a supervised local run. Present
+   * only for a custom run. This is private execution input: `publicView` never
+   * reads it, `beginOperation` never records it, and no error message quotes
+   * it. Its only use is writing the transient participant pledge files.
+   */
+  supervisedPledgeWindows?: SupervisedPledgeWindows;
+  /**
+   * Neutral marker for a supervised custom run. Its presence, and nothing about
+   * the entered windows, selects the V2 authorization path.
+   */
+  executionVariant?: typeof CUSTOM_SUPERVISED_EXECUTION_VARIANT;
+  /** Terminal artifact of a custom V2 run, in place of V4 evidence. */
+  customReceipt?: CustomSupervisedProtectionReceipt;
 }>;
 
 export type ProtectionCaseView = Readonly<{
@@ -357,10 +393,17 @@ function pathForBinary(runtime: ProtectionRuntime, name: keyof typeof BINARIES):
 
 async function ensureBinaries(runtime: ProtectionRuntime): Promise<void> {
   if (runtime.skipBinaryBuild || runtime.binaryRunner !== undefined) return;
+  mkdirSync(runtime.binRoot, { recursive: true, mode: 0o700 });
+  const names = Object.keys(BINARIES) as Array<keyof typeof BINARIES>;
+  // Compiling the FHE binaries on demand is a development affordance. What must
+  // never happen in a deployed runtime is shelling out to the Go toolchain, so
+  // the refusal belongs to the build itself: a purpose-built worker image ships
+  // every binary prebuilt and therefore never reaches it, while the deployed web
+  // runtime has none and is refused exactly as before.
+  if (names.every((name) => existsSync(pathForBinary(runtime, name)))) return;
   if (process.env.NODE_ENV === "production") {
     throw new ProtectionProductError("Local BGV execution is unavailable in the deployed web runtime.", 404);
   }
-  mkdirSync(runtime.binRoot, { recursive: true, mode: 0o700 });
   const goCache = join(runtime.runRoot, "go-build-cache");
   mkdirSync(goCache, { recursive: true, mode: 0o700 });
   for (const [name, binary] of Object.entries(BINARIES) as Array<[keyof typeof BINARIES, string]>) {
@@ -421,6 +464,22 @@ function saveState(runtime: ProtectionRuntime, state: InternalState): InternalSt
   return state;
 }
 
+/**
+ * Stages before a governed release never depend on a scenario, so this branch
+ * never has to name one. Reaching RECOURSE_OPENED here would be a defect.
+ */
+function nextOperationBeforeRelease(stage: ExecutionStage): string | null {
+  switch (stage) {
+    case "CASE_CREATED": return "preparePrivateMatch";
+    case "MATCH_PREPARED": return "submitParticipantPledge:PARTICIPANT_A";
+    case "PARTICIPANT_A_SUBMITTED": return "submitParticipantPledge:PARTICIPANT_B";
+    case "PARTICIPANT_B_PUBLISHED": return "submitParticipantPledge:PARTICIPANT_B";
+    case "PARTICIPANT_B_SUBMITTED": return "evaluatePrivateConflict";
+    case "EVALUATED": return "releaseGovernedResult";
+    default: return null;
+  }
+}
+
 function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string | null {
   switch (stage) {
     case "CASE_CREATED": return "preparePrivateMatch";
@@ -437,13 +496,58 @@ function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string
   }
 }
 
+/**
+ * A custom run is projected into its own schema rather than being forced into
+ * the V1 view. Before a verified governed release it carries no scenario at
+ * all, which is the honest state: there is nothing to report yet.
+ */
+function customSupervisedView(state: InternalState): CustomSupervisedProtectionView {
+  const governedResult = state.release === undefined ? null : {
+    conflict: state.release.conflict,
+    digest: state.release.resultDigest,
+    releaseMode: "governed-decryptor-v1" as const,
+  };
+  return {
+    schemaVersion: CUSTOM_SUPERVISED_VIEW_SCHEMA,
+    runId: state.runId,
+    executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+    stage: state.stage,
+    // The scenario argument is consulted only at RECOURSE_OPENED, which implies
+    // a release exists, so the guard is never asked to invent one.
+    nextOperation: state.release === undefined
+      ? nextOperationBeforeRelease(state.stage)
+      : nextOperation(state.stage, terminalScenarioAfterRelease(state)),
+    terminalScenario: governedResult === null ? null : (governedResult.conflict ? "conflict" : "no-conflict"),
+    protectionCase: {
+      cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
+      fheCaseId: state.protectionCase.fheCaseId,
+      incidentState: state.protectionCase.incidentState,
+      recourseState: state.protectionCase.recourseState,
+      cureDeadline: state.protectionCase.cureDeadline,
+    },
+    participantArtifactDigests: {
+      participantA: state.submissions?.PARTICIPANT_A?.artifactDigest ?? null,
+      participantB: state.submissions?.PARTICIPANT_B?.artifactDigest ?? null,
+    },
+    evaluatedArtifactDigest: state.evaluation?.artifactDigest ?? null,
+    governedResult,
+    recourse: state.recourse === undefined ? null : {
+      opened: state.recourse.opened,
+      reason: state.recourse.reason ?? null,
+    },
+    receipt: state.customReceipt ?? null,
+  };
+}
+
 function publicView(state: InternalState, runtime: ProtectionRuntime): ProtectionCaseView {
   const protectionCase = projectPublicProtectionCase(state.protectionCase);
   const view: ProtectionCaseView = {
     schemaVersion: "mordant.protection-product-view/1",
     runId: state.runId,
     stage: state.stage,
-    nextOperation: nextOperation(state.stage, state.protectionCase.productScenario),
+    nextOperation: nextOperation(state.stage, state.release === undefined
+      ? state.protectionCase.productScenario
+      : terminalScenarioAfterRelease(state)),
     protectionCase: {
       ...protectionCase,
       incidentState: state.protectionCase.incidentState,
@@ -677,7 +781,7 @@ function reconcileProtectionProjection(
       try {
         const retained = readJsonNoFollow<MordantProtectionEvidence>(pending.immutableParameters.destination);
         assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit, localCaseManifestDigest(state));
-        return retained.scenario === state.protectionCase.productScenario
+        return retained.scenario === terminalScenarioAfterRelease(state)
           && retained.protectionCase.fheCaseId === state.protectionCase.fheCaseId
           && retained.manifestDigest === state.evidence?.manifestDigest ? state : null;
       } catch {
@@ -827,12 +931,144 @@ async function exclusive<T>(runId: string, operation: () => Promise<T>): Promise
   }
 }
 
+/**
+ * The terminal scenario of a supervised custom run exists only once the
+ * governed decryptor has released its signed Boolean. Nothing derives it from
+ * the entered windows, and asking for it earlier is a programming error rather
+ * than a value this function is willing to invent.
+ */
+/**
+ * The pre-execution authorization both participants sign. A V1 run keeps the
+ * existing binding untouched. A custom run is authorized under the neutral V2
+ * shape, which structurally omits `productScenario`, so nothing about the
+ * expected Boolean is signed before the governed decryptor speaks.
+ */
+function protectionAuthorizationBinding(
+  state: InternalState,
+): ReturnType<typeof protectionBindingFromCase> | MordantCustomSupervisedBindingV2 {
+  if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+    return protectionBindingFromCase(state.protectionCase);
+  }
+  const protectionCase = state.protectionCase;
+  const binding: MordantCustomSupervisedBindingV2 = {
+    schemaVersion: CUSTOM_SUPERVISED_BINDING_SCHEMA,
+    cleanverseAssetRecordDigest: protectionCase.cleanverseAssetDigest,
+    protectionService: protectionCase.service,
+    protectionServiceVersion: protectionCase.serviceVersion,
+    policyId: protectionCase.policyId,
+    policyVersion: protectionCase.policyVersion,
+    fixtureClassification: PROTECTION_FIXTURE_CLASSIFICATION,
+    protectedAmount: protectionCase.protectedAmount,
+    reserveBasisPoints: protectionCase.reserve.basisPoints,
+    reserveAmount: { asset: "aUSDC", minorUnits: protectionCase.reserve.minorUnits },
+    holderRecordDate: protectionCase.holderRecordDate,
+    holderSnapshot: protectionCase.holderSnapshot,
+    holderAllocationDigest: protectionCase.holderAllocationDigest,
+    caseNonce: protectionCase.caseNonce,
+    fheCaseId: protectionCase.fheCaseId,
+    governedReleaseMode: protectionCase.releaseMode,
+    executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+  };
+  assertNeutralCustomBinding(binding);
+  return binding;
+}
+
+function protectionAuthorizationBindingDigest(state: InternalState): Sha256Digest {
+  return state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+    ? customSupervisedBindingDigestV2(protectionAuthorizationBinding(state) as MordantCustomSupervisedBindingV2)
+    : protectionBindingDigest(protectionBindingFromCase(state.protectionCase));
+}
+
+function buildCustomSupervisedReceipt(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  governedFheEvidence: GovernedFhePublicEvidence,
+  chronology: MordantProtectionEvidence["chronology"],
+): CustomSupervisedProtectionReceipt {
+  if (state.release === undefined || state.keygen === undefined || state.evaluation === undefined) {
+    throw new ProtectionProductError("A complete custom run is required", 500);
+  }
+  const sourceCommit = resolveProtectionExportSourceCommit(
+    runtime.expectedSourceCommit,
+    process.env.MORDANT_PROTECTION_SOURCE_COMMIT,
+  );
+  const pins = state.release.trustedRecoursePins;
+  const body: Omit<CustomSupervisedProtectionReceipt, "receiptDigest"> = {
+    schemaVersion: CUSTOM_SUPERVISED_RECEIPT_SCHEMA,
+    runId: state.runId,
+    sourceCommit,
+    // A custom run rebuilds the governed-FHE binaries from this checkout, so it
+    // pins its own commit rather than the accepted V1 constant.
+    governedFheCommit: sourceCommit,
+    executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+    authorization: {
+      protectionBindingSchema: CUSTOM_SUPERVISED_BINDING_SCHEMA,
+      protectionBindingDigest: protectionAuthorizationBindingDigest(state),
+      fheCaseId: state.protectionCase.fheCaseId,
+      caseBindingDigest: state.keygen.protectionBindingDigest,
+    },
+    execution: {
+      participantArtifactDigests: [pins.participantArtifactDigestA, pins.participantArtifactDigestB],
+      evaluatedArtifactDigest: pins.evaluatedArtifactDigest,
+      evaluatorProvenance: governedFheEvidence.evaluatorProvenance,
+      decryptorProvenance: pins.decryptorProvenance,
+      circuitId: FHE_CIRCUIT,
+      parameterProfile: FHE_PARAMETER_PROFILE,
+    },
+    governedResult: {
+      conflict: state.release.conflict,
+      digest: state.release.resultDigest,
+      releaseMode: state.release.releaseMode,
+      releaseOrdinal: 1,
+      resultCiphertextDigest: pins.recomputedResultCiphertextDigest,
+      independentlyRecomputedResultDigest: pins.recomputedResultCiphertextDigest,
+    },
+    terminal: {
+      incidentState: state.release.conflict ? "CONFLICT_CONFIRMED" : "CLEARED",
+      recourseState: state.protectionCase.recourseState,
+      recourseOpened: state.recourse?.opened === true,
+      recourseRefusal: state.recourse?.reason ?? null,
+      // Same derivation the V1 evidence uses: the digest of the published
+      // recourse record file, not a field of the record itself.
+      recourseRecordDigest: state.recourse?.record === undefined || state.recourse.record === null
+        ? null
+        : digestPublicFile(join(state.paths.publicRoot, "recourse-record.json")),
+      originalReceivableState: state.protectionCase.originalReceivable.state,
+    },
+    chronology: {
+      clockClass: chronology.clockClass,
+      signedAtUnix: chronology.signedAtUnix,
+      events: chronology.events.map((event) => ({ ordinal: event.ordinal, kind: event.kind, atUnix: event.atUnix })),
+    },
+    disclosures: [
+      "Supervised local single-host execution; not production authorized.",
+      "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
+      "Designated trusted decryptor; no threshold release and no native Monad FHE.",
+      "The governed signed Boolean is the sole authority for the terminal outcome.",
+    ],
+  };
+  return { ...body, receiptDigest: customSupervisedReceiptDigest(body) };
+}
+
+function terminalScenarioAfterRelease(state: InternalState): ProductScenario {
+  if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) return state.protectionCase.productScenario;
+  if (state.release === undefined) {
+    throw new ProtectionProductError("A custom supervised run has no scenario before governed release", 500);
+  }
+  return state.release.conflict ? "conflict" : "no-conflict";
+}
+
 async function createProtectionCaseRuntime(
   runtime: ProtectionRuntime,
   scenario: ProductScenario,
   creationRequestId: string,
+  supervisedPledgeWindows?: SupervisedPledgeWindows,
 ): Promise<ProtectionCaseView> {
-  if (scenario !== "conflict" && scenario !== "no-conflict") {
+  const windows = supervisedPledgeWindows === undefined
+    ? undefined
+    : assertSupervisedPledgeWindows(supervisedPledgeWindows);
+  const custom = windows !== undefined;
+  if (!custom && scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Unsupported product scenario", 400);
   }
   // The browser-generated creation request ID is the durable one-to-one map to
@@ -844,23 +1080,33 @@ async function createProtectionCaseRuntime(
     const existingPath = statePath(runtime, runId);
     if (existsSync(existingPath)) {
       const existing = await loadState(runtime, runId, false);
-      if (existing.protectionCase.productScenario !== scenario) {
-        throw new ProtectionProductError("Creation request scenario mismatch", 409);
-      }
+      // A custom run is identified by its neutral execution variant, never by a
+      // scenario, so replaying a lost create compares the variant instead.
+      const sameShape = custom
+        ? existing.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+        : existing.executionVariant === undefined && existing.protectionCase.productScenario === scenario;
+      if (!sameShape) throw new ProtectionProductError("Creation request scenario mismatch", 409);
       return publicView(existing, runtime);
     }
     const root = join(runtime.runRoot, runId);
     const createdAt = runtime.now().toISOString();
     const protectionCase = createProtectionCaseModel({
-      scenario,
+      // For a custom run this placeholder is never bound, never derived from and
+      // never displayed: the V2 binding omits it, the V2 case identity ignores
+      // it, and `terminalScenarioAfterRelease` refuses to read it before the
+      // governed Boolean exists.
+      scenario: custom ? "conflict" : scenario,
       createdAt,
       caseNonce: randomBytes(32).toString("hex"),
+      ...(custom ? { executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT } : {}),
     });
     const state: InternalState = {
       schemaVersion: "mordant.protection-execution/2",
       runId,
       stage: "CASE_CREATED",
       protectionCase,
+      ...(custom ? { executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT } : {}),
+      ...(windows === undefined ? {} : { supervisedPledgeWindows: windows }),
       paths: {
         root,
         publicRoot: join(root, "public"),
@@ -930,7 +1176,7 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       caseNonce: state.protectionCase.caseNonce,
       createdAtUnix,
       expiresAtUnix: createdAtUnix + 4 * 60 * 60,
-      protectionBinding: protectionBindingFromCase(state.protectionCase),
+      protectionBinding: protectionAuthorizationBinding(state),
     };
     writeJsonAtomic(specPath, spec);
     runtime.failpoint("after-case-spec");
@@ -959,7 +1205,7 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       || binding.releaseMode !== state.protectionCase.releaseMode
       || binding.parameterProfile !== FHE_PARAMETER_PROFILE
       || binding.circuitId !== FHE_CIRCUIT
-      || output.protectionBindingDigest !== protectionBindingDigest(protectionBindingFromCase(state.protectionCase))
+      || output.protectionBindingDigest !== protectionAuthorizationBindingDigest(state)
     ) {
       throw new ProtectionProductError("Generated FHE case does not match the protection case", 500);
     }
@@ -977,8 +1223,19 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
 
 function pledgeFor(state: InternalState, role: "PARTICIPANT_A" | "PARTICIPANT_B") {
   const base = state.protectionCase.cleanverseAssetDigest;
-  const activeFrom = role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
-  const activeUntil = role === "PARTICIPANT_A" ? 400 : state.protectionCase.productScenario === "conflict" ? 500 : 700;
+  // A supervised custom run substitutes only the two window bounds. Every other
+  // field, and every derivation below, is identical to the fixed fixture, so
+  // the Go pledge schema, the circuit and all signing semantics are unchanged.
+  const custom = state.supervisedPledgeWindows;
+  const window = custom === undefined
+    ? undefined
+    : role === "PARTICIPANT_A" ? custom.participantA : custom.participantB;
+  const activeFrom = window !== undefined
+    ? window.activeFrom
+    : role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
+  const activeUntil = window !== undefined
+    ? window.activeUntil
+    : role === "PARTICIPANT_A" ? 400 : state.protectionCase.productScenario === "conflict" ? 500 : 700;
   return {
     activeFrom,
     activeUntil,
@@ -1155,9 +1412,15 @@ async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: s
       "-private-root", state.paths.decryptorPrivateRoot,
     ]);
     runtime.failpoint("after-release-publication-before-state-save");
+    // A fixed-fixture run still asserts the pre-declared scenario, because its
+    // inputs are known and any divergence is a real defect. A supervised custom
+    // run has operator-authored windows, so the governed Boolean is the
+    // authority: the terminal scenario is derived from it below, never asserted
+    // against the caller's routing value.
+    const customRun = state.supervisedPledgeWindows !== undefined;
     if (
       output.releaseMode !== state.protectionCase.releaseMode
-      || output.conflict !== (state.protectionCase.productScenario === "conflict")
+      || (!customRun && output.conflict !== (state.protectionCase.productScenario === "conflict"))
     ) {
       throw new ProtectionProductError("Governed release does not match the protection scenario", 500);
     }
@@ -1405,7 +1668,7 @@ function buildProtectionEvidence(
     runId: state.runId,
     sourceCommit,
     governedFheCommit: GOVERNED_FHE_COMMIT,
-    scenario: state.protectionCase.productScenario,
+    scenario: terminalScenarioAfterRelease(state),
     cleanverseAsset: state.protectionCase.cleanverseAsset,
     cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
     sourceClassifications: [
@@ -1491,7 +1754,7 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
     if (state.stage === "COMPLETE" && state.evidence !== undefined) return publicView(state, runtime);
-    const expectedStage = state.protectionCase.productScenario === "conflict" ? "CHRONOLOGY_COMPLETE" : "RECOURSE_OPENED";
+    const expectedStage = terminalScenarioAfterRelease(state) === "conflict" ? "CHRONOLOGY_COMPLETE" : "RECOURSE_OPENED";
     if (state.stage !== expectedStage || state.release === undefined || state.keygen === undefined) {
       throw new ProtectionProductError("The product journey is not complete");
     }
@@ -1501,7 +1764,7 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       immutableParameters: {
         caseId: state.protectionCase.fheCaseId,
         resultDigest: state.release.resultDigest,
-        scenario: state.protectionCase.productScenario,
+        scenario: terminalScenarioAfterRelease(state),
       },
       expectedCurrentStage: expectedStage,
       expectedTargetStage: "COMPLETE",
@@ -1564,6 +1827,19 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       "-request", measurementsPath,
     ]);
     if (existsSync(measurementsPath)) rmSync(measurementsPath);
+    // A custom V2 run produces its own local receipt. It cannot produce V4
+    // evidence, because that schema cross-checks its scenario against a
+    // `binding.productScenario` that a neutral V2 authorization does not have,
+    // and widening or weakening the published V1 contract is not acceptable.
+    if (state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+      const receipt = buildCustomSupervisedReceipt(runtime, state, governedFheEvidence, attestation.chronology);
+      assertCustomSupervisedReceipt(receipt);
+      writeJsonAtomic(join(state.paths.root, "custom-supervised-receipt.json"), receipt, 0o644);
+      runtime.failpoint("after-evidence-publication-before-state-save");
+      state = saveState(runtime, { ...state, stage: "COMPLETE", customReceipt: receipt });
+      finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
+      return publicView(state, runtime);
+    }
     const evidence = buildProtectionEvidence(
       runtime,
       state,
@@ -1607,15 +1883,33 @@ function loadImportedProtectionEvidenceRuntime(
   return verifyAndProjectPublicProtectionEvidence(evidence, runtime.expectedSourceCommit);
 }
 
+/**
+ * A supervised custom run retains under its own run directory, never into the
+ * shared retention root whose two scenario files back the published evidence.
+ * A custom run can therefore fail, repeat or produce either outcome without
+ * touching the validated public fallback.
+ */
+function retentionTargetFor(state: InternalState, runtime: ProtectionRuntime): Readonly<{ root: string; path: string }> {
+  const root = state.supervisedPledgeWindows === undefined
+    ? runtime.retentionRoot
+    : join(state.paths.root, "custom-retained-evidence");
+  return Object.freeze({ root, path: resolve(root, `${terminalScenarioAfterRelease(state)}.json`) });
+}
+
 async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId: string, destination: string): Promise<string> {
   const state = await loadState(runtime, runId);
   if (state.stage !== "COMPLETE" || state.evidence === undefined) {
     throw new ProtectionProductError("Only complete public evidence may be retained");
   }
   assertPublicProtectionEvidence(state.evidence, runtime.expectedSourceCommit, localCaseManifestDigest(state));
-  const allowed = resolve(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`);
+  const target = retentionTargetFor(state, runtime);
+  const allowed = target.path;
   if (resolve(destination) !== allowed) throw new ProtectionProductError("Evidence destination rejected", 400);
-  if (!existsSync(runtime.retentionRoot)) {
+  // A custom run owns its retention directory, so it is created on demand. The
+  // shared public retention root stays an externally configured capability that
+  // is never created implicitly.
+  if (state.supervisedPledgeWindows !== undefined) mkdirSync(target.root, { recursive: true, mode: 0o700 });
+  if (!existsSync(target.root)) {
     throw new ProtectionProductError("Configured evidence retention capability is unavailable", 503);
   }
   const operation = beginOperation(runtime.runRoot, runId, {
@@ -1623,7 +1917,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     phase: "RETAINING",
     immutableParameters: {
       destination: allowed,
-      scenario: state.protectionCase.productScenario,
+      scenario: terminalScenarioAfterRelease(state),
       caseId: state.protectionCase.fheCaseId,
       manifestDigest: state.evidence.manifestDigest,
     },
@@ -1633,8 +1927,8 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
     createdAt: runtime.now().toISOString(),
   });
   const retention = await runJSON<Readonly<{ reconciled: boolean }>>(runtime, "retain", [
-    "-retention-root", runtime.retentionRoot,
-    "-scenario", state.protectionCase.productScenario,
+    "-retention-root", target.root,
+    "-scenario", terminalScenarioAfterRelease(state),
     "-source", join(state.paths.root, "protection-evidence.json"),
     "-manifest-digest", state.evidence.manifestDigest,
     "-case-id", state.protectionCase.fheCaseId,
@@ -1644,7 +1938,7 @@ async function retainProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
   assertPublicProtectionEvidence(retained, runtime.expectedSourceCommit, localCaseManifestDigest(state));
   if (
     retained.runId !== state.runId
-    || retained.scenario !== state.protectionCase.productScenario
+    || retained.scenario !== terminalScenarioAfterRelease(state)
     || retained.protectionCase.fheCaseId !== state.protectionCase.fheCaseId
     || retained.manifestDigest !== state.evidence.manifestDigest
   ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
@@ -1664,11 +1958,11 @@ function readRetainedProtectionEvidenceInConfiguredRootRuntime(
   if (state.stage !== "COMPLETE" || state.evidence === undefined) {
     throw new ProtectionProductError("Complete retained evidence is not yet available", 423);
   }
-  const scenario = state.protectionCase.productScenario;
+  const scenario = terminalScenarioAfterRelease(state);
   if (scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Retained evidence readback mismatch", 500);
   }
-  const retainedPath = resolve(runtime.retentionRoot, `${scenario}.json`);
+  const retainedPath = retentionTargetFor(state, runtime).path;
   if (!existsSync(retainedPath)) {
     throw new ProtectionProductError("Complete retained evidence is not yet available", 423);
   }
@@ -1680,7 +1974,7 @@ function readRetainedProtectionEvidenceInConfiguredRootRuntime(
   );
   if (
     evidence.runId !== state.runId
-    || evidence.scenario !== state.protectionCase.productScenario
+    || evidence.scenario !== terminalScenarioAfterRelease(state)
     || evidence.fhe.caseId !== state.protectionCase.fheCaseId
     || evidence.manifestDigest !== state.evidence.manifestDigest
   ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
@@ -1718,7 +2012,7 @@ async function retainProtectionEvidenceInConfiguredRootRuntime(
     const retainedPath = await retainProtectionEvidenceRuntime(
       runtime,
       runId,
-      join(runtime.retentionRoot, `${state.protectionCase.productScenario}.json`),
+      retentionTargetFor(state, runtime).path,
     );
     // This is a second independent no-follow read, after the retention command
     // and its own readback, so the adapter only receives the exact durable bytes.
@@ -1730,7 +2024,7 @@ async function retainProtectionEvidenceInConfiguredRootRuntime(
     );
     if (
       evidence.runId !== state.runId
-      || evidence.scenario !== state.protectionCase.productScenario
+      || evidence.scenario !== terminalScenarioAfterRelease(state)
       || evidence.fhe.caseId !== state.protectionCase.fheCaseId
       || evidence.manifestDigest !== state.evidence?.manifestDigest
     ) throw new ProtectionProductError("Retained evidence readback mismatch", 500);
@@ -1771,8 +2065,12 @@ async function validateRetainedPublicArtifactsRuntime(runtime: ProtectionRuntime
 export function createProtectionOrchestrator(options: ProtectionRuntimeOptions = {}) {
   const runtime = runtimeFrom(options);
   return Object.freeze({
-    createProtectionCase: (scenario: ProductScenario, creationRequestId: string = randomUUID()) => (
-      createProtectionCaseRuntime(runtime, scenario, creationRequestId)
+    createProtectionCase: (
+      scenario: ProductScenario,
+      creationRequestId: string = randomUUID(),
+      supervisedPledgeWindows?: SupervisedPledgeWindows,
+    ) => (
+      createProtectionCaseRuntime(runtime, scenario, creationRequestId, supervisedPledgeWindows)
     ),
     preparePrivateMatch: (runId: string) => preparePrivateMatchRuntime(runtime, runId),
     submitParticipantPledge: (
@@ -1788,6 +2086,20 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     completeCureChronology: (runId: string) => completeCureChronologyRuntime(runtime, runId),
     exportProtectionEvidence: (runId: string) => exportProtectionEvidenceRuntime(runtime, runId),
     readProtectionCase: (runId: string) => readProtectionCaseRuntime(runtime, runId),
+    /**
+     * Custom V2 readback. A custom run is never projected into the V1 view, so
+     * the browser must ask for it under its own schema.
+     */
+    readCustomSupervisedCase: async (runId: string): Promise<CustomSupervisedProtectionView> => {
+      if (locks.has(runId)) {
+        throw new ProtectionProductError("A protection operation is still running; resume durable readback after it completes", 423);
+      }
+      const state = await loadState(runtime, runId, false);
+      if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+        throw new ProtectionProductError("This run is not a supervised custom case", 400);
+      }
+      return customSupervisedView(state);
+    },
     readProtectionCreation: (creationRequestId: string) => readProtectionCreationRuntime(runtime, creationRequestId),
     loadImportedProtectionEvidence: (scenario: ProductScenario = "conflict") => loadImportedProtectionEvidenceRuntime(runtime, scenario),
     retainProtectionEvidence: (runId: string, destination: string) => retainProtectionEvidenceRuntime(runtime, runId, destination),

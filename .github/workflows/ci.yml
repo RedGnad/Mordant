@@ -82,6 +82,18 @@ jobs:
           if [ -n "$unformatted" ]; then
             echo "gofmt needed for:"; echo "$unformatted"; exit 1
           fi
+      # TestGovernedFHEProductionPaths drives the real evaluator and decryptor as
+      # separate processes and refuses anything but an absolute binary built from this
+      # checkout. Without these the test cannot run at all, so it is a prerequisite of
+      # the suite rather than an option.
+      - name: Build the FHE process binaries
+        run: |
+          mkdir -p "$RUNNER_TEMP/fhe-bin"
+          for binary in evaluator decryptor; do
+            go build -trimpath -o "$RUNNER_TEMP/fhe-bin/mordant-fhe-$binary" "./cmd/mordant-fhe-$binary"
+          done
+          echo "MORDANT_FHE_EVALUATOR_BIN=$RUNNER_TEMP/fhe-bin/mordant-fhe-evaluator" >> "$GITHUB_ENV"
+          echo "MORDANT_FHE_DECRYPTOR_BIN=$RUNNER_TEMP/fhe-bin/mordant-fhe-decryptor" >> "$GITHUB_ENV"
       # Default per-package timeout is 10 minutes, which the V5 release gates
       # exceed by construction. The recomputation is not weakened to fit it.
       - run: go test -timeout 40m ./...
@@ -106,3 +118,64 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Feature flags default to off and the chain allow-list is testnet only
         run: pnpm test:unit
+
+  # The deployed live-protection release surface, run as its own check from a full
+  # checkout. The retained-evidence provenance gate reads the A8 artifact commit and its
+  # parent, so shallow history would fail it for the wrong reason: fetch-depth 0 and tags
+  # are a correctness requirement here, not a convenience.
+  live-protection-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: fhe-lab/lattigo/go.sum
+      - run: pnpm install --frozen-lockfile
+
+      - name: Retained-evidence provenance and the registered protection suite
+        run: pnpm protection:test
+
+      - name: Build the FHE process binaries
+        working-directory: fhe-lab/lattigo
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-fhe-bin"
+          for binary in evaluator decryptor; do
+            go build -trimpath -o "$RUNNER_TEMP/release-fhe-bin/mordant-fhe-$binary" "./cmd/mordant-fhe-$binary"
+          done
+          echo "MORDANT_FHE_EVALUATOR_BIN=$RUNNER_TEMP/release-fhe-bin/mordant-fhe-evaluator" >> "$GITHUB_ENV"
+          echo "MORDANT_FHE_DECRYPTOR_BIN=$RUNNER_TEMP/release-fhe-bin/mordant-fhe-decryptor" >> "$GITHUB_ENV"
+
+      - name: Focused governed-FHE production paths
+        working-directory: fhe-lab/lattigo
+        run: go test ./governedfhe/ -run TestGovernedFHEProductionPaths -count=1
+
+      - name: Complete Go suite
+        working-directory: fhe-lab/lattigo
+        run: go test -timeout 40m ./...
+
+      - run: pnpm typecheck
+      - run: pnpm build
+
+      - name: A8 envelopes are byte-identical
+        run: |
+          echo "e24dfd8aebcda4802e66a4ac08c1b5e49b494e40aea26fedee16548103f9d635  docs/evidence/conflicting-pledge-protection/conflict.json" | sha256sum -c -
+          echo "844edf04d3b66fc691f817b0ee49856d94fe219ee7930b89b983fedb71f6c308  docs/evidence/conflicting-pledge-protection/no-conflict.json" | sha256sum -c -
+
+      - name: The build leaves the repository clean
+        run: |
+          git diff --check
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "the build modified tracked files:"; git status --porcelain --untracked-files=no; exit 1
+          fi

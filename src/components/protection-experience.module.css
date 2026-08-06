@@ -351,3 +351,16 @@
 @media (prefers-reduced-motion: reduce) {
   .page * { scroll-behavior: auto !important; }
 }
+
+/* Supervised custom case: local execution mode only. */
+.customCase { margin-top: 18px; padding: 26px; border: 1px solid var(--rule); background: var(--paper); }
+.customCase h3 { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.02em; }
+.customCase > p { margin: 0 0 18px; max-width: 640px; font-size: 14px; }
+.customGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.customGrid label { display: block; font: 11px var(--font-proof), monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.customGrid input { width: 100%; min-height: 44px; margin-top: 6px; padding: 0 12px; border: 1px solid var(--ink); background: var(--page); font: 15px var(--font-proof), monospace; }
+.customGrid input[aria-invalid="true"] { border-color: var(--protection); }
+.customFixed { margin: 0 0 18px; padding: 14px 16px; border-left: 3px solid var(--rule); font-size: 13px; }
+.customFixed strong { display: block; margin-bottom: 6px; font: 11px var(--font-proof), monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.customFixed ul { margin: 0; padding-left: 18px; }
+.customError { margin: 0 0 14px; color: var(--protection); font-size: 13px; }
