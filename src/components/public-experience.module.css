@@ -26,7 +26,10 @@
   z-index: 100;
   top: 8px;
   left: 8px;
-  padding: 10px 14px;
+  display: inline-flex;
+  min-height: var(--target);
+  align-items: center;
+  padding: 10px 16px;
   background: var(--ink);
   color: var(--ground);
   transform: translateY(-150%);
