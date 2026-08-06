@@ -115,3 +115,162 @@ test.describe("wallet presentation metadata is untrusted", () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------- runtime behaviour
+
+/**
+ * Installs two EIP-6963 providers and records every RPC method they are asked
+ * for, so the request discipline can be asserted rather than assumed.
+ */
+const INSTALL_PROVIDERS = `
+window.__mordantCalls = [];
+function makeProvider(name, rdns, accounts) {
+  const provider = {
+    request: async ({ method }) => {
+      window.__mordantCalls.push(method);
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_accounts") return [];
+      if (method === "eth_requestAccounts") return accounts;
+      if (method === "wallet_switchEthereumChain") return null;
+      return null;
+    },
+    on: () => {},
+    removeListener: () => {},
+  };
+  const detail = Object.freeze({
+    info: Object.freeze({ uuid: rdns + "-uuid", name, rdns, icon: "data:image/png;base64,iVBORw0KGgo=" }),
+    provider,
+  });
+  const announce = () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail }));
+  window.addEventListener("eip6963:requestProvider", announce);
+  announce();
+  return provider;
+}
+window.ethereum = makeProvider("Alpha Wallet", "app.alpha", ["0x911F99f424D47F08a15fcC771e94dcc2f7252B02"]);
+makeProvider("Beta Wallet", "app.beta", ["0x1111111111111111111111111111111111111111"]);
+`;
+
+test.describe("wallet modal runtime discipline", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(INSTALL_PROVIDERS);
+  });
+
+  test("no wallet request is made on mount", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await expect(page.getByTestId("open-wallet")).toBeVisible();
+    await page.waitForTimeout(1_200);
+
+    const calls: string[] = await page.evaluate(() => (window as never as { __mordantCalls: string[] }).__mordantCalls);
+    for (const forbidden of [
+      "eth_requestAccounts",
+      "wallet_requestPermissions",
+      "wallet_switchEthereumChain",
+      "wallet_addEthereumChain",
+      "eth_signTypedData_v4",
+      "personal_sign",
+    ]) {
+      expect(calls).not.toContain(forbidden);
+    }
+  });
+
+  test("opening the modal alone still requests nothing", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.waitForTimeout(600);
+
+    const calls: string[] = await page.evaluate(() => (window as never as { __mordantCalls: string[] }).__mordantCalls);
+    expect(calls).not.toContain("eth_requestAccounts");
+  });
+
+  test("discovered wallets are listed once each, with context and no dead rows", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    const dialog = page.getByRole("dialog");
+
+    await expect(dialog.getByRole("heading", { name: "Choose the wallet representing this participant" })).toBeVisible();
+    await expect(dialog).toContainText("MINV01");
+    await expect(dialog).toContainText("Monad testnet");
+    await expect(dialog).toContainText("Participant A");
+    await expect(dialog).toContainText("Connecting does not submit a claim");
+    await expect(dialog).toContainText("one typed authorization");
+
+    await expect(dialog.getByRole("button", { name: /Alpha Wallet/u })).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: /Beta Wallet/u })).toHaveCount(1);
+    // The generic injected fallback must not appear beside the named providers.
+    await expect(dialog.getByRole("button", { name: /^Injected/u })).toHaveCount(0);
+  });
+
+  test("WalletConnect is absent when unconfigured and present when configured", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    await expect(page.getByRole("dialog").getByText("On a phone")).toHaveCount(0);
+
+    await page.goto("/design-lab/wallet?wc=configured");
+    await page.getByTestId("open-wallet").click();
+    await expect(page.getByRole("dialog").getByText("On a phone")).toBeVisible();
+  });
+
+  test("one click produces exactly one account request", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    await page.getByRole("button", { name: /Alpha Wallet/u }).click();
+    await page.waitForTimeout(1_000);
+
+    const calls: string[] = await page.evaluate(() => (window as never as { __mordantCalls: string[] }).__mordantCalls);
+    expect(calls.filter((method) => method === "eth_requestAccounts")).toHaveLength(1);
+    // Connecting never switches the network by itself.
+    expect(calls).not.toContain("wallet_switchEthereumChain");
+  });
+
+  test("the dialog traps focus, closes with Escape and restores focus", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    const opener = page.getByTestId("open-wallet");
+    await opener.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    // Focus starts inside the dialog.
+    expect(await page.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null)).toBe(true);
+
+    // Tab many times: focus never escapes the dialog.
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null)).toBe(true);
+    }
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+  });
+
+  test("the page behind the dialog cannot be scrolled", async ({ page }) => {
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
+  });
+
+  test("a declined connection is explained without a raw provider payload", async ({ page }) => {
+    await page.addInitScript(`
+      window.__mordantReject = true;
+      const original = window.ethereum.request;
+      window.ethereum.request = async (args) => {
+        window.__mordantCalls.push(args.method);
+        if (args.method === "eth_requestAccounts") {
+          const error = new Error("User rejected the request.");
+          error.code = 4001;
+          throw error;
+        }
+        return original(args);
+      };
+    `);
+    await page.goto("/design-lab/wallet");
+    await page.getByTestId("open-wallet").click();
+    await page.getByRole("button", { name: /Alpha Wallet/u }).click();
+
+    const alert = page.getByRole("dialog").getByRole("alert");
+    await expect(alert).toContainText("declined in your wallet");
+    await expect(alert).not.toContainText("4001");
+    await expect(alert).not.toContainText("{");
+  });
+});

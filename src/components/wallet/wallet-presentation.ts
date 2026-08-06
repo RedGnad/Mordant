@@ -61,6 +61,17 @@ export function dedupeConnectors(rows: readonly ConnectorRow[]): readonly Connec
   return Object.freeze(out);
 }
 
+/**
+ * Digs the EIP-1193 code out of whatever the connector threw. Wagmi wraps
+ * provider errors, so the number is often one or two causes down.
+ */
+export function providerErrorCode(error: unknown, depth = 0): number | null {
+  if (error === null || typeof error !== "object" || depth > 4) return null;
+  const candidate = (error as { code?: unknown }).code;
+  if (typeof candidate === "number") return candidate;
+  return providerErrorCode((error as { cause?: unknown }).cause, depth + 1);
+}
+
 /** Provider failures become sentences a person can act on. */
 export function walletProblemMessage(code: unknown, fallback: string): string {
   const numeric = typeof code === "number" ? code : null;
