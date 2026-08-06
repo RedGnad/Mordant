@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "mordant.p0-public-restoration/1",
+  "closedAt": "2026-08-06T02:38:40.317Z",
+  "productionOrigin": "https://mordant-two.vercel.app",
+  "workerOrigin": "https://mordant-production.up.railway.app",
+  "vercelProductionVariablesPresent": [
+    "MORDANT_WORKER_TOKEN_SECRET",
+    "NEXT_PUBLIC_MORDANT_WORKER_ORIGIN",
+    "MORDANT_WORKER_TOKEN_LIFETIME_MS",
+    "MORDANT_MONAD_RPC_URL",
+    "MORDANT_PROTECTION_SOURCE_COMMIT"
+  ],
+  "secretsRecorded": "none, presence only",
+  "readbacks": {
+    "GET /protection": 200,
+    "GET /protection/live": 200,
+    "liveExecutionDisabledBanner": false,
+    "eligibilityStepRendered": true,
+    "POST /api/live-protection/token (eligible UAT holder)": 200,
+    "POST /api/live-protection/token (control holder)": 403,
+    "worker accepts a production-origin token (malformed body)": 400
+  },
+  "cors": {
+    "mode": "exact origin, never *",
+    "accepted": [
+      "https://mordant-two.vercel.app"
+    ],
+    "refused": [
+      "https://evil.example",
+      "https://mordant-git-feature-custom-supervised-pledges-redgnads-projects.vercel.app"
+    ],
+    "note": "MORDANT_WORKER_ALLOWED_ORIGIN is single valued and the worker was not modified, so the preview origin is necessarily refused while production is allowed."
+  },
+  "retainedRuns": [
+    {
+      "runId": "693a1cfc-a8c0-4024-a3de-3e17e38eb99c",
+      "stage": "COMPLETE",
+      "terminalScenario": "conflict",
+      "receiptDigestPrefix": "sha256:a50354efadd5658"
+    },
+    {
+      "runId": "5fac6616-1a89-4234-a1fa-1e1046782fb4",
+      "stage": "COMPLETE",
+      "terminalScenario": "no-conflict",
+      "receiptDigestPrefix": "sha256:d78bd81f627ee77"
+    }
+  ],
+  "secretExposure": {
+    "html": "clean",
+    "jsBundlesScannedBytes": 539201,
+    "result": "clean"
+  },
+  "paidBgvExecutionTriggered": false
+}
