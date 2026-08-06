@@ -732,4 +732,67 @@ contract MordantRecourseAdapterTest is Test {
     {
         return adapter.hashRelease(m) == baseline ? 0 : 1;
     }
+
+    // ------------------------------------------------- canonical runtime handoff
+
+    /// @dev Read from the committed runtime fixture
+    /// `src/lib/protection/governed-recourse-bridge.test.ts` on
+    /// feat/live-participant-admission-v1-runtime-candidate. Not copied from a message.
+    bytes32 private constant RUNTIME_RELEASE_TYPEHASH =
+        0x5e5f1a6c601ddff4a7d452bf8cf5c106c0efb68a0d0e17832da59c95a6ac0a8d;
+    bytes32 private constant RUNTIME_GOVERNED_AUTHORITY =
+        0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d;
+    bytes32 private constant RUNTIME_GOVERNED_CIRCUIT =
+        0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e;
+    bytes32 private constant RUNTIME_GOVERNED_PARAMETERS =
+        0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6;
+    bytes32 private constant RUNTIME_GOVERNED_ASSET =
+        0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c;
+    address private constant RUNTIME_BRIDGE_ATTESTOR = 0xEe3260bA47D097DE5a8601107e1b83454593617c;
+
+    /// @dev The struct schema is what makes the runtime's viem vector reproducible here. If the
+    /// typehash ever drifts, every digest on both sides drifts with it.
+    function test_theStructSchemaMatchesTheRuntimeHandoff() public view {
+        assertEq(adapter.RELEASE_TYPEHASH(), RUNTIME_RELEASE_TYPEHASH, "typehash must match the runtime fixture");
+    }
+
+    /// @dev The three pins the runtime handoff found wrong on the former adapter.
+    function test_anAdapterPinnedToTheGovernedValuesAcceptsThem() public {
+        MordantRecourseAdapter pinned = new MordantRecourseAdapter(
+            IERC20(address(token)),
+            ICviVerifier(address(eligibility)),
+            RUNTIME_BRIDGE_ATTESTOR,
+            facility,
+            owner,
+            RUNTIME_GOVERNED_ASSET,
+            RUNTIME_GOVERNED_AUTHORITY,
+            MODE,
+            RUNTIME_GOVERNED_CIRCUIT,
+            RUNTIME_GOVERNED_PARAMETERS,
+            CURE_WINDOW
+        );
+        assertEq(pinned.expectedGovernedReleaseAuthorityId(), RUNTIME_GOVERNED_AUTHORITY);
+        assertEq(pinned.circuitHash(), RUNTIME_GOVERNED_CIRCUIT);
+        assertEq(pinned.parameterFingerprint(), RUNTIME_GOVERNED_PARAMETERS);
+        assertEq(pinned.assetIdentityDigest(), RUNTIME_GOVERNED_ASSET);
+        assertEq(pinned.attestor(), RUNTIME_BRIDGE_ATTESTOR, "the bridge signer stays a separate address");
+        // The governed authority is data, the bridge signer is a key. They must never coincide.
+        assertTrue(uint256(pinned.expectedGovernedReleaseAuthorityId()) != uint256(uint160(pinned.attestor())));
+    }
+
+    /// @dev The former adapter's label, refused by an adapter pinned to the real authority.
+    function test_theFormerAdapterLabelIsRefusedByTheCorrectedPin() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(RUNTIME_GOVERNED_AUTHORITY);
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(60)), true);
+        r.releaseAuthorityId = 0x130d619731ab2a03a81de297e058ef57a6a85656d0ddf76d26e7a20cfa2d3651;
+        bytes memory signature = _signFor(pinned, r, ATTESTOR_KEY);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MordantRecourseAdapter.GovernedAuthorityMismatch.selector,
+                bytes32(0x130d619731ab2a03a81de297e058ef57a6a85656d0ddf76d26e7a20cfa2d3651),
+                RUNTIME_GOVERNED_AUTHORITY
+            )
+        );
+        pinned.consumeGovernedRelease(r, signature);
+    }
 }
