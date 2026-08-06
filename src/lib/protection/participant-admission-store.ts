@@ -24,13 +24,14 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { Bytes32, ParticipantRole } from "./participant-authorization";
 
-export const PARTICIPANT_ADMISSION_RECORD_SCHEMA = "mordant.participant-admission-record/1" as const;
+export const PARTICIPANT_ADMISSION_RECORD_SCHEMA = "mordant.participant-admission-record/2" as const;
 export const PARTICIPANT_CASE_CODE_SCHEMA = "mordant.participant-case-code/1" as const;
 
 /** Unambiguous alphabet: no I, L, O, U, and no lowercase. */
@@ -46,6 +47,8 @@ export type ParticipantAdmissionRecord = Readonly<{
   authorizationDigest: Bytes32;
   claimCommitment: Bytes32;
   authorizationNonce: Bytes32;
+  /** The chain bound into the verified EIP-712 authorization domain. */
+  chainId: number;
   issuedAt: number;
   expiresAt: number;
   /** The Monad block at which the active Cleanverse policy admitted this wallet. */
@@ -111,6 +114,39 @@ export function admissionRecordPath(runRoot: string, runId: string, role: Partic
   return join(admissionRoot(runRoot, runId), `${role.toLowerCase()}.json`);
 }
 
+/**
+ * Serializes the only cross-record invariant in this ledger: a wallet and an
+ * authorization nonce can occupy no more than one role in a run. The lock is a
+ * create-only file, so it is atomic across worker processes sharing the same
+ * durable volume.
+ *
+ * A stranded lock deliberately fails closed. Reclaiming it based on a clock or
+ * a PID would guess whether another writer is dead and could reopen the exact
+ * cross-role race this lock prevents.
+ */
+function withRunAdmissionLock<T>(runRoot: string, runId: string, operation: () => T): T {
+  const root = admissionRoot(runRoot, runId);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const lockPath = join(root, ".admission.lock");
+  let lock = -1;
+  try {
+    lock = openSync(lockPath, "wx", 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      fail("ADMISSION_BUSY", 409, "Participant admission is already being recorded for this case");
+    }
+    throw error;
+  }
+  try {
+    writeFileSync(lock, `${JSON.stringify({ runId })}\n`, "utf8");
+    fsyncSync(lock);
+    return operation();
+  } finally {
+    closeSync(lock);
+    unlinkSync(lockPath);
+  }
+}
+
 export function caseCodePath(runRoot: string, caseCode: string): string {
   if (!CASE_CODE_PATTERN.test(caseCode)) fail("CASE_CODE", 404, "Unknown case code");
   return join(runRoot, "case-codes", `${caseCode}.json`);
@@ -144,6 +180,31 @@ export function resolveCaseCode(runRoot: string, caseCode: string): string | nul
   return typeof record.runId === "string" ? record.runId : null;
 }
 
+function assertAdmissionRecord(record: ParticipantAdmissionRecord, runId: string, role: ParticipantRole): void {
+  if (
+    record.schemaVersion !== PARTICIPANT_ADMISSION_RECORD_SCHEMA
+    || record.runId !== runId
+    || record.role !== role
+    || typeof record.participantWallet !== "string"
+    || !/^0x[0-9a-fA-F]{40}$/u.test(record.participantWallet)
+    || !/^0x[0-9a-f]{64}$/u.test(record.authorizationDigest)
+    || !/^0x[0-9a-f]{64}$/u.test(record.claimCommitment)
+    || !/^0x[0-9a-f]{64}$/u.test(record.authorizationNonce)
+    || !Number.isSafeInteger(record.chainId)
+    || record.chainId <= 0
+    || !Number.isSafeInteger(record.issuedAt)
+    || !Number.isSafeInteger(record.expiresAt)
+    || record.issuedAt <= 0
+    || record.expiresAt <= record.issuedAt
+    || !Number.isSafeInteger(record.eligibilityBlock)
+    || record.eligibilityBlock < 0
+    || !Number.isSafeInteger(record.admittedAtUnix)
+    || record.admittedAtUnix <= 0
+  ) {
+    fail("ADMISSION_INTEGRITY", 500, "The durable admission record was rejected");
+  }
+}
+
 export function readAdmission(
   runRoot: string,
   runId: string,
@@ -151,9 +212,7 @@ export function readAdmission(
 ): ParticipantAdmissionRecord | null {
   const record = readJsonOrNull<ParticipantAdmissionRecord>(admissionRecordPath(runRoot, runId, role));
   if (record === null) return null;
-  if (record.schemaVersion !== PARTICIPANT_ADMISSION_RECORD_SCHEMA || record.runId !== runId || record.role !== role) {
-    fail("ADMISSION_INTEGRITY", 500, "The durable admission record was rejected");
-  }
+  assertAdmissionRecord(record, runId, role);
   return record;
 }
 
@@ -182,7 +241,10 @@ function sameAuthorization(
   return record.authorizationDigest === candidate.authorizationDigest
     && record.claimCommitment === candidate.claimCommitment
     && record.participantWallet === candidate.participantWallet
-    && record.authorizationNonce === candidate.authorizationNonce;
+    && record.authorizationNonce === candidate.authorizationNonce
+    && record.chainId === candidate.chainId
+    && record.issuedAt === candidate.issuedAt
+    && record.expiresAt === candidate.expiresAt;
 }
 
 /**
@@ -203,39 +265,48 @@ export function admitParticipantRole(
   candidate: Omit<ParticipantAdmissionRecord, "schemaVersion">,
 ): AdmissionOutcome {
   const { runId, role } = candidate;
-  const otherRole: ParticipantRole = role === "PARTICIPANT_A" ? "PARTICIPANT_B" : "PARTICIPANT_A";
+  return withRunAdmissionLock(runRoot, runId, () => {
+    const otherRole: ParticipantRole = role === "PARTICIPANT_A" ? "PARTICIPANT_B" : "PARTICIPANT_A";
 
-  const existing = readAdmission(runRoot, runId, role);
-  if (existing !== null) {
-    if (sameAuthorization(existing, candidate)) return Object.freeze({ record: existing, admitted: false });
-    fail("ROLE_OCCUPIED", 409, `${role} has already been admitted for this case`);
-  }
+    const existing = readAdmission(runRoot, runId, role);
+    if (existing !== null) {
+      if (sameAuthorization(existing, candidate)) return Object.freeze({ record: existing, admitted: false });
+      fail("ROLE_OCCUPIED", 409, `${role} has already been admitted for this case`);
+    }
 
-  const other = readAdmission(runRoot, runId, otherRole);
-  if (other !== null) {
-    if (other.participantWallet.toLowerCase() === candidate.participantWallet.toLowerCase()) {
-      fail("DUPLICATE_SIGNER", 409, "That wallet already holds the other role in this case");
+    const other = readAdmission(runRoot, runId, otherRole);
+    if (role === "PARTICIPANT_B" && other === null) {
+      fail("ADMISSION_OUT_OF_ORDER", 409, "Participant B cannot be admitted before Participant A");
     }
-    if (other.authorizationNonce === candidate.authorizationNonce) {
-      fail("NONCE_REPLAY", 409, "That authorization nonce has already been used");
+    if (role === "PARTICIPANT_A" && other !== null) {
+      fail("ADMISSION_INTEGRITY", 500, "Participant B exists without Participant A");
     }
-  }
+    if (other !== null) {
+      if (other.participantWallet.toLowerCase() === candidate.participantWallet.toLowerCase()) {
+        fail("DUPLICATE_SIGNER", 409, "That wallet already holds the other role in this case");
+      }
+      if (other.authorizationNonce === candidate.authorizationNonce) {
+        fail("NONCE_REPLAY", 409, "That authorization nonce has already been used");
+      }
+    }
 
-  const record: ParticipantAdmissionRecord = {
-    schemaVersion: PARTICIPANT_ADMISSION_RECORD_SCHEMA,
-    ...candidate,
-  };
-  const created = writeCreateOnly(admissionRecordPath(runRoot, runId, role), record);
-  if (!created) {
-    // Lost a race between the read above and this write. Re-read and apply the
-    // same idempotency rule rather than assuming who won.
-    const winner = readAdmission(runRoot, runId, role);
-    if (winner !== null && sameAuthorization(winner, candidate)) {
-      return Object.freeze({ record: winner, admitted: false });
+    const record: ParticipantAdmissionRecord = {
+      schemaVersion: PARTICIPANT_ADMISSION_RECORD_SCHEMA,
+      ...candidate,
+    };
+    assertAdmissionRecord(record, runId, role);
+    const created = writeCreateOnly(admissionRecordPath(runRoot, runId, role), record);
+    if (!created) {
+      // Lost a race between the read above and this write. Re-read and apply the
+      // same idempotency rule rather than assuming who won.
+      const winner = readAdmission(runRoot, runId, role);
+      if (winner !== null && sameAuthorization(winner, candidate)) {
+        return Object.freeze({ record: winner, admitted: false });
+      }
+      fail("ROLE_OCCUPIED", 409, `${role} has already been admitted for this case`);
     }
-    fail("ROLE_OCCUPIED", 409, `${role} has already been admitted for this case`);
-  }
-  return Object.freeze({ record, admitted: true });
+    return Object.freeze({ record, admitted: true });
+  });
 }
 
 export type AdmissionProgress = Readonly<{

@@ -58,6 +58,18 @@ function positiveIntEnv(environment, name, fallback) {
   return value;
 }
 
+function directParticipantAdmissionEnabled(environment) {
+  const requested = environment.MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION;
+  if (requested === undefined || requested === "disabled") return false;
+  if (requested !== "enabled") {
+    throw new WorkerError(500, "CONFIG", "MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION must be enabled or disabled");
+  }
+  if (environment.MORDANT_WORKER_DIRECT_PARTICIPANT_ADMISSION_ACK !== "MORDANT_PARTICIPANT_ADMISSION_V1") {
+    throw new WorkerError(500, "CONFIG", "MORDANT_WORKER_DIRECT_PARTICIPANT_ADMISSION_ACK is required to enable direct admission");
+  }
+  return true;
+}
+
 export function readWorkerConfiguration(environment = process.env) {
   const secret = requiredEnv(environment, "MORDANT_WORKER_TOKEN_SECRET");
   if (secret.length < 32) throw new WorkerError(500, "CONFIG", "MORDANT_WORKER_TOKEN_SECRET must be at least 32 characters");
@@ -71,12 +83,18 @@ export function readWorkerConfiguration(environment = process.env) {
   if (origin.protocol !== "https:" && origin.hostname !== "127.0.0.1" && origin.hostname !== "localhost") {
     throw new WorkerError(500, "CONFIG", "MORDANT_WORKER_ALLOWED_ORIGIN must be HTTPS outside local development");
   }
+  const maxActiveCases = positiveIntEnv(environment, "MORDANT_WORKER_MAX_ACTIVE_CASES", 1);
+  const chainId = positiveIntEnv(environment, "MORDANT_WORKER_CHAIN_ID", 10_143);
+  const directParticipantAdmission = directParticipantAdmissionEnabled(environment);
+  if (directParticipantAdmission && maxActiveCases !== 1) {
+    throw new WorkerError(500, "CONFIG", "Direct participant admission requires exactly one active BGV case");
+  }
   return Object.freeze({
     dataRoot: environment.MORDANT_WORKER_DATA_ROOT ?? "/data/mordant",
     tokenSecret: secret,
     tokenAudience: requiredEnv(environment, "MORDANT_WORKER_TOKEN_AUDIENCE"),
     allowedOrigin: origin.origin,
-    maxActiveCases: positiveIntEnv(environment, "MORDANT_WORKER_MAX_ACTIVE_CASES", 1),
+    maxActiveCases,
     dailyCaseLimit: positiveIntEnv(environment, "MORDANT_WORKER_DAILY_CASE_LIMIT", 24),
     diskFloorBytes: positiveIntEnv(environment, "MORDANT_WORKER_DISK_FLOOR_BYTES", 2_187_329_536),
     cooldownMs: positiveIntEnv(environment, "MORDANT_WORKER_COOLDOWN_MS", 15_000),
@@ -84,7 +102,9 @@ export function readWorkerConfiguration(environment = process.env) {
     // How long a neutral case waits for its second participant. Two people using
     // two wallets need longer than one operator filling in a form.
     participantCaseLifetimeMs: positiveIntEnv(environment, "MORDANT_WORKER_PARTICIPANT_CASE_LIFETIME_MS", 30 * 60 * 1_000),
-    chainId: positiveIntEnv(environment, "MORDANT_WORKER_CHAIN_ID", 10_143),
+    chainId,
+    /** Disabled unless an operator supplies both explicit direct-admission gates. */
+    directParticipantAdmission,
     retainedReceipts: positiveIntEnv(environment, "MORDANT_WORKER_RETAINED_RECEIPTS", 50),
     port: positiveIntEnv(environment, "PORT", 8080),
     version: environment.MORDANT_PROTECTION_SOURCE_COMMIT ?? "unknown",
@@ -521,12 +541,73 @@ export function createLiveWorker(options) {
     lastProgress: new Map(),
     /** Cases awaiting their second participant. */
     openCases: new Set(),
-    /** Cases whose post-admission journey is already running. */
+    /** Capacity already reserved for a neutral case still being prepared. */
+    pendingParticipantCreations: new Set(),
+    /** Fixed-window case creations that have not yet started their journey. */
+    pendingFixedCreations: new Set(),
+    /** Cases whose fixed or post-admission journey is already running. */
     running: new Set(),
   };
 
+  /**
+   * `busy` is a projection of owned work, not a flag a completing request may
+   * clear blindly. This keeps a reservation from clearing any independently
+   * owned journey that is still running.
+   */
+  function synchronizeBusyState() {
+    state.busy = state.pendingParticipantCreations.size > 0
+      || state.pendingFixedCreations.size > 0
+      || state.running.size > 0;
+    state.activeRunId = state.running.values().next().value ?? null;
+  }
+
+  function participantCaseHasTerminalReceipt(runId) {
+    return existsSync(join(paths.runRoot, runId, "custom-supervised-receipt.json"));
+  }
+
+  /**
+   * A malformed clock must not make an unknown case disappear. It occupies a
+   * slot until an operator resolves it; a valid clock expires on the same
+   * second-granularity boundary the admission service uses.
+   */
+  function participantCaseExpired(runId, nowMs) {
+    const record = readJson(join(paths.caseClock, `${runId}.json`), null);
+    const createdAtUnix = record === null ? null : record.createdAtUnix;
+    if (!Number.isSafeInteger(createdAtUnix) || createdAtUnix <= 0) return false;
+    return Math.floor(nowMs / 1_000) - createdAtUnix
+      >= Math.floor(configuration.participantCaseLifetimeMs / 1_000);
+  }
+
+  function releaseAbandonedParticipantCases(nowMs) {
+    for (const runId of state.openCases) {
+      if (participantCaseHasTerminalReceipt(runId) || participantCaseExpired(runId, nowMs)) {
+        state.openCases.delete(runId);
+      }
+    }
+  }
+
+  /**
+   * Case clocks are create-only and written before FHE preparation. On a worker
+   * replacement, every unexpired, nonterminal clock therefore occupies a slot
+   * again. This is deliberately conservative for an interrupted preparation:
+   * it expires rather than letting a restart silently exceed the configured
+   * participant-case capacity.
+   */
+  function restoreOpenParticipantCases(nowMs) {
+    if (!existsSync(paths.caseClock)) return;
+    for (const entry of readdirSync(paths.caseClock, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const runId = entry.name.slice(0, -".json".length);
+      if (!RUN_ID.test(runId) || participantCaseHasTerminalReceipt(runId)) continue;
+      state.openCases.add(runId);
+    }
+    releaseAbandonedParticipantCases(nowMs);
+  }
+
+  restoreOpenParticipantCases(now());
+
   const admissionService = () => {
-    if (options.admission === undefined) {
+    if (configuration.directParticipantAdmission !== true || options.admission === undefined) {
       throw new WorkerError(404, "ROUTE", "Participant admission is not configured");
     }
     return options.admission;
@@ -542,6 +623,7 @@ export function createLiveWorker(options) {
     return {
       orchestrator: createOrchestrator(),
       runRoot: paths.runRoot,
+      directParticipantAdmissionEnabled: configuration.directParticipantAdmission === true,
       verifyingService: configuration.allowedOrigin,
       chainId: configuration.chainId,
       verifyApass: service.verifyApass,
@@ -570,6 +652,7 @@ export function createLiveWorker(options) {
   }
 
   function assertAdmitting(nowMs) {
+    releaseAbandonedParticipantCases(nowMs);
     if (state.draining) throw new WorkerError(503, "DRAINING", "The worker is shutting down");
     if (state.busy) throw new WorkerError(409, "BUSY", "A private check is currently running");
     if (!diskSufficient()) throw new WorkerError(507, "DISK", "Insufficient durable storage for a new case");
@@ -579,16 +662,40 @@ export function createLiveWorker(options) {
     if (admittedInLastDay(paths, nowMs) >= configuration.dailyCaseLimit) {
       throw new WorkerError(429, "DAILY_LIMIT", "The daily execution limit has been reached");
     }
-    if (state.openCases.size >= configuration.maxActiveCases) {
+    if (state.openCases.size + state.pendingParticipantCreations.size >= configuration.maxActiveCases) {
       throw new WorkerError(409, "OPEN_CASE", "A case is already waiting for its participants");
     }
   }
 
+  function reserveFixedCreation(nowMs) {
+    assertAdmitting(nowMs);
+    const reservation = randomUUID();
+    state.pendingFixedCreations.add(reservation);
+    synchronizeBusyState();
+    return () => {
+      if (state.pendingFixedCreations.delete(reservation)) synchronizeBusyState();
+    };
+  }
+
+  /**
+   * Reserve both the global private-execution slot and one participant-case
+   * slot before neutral-case preparation begins. This function contains no
+   * await, so two incoming requests cannot both pass the capacity check.
+   */
+  function reserveParticipantCreation(nowMs) {
+    assertAdmitting(nowMs);
+    const reservation = randomUUID();
+    state.pendingParticipantCreations.add(reservation);
+    synchronizeBusyState();
+    return () => {
+      if (state.pendingParticipantCreations.delete(reservation)) synchronizeBusyState();
+    };
+  }
+
   function beginPostAdmissionJourney(runId) {
     state.running.add(runId);
-    state.busy = true;
-    state.activeRunId = runId;
     state.openCases.delete(runId);
+    synchronizeBusyState();
     void (async () => {
       const started = now();
       try {
@@ -603,8 +710,7 @@ export function createLiveWorker(options) {
         options.onError?.({ runId, error });
       } finally {
         state.running.delete(runId);
-        state.busy = false;
-        state.activeRunId = null;
+        synchronizeBusyState();
         state.lastCompletedAt = now();
       }
     })();
@@ -617,11 +723,13 @@ export function createLiveWorker(options) {
   }
 
   function accepting(nowMs) {
+    releaseAbandonedParticipantCases(nowMs);
     return !state.draining
       && !state.busy
       && diskSufficient()
       && nowMs - state.lastCompletedAt >= configuration.cooldownMs
-      && admittedInLastDay(paths, nowMs) < configuration.dailyCaseLimit;
+      && admittedInLastDay(paths, nowMs) < configuration.dailyCaseLimit
+      && state.openCases.size + state.pendingParticipantCreations.size < configuration.maxActiveCases;
   }
 
   async function persistStage(runId, view) {
@@ -636,8 +744,8 @@ export function createLiveWorker(options) {
     if (created.runId !== runId) throw new WorkerError(500, "RUN_ID", "Case creation did not bind the generated run identifier");
     const view = await orchestrator.readCustomSupervisedCase(runId);
     await persistStage(runId, view);
-    state.busy = true;
-    state.activeRunId = runId;
+    state.running.add(runId);
+    synchronizeBusyState();
 
     // The journey continues in the background; the visitor polls for progress.
     void (async () => {
@@ -653,8 +761,8 @@ export function createLiveWorker(options) {
         state.lastProgress.set(runId, "Execution stopped");
         options.onError?.({ runId, error });
       } finally {
-        state.busy = false;
-        state.activeRunId = null;
+        state.running.delete(runId);
+        synchronizeBusyState();
         state.lastCompletedAt = now();
       }
     })();
@@ -670,7 +778,8 @@ export function createLiveWorker(options) {
     // currently holds a run.
     if (request.method === "OPTIONS") {
       const known = url.pathname === "/v1/custom-cases" || url.pathname.startsWith("/v1/custom-cases/")
-        || url.pathname === "/v1/participant-cases" || url.pathname.startsWith("/v1/participant-cases/")
+        || (configuration.directParticipantAdmission === true
+          && (url.pathname === "/v1/participant-cases" || url.pathname.startsWith("/v1/participant-cases/")))
         || url.pathname === "/health";
       if (!known) throw new WorkerError(404, "ROUTE", "Unknown route");
       response.writeHead(204, { "cache-control": "no-store, max-age=0", ...cors });
@@ -689,6 +798,12 @@ export function createLiveWorker(options) {
     }
 
     if (request.method === "POST" && url.pathname === "/v1/custom-cases") {
+      // Direct participant admission owns the worker's one BGV slot. Keep
+      // historical custom-case reads available below, but remove the managed
+      // creation surface in this profile so it cannot race an admission flow.
+      if (configuration.directParticipantAdmission === true) {
+        throw new WorkerError(404, "ROUTE", "Managed case creation is unavailable");
+      }
       if (url.search !== "") throw new WorkerError(400, "QUERY", "Query parameters are not accepted");
       assertAllowedOrigin(request, configuration);
       const contentType = String(request.headers["content-type"] ?? "");
@@ -696,19 +811,22 @@ export function createLiveWorker(options) {
       const authorization = String(request.headers.authorization ?? "");
       if (!authorization.startsWith("Bearer ")) throw new WorkerError(401, "TOKEN_FORMAT", "A launch token is required");
       const claims = verifyLaunchToken(authorization.slice(7), configuration, nowMs);
-      if (state.draining) throw new WorkerError(503, "DRAINING", "The worker is shutting down");
-      if (state.busy) throw new WorkerError(409, "BUSY", "A private check is currently running");
-      if (!diskSufficient()) throw new WorkerError(507, "DISK", "Insufficient durable storage for a new case");
-      if (nowMs - state.lastCompletedAt < configuration.cooldownMs) throw new WorkerError(429, "COOLDOWN", "The next execution slot is not open yet");
-      if (admittedInLastDay(paths, nowMs) >= configuration.dailyCaseLimit) throw new WorkerError(429, "DAILY_LIMIT", "The daily execution limit has been reached");
       const body = await readBoundedBody(request);
       const windows = assertLiveWindows(body);
-      // Claimed only once every other precondition holds, so a refused request
-      // does not burn the visitor's token.
-      claimToken(paths, claims.tokenId, nowMs);
-      recordAdmission(paths, claims.tokenId, nowMs, configuration.dailyCaseLimit);
-      const admitted = await admitCase(windows, nowMs);
-      return send(response, 201, liveCaseBody(admitted.view, progressFor(admitted.view.stage)), cors);
+      // Reserve before claiming the token or starting any FHE work. The release
+      // closure is ownership-aware through `synchronizeBusyState`, so it cannot
+      // clear a later journey that began while this request awaited creation.
+      const releaseReservation = reserveFixedCreation(nowMs);
+      try {
+        // Claimed only once every other precondition holds, so a refused request
+        // does not burn the visitor's token.
+        claimToken(paths, claims.tokenId, nowMs);
+        recordAdmission(paths, claims.tokenId, nowMs, configuration.dailyCaseLimit);
+        const admitted = await admitCase(windows, nowMs);
+        return send(response, 201, liveCaseBody(admitted.view, progressFor(admitted.view.stage)), cors);
+      } finally {
+        releaseReservation();
+      }
     }
 
     // ---------------------------------------------------------- participant admission
@@ -722,19 +840,34 @@ export function createLiveWorker(options) {
       if (url.search !== "") throw new WorkerError(400, "QUERY", "Query parameters are not accepted");
       assertAllowedOrigin(request, configuration);
       assertJsonRequest(request);
+      const service = admissionService();
       const claims = verifyLaunchToken(bearer(request), configuration, nowMs);
-      assertAdmitting(nowMs);
       const body = await readBoundedBody(request);
       // A neutral case carries nothing. An empty object is the whole body.
       if (!exactKeys(body, [])) throw new WorkerError(400, "BODY_MEMBERS", "A neutral case takes no members");
-      claimToken(paths, claims.tokenId, nowMs);
-      recordAdmission(paths, claims.tokenId, nowMs, configuration.dailyCaseLimit);
-      const created = await admissionService().createParticipantCase(dependencies());
-      recordCaseStart(paths, created.runId, nowMs);
-      state.lastView.set(created.runId, created.view);
-      state.lastProgress.set(created.runId, progressFor(created.view.stage));
-      state.openCases.add(created.runId);
-      return send(response, 201, participantCaseBody(created.view, created.admission), cors);
+      const releaseReservation = reserveParticipantCreation(nowMs);
+      try {
+        claimToken(paths, claims.tokenId, nowMs);
+        recordAdmission(paths, claims.tokenId, nowMs, configuration.dailyCaseLimit);
+        const created = await service.createParticipantCase({
+          ...dependencies(),
+          // This callback runs after the neutral run and shareable code are
+          // durable but before FHE preparation. Reserve the waiting-case slot
+          // at the same point, so a failed preparation cannot disappear from
+          // this process's capacity accounting until its clock expires.
+          onParticipantCaseCreated: ({ runId }) => {
+            recordCaseStart(paths, runId, nowMs);
+            state.openCases.add(runId);
+          },
+        });
+        state.lastView.set(created.runId, created.view);
+        state.lastProgress.set(created.runId, progressFor(created.view.stage));
+        return send(response, 201, participantCaseBody(created.view, created.admission), cors);
+      } finally {
+        // Only the active preparation reservation is released here. A case
+        // clocked above remains open until terminal completion or expiry.
+        releaseReservation();
+      }
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/v1/participant-cases/")) {
@@ -742,6 +875,9 @@ export function createLiveWorker(options) {
       const readback = await admissionService().readParticipantCase(
         dependencies(), caseCode, readCaseStartFor(caseCode, nowMs),
       );
+      if (readback.admission.abandoned || readback.admission.lifecycle === "EXECUTION_ABORTED") {
+        state.openCases.delete(readback.runId);
+      }
       return send(response, 200, participantCaseBody(readback.view, readback.admission), cors);
     }
 
@@ -759,6 +895,7 @@ export function createLiveWorker(options) {
       // choose its own replay window.
       const challenge = await admissionService().participantAdmissionChallenge(
         dependencies(), caseCode, body.role, body.participantWallet, body.claim,
+        readCaseStartFor(caseCode, nowMs),
       );
       return send(response, 200, { schemaVersion: WORKER_SCHEMA, challenge }, cors);
     }
@@ -864,7 +1001,21 @@ async function main() {
   // The engine writes every durable artifact below the attached volume.
   process.env.MORDANT_PROTECTION_RUN_ROOT = paths.runRoot;
   process.env.MORDANT_PROTECTION_RETENTION_ROOT = paths.receipts;
-
+  const compatibility = await import("../.product-test-dist/src/lib/protection/adapter-compatibility.js");
+  // The engine itself is fail-closed too. The worker enables it only after the
+  // canonical, key-free configuration confirms its exact Monad chain. Explicitly
+  // clear an inherited engine flag when worker admission is disabled, so this
+  // worker cannot accidentally expose a direct path through ambient process
+  // configuration.
+  process.env.MORDANT_PROTECTION_DIRECT_PARTICIPANT_ADMISSION = configuration.directParticipantAdmission === true
+    ? "enabled"
+    : "disabled";
+  if (configuration.directParticipantAdmission === true) {
+    const canonical = compatibility.loadCanonicalRecourseConfiguration();
+    if (configuration.chainId !== canonical.adapter.chainId) {
+      throw new WorkerError(500, "CONFIG", "Direct participant admission requires the canonical Monad chain");
+    }
+  }
   const engine = await import("../.product-test-dist/src/lib/protection/governed-fhe-product-server.js");
   const service = await import("../.product-test-dist/src/lib/protection/participant-admission-service.js");
   const store = await import("../.product-test-dist/src/lib/protection/participant-admission-store.js");

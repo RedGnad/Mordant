@@ -24,6 +24,11 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { CustomSupervisedProtectionView } from "./custom-supervised-view";
 import type { AdmittedParticipantClaim, ParticipantAdmissionContext } from "./governed-fhe-product-server";
 import {
+  MONAD_TESTNET_CHAIN_ID,
+  loadCanonicalRecourseConfiguration,
+  type CanonicalRecourseConfiguration,
+} from "./adapter-compatibility";
+import {
   PARTICIPANT_ADMISSION_PRIMARY_TYPE,
   PARTICIPANT_ADMISSION_TYPES,
   ParticipantAuthorizationError,
@@ -42,6 +47,7 @@ import {
   admitParticipantRole,
   bindCaseCode,
   generateCaseCode,
+  readAdmission,
   readAdmissions,
   resolveCaseCode,
   type AdmissionProgress,
@@ -86,6 +92,8 @@ export type ApassVerdict = Readonly<{ eligible: boolean; holderAddress: string; 
 export type AdmissionDependencies = Readonly<{
   orchestrator: AdmissionOrchestrator;
   runRoot: string;
+  /** Disabled by default; the worker enables it only after all runtime gates pass. */
+  directParticipantAdmissionEnabled?: boolean;
   /** The exact service the wallet signed for. */
   verifyingService: string;
   chainId?: number;
@@ -94,7 +102,42 @@ export type AdmissionDependencies = Readonly<{
   /** Unix seconds. */
   now: () => number;
   caseLifetimeSeconds?: number;
+  /** Records the durable case clock before private preparation begins. */
+  onParticipantCaseCreated?: (input: Readonly<{ runId: string; caseCode: string }>) => void | Promise<void>;
 }>;
+
+function canonicalDirectAdmissionConfiguration(dependencies: AdmissionDependencies): CanonicalRecourseConfiguration {
+  if (dependencies.directParticipantAdmissionEnabled !== true) {
+    fail("DIRECT_ADMISSION_DISABLED", 403, "Direct participant admission is disabled");
+  }
+  if (dependencies.chainId !== MONAD_TESTNET_CHAIN_ID) {
+    fail("DIRECT_ADMISSION_CHAIN", 403, `Direct participant admission requires chain ${MONAD_TESTNET_CHAIN_ID}`);
+  }
+  try {
+    const canonical = loadCanonicalRecourseConfiguration();
+    if (canonical.adapter.chainId !== MONAD_TESTNET_CHAIN_ID) {
+      fail("DIRECT_ADMISSION_CHAIN", 503, "The canonical direct-admission chain is unavailable");
+    }
+    return canonical;
+  } catch (error) {
+    if (error instanceof ParticipantAdmissionError) throw error;
+    fail("CANONICAL_CONFIGURATION", 503, "The canonical direct-admission configuration is unavailable");
+  }
+}
+
+function assertCanonicalParticipantWallet(
+  configuration: CanonicalRecourseConfiguration,
+  role: ParticipantRole,
+  wallet: string,
+): `0x${string}` {
+  const expected = role === "PARTICIPANT_A"
+    ? configuration.participants.holderA
+    : configuration.participants.holderB;
+  if (typeof wallet !== "string" || wallet.toLowerCase() !== expected.toLowerCase()) {
+    fail("CANONICAL_PARTICIPANT", 403, `That wallet is not the canonical ${role} participant`);
+  }
+  return expected;
+}
 
 /**
  * Public-safe admission projection.
@@ -122,6 +165,7 @@ export const PARTICIPANT_LIFECYCLE = [
   "SUBMISSIONS_FINALIZED",
   "EVALUATED",
   "RELEASED",
+  "EXECUTION_ABORTED",
   "ABANDONED",
 ] as const;
 export type ParticipantLifecycle = (typeof PARTICIPANT_LIFECYCLE)[number];
@@ -136,6 +180,21 @@ export function participantLifecycle(
   progress: AdmissionProgress,
   abandoned: boolean,
 ): ParticipantLifecycle {
+  const knownStage = [
+    "CASE_CREATED",
+    "MATCH_PREPARED",
+    "PARTICIPANT_A_SUBMITTED",
+    "PARTICIPANT_B_PUBLISHED",
+    "PARTICIPANT_B_SUBMITTED",
+    "EVALUATED",
+    "RELEASED",
+    "RECOURSE_OPENED",
+    "CHRONOLOGY_COMPLETE",
+    "COMPLETE",
+    "ABORTED",
+  ].includes(stage);
+  if (!knownStage) fail("ADMISSION_STAGE", 500, "The participant execution stage is not recognized");
+  if (stage === "ABORTED") return "EXECUTION_ABORTED";
   if (abandoned) return "ABANDONED";
   switch (stage) {
     case "CASE_CREATED": return "CASE_CREATED_NEUTRAL";
@@ -144,7 +203,11 @@ export function participantLifecycle(
     case "PARTICIPANT_B_PUBLISHED": return "PARTICIPANT_B_ADMITTED";
     case "PARTICIPANT_B_SUBMITTED": return "SUBMISSIONS_FINALIZED";
     case "EVALUATED": return "EVALUATED";
-    default: return "RELEASED";
+    case "RELEASED":
+    case "RECOURSE_OPENED":
+    case "CHRONOLOGY_COMPLETE":
+    case "COMPLETE": return "RELEASED";
+    default: fail("ADMISSION_STAGE", 500, "The participant execution stage is not recognized");
   }
 }
 
@@ -156,6 +219,9 @@ function projectAdmission(
   createdAtUnix: number,
 ): ParticipantAdmissionProjection {
   const progress = admissionProgress(dependencies.runRoot, runId);
+  if (progress.participantB && !progress.participantA) {
+    fail("ADMISSION_INTEGRITY", 500, "Participant B cannot be admitted before Participant A");
+  }
   const abandoned = admissionAbandoned(
     dependencies.runRoot,
     runId,
@@ -193,10 +259,15 @@ export async function createParticipantCase(
   dependencies: AdmissionDependencies,
   creationRequestId: string = randomUUID(),
 ): Promise<CreatedParticipantCase> {
+  canonicalDirectAdmissionConfiguration(dependencies);
   const created = await dependencies.orchestrator.createNeutralParticipantCase(creationRequestId);
   const runId = created.runId;
   const caseCode = generateCaseCode();
   bindCaseCode(dependencies.runRoot, caseCode, runId);
+  // The worker records its durable case clock here, before BGV preparation can
+  // consume significant resources or fail. A restart can therefore never reset
+  // the participant lifetime merely because preparation had not completed.
+  await dependencies.onParticipantCaseCreated?.(Object.freeze({ runId, caseCode }));
   await dependencies.orchestrator.preparePrivateMatch(runId);
   const view = await dependencies.orchestrator.readCustomSupervisedCase(runId);
   return Object.freeze({
@@ -254,14 +325,35 @@ export async function participantAdmissionChallenge(
   role: ParticipantRole,
   participantWallet: string,
   claim: unknown,
+  createdAtUnix?: number,
 ): Promise<ParticipantChallenge> {
+  const canonical = canonicalDirectAdmissionConfiguration(dependencies);
+  if (!isParticipantRole(role)) fail("ROLE", 400, "The role must be PARTICIPANT_A or PARTICIPANT_B");
+  const canonicalWallet = assertCanonicalParticipantWallet(canonical, role, participantWallet);
   const runId = resolveCaseCode(dependencies.runRoot, caseCode);
   if (runId === null) fail("UNKNOWN_CASE", 404, "Unknown case code");
+  const caseCreatedAt = createdAtUnix ?? dependencies.now();
+  if (admissionAbandoned(
+    dependencies.runRoot,
+    runId,
+    caseCreatedAt,
+    dependencies.now(),
+    dependencies.caseLifetimeSeconds ?? PARTICIPANT_CASE_LIFETIME_SECONDS,
+  )) {
+    fail("CASE_ABANDONED", 410, "This case is no longer accepting participants");
+  }
+  if (readAdmission(dependencies.runRoot, runId, role) !== null) {
+    fail("ROLE_OCCUPIED", 409, `${role} has already been admitted for this case`);
+  }
   const window = assertSupervisedPledgeWindow(
     claim,
     role === "PARTICIPANT_A" ? "participantA" : "participantB",
   );
   const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId);
+  const expectedStage = role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
+  if (context.stage !== expectedStage) {
+    fail("ADMISSION_OUT_OF_ORDER", 409, `Participant ${role} admission is out of order`);
+  }
   const issuedAt = dependencies.now();
   return Object.freeze({
     schemaVersion: PARTICIPANT_CHALLENGE_SCHEMA,
@@ -277,7 +369,7 @@ export async function participantAdmissionChallenge(
       role,
       activeFrom: window.activeFrom,
       activeUntil: window.activeUntil,
-      participantWallet,
+      participantWallet: canonicalWallet,
       authorizationNonce: `0x${randomBytes(32).toString("hex")}`,
       issuedAt,
       expiresAt: issuedAt + PARTICIPANT_CHALLENGE_LIFETIME_SECONDS,
@@ -341,6 +433,7 @@ export async function admitParticipant(
   request: AdmissionRequest,
   createdAtUnix?: number,
 ): Promise<AdmissionResult> {
+  const canonical = canonicalDirectAdmissionConfiguration(dependencies);
   const runId = resolveCaseCode(dependencies.runRoot, request.caseCode);
   if (runId === null) fail("UNKNOWN_CASE", 404, "Unknown case code");
 
@@ -363,6 +456,12 @@ export async function admitParticipant(
   );
 
   const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId);
+  const expectedStage = request.role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
+  // Do not reserve a durable role before the engine can accept it. Exact
+  // retries are allowed to repair a crash after the ledger write.
+  if (readAdmission(dependencies.runRoot, runId, request.role) === null && context.stage !== expectedStage) {
+    fail("ADMISSION_OUT_OF_ORDER", 409, `Participant ${request.role} admission is out of order`);
+  }
   const message = assertParticipantAdmissionMessage(request.authorization);
   const verified = await verifyParticipantAuthorization(
     message,
@@ -380,12 +479,16 @@ export async function admitParticipant(
     },
     dependencies.verifyTypedData,
   );
+  assertCanonicalParticipantWallet(canonical, request.role, verified.participantWallet);
 
   // The active Cleanverse policy decides on the verified signing address, never
   // on an address the body merely asserted.
   const verdict = await dependencies.verifyApass(verified.participantWallet);
   if (!verdict.eligible) {
     fail("APASS_DENIED", 403, "That wallet does not pass the active compliance policy");
+  }
+  if (typeof verdict.holderAddress !== "string" || verdict.holderAddress.toLowerCase() !== verified.participantWallet.toLowerCase()) {
+    fail("APASS_IDENTITY", 403, "The compliance verdict did not bind the verified wallet");
   }
 
   const outcome = admitParticipantRole(dependencies.runRoot, {
@@ -395,6 +498,7 @@ export async function admitParticipant(
     authorizationDigest: verified.authorizationDigest,
     claimCommitment: verified.claimCommitment,
     authorizationNonce: message.authorizationNonce,
+    chainId: canonical.adapter.chainId,
     issuedAt: message.issuedAt,
     expiresAt: message.expiresAt,
     eligibilityBlock: verdict.observedBlock,
@@ -406,6 +510,7 @@ export async function admitParticipant(
     authorizationDigest: verified.authorizationDigest,
     claimCommitment: verified.claimCommitment,
     authorizationNonce: message.authorizationNonce,
+    chainId: canonical.adapter.chainId,
     issuedAt: message.issuedAt,
     expiresAt: message.expiresAt,
     claim,

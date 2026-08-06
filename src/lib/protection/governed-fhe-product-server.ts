@@ -74,10 +74,17 @@ import {
   type ProductOperationRecord,
 } from "./protection-operation-journal";
 import {
+  assertSupervisedPledgeWindow,
   assertSupervisedPledgeWindows,
   type SupervisedPledgeWindow,
   type SupervisedPledgeWindows,
 } from "./supervised-pledge-windows";
+import { participantClaimCommitment } from "./participant-authorization";
+import { readAdmission } from "./participant-admission-store";
+import {
+  MONAD_TESTNET_CHAIN_ID,
+  loadCanonicalRecourseConfiguration,
+} from "./adapter-compatibility";
 import {
   CUSTOM_SUPERVISED_VIEW_SCHEMA,
   type CustomSupervisedProtectionView,
@@ -200,6 +207,11 @@ export type ProtectionRuntimeOptions = Readonly<{
   statfsAvailableBytes?: (root: string) => number;
   skipBinaryBuild?: boolean;
   expectedSourceCommit?: string;
+  /**
+   * Direct wallet admission is an opt-in server capability. It is deliberately
+   * off for a normal custom/FHE orchestrator, including the module default.
+   */
+  directParticipantAdmissionEnabled?: boolean;
 }>;
 
 type ProtectionRuntime = Readonly<{
@@ -214,6 +226,7 @@ type ProtectionRuntime = Readonly<{
   statfsAvailableBytes?: ProtectionRuntimeOptions["statfsAvailableBytes"];
   skipBinaryBuild: boolean;
   expectedSourceCommit: unknown;
+  directParticipantAdmissionEnabled: boolean;
 }>;
 
 function runtimeFrom(options: ProtectionRuntimeOptions = {}): ProtectionRuntime {
@@ -242,6 +255,8 @@ function runtimeFrom(options: ProtectionRuntimeOptions = {}): ProtectionRuntime 
     // Capture the independent build/server pin once. Export separately checks
     // the live environment so a changed or missing value cannot rewrite it.
     expectedSourceCommit: options.expectedSourceCommit ?? process.env.MORDANT_PROTECTION_SOURCE_COMMIT,
+    directParticipantAdmissionEnabled: options.directParticipantAdmissionEnabled
+      ?? process.env.MORDANT_PROTECTION_DIRECT_PARTICIPANT_ADMISSION === "enabled",
   };
 }
 
@@ -288,6 +303,7 @@ type InternalState = Readonly<{
     authorizationDigest: string;
     claimCommitment: string;
     authorizationNonce: string;
+    chainId: number;
     issuedAt: number;
     expiresAt: number;
     claim: SupervisedPledgeWindow;
@@ -1063,7 +1079,9 @@ function buildCustomSupervisedReceipt(
     },
     disclosures: [
       "Supervised local single-host execution; not production authorized.",
-      "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
+      state.supervisedPledgeWindows === undefined
+        ? "Participant-admitted pledge windows under verified durable wallet authorizations; synthetic lender fixtures and no real funds."
+        : "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
       "Designated trusted decryptor; no threshold release and no native Monad FHE.",
       "The governed signed Boolean is the sole authority for the terminal outcome.",
     ],
@@ -1264,10 +1282,26 @@ export type ParticipantAdmissionContext = Readonly<{
   protectionBindingDigest: Sha256Digest;
 }>;
 
+function assertDirectParticipantAdmissionEnabled(runtime: ProtectionRuntime): void {
+  if (!runtime.directParticipantAdmissionEnabled) {
+    throw new ProtectionProductError("Direct participant admission is disabled", 403);
+  }
+  try {
+    const canonical = loadCanonicalRecourseConfiguration();
+    if (canonical.adapter.chainId !== MONAD_TESTNET_CHAIN_ID) {
+      throw new ProtectionProductError("The canonical direct-admission chain is unavailable", 503);
+    }
+  } catch (error) {
+    if (error instanceof ProtectionProductError) throw error;
+    throw new ProtectionProductError("The canonical direct-admission configuration is unavailable", 503);
+  }
+}
+
 async function readParticipantAdmissionContextRuntime(
   runtime: ProtectionRuntime,
   runId: string,
 ): Promise<ParticipantAdmissionContext> {
+  assertDirectParticipantAdmissionEnabled(runtime);
   const state = await loadState(runtime, runId, false);
   if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
     throw new ProtectionProductError("This case does not admit participants", 409);
@@ -1286,10 +1320,59 @@ export type AdmittedParticipantClaim = Readonly<{
   authorizationDigest: string;
   claimCommitment: string;
   authorizationNonce: string;
+  chainId: number;
   issuedAt: number;
   expiresAt: number;
   claim: SupervisedPledgeWindow;
 }>;
+
+/**
+ * The engine trusts only the create-only admission ledger, never the object an
+ * in-process caller supplied. The service writes that ledger only after typed
+ * signature, policy and canonical-role checks. Recomputing the claim commitment
+ * closes the remaining gap between a durable commitment and plaintext used to
+ * build the Go pledge.
+ */
+function assertVerifiedDurableAdmission(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  admission: AdmittedParticipantClaim,
+): void {
+  const durable = readAdmission(runtime.runRoot, state.runId, role);
+  if (durable === null) {
+    throw new ProtectionProductError(`Participant ${role} has no verified durable admission`, 409);
+  }
+  const claim = assertSupervisedPledgeWindow(
+    admission.claim,
+    role === "PARTICIPANT_A" ? "participantA" : "participantB",
+  );
+  const recomputedClaimCommitment = participantClaimCommitment({ runId: state.runId, role, claim });
+  let canonicalWallet: string;
+  try {
+    const canonical = loadCanonicalRecourseConfiguration();
+    canonicalWallet = role === "PARTICIPANT_A"
+      ? canonical.participants.holderA
+      : canonical.participants.holderB;
+  } catch {
+    throw new ProtectionProductError("The canonical direct-admission configuration is unavailable", 503);
+  }
+  if (
+    durable.chainId !== MONAD_TESTNET_CHAIN_ID
+    || admission.chainId !== MONAD_TESTNET_CHAIN_ID
+    || durable.participantWallet.toLowerCase() !== canonicalWallet.toLowerCase()
+    || durable.participantWallet.toLowerCase() !== admission.participantWallet.toLowerCase()
+    || durable.authorizationDigest !== admission.authorizationDigest
+    || durable.claimCommitment !== admission.claimCommitment
+    || durable.authorizationNonce !== admission.authorizationNonce
+    || durable.chainId !== admission.chainId
+    || durable.issuedAt !== admission.issuedAt
+    || durable.expiresAt !== admission.expiresAt
+    || durable.claimCommitment !== recomputedClaimCommitment
+  ) {
+    throw new ProtectionProductError(`Participant ${role} durable admission does not match this pledge`, 409);
+  }
+}
 
 /**
  * Records one participant's admitted claim against a prepared case.
@@ -1309,6 +1392,7 @@ async function admitParticipantClaimRuntime(
   admission: AdmittedParticipantClaim,
 ): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
+    assertDirectParticipantAdmissionEnabled(runtime);
     let state = await loadState(runtime, runId);
     if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
       throw new ProtectionProductError("This case does not admit participants", 409);
@@ -1328,12 +1412,14 @@ async function admitParticipantClaimRuntime(
       ) {
         throw new ProtectionProductError(`${role} has already been admitted for this case`, 409);
       }
+      assertVerifiedDurableAdmission(runtime, state, role, admission);
       return publicView(state, runtime);
     }
     const expectedStage: ExecutionStage = role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
     if (state.stage !== expectedStage) {
       throw new ProtectionProductError(`Participant ${role} admission is out of order`, 409);
     }
+    assertVerifiedDurableAdmission(runtime, state, role, admission);
     state = saveState(runtime, {
       ...state,
       admittedClaims: { ...state.admittedClaims, [role]: admission },
@@ -1360,6 +1446,13 @@ function pledgeFor(state: InternalState, role: "PARTICIPANT_A" | "PARTICIPANT_B"
     : custom === undefined
       ? undefined
       : role === "PARTICIPANT_A" ? custom.participantA : custom.participantB;
+  if (
+    state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+    && custom === undefined
+    && admitted === undefined
+  ) {
+    throw new ProtectionProductError(`Participant ${role} has no verified durable admission`, 409);
+  }
   const activeFrom = window !== undefined
     ? window.activeFrom
     : role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
@@ -1374,8 +1467,18 @@ function pledgeFor(state: InternalState, role: "PARTICIPANT_A" | "PARTICIPANT_B"
     obligationId: digestText("MordantProtectionObligation/v1", `${state.runId}/${role}`).slice(7),
     receivableId: digestText("MordantProtectionReceivable/v1", base).slice(7),
     exclusive: true,
-    authorizationCommitment: digestText("MordantProtectionAuthorization/v1", `${state.runId}/${role}`).slice(7),
-    privateMetadataCommitment: digestText("MordantProtectionPrivateMetadata/v1", `${state.runId}/${role}`).slice(7),
+    // The Go pledge schema remains the same 64-hex-character fields. For the
+    // direct-admission variant, they now carry the exact EIP-712 authorization
+    // digest and the independently recomputable claim commitment. Both values
+    // already bind run, role, wallet and interval, so the FHE input can be
+    // checked against the verified durable admission without changing the BGV
+    // circuit or governed-result schema.
+    authorizationCommitment: admitted === undefined
+      ? digestText("MordantProtectionAuthorization/v1", `${state.runId}/${role}`).slice(7)
+      : admitted.authorizationDigest.slice(2),
+    privateMetadataCommitment: admitted === undefined
+      ? digestText("MordantProtectionPrivateMetadata/v1", `${state.runId}/${role}`).slice(7)
+      : admitted.claimCommitment.slice(2),
   };
 }
 
@@ -1414,6 +1517,14 @@ async function submitParticipantPledgeRuntime(
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
     assertProtectionAssetBinding(state.protectionCase, expectedAssetDigest);
+    if (state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT && state.supervisedPledgeWindows === undefined) {
+      assertDirectParticipantAdmissionEnabled(runtime);
+      const admitted = state.admittedClaims?.[role];
+      if (admitted === undefined) {
+        throw new ProtectionProductError(`Participant ${role} has no verified durable admission`, 409);
+      }
+      assertVerifiedDurableAdmission(runtime, state, role, admitted);
+    }
     if (role === "PARTICIPANT_B" && state.stage === "PARTICIPANT_B_PUBLISHED") {
       return publicView(await finalizeParticipantSubmissions(runtime, state), runtime);
     }
@@ -2207,9 +2318,10 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
      * private input: the placeholder first argument is never bound, never derived
      * from and never displayed, exactly as on the operator-entered custom path.
      */
-    createNeutralParticipantCase: (creationRequestId: string = randomUUID()) => (
-      createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true)
-    ),
+    createNeutralParticipantCase: async (creationRequestId: string = randomUUID()) => {
+      assertDirectParticipantAdmissionEnabled(runtime);
+      return createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true);
+    },
     readParticipantAdmissionContext: (runId: string) => readParticipantAdmissionContextRuntime(runtime, runId),
     admitParticipantClaim: (
       runId: string,
