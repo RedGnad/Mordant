@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { hashTypedData, recoverAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import type { CustomSupervisedProtectionView } from "./custom-supervised-view";
@@ -22,6 +21,7 @@ import {
 import {
   admitParticipant,
   assertAdmissionRequest,
+  createParticipantCase,
   participantAdmissionChallenge,
   participantLifecycle,
   readParticipantCase,
@@ -33,8 +33,8 @@ import {
   participantAdmissionTypedData,
   type ParticipantAdmissionMessage,
   type ParticipantRole,
-  type TypedDataVerifier,
 } from "./participant-authorization";
+import { loadCanonicalRecourseConfiguration } from "./adapter-compatibility";
 
 const CHAIN_ID = 10_143;
 const RUN_ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
@@ -43,10 +43,10 @@ const FHE_CASE_ID = `sha256:${"a".repeat(64)}` as const;
 const BINDING_DIGEST = `sha256:${"b".repeat(64)}` as const;
 const ASSET_DIGEST = `sha256:${"c".repeat(64)}` as const;
 const NOW = 1_800_000_000;
+const CANONICAL_PARTICIPANTS = loadCanonicalRecourseConfiguration().participants;
 
 const accountA = privateKeyToAccount(`0x${"11".repeat(32)}`);
 const accountB = privateKeyToAccount(`0x${"22".repeat(32)}`);
-const accountC = privateKeyToAccount(`0x${"33".repeat(32)}`);
 
 function temporaryRoot(): string {
   return mkdtempSync(join(tmpdir(), "mordant-admission-"));
@@ -60,6 +60,7 @@ function record(overrides: Partial<Omit<ParticipantAdmissionRecord, "schemaVersi
     authorizationDigest: `0x${"1".repeat(64)}` as const,
     claimCommitment: `0x${"2".repeat(64)}` as const,
     authorizationNonce: `0x${"3".repeat(64)}` as const,
+    chainId: CHAIN_ID,
     issuedAt: NOW - 10,
     expiresAt: NOW + 600,
     eligibilityBlock: 12_345,
@@ -197,6 +198,20 @@ test("a nonce cannot be replayed into the other role", () => {
   }
 });
 
+test("a run-scoped create-only lock fails closed instead of racing A and B admission", () => {
+  const root = temporaryRoot();
+  try {
+    const admissionRoot = join(root, RUN_ID, "admissions");
+    mkdirSync(admissionRoot, { recursive: true });
+    writeFileSync(join(admissionRoot, ".admission.lock"), JSON.stringify({ runId: RUN_ID }));
+    throwsCode(() => admitParticipantRole(root, record()), "ADMISSION_BUSY");
+    assert.equal(readAdmission(root, RUN_ID, "PARTICIPANT_A"), null);
+    assert.equal(readAdmission(root, RUN_ID, "PARTICIPANT_B"), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("admission and nonce consumption are one durable object", () => {
   const root = temporaryRoot();
   try {
@@ -261,7 +276,27 @@ test("the lifecycle projects the engine stage plus the ledger", () => {
   assert.equal(participantLifecycle("PARTICIPANT_B_SUBMITTED", both, false), "SUBMISSIONS_FINALIZED");
   assert.equal(participantLifecycle("EVALUATED", both, false), "EVALUATED");
   assert.equal(participantLifecycle("RELEASED", both, false), "RELEASED");
+  assert.equal(participantLifecycle("COMPLETE", both, false), "RELEASED");
+  assert.equal(participantLifecycle("ABORTED", both, false), "EXECUTION_ABORTED");
   assert.equal(participantLifecycle("MATCH_PREPARED", onlyA, true), "ABANDONED");
+  throwsCode(() => participantLifecycle("UNRECOGNIZED", none, false), "ADMISSION_STAGE");
+});
+
+test("the durable ledger refuses B before A", () => {
+  const root = temporaryRoot();
+  try {
+    throwsCode(
+      () => admitParticipantRole(root, record({
+        role: "PARTICIPANT_B",
+        participantWallet: accountB.address,
+        authorizationNonce: `0x${"4".repeat(64)}`,
+        authorizationDigest: `0x${"5".repeat(64)}`,
+      })),
+      "ADMISSION_OUT_OF_ORDER",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ------------------------------------------------------------------ service
@@ -291,16 +326,6 @@ function view(stage: string): CustomSupervisedProtectionView {
   } as CustomSupervisedProtectionView;
 }
 
-/**
- * EOA-only test double for the injected verifier. Production uses
- * `publicClient.verifyHash`, which also answers for deployed ERC-1271 accounts;
- * nothing here exercises that, and nothing claims it does.
- */
-const eoaVerifier: TypedDataVerifier = async ({ address, typedData, signature }) => {
-  const recovered = await recoverAddress({ hash: hashTypedData(typedData), signature });
-  return recovered.toLowerCase() === address.toLowerCase();
-};
-
 function harness(root: string, options: Partial<{ apass: (wallet: string) => Promise<ApassVerdict> }> = {}) {
   const calls: Calls = { admitted: [], submitted: [], apass: [] };
   const stage = { value: "MATCH_PREPARED" };
@@ -325,13 +350,16 @@ function harness(root: string, options: Partial<{ apass: (wallet: string) => Pro
   const dependencies: AdmissionDependencies = {
     orchestrator,
     runRoot: root,
+    directParticipantAdmissionEnabled: true,
     verifyingService: SERVICE,
     chainId: CHAIN_ID,
     verifyApass: options.apass ?? (async (wallet) => {
       calls.apass.push(wallet);
       return { eligible: true, holderAddress: wallet, observedBlock: 9_001 };
     }),
-    verifyTypedData: eoaVerifier,
+    // Typed-data cryptography has focused coverage in participant-authorization.
+    // This service harness instead concentrates on durable ordering/mapping.
+    verifyTypedData: async () => true,
     now: () => NOW,
   };
   return { dependencies, calls, stage };
@@ -353,7 +381,9 @@ async function signedRequest(
     role,
     activeFrom: claim.activeFrom,
     activeUntil: claim.activeUntil,
-    participantWallet: account.address,
+    participantWallet: role === "PARTICIPANT_A"
+      ? CANONICAL_PARTICIPANTS.holderA
+      : CANONICAL_PARTICIPANTS.holderB,
     authorizationNonce: `0x${role === "PARTICIPANT_A" ? "3" : "4"}${"0".repeat(63)}`,
     issuedAt: NOW - 10,
     expiresAt: NOW + 600,
@@ -378,7 +408,7 @@ test("two distinct wallets each admit and submit only their own role", async () 
 
     const a = await admitParticipant(dependencies, await signedRequest(code, "PARTICIPANT_A", accountA, { activeFrom: 100, activeUntil: 400 }), NOW);
     assert.equal(a.newlyAdmitted, true);
-    assert.equal(a.participantWallet, accountA.address);
+    assert.equal(a.participantWallet, CANONICAL_PARTICIPANTS.holderA);
     assert.equal(a.eligibilityBlock, 9_001);
     assert.deepEqual(calls.submitted, ["PARTICIPANT_A"]);
     assert.equal(a.admission.lifecycle, "PARTICIPANT_A_ADMITTED");
@@ -388,10 +418,52 @@ test("two distinct wallets each admit and submit only their own role", async () 
     assert.equal(b.newlyAdmitted, true);
     assert.deepEqual(calls.submitted, ["PARTICIPANT_A", "PARTICIPANT_B"]);
     assert.equal(b.admission.bothAdmitted, true);
-    assert.equal(b.admission.participantA.wallet, accountA.address);
-    assert.equal(b.admission.participantB.wallet, accountB.address);
+    assert.equal(b.admission.participantA.wallet, CANONICAL_PARTICIPANTS.holderA);
+    assert.equal(b.admission.participantB.wallet, CANONICAL_PARTICIPANTS.holderB);
     // The compliance policy was asked about each wallet independently.
-    assert.deepEqual(calls.apass, [accountA.address, accountB.address]);
+    assert.deepEqual(calls.apass, [CANONICAL_PARTICIPANTS.holderA, CANONICAL_PARTICIPANTS.holderB]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("direct admission fails closed unless explicitly enabled on canonical Monad chain", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    const code = generateCaseCode();
+    bindCaseCode(root, code, RUN_ID);
+    const request = await signedRequest(code, "PARTICIPANT_A", accountA, { activeFrom: 100, activeUntil: 400 });
+    await rejectsCode(admitParticipant({ ...dependencies, directParticipantAdmissionEnabled: false }, request, NOW), "DIRECT_ADMISSION_DISABLED");
+    await rejectsCode(admitParticipant({ ...dependencies, chainId: 1 }, request, NOW), "DIRECT_ADMISSION_CHAIN");
+    assert.equal(readAdmission(root, RUN_ID, "PARTICIPANT_A"), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the durable case-clock callback runs before private match preparation", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    const events: string[] = [];
+    const orchestrator: AdmissionOrchestrator = {
+      ...dependencies.orchestrator,
+      createNeutralParticipantCase: async () => {
+        events.push("created");
+        return { runId: RUN_ID };
+      },
+      preparePrivateMatch: async () => {
+        events.push("prepared");
+        return undefined;
+      },
+    };
+    await createParticipantCase({
+      ...dependencies,
+      orchestrator,
+      onParticipantCaseCreated: () => { events.push("clocked"); },
+    });
+    assert.deepEqual(events.slice(0, 3), ["created", "clocked", "prepared"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -475,7 +547,7 @@ test("a changed claim under a fresh signature cannot take an occupied role", asy
   }
 });
 
-test("the same wallet is refused the second role through the service", async () => {
+test("the canonical A/B wallet-role mapping is enforced through the service", async () => {
   const root = temporaryRoot();
   try {
     const { dependencies } = harness(root);
@@ -483,8 +555,10 @@ test("the same wallet is refused the second role through the service", async () 
     bindCaseCode(root, code, RUN_ID);
     await admitParticipant(dependencies, await signedRequest(code, "PARTICIPANT_A", accountA, { activeFrom: 100, activeUntil: 400 }), NOW);
     await rejectsCode(
-      admitParticipant(dependencies, await signedRequest(code, "PARTICIPANT_B", accountA, { activeFrom: 200, activeUntil: 500 }), NOW),
-      "DUPLICATE_SIGNER",
+      admitParticipant(dependencies, await signedRequest(code, "PARTICIPANT_B", accountA, { activeFrom: 200, activeUntil: 500 }, {
+        participantWallet: CANONICAL_PARTICIPANTS.holderA,
+      }), NOW),
+      "CANONICAL_PARTICIPANT",
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -539,19 +613,59 @@ test("the challenge is server-issued and carries no operator input", async () =>
     const code = generateCaseCode();
     bindCaseCode(root, code, RUN_ID);
     const challenge = await participantAdmissionChallenge(
-      dependencies, code, "PARTICIPANT_A", accountC.address, { activeFrom: 100, activeUntil: 400 },
+      dependencies, code, "PARTICIPANT_A", CANONICAL_PARTICIPANTS.holderA, { activeFrom: 100, activeUntil: 400 },
     );
     assert.equal(challenge.primaryType, "ParticipantAdmissionV1");
     assert.equal(challenge.domain.chainId, CHAIN_ID);
     assert.equal(challenge.message.runId, RUN_ID);
-    assert.equal(challenge.message.participantWallet, accountC.address);
+    assert.equal(challenge.message.participantWallet, CANONICAL_PARTICIPANTS.holderA);
     assert.match(challenge.message.authorizationNonce as string, /^0x[0-9a-f]{64}$/u);
     assert.equal(challenge.message.expiresAt, (challenge.message.issuedAt as number) + 600);
     // Two challenges never share a nonce.
     const second = await participantAdmissionChallenge(
-      dependencies, code, "PARTICIPANT_A", accountC.address, { activeFrom: 100, activeUntil: 400 },
+      dependencies, code, "PARTICIPANT_A", CANONICAL_PARTICIPANTS.holderA, { activeFrom: 100, activeUntil: 400 },
     );
     assert.notEqual(challenge.message.authorizationNonce, second.message.authorizationNonce);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a challenge is issued only for the next live, unoccupied participant role", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    const code = generateCaseCode();
+    bindCaseCode(root, code, RUN_ID);
+
+    await rejectsCode(
+      participantAdmissionChallenge(
+        dependencies, code, "PARTICIPANT_B", CANONICAL_PARTICIPANTS.holderB,
+        { activeFrom: 200, activeUntil: 500 }, NOW,
+      ),
+      "ADMISSION_OUT_OF_ORDER",
+    );
+
+    await admitParticipant(
+      dependencies,
+      await signedRequest(code, "PARTICIPANT_A", accountA, { activeFrom: 100, activeUntil: 400 }),
+      NOW,
+    );
+    await rejectsCode(
+      participantAdmissionChallenge(
+        dependencies, code, "PARTICIPANT_A", CANONICAL_PARTICIPANTS.holderA,
+        { activeFrom: 100, activeUntil: 400 }, NOW,
+      ),
+      "ROLE_OCCUPIED",
+    );
+
+    await rejectsCode(
+      participantAdmissionChallenge(
+        dependencies, code, "PARTICIPANT_B", CANONICAL_PARTICIPANTS.holderB,
+        { activeFrom: 200, activeUntil: 500 }, NOW - 100_000,
+      ),
+      "CASE_ABANDONED",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

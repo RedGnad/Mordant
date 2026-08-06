@@ -32,6 +32,7 @@ export const RUNNING_VIEW: ManagedWorkerView = Object.freeze({
   runId: "00000000-0000-4000-8000-000000000001",
   executionVariant: "CUSTOM_SUPERVISED",
   stage: "EVALUATED",
+  nextOperation: "verifyGovernedRelease",
   terminalScenario: null,
   protectionCase: Object.freeze({ ...CASE, incidentState: "EVALUATED", recourseState: "NOT_OPEN", cureDeadline: null }),
   participantArtifactDigests: Object.freeze({ participantA: digest("a"), participantB: digest("b") }),
@@ -41,24 +42,75 @@ export const RUNNING_VIEW: ManagedWorkerView = Object.freeze({
   receipt: null,
 });
 
-function receipt(conflict: boolean): Readonly<Record<string, unknown>> {
+function receipt(conflict: boolean, runId: string): Readonly<Record<string, unknown>> {
+  const events = conflict
+    ? [
+      { ordinal: 1, kind: "PROTECTED_HOLDER_SNAPSHOT_FIXED", atUnix: 1_700_000_001 },
+      { ordinal: 2, kind: "FHE_CASE_CREATED", atUnix: 1_700_000_002 },
+      { ordinal: 3, kind: "PARTICIPANT_A_ARTIFACT_BOUND", atUnix: null },
+      { ordinal: 4, kind: "PARTICIPANT_B_ARTIFACT_BOUND", atUnix: null },
+      { ordinal: 5, kind: "FHE_EVALUATION_BOUND", atUnix: null },
+      { ordinal: 6, kind: "GOVERNED_RESULT_RELEASED", atUnix: 1_700_000_003 },
+      { ordinal: 7, kind: "RECOURSE_BOUND", atUnix: 1_700_000_004 },
+      { ordinal: 8, kind: "SIMULATED_CURE_WINDOW_COMPLETED", atUnix: 1_700_000_005 },
+    ]
+    : [
+      { ordinal: 1, kind: "PROTECTED_HOLDER_SNAPSHOT_FIXED", atUnix: 1_700_000_001 },
+      { ordinal: 2, kind: "FHE_CASE_CREATED", atUnix: 1_700_000_002 },
+      { ordinal: 3, kind: "PARTICIPANT_A_ARTIFACT_BOUND", atUnix: null },
+      { ordinal: 4, kind: "PARTICIPANT_B_ARTIFACT_BOUND", atUnix: null },
+      { ordinal: 5, kind: "FHE_EVALUATION_BOUND", atUnix: null },
+      { ordinal: 6, kind: "GOVERNED_RESULT_RELEASED", atUnix: 1_700_000_003 },
+      { ordinal: 7, kind: "RECOURSE_REFUSED_BY_SIGNED_FALSE", atUnix: 1_700_000_003 },
+    ];
   return Object.freeze({
+    schemaVersion: "mordant.custom-supervised-protection-receipt/1",
+    receiptDigest: digest("z"),
+    runId,
+    sourceCommit: "1".repeat(40),
+    governedFheCommit: "2".repeat(40),
     executionVariant: "CUSTOM_SUPERVISED",
-    authorization: { fheCaseId: CASE.fheCaseId, protectionBindingDigest: digest("p"), caseBindingDigest: digest("c") },
+    authorization: {
+      protectionBindingSchema: "mordant.protection-binding/2",
+      fheCaseId: CASE.fheCaseId,
+      protectionBindingDigest: digest("p"),
+      caseBindingDigest: digest("c"),
+    },
     execution: {
       participantArtifactDigests: [digest("a"), digest("b")],
       evaluatedArtifactDigest: digest("e"),
       evaluatorProvenance: digest("v"),
       decryptorProvenance: digest("d"),
+      circuitId: "mordant.identity-full-fhe-256",
+      parameterProfile: "mordant.bgv.identity-full-fhe-256.n15/v1",
     },
-    governedResult: { digest: digest("g"), resultCiphertextDigest: digest("r") },
+    governedResult: {
+      conflict,
+      digest: digest("g"),
+      releaseMode: "governed-decryptor-v1",
+      releaseOrdinal: 1,
+      resultCiphertextDigest: digest("r"),
+      independentlyRecomputedResultDigest: digest("r"),
+    },
     terminal: {
+      recourseOpened: conflict,
+      recourseRefusal: conflict ? null : "SIGNED_RESULT_FALSE",
       recourseRecordDigest: conflict ? digest("x") : null,
       incidentState: conflict ? "CONFLICT_CONFIRMED" : "CLEARED",
       recourseState: conflict ? "CURE_WINDOW" : "REFUSED",
-      originalReceivableState: "OUTSTANDING",
+      originalReceivableState: "OUTSTANDING_INTACT",
     },
-    receiptDigest: digest("z"),
+    chronology: {
+      clockClass: conflict ? "SIMULATED_PROTOCOL_CLOCK" : "REAL_OBSERVED_CLOCK",
+      signedAtUnix: 1_700_000_006,
+      events,
+    },
+    disclosures: [
+      "Supervised local single-host execution; not production authorized.",
+      "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
+      "Designated trusted decryptor; no threshold release and no native Monad FHE.",
+      "The governed signed Boolean is the sole authority for the terminal outcome.",
+    ],
   });
 }
 
@@ -68,28 +120,30 @@ function receipt(conflict: boolean): Readonly<Record<string, unknown>> {
  */
 export function conflictView(now: Date = new Date()): ManagedWorkerView {
   const deadline = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString();
+  const runId = "00000000-0000-4000-8000-000000000002";
   return Object.freeze({
     ...RUNNING_VIEW,
-    runId: "00000000-0000-4000-8000-000000000002",
+    runId,
     stage: "COMPLETE",
     terminalScenario: "conflict" as const,
     protectionCase: Object.freeze({ ...CASE, incidentState: "CONFLICT_CONFIRMED", recourseState: "CURE_WINDOW", cureDeadline: deadline }),
     governedResult: Object.freeze({ conflict: true, digest: digest("g"), releaseMode: "governed-decryptor-v1" }),
     recourse: Object.freeze({ opened: true, reason: null }),
-    receipt: receipt(true),
+    receipt: receipt(true, runId),
   });
 }
 
 export function noConflictView(): ManagedWorkerView {
+  const runId = "00000000-0000-4000-8000-000000000003";
   return Object.freeze({
     ...RUNNING_VIEW,
-    runId: "00000000-0000-4000-8000-000000000003",
+    runId,
     stage: "COMPLETE",
     terminalScenario: "no-conflict" as const,
     protectionCase: Object.freeze({ ...CASE, incidentState: "CLEARED", recourseState: "REFUSED", cureDeadline: null }),
     governedResult: Object.freeze({ conflict: false, digest: digest("g"), releaseMode: "governed-decryptor-v1" }),
     recourse: Object.freeze({ opened: false, reason: "SIGNED_RESULT_FALSE" }),
-    receipt: receipt(false),
+    receipt: receipt(false, runId),
   });
 }
 

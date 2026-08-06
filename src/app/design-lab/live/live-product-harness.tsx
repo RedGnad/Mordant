@@ -3,8 +3,10 @@
 import { useState } from "react";
 
 import { PublicShell } from "@/components/public-shell";
+import { adaptDirectParticipantIntake } from "@/components/live-product/direct-participant-adapter";
 import { LiveProduct, type ClaimDraft } from "@/components/live-product/live-product";
 import { adaptManagedIntake } from "@/components/live-product/managed-intake-adapter";
+import type { ParticipantAdmissionProjection } from "@/components/live-product/participant-admission-client";
 import {
   conflictView,
   noConflictView,
@@ -44,7 +46,7 @@ const WALLET_B = "0x1111111111111111111111111111111111111111";
 /** Never reachable in production: the harness is the only place this is on. */
 const WITH_ONCHAIN = capabilities("MANAGED_COMBINED_INTAKE", "ONCHAIN_RECOURSE_CONNECTED");
 
-function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDraft } {
+function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDraft | null } {
   const base = {
     capabilitySet: MANAGED,
     eligibility: VERIFIED,
@@ -108,7 +110,6 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
     };
   }
   if (scenario.startsWith("admission")) {
-    const base2 = adaptManagedIntake({ ...base, capabilitySet: WITH_ADMISSION, view: null, claimsAuthored: false, elapsedSeconds: null });
     const wallet = {
       state: "CONNECTED" as const,
       address: scenario === "admission-b" || scenario === "admission-same" ? WALLET_B : WALLET_A,
@@ -118,54 +119,67 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       expectedChainId: 10_143,
       problem: null,
     };
-    const claim = (role: "A" | "B", walletAddress: string | null, admitted: boolean) => Object.freeze({
-      ...(role === "A" ? base2.claimA : base2.claimB),
-      window: role === "A" ? { activeFrom: 120, activeUntil: 420 } : { activeFrom: 220, activeUntil: 520 },
-      admission: (admitted ? "ADMITTED" : "REQUIRED") as "ADMITTED" | "REQUIRED",
-      wallet: walletAddress,
-      eligibilityVerified: walletAddress !== null,
+    const eligibilityFor = (holderAddress: string, state: EligibilityView["state"] = "VERIFIED"): EligibilityView => state === "VERIFIED"
+      ? { ...VERIFIED, holderAddress }
+      : { ...IDLE, state, holderAddress: state === "IDLE" ? null : holderAddress };
+    const admittedA: ParticipantAdmissionProjection = Object.freeze({
+      schemaVersion: "mordant.participant-case/1",
+      caseCode: "0123456789ABCDEF",
+      runId: "00000000-0000-4000-8000-000000000004",
+      lifecycle: "PARTICIPANT_A_ADMITTED",
+      participantA: Object.freeze({ admitted: true, wallet: WALLET_A }),
+      participantB: Object.freeze({ admitted: false, wallet: null }),
+      bothAdmitted: false,
+      abandoned: false,
+    });
+    const direct = (input: Readonly<{
+      activeRole: "A" | "B" | null;
+      admission: ParticipantAdmissionProjection | null;
+      ownDraft: Readonly<{ activeFrom: string; activeUntil: string }>;
+      walletAddress: string;
+      eligibility: EligibilityView;
+    }>) => adaptDirectParticipantIntake({
+      view: null,
+      admission: input.admission,
+      capabilitySet: WITH_ADMISSION,
+      activeRole: input.activeRole,
+      eligibility: input.eligibility,
+      ownDraft: input.ownDraft,
+      wallet: { ...wallet, address: input.walletAddress },
+      authorizing: false,
+      retryReady: false,
+      elapsedSeconds: null,
+      notice: null,
+      noticeState: null,
     });
 
     if (scenario === "admission-handoff") {
       return {
-        model: Object.freeze({
-          ...base2,
-          wallet,
-          claimA: claim("A", WALLET_A, true),
-          claimB: claim("B", null, false),
-          handoffRequired: true,
-          activeRole: null,
-        }),
-        draft: DRAFT,
+        model: direct({ activeRole: null, admission: admittedA, ownDraft: { activeFrom: "", activeUntil: "" }, walletAddress: WALLET_A, eligibility: eligibilityFor(WALLET_A) }),
+        draft: null,
       };
     }
     if (scenario === "admission-same") {
       return {
-        model: Object.freeze({
-          ...base2,
-          wallet: { ...wallet, address: WALLET_A },
-          claimA: claim("A", WALLET_A, true),
-          claimB: claim("B", WALLET_A, false),
-          activeRole: "B" as const,
-        }),
-        draft: DRAFT,
+        model: direct({ activeRole: "B", admission: admittedA, ownDraft: { activeFrom: "220", activeUntil: "520" }, walletAddress: WALLET_A, eligibility: eligibilityFor(WALLET_A) }),
+        draft: null,
       };
     }
     if (scenario === "admission-b") {
       return {
-        model: Object.freeze({
-          ...base2,
-          wallet,
-          claimA: claim("A", WALLET_A, true),
-          claimB: claim("B", WALLET_B, false),
-          activeRole: "B" as const,
-        }),
-        draft: DRAFT,
+        model: direct({ activeRole: "B", admission: admittedA, ownDraft: { activeFrom: "220", activeUntil: "520" }, walletAddress: WALLET_B, eligibility: eligibilityFor(WALLET_B) }),
+        draft: null,
       };
     }
     return {
-      model: Object.freeze({ ...base2, wallet, claimA: claim("A", WALLET_A, false), claimB: claim("B", null, false), activeRole: "A" as const }),
-      draft: DRAFT,
+      model: direct({
+        activeRole: "A",
+        admission: null,
+        ownDraft: { activeFrom: "120", activeUntil: "420" },
+        walletAddress: WALLET_A,
+        eligibility: eligibilityFor(WALLET_A, scenario === "admission-verify" ? "IDLE" : "VERIFIED"),
+      }),
+      draft: null,
     };
   }
 

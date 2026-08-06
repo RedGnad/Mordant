@@ -100,8 +100,6 @@ function input(overrides: Partial<BridgeInput> = {}): BridgeInput {
     nonce: BigInt(vector.nonce as string),
     issuedAt: Number(vector.issuedAt),
     expiry: Number(vector.expiry),
-    governedSignatureVerified: true,
-    crossReferencesVerified: true,
     ...overrides,
   };
 }
@@ -272,9 +270,16 @@ test("a false Boolean cannot carry a payout and a true one cannot omit it", () =
   );
 });
 
-test("a payload cannot be built before the governed signature is verified", () => {
-  assert.throws(() => buildGovernedBridgePayload({ ...input(), governedSignatureVerified: false as never }), /governed signature must be verified/u);
-  assert.throws(() => buildGovernedBridgePayload({ ...input(), crossReferencesVerified: false as never }), /cross-references must be verified/u);
+test("forgeable verification booleans do not participate in payload construction", () => {
+  const base = digestOf(buildGovernedBridgePayload(input()));
+  const forged = {
+    ...input(),
+    governedSignatureVerified: false,
+    crossReferencesVerified: false,
+  } as unknown as BridgeInput;
+  // The encoder is pure; signature/cross-reference verification belongs to the
+  // bridge's evidence boundary, where literals cannot impersonate proof.
+  assert.equal(digestOf(buildGovernedBridgePayload(forged)), base);
 });
 
 test("an inverted bridge window is refused", () => {

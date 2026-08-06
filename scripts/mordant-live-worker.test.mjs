@@ -15,6 +15,7 @@ import {
   liveCaseBody,
   progressFor,
   pruneReproducibleArtifacts,
+  recordCaseStart,
   readWorkerConfiguration,
   reconcileOnStartup,
   signLaunchToken,
@@ -516,9 +517,16 @@ function mockAdmission(overrides = {}) {
         : { status: 500, code: "ADMISSION", message: "Participant admission failed" }
     ),
     assertAdmissionRequest: (body) => body,
-    createParticipantCase: async () => {
+    createParticipantCase: async (dependencies) => {
       calls.created += 1;
-      return { runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", caseCode: CASE_CODE, view: participantView("MATCH_PREPARED"), admission: projection(false, false) };
+      const created = {
+        runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        caseCode: CASE_CODE,
+        view: participantView("MATCH_PREPARED"),
+        admission: projection(false, false),
+      };
+      await dependencies.onParticipantCaseCreated?.({ runId: created.runId, caseCode: created.caseCode });
+      return created;
     },
     readParticipantCase: async () => ({
       runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", caseCode: CASE_CODE,
@@ -556,6 +564,14 @@ async function withParticipantWorker(config, orchestrator, admission, run) {
   }
 }
 
+function participantConfiguration(overrides = {}) {
+  return configuration({
+    MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION: "enabled",
+    MORDANT_WORKER_DIRECT_PARTICIPANT_ADMISSION_ACK: "MORDANT_PARTICIPANT_ADMISSION_V1",
+    ...overrides,
+  });
+}
+
 function admissionBody(role) {
   return JSON.stringify({
     role,
@@ -566,7 +582,7 @@ function admissionBody(role) {
 }
 
 test("a neutral case is created with an empty body and no windows", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   const admission = mockAdmission();
   await withParticipantWorker(config, mockEngineOrchestrator({}), admission, async (base) => {
     const response = await fetch(`${base}/v1/participant-cases`, {
@@ -584,7 +600,7 @@ test("a neutral case is created with an empty body and no windows", async () => 
 });
 
 test("a neutral case refuses any body member", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
     const response = await fetch(`${base}/v1/participant-cases`, {
       method: "POST",
@@ -597,7 +613,7 @@ test("a neutral case refuses any body member", async () => {
 });
 
 test("participant routes require the exact origin and content type", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
     const url = `${base}/v1/participant-cases/${CASE_CODE}/admissions`;
     let response = await fetch(url, {
@@ -616,7 +632,7 @@ test("participant routes require the exact origin and content type", async () =>
 });
 
 test("two wallets admit independently and the journey starts only after both", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   const admission = mockAdmission();
   const orchestrator = mockEngineOrchestrator({});
   await withParticipantWorker(config, orchestrator, admission, async (base) => {
@@ -646,7 +662,7 @@ test("two wallets admit independently and the journey starts only after both", a
 });
 
 test("a challenge is issued without any signature prompt state on the worker", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   const admission = mockAdmission();
   await withParticipantWorker(config, mockEngineOrchestrator({}), admission, async (base) => {
     const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/challenge`, {
@@ -661,7 +677,7 @@ test("a challenge is issued without any signature prompt state on the worker", a
 });
 
 test("a challenge refuses an inexact body", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
     const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/challenge`, {
       method: "POST",
@@ -674,7 +690,7 @@ test("a challenge refuses an inexact body", async () => {
 });
 
 test("a typed admission refusal keeps its status and code", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   const refusing = mockAdmission({
     admitParticipant: async () => {
       const error = new Error("That wallet already holds the other role in this case");
@@ -696,7 +712,7 @@ test("a typed admission refusal keeps its status and code", async () => {
 });
 
 test("an internal admission failure never leaks its message", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   const broken = mockAdmission({
     admitParticipant: async () => { throw new Error("postgres://user:secret@host/db is unreachable"); },
   });
@@ -714,7 +730,7 @@ test("an internal admission failure never leaks its message", async () => {
 });
 
 test("an oversized admission body is refused", async () => {
-  const config = configuration();
+  const config = participantConfiguration();
   await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
     const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/admissions`, {
       method: "POST",
@@ -735,6 +751,132 @@ test("participant routes are absent when admission is not configured", async () 
     });
     assert.equal(response.status, 404);
   });
+});
+
+test("direct participant routes stay disabled unless both explicit worker gates are present", async () => {
+  const config = configuration();
+  assert.equal(config.directParticipantAdmission, false);
+  await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` },
+      body: "{}",
+    });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).code, "ROUTE");
+  });
+  assert.throws(() => configuration({ MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION: "enabled" }),
+    (error) => error instanceof WorkerError && error.code === "CONFIG");
+  assert.throws(() => participantConfiguration({ MORDANT_WORKER_MAX_ACTIVE_CASES: "2" }),
+    (error) => error instanceof WorkerError && error.code === "CONFIG");
+});
+
+test("the direct-admission profile closes managed creation but preserves historical reads", async () => {
+  const engine = mockEngineOrchestrator({});
+  await withParticipantWorker(participantConfiguration(), engine, mockAdmission(), async (base) => {
+    const blocked = await fetch(`${base}/v1/custom-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` },
+      body: JSON.stringify(WINDOWS),
+    });
+    assert.equal(blocked.status, 404);
+    assert.equal((await blocked.json()).code, "ROUTE");
+    assert.deepEqual(engine.stages, []);
+
+    const historical = await fetch(`${base}/v1/custom-cases/3f2504e0-4f89-11d3-9a0c-0305e82c3301`);
+    assert.equal(historical.status, 200);
+  });
+});
+
+test("participant capacity is reserved before preparation, and a failed prepared case retains its slot", async () => {
+  const config = participantConfiguration();
+  let allowPreparation;
+  let beganPreparation;
+  const preparationGate = new Promise((resolve) => { allowPreparation = resolve; });
+  const began = new Promise((resolve) => { beganPreparation = resolve; });
+  const admission = mockAdmission();
+  const originalCreate = admission.createParticipantCase;
+  admission.createParticipantCase = async (...args) => {
+    beganPreparation();
+    await preparationGate;
+    return originalCreate(...args);
+  };
+  await withParticipantWorker(config, mockEngineOrchestrator({}), admission, async (base) => {
+    const headers = () => ({ origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` });
+    const first = fetch(`${base}/v1/participant-cases`, { method: "POST", headers: headers(), body: "{}" });
+    await began;
+    const blocked = await fetch(`${base}/v1/participant-cases`, { method: "POST", headers: headers(), body: "{}" });
+    assert.equal(blocked.status, 409);
+    assert.equal((await blocked.json()).code, "BUSY");
+    allowPreparation();
+    assert.equal((await first).status, 201);
+  });
+
+  const failing = mockAdmission({
+    createParticipantCase: async (dependencies) => {
+      await dependencies.onParticipantCaseCreated?.({
+        runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        caseCode: CASE_CODE,
+      });
+      throw new Error("preparation failed");
+    },
+  });
+  await withParticipantWorker(participantConfiguration(), mockEngineOrchestrator({}), failing, async (base, worker) => {
+    const headers = () => ({ origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` });
+    const failed = await fetch(`${base}/v1/participant-cases`, { method: "POST", headers: headers(), body: "{}" });
+    assert.equal(failed.status, 500);
+    // The reservation itself is released, but the durable neutral case exists
+    // and remains counted until expiry even though preparation failed.
+    assert.equal(worker.isBusy(), false);
+    assert.equal(worker.state.openCases.size, 1);
+    const retry = await fetch(`${base}/v1/participant-cases`, { method: "POST", headers: headers(), body: "{}" });
+    assert.equal(retry.status, 409);
+    assert.equal((await retry.json()).code, "OPEN_CASE");
+  });
+});
+
+test("an unexpired participant clock restores capacity and expires it for a later case", async () => {
+  let nowMs = 1_800_000_000_000;
+  const config = participantConfiguration({
+    MORDANT_WORKER_MAX_ACTIVE_CASES: "1",
+    MORDANT_WORKER_PARTICIPANT_CASE_LIFETIME_MS: "1000",
+  });
+  const paths = ensureWorkerLayout(config);
+  const priorRunId = "8f2504e0-4f89-11d3-9a0c-0305e82c3301";
+  recordCaseStart(paths, priorRunId, nowMs);
+
+  // This is a fresh process after the first participant case was created. The
+  // durable clock must still consume the one configured waiting-case slot.
+  const worker = createLiveWorker({
+    configuration: config,
+    createOrchestrator: () => mockEngineOrchestrator({}),
+    admission: mockAdmission(),
+    now: () => nowMs,
+  });
+  assert.equal(worker.state.openCases.has(priorRunId), true);
+  worker.server.listen(0, "127.0.0.1");
+  await once(worker.server, "listening");
+  const { port } = worker.server.address();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    let health = await (await fetch(`${base}/health`)).json();
+    assert.equal(health.acceptingCases, false);
+
+    nowMs += 1_000;
+    health = await (await fetch(`${base}/health`)).json();
+    assert.equal(health.acceptingCases, true);
+    assert.equal(worker.state.openCases.has(priorRunId), false);
+
+    const response = await fetch(`${base}/v1/participant-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(nowMs)}` },
+      body: "{}",
+    });
+    assert.equal(response.status, 201);
+  } finally {
+    worker.server.close();
+    await once(worker.server, "close");
+  }
 });
 
 test("pruning removes an admitted claim while leaving the admission provable", () => {

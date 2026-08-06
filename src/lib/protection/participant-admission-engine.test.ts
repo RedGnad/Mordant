@@ -10,6 +10,9 @@ import {
   createProtectionOrchestrator,
   type ProtectionRuntimeOptions,
 } from "./governed-fhe-product-server";
+import { admitParticipantRole } from "./participant-admission-store";
+import { participantClaimCommitment } from "./participant-authorization";
+import { loadCanonicalRecourseConfiguration } from "./adapter-compatibility";
 import { customSupervisedBindingDigestV2, type MordantCustomSupervisedBindingV2 } from "./custom-supervised-v2";
 
 /**
@@ -31,7 +34,12 @@ function argument(args: readonly string[], flag: string): string {
   return String(args[index + 1]);
 }
 
-type Pledge = Readonly<{ activeFrom: number; activeUntil: number }>;
+type Pledge = Readonly<{
+  activeFrom: number;
+  activeUntil: number;
+  authorizationCommitment: string;
+  privateMetadataCommitment: string;
+}>;
 
 async function harness() {
   const root = await mkdtemp(join(tmpdir(), "mordant-admission-engine-"));
@@ -91,7 +99,12 @@ async function harness() {
       // bounds are kept, because they are the only part a participant authors;
       // every other pledge field stays derived exactly as the fixture derives it.
       const written = JSON.parse(readFileSync(argument(args, "-pledge"), "utf8")) as Pledge;
-      pledges.set(role, { activeFrom: written.activeFrom, activeUntil: written.activeUntil });
+      pledges.set(role, {
+        activeFrom: written.activeFrom,
+        activeUntil: written.activeUntil,
+        authorizationCommitment: written.authorizationCommitment,
+        privateMetadataCommitment: written.privateMetadataCommitment,
+      });
       const binding = JSON.parse(readFileSync(join(publicRoot, "case-binding.json"), "utf8")) as Record<string, unknown>;
       writeFileSync(
         join(publicRoot, role === "PARTICIPANT_A" ? "submission-a.json" : "submission-b.json"),
@@ -110,11 +123,13 @@ async function harness() {
     binaryRunner: runner,
     skipBinaryBuild: true,
     statfsAvailableBytes: () => Number.MAX_SAFE_INTEGER,
+    directParticipantAdmissionEnabled: true,
   };
   return { base, pledges, root };
 }
 
 const RUN_ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+const CANONICAL_PARTICIPANTS = loadCanonicalRecourseConfiguration().participants;
 
 function admission(overrides: Record<string, unknown> = {}) {
   return {
@@ -122,11 +137,56 @@ function admission(overrides: Record<string, unknown> = {}) {
     authorizationDigest: `0x${"1".repeat(64)}`,
     claimCommitment: `0x${"2".repeat(64)}`,
     authorizationNonce: `0x${"3".repeat(64)}`,
+    chainId: 10_143,
     issuedAt: 1_785_000_000,
     expiresAt: 1_785_000_300,
     claim: { activeFrom: 120, activeUntil: 420 },
     ...overrides,
   };
+}
+
+function verifiedAdmission(
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  input = admission(),
+) {
+  return {
+    ...input,
+    participantWallet: role === "PARTICIPANT_A"
+      ? CANONICAL_PARTICIPANTS.holderA
+      : CANONICAL_PARTICIPANTS.holderB,
+    claimCommitment: participantClaimCommitment({ runId: RUN_ID, role, claim: input.claim }),
+  };
+}
+
+function writeVerifiedDurableAdmission(
+  base: ProtectionRuntimeOptions,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  input = admission(),
+) {
+  const verified = verifiedAdmission(role, input);
+  const { claim, ...durable } = verified;
+  admitParticipantRole(base.runRoot!, {
+    runId: RUN_ID,
+    role,
+    ...durable,
+    participantWallet: durable.participantWallet as `0x${string}`,
+    authorizationDigest: durable.authorizationDigest as `0x${string}`,
+    claimCommitment: durable.claimCommitment as `0x${string}`,
+    authorizationNonce: durable.authorizationNonce as `0x${string}`,
+    eligibilityBlock: 1,
+    admittedAtUnix: durable.issuedAt,
+  });
+  return verified;
+}
+
+async function admitVerified(
+  orchestrator: ReturnType<typeof createProtectionOrchestrator>,
+  base: ProtectionRuntimeOptions,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  input = admission(),
+) {
+  const verified = writeVerifiedDurableAdmission(base, role, input);
+  return orchestrator.admitParticipantClaim(RUN_ID, role, verified);
 }
 
 test("a neutral case is created with no private input from anyone", async () => {
@@ -141,18 +201,39 @@ test("a neutral case is created with no private input from anyone", async () => 
   }
 });
 
+test("direct participant admission is disabled unless the runtime explicitly enables it", async () => {
+  const { base } = await harness();
+  const disabled = createProtectionOrchestrator({ ...base, directParticipantAdmissionEnabled: false });
+  await assert.rejects(disabled.createNeutralParticipantCase(RUN_ID), /disabled/u);
+});
+
+test("a neutral participant pledge fails closed without its verified durable admission", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+  await assert.rejects(
+    orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A"),
+    /verified durable admission/u,
+  );
+  await assert.rejects(
+    orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission()),
+    /verified durable admission/u,
+  );
+});
+
 test("each role's own authorized interval reaches its own pledge file", async () => {
   const { base, pledges } = await harness();
   const orchestrator = createProtectionOrchestrator(base);
   await orchestrator.createNeutralParticipantCase(RUN_ID);
   await orchestrator.preparePrivateMatch(RUN_ID);
 
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission({
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", admission({
     claim: { activeFrom: 120, activeUntil: 420 },
   }));
   await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
 
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_B", admission({
+  await admitVerified(orchestrator, base, "PARTICIPANT_B", admission({
     participantWallet: "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
     authorizationDigest: `0x${"5".repeat(64)}`,
     authorizationNonce: `0x${"6".repeat(64)}`,
@@ -172,7 +253,7 @@ test("the fixed fixture defaults are never substituted for an admitted interval"
   const orchestrator = createProtectionOrchestrator(base);
   await orchestrator.createNeutralParticipantCase(RUN_ID);
   await orchestrator.preparePrivateMatch(RUN_ID);
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission({
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", admission({
     claim: { activeFrom: 7, activeUntil: 9 },
   }));
   await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
@@ -181,6 +262,66 @@ test("the fixed fixture defaults are never substituted for an admitted interval"
   assert.notEqual(written?.activeFrom, 100);
   assert.notEqual(written?.activeUntil, 400);
   assert.deepEqual({ activeFrom: written?.activeFrom, activeUntil: written?.activeUntil }, { activeFrom: 7, activeUntil: 9 });
+});
+
+test("the existing Go commitment fields carry the verified authorization and claim digests", async () => {
+  const { base, pledges } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  const requested = admission({
+    authorizationDigest: `0x${"a".repeat(64)}`,
+  });
+  const verified = verifiedAdmission("PARTICIPANT_A", requested);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", requested);
+  await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
+  const pledge = pledges.get("PARTICIPANT_A");
+  assert.equal(pledge?.authorizationCommitment, verified.authorizationDigest.slice(2));
+  assert.equal(pledge?.privateMetadataCommitment, verified.claimCommitment.slice(2));
+});
+
+test("the engine rejects plaintext that no longer matches the verified durable claim commitment", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+  const verified = writeVerifiedDurableAdmission(base, "PARTICIPANT_A", admission({
+    claim: { activeFrom: 120, activeUntil: 420 },
+  }));
+  await assert.rejects(
+    orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", {
+      ...verified,
+      claim: { activeFrom: 121, activeUntil: 420 },
+    }),
+    /durable admission does not match/u,
+  );
+});
+
+test("the engine rejects a durable record that assigns the canonical role to another wallet", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+  const wrong = {
+    ...verifiedAdmission("PARTICIPANT_A", admission()),
+    participantWallet: "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+  };
+  const { claim, ...durable } = wrong;
+  admitParticipantRole(base.runRoot!, {
+    runId: RUN_ID,
+    role: "PARTICIPANT_A",
+    ...durable,
+    participantWallet: durable.participantWallet as `0x${string}`,
+    authorizationDigest: durable.authorizationDigest as `0x${string}`,
+    claimCommitment: durable.claimCommitment as `0x${string}`,
+    authorizationNonce: durable.authorizationNonce as `0x${string}`,
+    eligibilityBlock: 1,
+    admittedAtUnix: durable.issuedAt,
+  });
+  await assert.rejects(
+    orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", wrong),
+    /durable admission does not match/u,
+  );
 });
 
 test("B cannot be admitted before A", async () => {
@@ -209,7 +350,7 @@ test("evaluation is refused while only one participant has submitted", async () 
   const orchestrator = createProtectionOrchestrator(base);
   await orchestrator.createNeutralParticipantCase(RUN_ID);
   await orchestrator.preparePrivateMatch(RUN_ID);
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission());
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", admission());
   await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
   await assert.rejects(
     orchestrator.evaluatePrivateConflict(RUN_ID),
@@ -222,9 +363,9 @@ test("an exact re-admission is idempotent and a different one is refused", async
   const orchestrator = createProtectionOrchestrator(base);
   await orchestrator.createNeutralParticipantCase(RUN_ID);
   await orchestrator.preparePrivateMatch(RUN_ID);
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission());
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", admission());
   // The lost-response retry.
-  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission());
+  await orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", verifiedAdmission("PARTICIPANT_A", admission()));
   await assert.rejects(
     orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission({
       authorizationDigest: `0x${"9".repeat(64)}`,
@@ -240,22 +381,28 @@ test("a restart after A carries A's interval and still accepts B", async () => {
     const first = createProtectionOrchestrator(base);
     await first.createNeutralParticipantCase(RUN_ID);
     await first.preparePrivateMatch(RUN_ID);
-    await first.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission({ claim: { activeFrom: 11, activeUntil: 22 } }));
+    await admitVerified(first, base, "PARTICIPANT_A", admission({ claim: { activeFrom: 11, activeUntil: 22 } }));
     await first.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
   })();
   // A fresh orchestrator, as after a container replacement.
   const restarted = createProtectionOrchestrator(base);
   const view = await restarted.readCustomSupervisedCase(RUN_ID);
   assert.equal(view.stage, "PARTICIPANT_A_SUBMITTED");
-  await restarted.admitParticipantClaim(RUN_ID, "PARTICIPANT_B", admission({
+  await admitVerified(restarted, base, "PARTICIPANT_B", admission({
     participantWallet: "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
     authorizationDigest: `0x${"5".repeat(64)}`,
     authorizationNonce: `0x${"6".repeat(64)}`,
     claim: { activeFrom: 33, activeUntil: 44 },
   }));
   await restarted.submitParticipantPledge(RUN_ID, "PARTICIPANT_B");
-  assert.deepEqual(pledges.get("PARTICIPANT_A"), { activeFrom: 11, activeUntil: 22 });
-  assert.deepEqual(pledges.get("PARTICIPANT_B"), { activeFrom: 33, activeUntil: 44 });
+  assert.deepEqual(
+    { activeFrom: pledges.get("PARTICIPANT_A")?.activeFrom, activeUntil: pledges.get("PARTICIPANT_A")?.activeUntil },
+    { activeFrom: 11, activeUntil: 22 },
+  );
+  assert.deepEqual(
+    { activeFrom: pledges.get("PARTICIPANT_B")?.activeFrom, activeUntil: pledges.get("PARTICIPANT_B")?.activeUntil },
+    { activeFrom: 33, activeUntil: 44 },
+  );
 });
 
 test("a crash between admission and submission is completed by the retry", async () => {
@@ -268,14 +415,17 @@ test("a crash between admission and submission is completed by the retry", async
   });
   await crashing.createNeutralParticipantCase(RUN_ID);
   await crashing.preparePrivateMatch(RUN_ID);
-  await crashing.admitParticipantClaim(RUN_ID, "PARTICIPANT_A", admission({ claim: { activeFrom: 55, activeUntil: 66 } }));
+  await admitVerified(crashing, base, "PARTICIPANT_A", admission({ claim: { activeFrom: 55, activeUntil: 66 } }));
   await assert.rejects(crashing.submitParticipantPledge(RUN_ID, "PARTICIPANT_A"), /INJECTED_CRASH/u);
 
   // The admission survived the crash, so the retry uses the same interval and
   // never asks the participant to sign again.
   const recovered = createProtectionOrchestrator(base);
   await recovered.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
-  assert.deepEqual(pledges.get("PARTICIPANT_A"), { activeFrom: 55, activeUntil: 66 });
+  assert.deepEqual(
+    { activeFrom: pledges.get("PARTICIPANT_A")?.activeFrom, activeUntil: pledges.get("PARTICIPANT_A")?.activeUntil },
+    { activeFrom: 55, activeUntil: 66 },
+  );
 });
 
 test("an operator-window case is untouched by the admission path", async () => {
@@ -287,7 +437,10 @@ test("an operator-window case is untouched by the admission path", async () => {
   });
   await orchestrator.preparePrivateMatch(RUN_ID);
   await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
-  assert.deepEqual(pledges.get("PARTICIPANT_A"), { activeFrom: 200, activeUntil: 500 });
+  assert.deepEqual(
+    { activeFrom: pledges.get("PARTICIPANT_A")?.activeFrom, activeUntil: pledges.get("PARTICIPANT_A")?.activeUntil },
+    { activeFrom: 200, activeUntil: 500 },
+  );
   // And it refuses to be turned into a participant case midway.
   await assert.rejects(
     orchestrator.admitParticipantClaim(RUN_ID, "PARTICIPANT_B", admission()),
