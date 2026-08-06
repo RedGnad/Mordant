@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { ControlError } from "./runner-controls.mjs";
 import {
-  HOLDER_A, HOLDER_B, NEGATIVE_CONTROL,
+  HOLDER_A, HOLDER_B, NEGATIVE_CONTROL, PRIVILEGED, UNCONTROLLED_APASS_WALLET,
   PAYOUT_A_ATOMIC, PAYOUT_B_ATOMIC,
   evaluateGates, formatAtomic, normalizeAddress, planPayouts, sameAddress,
 } from "./verify-recourse-v2-demo-config.mjs";
@@ -20,6 +20,7 @@ function passing(overrides = {}) {
     facilityApass: true, facilityRole: true, cureAuthorized: true,
     payoutsFit: true, solvent: true, minv01Untouched: true,
     negativeControlRefused: true,
+    holdersNotPrivileged: true, holdersNotUncontrolled: true,
     ...overrides,
   };
 }
@@ -114,7 +115,7 @@ test("a missing observation is a failure, never a pass", () => {
   assert.equal(evaluateGates({}).ok, false);
   assert.equal(evaluateGates(undefined).ok, false);
   assert.equal(evaluateGates(null).ok, false);
-  assert.equal(evaluateGates({}).failed.length, 15);
+  assert.equal(evaluateGates({}).failed.length, 17);
 });
 
 test("a truthy non-boolean does not satisfy a gate", () => {
@@ -144,4 +145,26 @@ test("the negative control is not one of the two holders", () => {
   assert.notEqual(normalizeAddress(NEGATIVE_CONTROL), normalizeAddress(HOLDER_A));
   assert.notEqual(normalizeAddress(NEGATIVE_CONTROL), normalizeAddress(HOLDER_B));
   assert.notEqual(normalizeAddress(HOLDER_A), normalizeAddress(HOLDER_B));
+});
+
+// ------------------------------------------------------------------ custody separation
+
+test("neither holder is a privileged address", () => {
+  // A beneficiary that is also the owner, the cure authority or the bridge signer
+  // collapses two roles the adapter keeps apart.
+  for (const privileged of Object.values(PRIVILEGED)) {
+    assert.notEqual(normalizeAddress(privileged), normalizeAddress(HOLDER_A));
+    assert.notEqual(normalizeAddress(privileged), normalizeAddress(HOLDER_B));
+  }
+});
+
+test("the A-Passed but uncontrolled wallet is not a holder", () => {
+  // It passes every policy gate and still cannot sign, so it must never be a participant.
+  assert.notEqual(normalizeAddress(UNCONTROLLED_APASS_WALLET), normalizeAddress(HOLDER_A));
+  assert.notEqual(normalizeAddress(UNCONTROLLED_APASS_WALLET), normalizeAddress(HOLDER_B));
+});
+
+test("a privileged or uncontrolled holder fails the run", () => {
+  assert.equal(evaluateGates(passing({ holdersNotPrivileged: false })).ok, false);
+  assert.equal(evaluateGates(passing({ holdersNotUncontrolled: false })).ok, false);
 });

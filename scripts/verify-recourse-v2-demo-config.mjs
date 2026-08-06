@@ -21,10 +21,28 @@ import { ControlError, MONAD_CHAIN_ID, assertChainId } from "./runner-controls.m
 
 export const ADAPTER_V2 = "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18";
 export const MINV01 = "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b";
-export const HOLDER_A = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
+/**
+ * Both holders are dedicated, key-controlled EOAs provisioned for this demo.
+ *
+ * An A-Pass is not custody. The previous holderA, 0x911F99f424D47F08a15fcC771e94dcc2f7252B02,
+ * carries a valid A-Pass and passes every policy gate, yet no local key derives to it, so it
+ * could never have signed ParticipantAdmissionV1 in the browser. Their keys live in the
+ * gitignored .env under MORDANT_KEY_RECOURSE_HOLDER_A and MORDANT_KEY_RECOURSE_HOLDER_B,
+ * deliberately NOT under the M-05 runner's MORDANT_KEY_HOLDER_A/B role slots, because that
+ * overlap is what disguised an uncontrolled wallet as a holder in the first place.
+ */
+export const HOLDER_A = "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685";
 export const HOLDER_B = "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9";
 /** Deliberately unqualified. It proves the gates discriminate rather than always pass. */
 export const NEGATIVE_CONTROL = "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0";
+/** Privileged addresses, kept separate from the two holders on purpose. */
+export const PRIVILEGED = Object.freeze({
+  owner: "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+  facility: "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+  attestor: "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+});
+/** A-Passed but not key-controlled, so never a holder. */
+export const UNCONTROLLED_APASS_WALLET = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
 
 export const ROLE_FACILITY = 3;
 export const ROLE_HOLDER = 4;
@@ -137,6 +155,8 @@ export function evaluateGates(observed) {
     "adapter solvent": gate(o.solvent),
     "MINV01 untouched by the adapter": gate(o.minv01Untouched),
     "negative control still refused": gate(o.negativeControlRefused),
+    "holders separate from privileged roles": gate(o.holdersNotPrivileged),
+    "holders are not the uncontrolled A-Pass wallet": gate(o.holdersNotUncontrolled),
   };
   const failed = Object.entries(gates).filter(([, ok]) => !ok).map(([name]) => name);
   return { gates, failed, ok: failed.length === 0 };
@@ -207,6 +227,10 @@ export async function collect({ client, blockNumber, holderA = HOLDER_A, holderB
     minv01Untouched: minv01Balance === 0n,
     // A gate that never says no proves nothing, so the control is read every run.
     negativeControlRefused: (await read(verifier, VERIFIER_ABI, "isEligible", [control, ROLE_HOLDER])) === false,
+    // A payout beneficiary must not also be the owner, the cure authority or the bridge signer.
+    holdersNotPrivileged: ![owner, facility, attestor].some((p) => p === a || p === b),
+    // An A-Pass is not custody, so the wallet nobody holds a key for is never a holder.
+    holdersNotUncontrolled: ![a, b].includes(normalizeAddress(UNCONTROLLED_APASS_WALLET)),
   };
   // `cure` calls _requireEligible(msg.sender, ROLE_FACILITY) after msg.sender == facility.
   observed.cureAuthorized = observed.facilityRole === true && observed.facilityApass === true;
@@ -273,8 +297,8 @@ function render(snapshot, result) {
   process.stdout.write("\nGATES\n");
   for (const [name, ok] of Object.entries(result.gates)) line(`  ${ok ? "PASS" : "FAIL"}`, name);
   process.stdout.write(`\n${result.ok
-    ? "PASS — V2 PARTICIPANTS, FACILITY AND AUSDC POLICY QUALIFIED"
-    : `FAIL — CLEANVERSE DEMO ROLES REMAIN INCOMPATIBLE (${result.failed.join("; ")})`}\n`);
+    ? "PASS: V2 PARTICIPANTS, FACILITY AND AUSDC POLICY QUALIFIED"
+    : `FAIL: CLEANVERSE DEMO ROLES REMAIN INCOMPATIBLE (${result.failed.join("; ")})`}\n`);
 }
 
 async function main() {
