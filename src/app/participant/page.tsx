@@ -7,6 +7,7 @@ import { TRANSACTION_DEMO_QUERY } from "@/lib/dealroom/living-demo";
 export const metadata: Metadata = {
   title: "Participant deal room",
   description: "Understand your position, responsibility, timing, and evidence for a Mordant receivable deal.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ParticipantPage({
