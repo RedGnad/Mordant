@@ -122,6 +122,7 @@ const TEST_FILES = Object.freeze([
   ".product-test-dist/src/lib/protection/participant-authorization.test.js",
   ".product-test-dist/src/lib/protection/participant-admission.test.js",
   ".product-test-dist/src/lib/protection/participant-admission-engine.test.js",
+  ".product-test-dist/src/lib/protection/governed-recourse-bridge.test.js",
   "test/protection-experience-mounted.test.cjs",
   "scripts/protection-local-adapter.test.mjs",
   "scripts/mordant-live-worker.test.mjs",
