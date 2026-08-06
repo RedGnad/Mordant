@@ -1,93 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import styles from "./live-execution.module.css";
+import { LiveProduct, type ClaimDraft } from "./live-product/live-product";
+import { adaptManagedIntake, type ManagedWorkerView } from "./live-product/managed-intake-adapter";
+import {
+  capabilities,
+  type EligibilityView,
+  type LiveProductState,
+  type LiveProductViewModel,
+} from "./live-product/live-product-view-model";
 
 /**
- * Bounded live-execution surface.
+ * Controller for the managed combined intake.
  *
- * Separate from ProtectionExperience on purpose: this component talks only to
- * the managed execution worker, and it never needs the V1 imported-evidence
- * machinery. It shows no outcome wording until the governed decryptor has
- * released a signed Boolean.
+ * It owns only data: eligibility, the launch token, the direct-to-worker
+ * submission and the durable poll. Everything visible is decided by the
+ * presentation model, so a future intake can reuse the same surface.
+ *
+ * It shows no outcome wording until the governed decryptor has released a
+ * signed Boolean, and it never invents a stage the worker has not reported.
  */
 
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLLS = 300;
+/** A single failed poll is a blip. Only a sustained silence is unavailability. */
+const FAILURES_BEFORE_UNAVAILABLE = 3;
 
-const FIELDS = [
-  { key: "aFrom", label: "Participant A pledge start", role: "participantA", bound: "activeFrom" },
-  { key: "aUntil", label: "Participant A pledge end", role: "participantA", bound: "activeUntil" },
-  { key: "bFrom", label: "Participant B pledge start", role: "participantB", bound: "activeFrom" },
-  { key: "bUntil", label: "Participant B pledge end", role: "participantB", bound: "activeUntil" },
-] as const;
+const FIELD_KEYS = ["aFrom", "aUntil", "bFrom", "bUntil"] as const;
+type FieldKey = (typeof FIELD_KEYS)[number];
 
-type FieldKey = (typeof FIELDS)[number]["key"];
-
-type LiveView = Readonly<{
-  schemaVersion: string;
-  runId: string;
-  executionVariant: string;
-  stage: string;
-  terminalScenario: "conflict" | "no-conflict" | null;
-  protectionCase: Readonly<{
-    cleanverseAssetDigest: string;
-    fheCaseId: string;
-    incidentState: string;
-    recourseState: string;
-  }>;
-  participantArtifactDigests: Readonly<{ participantA: string | null; participantB: string | null }>;
-  evaluatedArtifactDigest: string | null;
-  governedResult: null | Readonly<{ conflict: boolean; digest: string; releaseMode: string }>;
-  recourse: null | Readonly<{ opened: boolean; reason: string | null }>;
-  receipt: Readonly<Record<string, unknown>> | null;
-}>;
-
-const STAGE_SEQUENCE = [
-  "Case authorized",
-  "Private encryption prepared",
-  "Participant A encrypted",
-  "Participant B encrypted",
-  "Encrypted evaluation running",
-  "Governed result verification",
-  "Recourse application",
-  "Receipt sealed",
-] as const;
-
-function digestText(value: unknown): string {
-  return typeof value === "string" ? value : "not present";
-}
-
-/** Only safe, non-private receipt fields are ever rendered. */
-function receiptRows(receipt: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [string, string]> {
-  const authorization = (receipt.authorization ?? {}) as Record<string, unknown>;
-  const execution = (receipt.execution ?? {}) as Record<string, unknown>;
-  const governed = (receipt.governedResult ?? {}) as Record<string, unknown>;
-  const terminal = (receipt.terminal ?? {}) as Record<string, unknown>;
-  const artifacts = (execution.participantArtifactDigests ?? []) as unknown[];
-  return [
-    ["Execution variant", digestText(receipt.executionVariant)],
-    ["Protection-binding digest", digestText(authorization.protectionBindingDigest)],
-    ["FHE CaseID", digestText(authorization.fheCaseId)],
-    ["Case-binding digest", digestText(authorization.caseBindingDigest)],
-    ["Participant A artifact digest", digestText(artifacts[0])],
-    ["Participant B artifact digest", digestText(artifacts[1])],
-    ["Evaluated artifact digest", digestText(execution.evaluatedArtifactDigest)],
-    ["Governed result digest", digestText(governed.digest)],
-    ["Result ciphertext digest", digestText(governed.resultCiphertextDigest)],
-    ["Evaluator provenance", digestText(execution.evaluatorProvenance)],
-    ["Decryptor provenance", digestText(execution.decryptorProvenance)],
-    [
-      terminal.recourseRecordDigest === null ? "Recourse" : "Recourse record digest",
-      terminal.recourseRecordDigest === null ? "Signed result cleared the case" : digestText(terminal.recourseRecordDigest),
-    ],
-    ["Terminal state", `${digestText(terminal.incidentState)} · ${digestText(terminal.recourseState)}`],
-    ["Original receivable", digestText(terminal.originalReceivableState)],
-    ["Receipt digest", digestText(receipt.receiptDigest)],
-  ];
-}
+const IDLE_ELIGIBILITY: EligibilityView = Object.freeze({
+  state: "IDLE", holderAddress: null, chainId: null, gateAddress: null, observedBlock: null, problem: null,
+});
 
 type CcpEligibility = Readonly<{
   chainId: number;
@@ -104,40 +50,41 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
   readonly publicTestHolder: string;
 }) {
   const [holder, setHolder] = useState("");
-  const [eligibility, setEligibility] = useState<CcpEligibility | null>(null);
-  const [eligibilityState, setEligibilityState] = useState<"idle" | "checking" | "verified" | "refused">("idle");
-  const [eligibilityError, setEligibilityError] = useState<string | null>(null);
-  const [values, setValues] = useState<Record<FieldKey, string>>({ aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" });
-  const [invalid, setInvalid] = useState<ReadonlySet<FieldKey>>(new Set());
+  const [eligibility, setEligibility] = useState<EligibilityView>(IDLE_ELIGIBILITY);
+  const [draft, setDraft] = useState<ClaimDraft>({ aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" });
+  const [invalid, setInvalid] = useState<readonly string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(initialRunId);
-  const [view, setView] = useState<LiveView | null>(null);
-  const [progress, setProgress] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "starting" | "running" | "terminal" | "busy" | "unavailable">(
-    initialRunId === null ? "idle" : "running",
-  );
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [view, setView] = useState<ManagedWorkerView | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [notice, setNotice] = useState<LiveProductViewModel["notice"]>(null);
+  const [noticeState, setNoticeState] = useState<LiveProductState | null>(null);
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  const [restoring, setRestoring] = useState(initialRunId !== null);
+
   const polls = useRef(0);
+  const failures = useRef(0);
+  // Seeded in an effect rather than during render: reading the clock while
+  // rendering is impure and would differ between server and client.
+  const startedAt = useRef<number | null>(null);
 
-  const complete = view?.stage === "COMPLETE" && view.receipt !== null;
-  const released = view?.governedResult !== null && view?.governedResult !== undefined;
+  const terminal = view?.stage === "COMPLETE" && view.receipt !== null;
 
-  const parse = useCallback((): { windows: unknown | null; bad: Set<FieldKey>; message: string | null } => {
-    const bad = new Set<FieldKey>();
+  const parse = useCallback((): { windows: unknown | null; bad: string[]; message: string | null } => {
+    const bad: string[] = [];
     const parsed: Partial<Record<FieldKey, number>> = {};
-    for (const field of FIELDS) {
-      const raw = values[field.key].trim();
+    for (const key of FIELD_KEYS) {
+      const raw = draft[key].trim();
       const value = /^\d+$/u.test(raw) ? Number(raw) : Number.NaN;
-      if (!Number.isSafeInteger(value) || value < 0) bad.add(field.key);
-      else parsed[field.key] = value;
+      if (!Number.isSafeInteger(value) || value < 0) bad.push(key);
+      else parsed[key] = value;
     }
-    if (bad.size > 0) return { windows: null, bad, message: "Each bound must be a whole number, zero or greater." };
+    if (bad.length > 0) return { windows: null, bad, message: "Each bound must be a whole number, zero or greater." };
     // Each interval is checked on its own. Participant A is never compared with
     // Participant B here: only the encrypted evaluation may answer that.
     for (const [role, keys] of [["A", ["aFrom", "aUntil"]], ["B", ["bFrom", "bUntil"]]] as const) {
       if (parsed[keys[0]]! >= parsed[keys[1]]!) {
-        keys.forEach((key) => bad.add(key));
-        return { windows: null, bad, message: `Participant ${role} must start strictly before it ends.` };
+        return { windows: null, bad: [...keys], message: `Participant ${role} must start strictly before it ends.` };
       }
     }
     return {
@@ -145,19 +92,13 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
         participantA: { activeFrom: parsed.aFrom!, activeUntil: parsed.aUntil! },
         participantB: { activeFrom: parsed.bFrom!, activeUntil: parsed.bUntil! },
       },
-      bad,
+      bad: [],
       message: null,
     };
-  }, [values]);
+  }, [draft]);
 
-  /**
-   * Asks the server whether this holder satisfies the active Monad policy. The server
-   * reads the verdict on-chain and refuses a launch token when it is false, so this is
-   * a preview of a decision the browser cannot influence.
-   */
   const checkEligibility = useCallback(async (candidate: string) => {
-    setEligibilityError(null);
-    setEligibilityState("checking");
+    setEligibility((current) => ({ ...current, state: "CHECKING", problem: null }));
     try {
       const response = await fetch("/api/live-protection/token", {
         method: "POST",
@@ -167,15 +108,20 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
       });
       const body = await response.json() as { eligibility?: CcpEligibility; error?: string };
       if (body.eligibility === undefined) {
-        setEligibilityState("idle");
-        setEligibilityError(body.error ?? "Eligibility could not be checked right now.");
+        setEligibility({ ...IDLE_ELIGIBILITY, state: "ERROR", problem: body.error ?? "Eligibility could not be checked right now." });
         return;
       }
-      setEligibility(body.eligibility);
-      setEligibilityState(body.eligibility.eligible ? "verified" : "refused");
+      const result = body.eligibility;
+      setEligibility({
+        state: result.eligible ? "VERIFIED" : "REFUSED",
+        holderAddress: result.holderAddress,
+        chainId: result.chainId,
+        gateAddress: result.gateAddress,
+        observedBlock: result.observedBlock,
+        problem: null,
+      });
     } catch {
-      setEligibilityState("idle");
-      setEligibilityError("Eligibility could not be checked right now.");
+      setEligibility({ ...IDLE_ELIGIBILITY, state: "ERROR", problem: "Eligibility could not be checked right now." });
     }
   }, []);
 
@@ -184,14 +130,14 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
     setInvalid(bad);
     setFormError(message);
     if (windows === null) return;
-    setStatus("starting");
+    setStarting(true);
     try {
-      // A fresh token is minted at submit time, so the server re-checks eligibility
-      // against the chain rather than trusting the earlier answer.
+      // A fresh token is minted at submit time, so the server re-checks
+      // eligibility against the chain rather than trusting the earlier answer.
       const tokenResponse = await fetch("/api/live-protection/token", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ holderAddress: eligibility!.holderAddress }),
+        body: JSON.stringify({ holderAddress: eligibility.holderAddress }),
         cache: "no-store",
       });
       if (!tokenResponse.ok) throw new Error("This holder is no longer eligible under the active policy.");
@@ -203,24 +149,59 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
         body: JSON.stringify(windows),
         cache: "no-store",
       });
-      if (created.status === 409) { setStatus("busy"); return; }
+      if (created.status === 409) {
+        setNoticeState("BUSY");
+        setNotice({
+          title: "A private check is already running.",
+          body: "One execution slot is available, so this check waits rather than running in parallel. "
+            + "The slot opens when the current run completes.",
+          retryable: true,
+        });
+        return;
+      }
       if (!created.ok) throw new Error("The execution service refused the request.");
-      const body = await created.json() as { view: LiveView; progress: string };
-      // The submitted values leave rendered state at admission.
-      setValues({ aFrom: "", aUntil: "", bFrom: "", bUntil: "" });
+      const body = await created.json() as { view: ManagedWorkerView };
       setRunId(body.view.runId);
       setView(body.view);
-      setProgress(body.progress);
-      setStatus("running");
+      startedAt.current = Date.now();
       window.history.pushState(null, "", `/protection/live?runId=${body.view.runId}`);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Live execution could not be started.");
-      setStatus("idle");
+      setFormError(error instanceof Error ? error.message : "The confidential check could not be started.");
+    } finally {
+      setStarting(false);
     }
-  }, [parse, eligibility]);
+  }, [parse, eligibility.holderAddress]);
+
+  const readRun = useCallback(async (id: string) => {
+    const response = await fetch(`${workerOrigin}/v1/custom-cases/${id}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("unreadable");
+    const body = await response.json() as { view: ManagedWorkerView };
+    return body.view;
+  }, [workerOrigin]);
+
+  /**
+   * A durable run is read once immediately. Without this a completed run
+   * announced "evaluation in progress" for a full poll interval, which is the
+   * first thing anyone opening a shared run link would have seen.
+   */
+  useEffect(() => {
+    if (runId === null || !RUN_ID.test(runId) || view !== null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await readRun(runId);
+        if (!cancelled) setView(next);
+      } catch {
+        if (!cancelled) failures.current += 1;
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runId, view, readRun]);
 
   useEffect(() => {
-    if (runId === null || !RUN_ID.test(runId) || status === "terminal") return;
+    if (runId === null || !RUN_ID.test(runId) || terminal || noticeState !== null) return;
     let cancelled = false;
     const timer = setInterval(() => {
       void (async () => {
@@ -228,231 +209,84 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
         polls.current += 1;
         if (polls.current > MAX_POLLS) { clearInterval(timer); return; }
         try {
-          const response = await fetch(`${workerOrigin}/v1/custom-cases/${runId}`, { cache: "no-store" });
-          if (!response.ok) return;
-          const body = await response.json() as { view: LiveView; progress: string };
+          const next = await readRun(runId);
           if (cancelled) return;
-          setView(body.view);
-          setProgress(body.progress);
-          if (body.view.stage === "COMPLETE" && body.view.receipt !== null) setStatus("terminal");
+          failures.current = 0;
+          setView(next);
         } catch {
-          if (!cancelled) setStatus("unavailable");
+          if (cancelled) return;
+          failures.current += 1;
+          if (failures.current >= FAILURES_BEFORE_UNAVAILABLE) {
+            setNoticeState("SERVICE_UNAVAILABLE");
+            setNotice({
+              title: "The execution service did not answer.",
+              body: `Run ${runId} is still recorded and this page can resume it. `
+                + "The verified evidence for a completed case remains available.",
+              retryable: true,
+            });
+          }
         }
       })();
     }, POLL_INTERVAL_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [runId, status, workerOrigin]);
+  }, [runId, terminal, noticeState, readRun]);
 
-  const reachedIndex = useMemo(() => {
-    if (view === null) return -1;
-    const map: Record<string, number> = {
-      CASE_CREATED: 0, MATCH_PREPARED: 1, PARTICIPANT_A_SUBMITTED: 2,
-      PARTICIPANT_B_PUBLISHED: 3, PARTICIPANT_B_SUBMITTED: 3, EVALUATED: 4,
-      RELEASED: 5, RECOURSE_OPENED: 6, CHRONOLOGY_COMPLETE: 6, COMPLETE: 7,
-    };
-    return map[view.stage] ?? 0;
-  }, [view]);
+  useEffect(() => {
+    if (initialRunId !== null && startedAt.current === null) startedAt.current = Date.now();
+  }, [initialRunId]);
 
-  if (status === "busy") {
-    return (
-      <section className={styles.notice}>
-        <h2>A private check is currently running.</h2>
-        <p>The next execution slot will open when it completes.</p>
-        <a className={styles.secondary} href="/protection?scenario=conflict">View verified protection evidence</a>
-      </section>
-    );
-  }
+  useEffect(() => {
+    if (startedAt.current === null || terminal) return;
+    const timer = setInterval(() => {
+      setElapsed(Math.round((Date.now() - (startedAt.current ?? Date.now())) / 1_000));
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [terminal]);
 
-  if (status === "unavailable") {
-    return (
-      <section className={styles.notice}>
-        <h2>Live execution is unavailable right now.</h2>
-        <p>The verified protection evidence remains available.</p>
-        <a className={styles.secondary} href="/protection?scenario=conflict">View verified protection evidence</a>
-      </section>
-    );
-  }
+  const retry = useCallback(() => {
+    failures.current = 0;
+    polls.current = 0;
+    setNotice(null);
+    setNoticeState(null);
+  }, []);
 
-  // Eligibility comes first: the pledge form only appears once the active Monad policy
-  // has admitted a holder, because a refused holder can never obtain a launch token.
-  if (runId === null && eligibilityState !== "verified") {
-    return (
-      <section className={styles.panel}>
-        <p className={styles.eyebrow}>Cleanverse eligibility</p>
-        <h1 className={styles.title}>Verify this holder against the active Monad policy.</h1>
-        <p className={styles.lede}>
-          Mordant reads the verdict from the Cleanverse compliance validator on Monad testnet.
-          Entering an address checks that address; it does not claim you own it.
-        </p>
-        {eligibilityError === null ? null : <p className={styles.error} role="alert">{eligibilityError}</p>}
-        {eligibilityState !== "refused" ? null : (
-          <p className={styles.error} role="alert">
-            This holder is not eligible under the active policy. Live execution stays closed for it.
-          </p>
-        )}
-        <div className={styles.grid}>
-          <label htmlFor="ccp-holder">
-            Holder address
-            <input
-              id="ccp-holder"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="0x..."
-              value={holder}
-              disabled={eligibilityState === "checking"}
-              onChange={(event) => {
-                const next = event.target.value;
-                setHolder(next);
-                setEligibilityState("idle");
-                setEligibilityError(null);
-              }}
-            />
-          </label>
-        </div>
-        <div className={styles.fixed}>
-          <strong>Public test holder</strong>
-          <ul>
-            <li>
-              <code>{publicTestHolder}</code>
-            </li>
-            <li>A Cleanverse UAT A-Pass holder, published for testing this policy.</li>
-          </ul>
-          <button
-            className={styles.secondary}
-            type="button"
-            disabled={eligibilityState === "checking"}
-            onClick={() => {
-              setHolder(publicTestHolder);
-              setEligibilityState("idle");
-              setEligibilityError(null);
-              void checkEligibility(publicTestHolder);
-            }}
-          >
-            Use the public test holder
-          </button>
-        </div>
-        {eligibility === null ? null : (
-          <code className={styles.run}>
-            chain {eligibility.chainId} · gate {eligibility.gateAddress} · block {eligibility.observedBlock}
-          </code>
-        )}
-        <button
-          className={styles.primary}
-          type="button"
-          disabled={eligibilityState === "checking" || holder.trim() === ""}
-          onClick={() => void checkEligibility(holder)}
-        >
-          {eligibilityState === "checking" ? "Checking eligibility" : "Check Cleanverse eligibility"}
-        </button>
-        <a className={styles.secondary} href="/protection?scenario=conflict">View verified protection evidence</a>
-      </section>
-    );
-  }
-
-  if (runId === null) {
-    return (
-      <section className={styles.panel}>
-        <p className={styles.eyebrow}>Cleanverse eligibility verified</p>
-        <h1 className={styles.title}>Run a real encrypted conflict check.</h1>
-        {eligibility === null ? null : (
-          <code className={styles.run}>
-            {eligibility.holderAddress} · chain {eligibility.chainId} · block {eligibility.observedBlock}
-          </code>
-        )}
-        <p className={styles.lede}>
-          Mordant encrypts the submitted demo pledge windows before the FHE evaluator processes them.
-          The evaluator receives ciphertexts only.
-        </p>
-        {formError === null ? null : <p className={styles.error} role="alert">{formError}</p>}
-        <div className={styles.grid}>
-          {FIELDS.map((field) => (
-            <label key={field.key} htmlFor={`live-${field.key}`}>
-              {field.label}
-              <input
-                id={`live-${field.key}`}
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={values[field.key]}
-                aria-invalid={invalid.has(field.key)}
-                disabled={status === "starting"}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setValues((current) => ({ ...current, [field.key]: next }));
-                }}
-              />
-            </label>
-          ))}
-        </div>
-        <div className={styles.fixed}>
-          <strong>Fixed for this execution</strong>
-          <ul>
-            <li>Cleanverse asset MINV01 and its canonical receivable identity</li>
-            <li>aUSDC, protected amount and the exclusive pledge policy</li>
-            <li>The fixed BGV circuit and its parameter profile</li>
-            <li>Governed release by the designated decryptor</li>
-          </ul>
-        </div>
-        <button className={styles.primary} type="button" disabled={status === "starting"} onClick={() => void start()}>
-          {status === "starting" ? "Starting encrypted check" : "Start encrypted check"}
-        </button>
-      </section>
-    );
-  }
+  const model = adaptManagedIntake({
+    view,
+    // Production runs the one qualified intake. Nothing else is turned on here.
+    capabilitySet: capabilities("MANAGED_COMBINED_INTAKE"),
+    eligibility,
+    wallet: null,
+    claimsAuthored: view !== null,
+    elapsedSeconds: view === null || terminal ? null : elapsed,
+    notice: restoring && view === null && notice === null
+      ? { title: "Restoring this run.", body: `Reading the durable state for run ${runId}.`, retryable: false }
+      : notice,
+    noticeState: restoring && view === null && notice === null ? "RECOVERY_AVAILABLE" : noticeState,
+  });
 
   return (
-    <section className={styles.panel}>
-      <p className={styles.eyebrow}>Live encrypted execution</p>
-      <h1 className={styles.title}>
-        {!released
-          ? "Private evaluation in progress."
-          : view!.governedResult!.conflict ? "Conflict confirmed" : "No conflict found"}
-      </h1>
-      {!released ? (
-        <p className={styles.lede}>
-          The evaluator is processing ciphertexts. No result exists until the governed decryptor releases a signed Boolean.
-        </p>
-      ) : (
-        <p className={styles.lede}>
-          {view!.governedResult!.conflict ? "Recourse opened" : "Signed result cleared the case"}
-        </p>
-      )}
-
-      <ol className={styles.stages} aria-live="polite">
-        {STAGE_SEQUENCE.map((label, index) => (
-          <li key={label} data-state={index < reachedIndex ? "done" : index === reachedIndex ? "active" : "pending"}>
-            {label}
-          </li>
-        ))}
-      </ol>
-      {progress === null ? null : <p className={styles.progress}>{progress}</p>}
-      <code className={styles.run}>Run {runId}</code>
-
-      {!complete ? null : (
-        <button className={styles.primary} type="button" onClick={() => setDrawerOpen(true)}>
-          View execution receipt
-        </button>
-      )}
-
-      {!drawerOpen || view?.receipt == null ? null : (
-        <div className={styles.drawer} role="dialog" aria-modal="true" aria-label="Execution receipt">
-          <header>
-            <h2>Execution receipt</h2>
-            <button type="button" onClick={() => setDrawerOpen(false)}>Close</button>
-          </header>
-          <p className={styles.receiptNote}>Local supervised receipt from the managed execution service.</p>
-          <dl>
-            {receiptRows(view.receipt).map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
-    </section>
+    <LiveProduct
+      model={model}
+      draft={draft}
+      invalidFields={invalid}
+      formError={formError}
+      holderDraft={holder}
+      publicTestHolder={publicTestHolder}
+      busy={starting}
+      actions={{
+        onHolderChange: (value) => {
+          setHolder(value);
+          setEligibility(IDLE_ELIGIBILITY);
+        },
+        onUsePublicHolder: () => {
+          setHolder(publicTestHolder);
+          void checkEligibility(publicTestHolder);
+        },
+        onCheckEligibility: () => void checkEligibility(holder),
+        onDraftChange: (key, value) => setDraft((current) => ({ ...current, [key]: value })),
+        onStart: () => void start(),
+        onRetry: retry,
+      }}
+    />
   );
 }

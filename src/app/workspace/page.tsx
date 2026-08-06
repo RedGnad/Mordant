@@ -7,6 +7,9 @@ import { TRANSACTION_DEMO_QUERY } from "@/lib/dealroom/living-demo";
 export const metadata: Metadata = {
   title: "Deal workspace",
   description: "Monitor responsibilities, action windows, and evidence across Mordant receivable deals.",
+  // Internal review surface. It stays reachable by URL for the team and for the
+  // existing suites, but it is no longer part of the public product hierarchy.
+  robots: { index: false, follow: false },
 };
 
 export default async function WorkspacePage({

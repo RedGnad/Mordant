@@ -19,11 +19,34 @@ test("the public story stays specific and its causal control does not move", asy
   await expect(page.getByRole("heading", {
     name: "Conflict became recourse.",
   })).toBeVisible();
-  await expect(page.getByText("Governed execution and evidence for receivables exceptions.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Conflicting Pledge Protection" })).toHaveAttribute("href", "/protection?scenario=conflict");
-  await expect(page.getByRole("link", { name: /Conflicting Pledge Protection|Protection/u }).first()).toHaveAttribute("href", "/protection?scenario=conflict");
-  await expect(page.getByRole("link", { name: "See how Mordant works" })).toHaveAttribute("href", "#product");
-  await expect(page.getByRole("region", { name: "MVP evidence and execution boundaries" })).toContainText("synthetic lender pledge fixtures");
+  await expect(page.getByText(
+    "When private claims collide, Mordant keeps tokenized credit moving.",
+    { exact: true },
+  )).toBeVisible();
+
+  // The canonical primary action is the live product, in the shell and in the hero.
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
+  await expect(page.getByRole("main").getByRole("link", { name: "Run the live check" }).first())
+    .toHaveAttribute("href", "/protection/live");
+  // Evidence is the secondary proof path and resolves to the protection surface.
+  await expect(page.getByRole("navigation", { name: "Product navigation" })
+    .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection?scenario=conflict");
+  await expect(page.getByRole("main").getByRole("link", { name: "Inspect verified evidence" }).first())
+    .toHaveAttribute("href", "/protection?scenario=conflict");
+
+  // Every material limitation stays on the page, below the value explanation.
+  const boundaries = page.locator("#boundaries");
+  await expect(boundaries).toContainText("managed execution service prepares and encrypts the inputs");
+  await expect(boundaries).toContainText("ciphertexts and holds no decryption key");
+  await expect(boundaries).toContainText("not native Monad FHE, threshold release or trustless decryption");
+  await expect(boundaries).toContainText("no funds move");
+
+  // The recorded receipt names the chain that produced it, so it can never be
+  // mistaken for the live encrypted check.
+  await expect(page.getByRole("region", { name: /verifiable transition/iu })).toContainText("Anvil");
+
+  // A landing must not carry a fixed historical deadline.
+  expect(await page.locator("body").innerText()).not.toMatch(/\b30 Jul\b/u);
 
   const renderedText = await page.locator("body").innerText();
   expect(renderedText).not.toMatch(/\b0[1-5]\s*[·/]\s*/u);
@@ -182,4 +205,39 @@ test("the shadow pilot route asks only for pilot-fit information and never fakes
   await expect(unavailable.json()).resolves.toEqual({
     error: "Application intake is not connected yet. No data was sent.",
   });
+});
+
+test("the public shell exposes one hierarchy and one primary action", async ({ page }) => {
+  await page.goto("/");
+
+  const navigation = page.getByRole("navigation", { name: "Product navigation" });
+  // Destinations and their order are the contract. The visible wording is
+  // deliberately shorter on a phone, so it is not what this test pins.
+  const hrefs = await navigation.getByRole("link").evaluateAll(
+    (links) => links.map((link) => link.getAttribute("href")),
+  );
+  expect(hrefs).toEqual(["/#product", "/#how", "/protection?scenario=conflict", "/pilot"]);
+
+  // Every destination must still announce a name at this viewport, so a short
+  // label can never become an empty one.
+  for (const name of await navigation.getByRole("link").allInnerTexts()) {
+    expect(name.trim().length).toBeGreaterThan(0);
+  }
+
+  // The live product is the only primary action, and it is never duplicated as a
+  // second navigation destination.
+  await expect(navigation.getByRole("link", { name: /live check|Run the live check/u })).toHaveCount(0);
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
+
+  // Old destinations must not reappear anywhere in the public chrome.
+  for (const retired of ["/workspace", "/participant", "/protocol", "/design-system"]) {
+    await expect(page.locator(`header a[href="${retired}"], footer a[href="${retired}"]`)).toHaveCount(0);
+  }
+
+  // The live product wears the same shell and marks itself as the current surface.
+  await page.goto("/protection/live");
+  await expect(page.getByRole("navigation", { name: "Product navigation" })).toBeVisible();
+  await expect(page.getByTestId("shell-live-cta")).toHaveCount(0);
+  await expect(page.getByRole("contentinfo").getByRole("link", { name: "Run the live check" }))
+    .toHaveAttribute("href", "/protection/live");
 });

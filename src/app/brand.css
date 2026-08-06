@@ -1,0 +1,83 @@
+/**
+ * Mordant brand foundation.
+ *
+ * The palette used to live only inside `.page` blocks in two CSS modules, so any
+ * surface that did not mount one of those wrappers rendered with every token
+ * undefined. `/protection/live` was exactly that case: transparent panels, no
+ * borders, no amber action and the interface typeface instead of the product
+ * one.
+ *
+ * The tokens are declared here at the document root with the same values the
+ * public experience already used, so every existing `.page` block keeps winning
+ * for its own subtree and nothing about the current pages changes, while a new
+ * surface inherits a complete palette by default.
+ */
+
+:root {
+  /* Ground and paper */
+  --ground: #f4f1e8;
+  --paper: #fbfaf5;
+  --page: #f2efe7;
+
+  /* Structure */
+  --ink: #211923;
+  --muted: #655d68;
+  --rule: rgb(33 25 35 / 52%);
+  --soft-rule: rgb(33 25 35 / 16%);
+
+  /* Economic domains: never reused for a state */
+  --receivable: #49305c;
+
+  /* States: never reused for a domain */
+  --protection: #b4233f;
+  --cleared: #276858;
+
+  /* Action */
+  --action: #c67a00;
+  --action-fill: #e39a00;
+  --action-fill-hover: #f0aa00;
+  --amber: #d28a00;
+
+  /* Proof register */
+  --proof: #241a2a;
+  --proof-raised: #302434;
+  --on-proof: #fffef9;
+
+  /* Geometry */
+  --shell-height: 64px;
+  --shell-gutter: clamp(22px, 5vw, 76px);
+  --target: 44px;
+}
+
+/**
+ * Surfaces that opt into the brand explicitly. Kept as a class rather than a
+ * bare element selector so the product-shell research surfaces, which run their
+ * own `--nws-*` palette, are never touched.
+ */
+.mordant-shell {
+  min-height: 100svh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  font-synthesis: none;
+}
+
+.mordant-shell * {
+  box-sizing: border-box;
+}
+
+/**
+ * Reduced motion is honoured for the whole branded surface, not only inside
+ * individual modules: a visitor who asks for less motion should not have to
+ * discover which component happened to opt in.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .mordant-shell *,
+  .mordant-shell *::before,
+  .mordant-shell *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
