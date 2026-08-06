@@ -206,8 +206,6 @@ export type ClaimAdmission =
 export type ParticipantClaimView = Readonly<{
   role: ParticipantRole;
   label: string;
-  /** Present only while the visitor is still authoring it. */
-  window: ClaimWindow | null;
   admission: ClaimAdmission;
   /** Wallet bound to this role, when the capability provides one. */
   wallet: string | null;
@@ -215,6 +213,44 @@ export type ParticipantClaimView = Readonly<{
   /** Digest of the admitted claim, once the backend has produced one. */
   artifactDigest: string | null;
   privacyNote: string;
+}>;
+
+/**
+ * The direct-admission surface is deliberately a different shape from the
+ * managed two-claim form. It can carry the active participant's draft, but it
+ * has no place to put the other participant's interval. Keeping that absence in
+ * the type is a privacy boundary, rather than a rendering convention.
+ */
+export type DirectClaimDraft = Readonly<{ activeFrom: string; activeUntil: string }>;
+
+export type DirectParticipantView = Readonly<{
+  role: ParticipantRole;
+  label: string;
+  /** Only the active participant's own draft is ever held in this model. */
+  draft: DirectClaimDraft;
+  admission: ClaimAdmission;
+  wallet: WalletView | null;
+  /** The active wallet's explicit, role-local A-Pass check. */
+  eligibility: EligibilityView;
+  eligibilityVerified: boolean;
+  privacyNote: string;
+}>;
+
+/** Public-safe status for the other role. No claim, interval or commitment exists here. */
+export type DirectOtherParticipantView = Readonly<{
+  role: ParticipantRole;
+  label: string;
+  admitted: boolean;
+  wallet: string | null;
+}>;
+
+export type DirectAdmissionView = Readonly<{
+  /** Null while the first participant has handed the device to the second one. */
+  current: DirectParticipantView | null;
+  other: DirectOtherParticipantView;
+  handoffRequired: boolean;
+  /** A previously signed admission may be posted again without asking to sign again. */
+  retryReady: boolean;
 }>;
 
 // ---------------------------------------------------------------- execution
@@ -404,6 +440,8 @@ export type LiveProductViewModel = Readonly<{
 
   claimA: ParticipantClaimView;
   claimB: ParticipantClaimView;
+  /** Present only for the qualified direct-admission capability. */
+  directAdmission: DirectAdmissionView | null;
   activeRole: ParticipantRole | null;
   handoffRequired: boolean;
 

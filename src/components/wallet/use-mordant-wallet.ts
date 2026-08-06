@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useConnect, useConnection, useConnectors, useDisconnect, useSwitchChain } from "wagmi";
+import { useConnect, useConnection, useConnectors, useDisconnect, useSignTypedData, useSwitchChain } from "wagmi";
 
 import { MORDANT_CHAIN_ID } from "./wagmi-config";
 import { dedupeConnectors, providerErrorCode, safeWalletIcon, walletProblemMessage, type ConnectorRow } from "./wallet-presentation";
 import type { WalletView } from "../live-product/live-product-view-model";
+import type { ParticipantChallenge } from "../live-product/participant-admission-client";
 
 /**
  * The browser-side wallet surface.
@@ -33,6 +34,7 @@ export function useMordantWallet() {
   const connectors = useConnectors();
   const { connectAsync, isPending: connecting } = useConnect();
   const { disconnectAsync } = useDisconnect();
+  const { signTypedDataAsync, isPending: signing } = useSignTypedData();
   const { switchChainAsync, isPending: switching } = useSwitchChain();
 
   const [problem, setProblem] = useState<string | null>(null);
@@ -108,11 +110,58 @@ export function useMordantWallet() {
   }, [switchChainAsync]);
 
   const disconnect = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setProblem(null);
     setRejected(false);
     setPairingUri(null);
-    await disconnectAsync();
+    try {
+      await disconnectAsync();
+    } catch {
+      setProblem("The wallet did not disconnect. You can dismiss it in the wallet and try again.");
+    } finally {
+      inFlight.current = false;
+    }
   }, [disconnectAsync]);
+
+  /**
+   * A participant signature is intentionally narrower than a generic signing
+   * helper. It can sign only the exact, server-issued ParticipantAdmissionV1
+   * shape after the controller has checked its case, role, wallet and interval.
+   * Nothing here runs on mount or after a failed POST.
+   */
+  const signParticipantAdmission = useCallback(async (challenge: ParticipantChallenge): Promise<`0x${string}`> => {
+    if (inFlight.current || connection.address === undefined) {
+      throw new Error("A wallet signature cannot be requested right now.");
+    }
+    inFlight.current = true;
+    setProblem(null);
+    setRejected(false);
+    try {
+      const signature = await signTypedDataAsync({
+        account: connection.address,
+        domain: challenge.domain,
+        types: challenge.types,
+        primaryType: challenge.primaryType,
+        message: {
+          ...challenge.message,
+          activeFrom: BigInt(challenge.message.activeFrom),
+          activeUntil: BigInt(challenge.message.activeUntil),
+          issuedAt: BigInt(challenge.message.issuedAt),
+          expiresAt: BigInt(challenge.message.expiresAt),
+        },
+      });
+      return signature;
+    } catch (error) {
+      const code = providerErrorCode(error);
+      setRejected(code === 4001);
+      setProblem(walletProblemMessage(code, "The typed authorization was not signed. Nothing was submitted."));
+      // Never rethrow a provider object: callers can only show this bounded text.
+      throw new Error(code === 4001 ? "The typed authorization was declined in your wallet." : "The typed authorization was not completed.");
+    } finally {
+      inFlight.current = false;
+    }
+  }, [connection.address, signTypedDataAsync]);
 
   const view: WalletView = useMemo(() => {
     const address = connection.address ?? null;
@@ -147,10 +196,11 @@ export function useMordantWallet() {
     options,
     walletConnectAvailable,
     pairingUri,
-    busy: connecting || switching,
+    busy: connecting || switching || signing,
     connect,
     switchToMonad,
     disconnect,
+    signParticipantAdmission,
     clearProblem: useCallback(() => { setProblem(null); setRejected(false); }, []),
   } as const;
 }

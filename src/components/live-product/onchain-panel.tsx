@@ -29,9 +29,36 @@ const PHASE_LABEL: Readonly<Record<OnchainPhase, string>> = Object.freeze({
   CLAIM_CONFIRMED: "Claim confirmed",
 });
 
+const MONAD_TESTNET_EXPLORER = "https://testnet.monadexplorer.com";
+const TRANSACTION_HASH = /^0x[0-9a-fA-F]{64}$/u;
+const CONTRACT_ADDRESS = /^0x[0-9a-fA-F]{40}$/u;
+
 function short(value: string | null): string {
   if (value === null) return "not present";
   return value.length <= 20 ? value : `${value.slice(0, 10)}…${value.slice(-8)}`;
+}
+
+/**
+ * Future adapter data is untrusted at this rendering boundary. A transaction
+ * or address becomes clickable only for the one explicit HTTPS Monad testnet
+ * explorer and a strict canonical identifier; otherwise it stays plain text.
+ */
+export function safeMonadExplorerHref(
+  explorerBase: string | null,
+  kind: "tx" | "address",
+  value: string | null,
+): string | null {
+  if (explorerBase === null || value === null) return null;
+  const pattern = kind === "tx" ? TRANSACTION_HASH : CONTRACT_ADDRESS;
+  if (!pattern.test(value)) return null;
+  try {
+    const base = new URL(explorerBase);
+    if (base.protocol !== "https:" || base.origin !== MONAD_TESTNET_EXPLORER
+      || base.pathname !== "/" || base.search !== "" || base.hash !== "") return null;
+    return `${MONAD_TESTNET_EXPLORER}/${kind}/${value}`;
+  } catch {
+    return null;
+  }
 }
 
 export function OnchainPanel({ view }: { readonly view: OnchainView }) {
@@ -41,14 +68,16 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
         <p className={styles.eyebrow}>Settlement</p>
         <p className={styles.disabled}>
           {view.disabledReason ?? "On-chain recourse is not connected on this deployment."}
-          {" "}The governed result above is real; the aUSDC settlement leg is prepared and not yet wired.
+          {" "}The verified governed result above is a synthetic prototype readback; no real funds move here.
+          The aUSDC settlement leg is prepared and not yet wired.
         </p>
       </section>
     );
   }
 
-  const explorer = view.evidence.explorerBase;
   const hash = view.evidence.transactionHash;
+  const transactionHref = safeMonadExplorerHref(view.evidence.explorerBase, "tx", hash);
+  const contractHref = safeMonadExplorerHref(view.evidence.explorerBase, "address", view.evidence.contractAddress);
 
   return (
     <section className={styles.panel} data-connected="true" data-testid="onchain-panel">
@@ -59,8 +88,8 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
         <div>
           <dt>Transaction</dt>
           <dd>
-            {hash === null ? "not present" : explorer === null ? short(hash) : (
-              <a href={`${explorer}/tx/${hash}`} target="_blank" rel="noreferrer noopener">{short(hash)}</a>
+            {hash === null ? "not present" : transactionHref === null ? short(hash) : (
+              <a href={transactionHref} target="_blank" rel="noreferrer noopener">{short(hash)}</a>
             )}
           </dd>
         </div>
@@ -68,10 +97,10 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
         <div>
           <dt>Contract</dt>
           <dd>
-            {view.evidence.contractAddress === null ? "not present" : explorer === null
+            {view.evidence.contractAddress === null ? "not present" : contractHref === null
               ? short(view.evidence.contractAddress)
               : (
-                <a href={`${explorer}/address/${view.evidence.contractAddress}`} target="_blank" rel="noreferrer noopener">
+                <a href={contractHref} target="_blank" rel="noreferrer noopener">
                   {short(view.evidence.contractAddress)}
                 </a>
               )}

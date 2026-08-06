@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { AdapterCompatibilityPanel, useAdapterCompatibility } from "./adapter-compatibility-panel";
 import { OnchainPanel } from "./onchain-panel";
 import { ParticipantAdmission } from "./participant-admission";
 import { ReceiptDrawer } from "./receipt-drawer";
@@ -29,13 +30,15 @@ export type ClaimDraft = Readonly<{ aFrom: string; aUntil: string; bFrom: string
 export type LiveProductActions = Readonly<{
   onHolderChange?: (value: string) => void;
   onUsePublicHolder?: () => void;
-  onCheckEligibility?: () => void;
+  onCheckEligibility?: (role?: "A" | "B") => void;
   onDraftChange?: (key: keyof ClaimDraft, value: string) => void;
   onStart?: () => void;
   onConnectWallet?: (role: "A" | "B") => void;
   onSwitchNetwork?: () => void;
   onAuthorizeClaim?: (role: "A" | "B") => void;
+  onDirectDraftChange?: (key: "activeFrom" | "activeUntil", value: string) => void;
   onContinueAsParticipantB?: () => void;
+  onDisconnect?: () => void;
   onRetry?: () => void;
 }>;
 
@@ -60,7 +63,7 @@ function ClaimTimeline({ a, b, reveal }: {
   });
 
   return (
-    <div className={styles.timeline} data-reveal={reveal} aria-hidden="true">
+    <div className={styles.timeline} data-testid="claim-timeline" data-reveal={reveal} aria-hidden="true">
       <div className={styles.timelineTrack}><span className={styles.timelineBarA} style={bar(a)} /></div>
       <div className={styles.timelineTrack}><span className={styles.timelineBarB} style={bar(b)} /></div>
     </div>
@@ -95,7 +98,8 @@ export function LiveProduct({
   busy = false,
 }: {
   readonly model: LiveProductViewModel;
-  readonly draft: ClaimDraft;
+  /** The two-claim draft belongs solely to the managed combined intake. */
+  readonly draft: ClaimDraft | null;
   readonly invalidFields: readonly string[];
   readonly formError: string | null;
   readonly holderDraft: string;
@@ -108,6 +112,7 @@ export function LiveProduct({
   const chapter = chapterFor(model.state);
   const current = chapterIndex(chapter);
   const released = model.release !== null;
+  const adapterCompatibility = useAdapterCompatibility(released);
   const conflict = model.release?.conflict === true;
   const deadline = useMemo(
     () => formatDeadline(model.decisionRail?.deadlineIso ?? null),
@@ -121,6 +126,7 @@ export function LiveProduct({
   };
 
   const notice = model.notice;
+  const managedDraft = model.intake === "MANAGED_COMBINED" ? draft : null;
 
   return (
     <div className={styles.product} data-state={model.state} data-chapter={chapter}>
@@ -159,66 +165,88 @@ export function LiveProduct({
       {/* ------------------------------------------------------------ 1 VERIFY */}
       {chapter !== "VERIFY" || notice !== null ? null : (
         <section className={styles.chapter} aria-labelledby="chapter-verify">
-          <h2 id="chapter-verify" className={styles.chapterHeading}>
-            Who is allowed to take part in this case?
-          </h2>
-          <p className={styles.lede}>
-            Cleanverse holds the A-Pass policy on Monad testnet. Mordant reads its verdict for the address
-            you enter. Entering an address checks that address; it does not claim you own it.
-          </p>
+          {model.intake === "DIRECT_ADMISSION" && model.directAdmission !== null ? (
+            <>
+              <h2 id="chapter-verify" className={styles.chapterHeading}>Verify this participant’s A-Pass.</h2>
+              <p className={styles.lede}>
+                Connect the wallet for this role, then explicitly read its A-Pass verdict on Monad testnet.
+                No participant claim can be authorized before that read succeeds.
+              </p>
+              <ParticipantAdmission
+                admission={model.directAdmission}
+                busy={busy}
+                actions={{
+                  onConnectWallet: actions.onConnectWallet,
+                  onSwitchNetwork: actions.onSwitchNetwork,
+                  onCheckEligibility: actions.onCheckEligibility,
+                  onDisconnect: actions.onDisconnect,
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <h2 id="chapter-verify" className={styles.chapterHeading}>
+                Who is allowed to take part in this case?
+              </h2>
+              <p className={styles.lede}>
+                Cleanverse holds the A-Pass policy on Monad testnet. Mordant reads its verdict for the address
+                you enter. Entering an address checks that address; it does not claim you own it.
+              </p>
 
-          {model.eligibility.problem === null ? null : (
-            <p className={styles.error} role="alert">{model.eligibility.problem}</p>
+              {model.eligibility.problem === null ? null : (
+                <p className={styles.error} role="alert">{model.eligibility.problem}</p>
+              )}
+              {model.state !== "ELIGIBILITY_REFUSED" ? null : (
+                <p className={styles.error} role="alert">
+                  This holder is not admitted by the active policy, so no check can start for it.
+                </p>
+              )}
+
+              <div className={styles.field}>
+                <label htmlFor="ccp-holder">Holder address</label>
+                <input
+                  id="ccp-holder"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="0x..."
+                  value={holderDraft}
+                  disabled={model.eligibility.state === "CHECKING"}
+                  onChange={(event) => actions.onHolderChange?.(event.target.value)}
+                />
+              </div>
+
+              <div className={styles.testHolder}>
+                <p>A Cleanverse UAT A-Pass holder is published for testing this policy.</p>
+                <code>{publicTestHolder}</code>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  disabled={model.eligibility.state === "CHECKING"}
+                  onClick={() => actions.onUsePublicHolder?.()}
+                >
+                  Use the public test holder
+                </button>
+              </div>
+
+              {model.eligibility.state !== "VERIFIED" ? null : (
+                <p className={styles.verified} data-testid="eligibility-verified">
+                  A-Pass verified · chain {model.eligibility.chainId} · gate {shorten(model.eligibility.gateAddress)}
+                  {" "}· block {model.eligibility.observedBlock}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={model.eligibility.state === "CHECKING" || holderDraft.trim() === ""}
+                onClick={() => actions.onCheckEligibility?.()}
+              >
+                {model.eligibility.state === "CHECKING" ? "Checking A-Pass eligibility" : "Check A-Pass eligibility"}
+              </button>
+            </>
           )}
-          {model.state !== "ELIGIBILITY_REFUSED" ? null : (
-            <p className={styles.error} role="alert">
-              This holder is not admitted by the active policy, so no check can start for it.
-            </p>
-          )}
-
-          <div className={styles.field}>
-            <label htmlFor="ccp-holder">Holder address</label>
-            <input
-              id="ccp-holder"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="0x..."
-              value={holderDraft}
-              disabled={model.eligibility.state === "CHECKING"}
-              onChange={(event) => actions.onHolderChange?.(event.target.value)}
-            />
-          </div>
-
-          <div className={styles.testHolder}>
-            <p>A Cleanverse UAT A-Pass holder is published for testing this policy.</p>
-            <code>{publicTestHolder}</code>
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={model.eligibility.state === "CHECKING"}
-              onClick={actions.onUsePublicHolder}
-            >
-              Use the public test holder
-            </button>
-          </div>
-
-          {model.eligibility.state !== "VERIFIED" ? null : (
-            <p className={styles.verified} data-testid="eligibility-verified">
-              A-Pass verified · chain {model.eligibility.chainId} · gate {shorten(model.eligibility.gateAddress)}
-              {" "}· block {model.eligibility.observedBlock}
-            </p>
-          )}
-
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={model.eligibility.state === "CHECKING" || holderDraft.trim() === ""}
-            onClick={actions.onCheckEligibility}
-          >
-            {model.eligibility.state === "CHECKING" ? "Checking A-Pass eligibility" : "Check A-Pass eligibility"}
-          </button>
         </section>
       )}
 
@@ -233,32 +261,31 @@ export function LiveProduct({
             so the overlap cannot be checked in the open.
           </p>
 
-          <ClaimTimeline
-            a={claimRange(draft.aFrom, draft.aUntil)}
-            b={claimRange(draft.bFrom, draft.bUntil)}
-            reveal="none"
-          />
+          {managedDraft === null ? null : (
+            <ClaimTimeline
+              a={claimRange(managedDraft.aFrom, managedDraft.aUntil)}
+              b={claimRange(managedDraft.bFrom, managedDraft.bUntil)}
+              reveal="none"
+            />
+          )}
 
-          {model.intake === "MANAGED_COMBINED" ? null : (
+          {model.intake !== "DIRECT_ADMISSION" || model.directAdmission === null ? null : (
             <ParticipantAdmission
-              claimA={model.claimA}
-              claimB={model.claimB}
-              wallet={model.wallet}
-              windowA={model.claimA.window}
-              windowB={model.claimB.window}
-              activeRole={model.activeRole}
-              handoffRequired={model.handoffRequired}
+              admission={model.directAdmission}
               busy={busy}
               actions={{
                 onConnectWallet: actions.onConnectWallet,
                 onSwitchNetwork: actions.onSwitchNetwork,
+                onCheckEligibility: actions.onCheckEligibility,
                 onAuthorizeClaim: actions.onAuthorizeClaim,
+                onDraftChange: actions.onDirectDraftChange,
                 onContinueAsParticipantB: actions.onContinueAsParticipantB,
+                onDisconnect: actions.onDisconnect,
               }}
             />
           )}
 
-          {model.intake !== "MANAGED_COMBINED" ? null : (
+          {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
           <div className={styles.claims}>
             {(["A", "B"] as const).map((role) => {
               const fromKey = role === "A" ? "aFrom" : "bFrom";
@@ -281,7 +308,7 @@ export function LiveProduct({
                         type="text"
                         inputMode="numeric"
                         autoComplete="off"
-                        value={draft[fromKey]}
+                        value={managedDraft[fromKey]}
                         aria-invalid={invalidFields.includes(fromKey)}
                         disabled={busy}
                         onChange={(event) => actions.onDraftChange?.(fromKey, event.target.value)}
@@ -294,7 +321,7 @@ export function LiveProduct({
                         type="text"
                         inputMode="numeric"
                         autoComplete="off"
-                        value={draft[untilKey]}
+                        value={managedDraft[untilKey]}
                         aria-invalid={invalidFields.includes(untilKey)}
                         disabled={busy}
                         onChange={(event) => actions.onDraftChange?.(untilKey, event.target.value)}
@@ -377,11 +404,13 @@ export function LiveProduct({
               : "The private check cleared. No reserve was assigned to this case."}
           </p>
 
-          <ClaimTimeline
-            a={claimRange(draft.aFrom, draft.aUntil)}
-            b={claimRange(draft.bFrom, draft.bUntil)}
-            reveal={conflict ? "conflict" : "cleared"}
-          />
+          {managedDraft === null ? null : (
+            <ClaimTimeline
+              a={claimRange(managedDraft.aFrom, managedDraft.aUntil)}
+              b={claimRange(managedDraft.bFrom, managedDraft.bUntil)}
+              reveal={conflict ? "conflict" : "cleared"}
+            />
+          )}
 
           {model.decisionRail === null ? null : (
             <dl className={styles.decisionRail} data-testid="decision-rail">
@@ -415,6 +444,7 @@ export function LiveProduct({
           )}
 
           <OnchainPanel view={model.onchain} />
+          <AdapterCompatibilityPanel load={adapterCompatibility} placement="ACT" />
 
           {model.receipt === null || chapter === "PROVE" ? null : (
             <button type="button" className={styles.primary} onClick={() => setReceiptOpen(true)}>
@@ -436,6 +466,7 @@ export function LiveProduct({
               <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>
             ))}
           </dl>
+          <AdapterCompatibilityPanel load={adapterCompatibility} placement="PROVE" />
           <button type="button" className={styles.primary} onClick={() => setReceiptOpen(true)}>
             Open the full receipt
           </button>

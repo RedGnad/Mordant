@@ -77,6 +77,56 @@
   color: var(--muted);
 }
 
+.claimFields {
+  display: grid;
+  margin: 0 0 18px;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 16px;
+}
+
+.otherRole {
+  max-width: 62ch;
+  margin: 18px 0 0;
+  padding: 16px 0 16px 18px;
+  border-left: 3px solid var(--cleared);
+}
+
+.otherRole strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.otherRole p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .privacy {
   max-width: 62ch;
   margin: 0 0 18px;
@@ -158,6 +208,10 @@
   }
 
   .steps li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .claimFields {
     grid-template-columns: minmax(0, 1fr);
   }
 

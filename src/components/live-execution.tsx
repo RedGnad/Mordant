@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { DirectParticipantExecution } from "./live-product/direct-participant-execution";
 import { LiveProduct, type ClaimDraft } from "./live-product/live-product";
-import { adaptManagedIntake, type ManagedWorkerView } from "./live-product/managed-intake-adapter";
+import { adaptManagedIntake, parseManagedCaseEnvelope, type ManagedWorkerView } from "./live-product/managed-intake-adapter";
 import {
   capabilities,
+  intakeMode,
+  type CapabilitySet,
   type EligibilityView,
   type LiveProductState,
   type LiveProductViewModel,
 } from "./live-product/live-product-view-model";
+import { WalletProvider } from "./wallet/wallet-provider";
 
 /**
  * Controller for the managed combined intake.
@@ -44,11 +48,25 @@ type CcpEligibility = Readonly<{
   observedBlock: number;
 }>;
 
-export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: {
+type LiveExecutionProps = Readonly<{
   readonly workerOrigin: string;
   readonly initialRunId: string | null;
+  readonly initialCaseCode?: string | null;
   readonly publicTestHolder: string;
-}) {
+  /** Supplied only by the server page after it has evaluated its capability gate. */
+  readonly capabilitySet?: CapabilitySet;
+  /** Server-supplied and omitted unless WalletConnect is separately qualified. */
+  readonly walletConnectProjectId?: string | null;
+}>;
+
+class ManagedResponseRejected extends Error {
+  constructor() {
+    super("The execution response could not be verified.");
+    this.name = "ManagedResponseRejected";
+  }
+}
+
+function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, capabilitySet }: Required<Pick<LiveExecutionProps, "workerOrigin" | "initialRunId" | "publicTestHolder">> & Readonly<{ capabilitySet: CapabilitySet }>) {
   const [holder, setHolder] = useState("");
   const [eligibility, setEligibility] = useState<EligibilityView>(IDLE_ELIGIBILITY);
   const [draft, setDraft] = useState<ClaimDraft>({ aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" });
@@ -68,7 +86,7 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
   // rendering is impure and would differ between server and client.
   const startedAt = useRef<number | null>(null);
 
-  const terminal = view?.stage === "COMPLETE" && view.receipt !== null;
+  const terminal = view?.stage === "ABORTED" || (view?.stage === "COMPLETE" && view.receipt !== null);
 
   const parse = useCallback((): { windows: unknown | null; bad: string[]; message: string | null } => {
     const bad: string[] = [];
@@ -160,13 +178,29 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
         return;
       }
       if (!created.ok) throw new Error("The execution service refused the request.");
-      const body = await created.json() as { view: ManagedWorkerView };
-      setRunId(body.view.runId);
-      setView(body.view);
+      let raw: unknown;
+      try {
+        raw = await created.json();
+      } catch {
+        throw new ManagedResponseRejected();
+      }
+      const next = parseManagedCaseEnvelope(raw);
+      if (next === null) throw new ManagedResponseRejected();
+      setRunId(next.runId);
+      setView(next);
       startedAt.current = Date.now();
-      window.history.pushState(null, "", `/protection/live?runId=${body.view.runId}`);
+      window.history.pushState(null, "", `/protection/live?runId=${next.runId}`);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The confidential check could not be started.");
+      if (error instanceof ManagedResponseRejected) {
+        setNoticeState("SERVICE_UNAVAILABLE");
+        setNotice({
+          title: "The execution response was rejected.",
+          body: "No result is shown because the worker projection could not be verified. You may retry the request.",
+          retryable: true,
+        });
+      } else {
+        setFormError(error instanceof Error ? error.message : "The confidential check could not be started.");
+      }
     } finally {
       setStarting(false);
     }
@@ -175,8 +209,15 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
   const readRun = useCallback(async (id: string) => {
     const response = await fetch(`${workerOrigin}/v1/custom-cases/${id}`, { cache: "no-store" });
     if (!response.ok) throw new Error("unreadable");
-    const body = await response.json() as { view: ManagedWorkerView };
-    return body.view;
+    let raw: unknown;
+    try {
+      raw = await response.json();
+    } catch {
+      throw new ManagedResponseRejected();
+    }
+    const next = parseManagedCaseEnvelope(raw);
+    if (next === null || next.runId !== id) throw new ManagedResponseRejected();
+    return next;
   }, [workerOrigin]);
 
   /**
@@ -191,8 +232,17 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
       try {
         const next = await readRun(runId);
         if (!cancelled) setView(next);
-      } catch {
-        if (!cancelled) failures.current += 1;
+      } catch (error) {
+        if (!cancelled && error instanceof ManagedResponseRejected) {
+          setNoticeState("SERVICE_UNAVAILABLE");
+          setNotice({
+            title: "The execution response was rejected.",
+            body: "No result is shown because the durable worker projection could not be verified.",
+            retryable: true,
+          });
+        } else if (!cancelled) {
+          failures.current += 1;
+        }
       } finally {
         if (!cancelled) setRestoring(false);
       }
@@ -213,8 +263,17 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
           if (cancelled) return;
           failures.current = 0;
           setView(next);
-        } catch {
+        } catch (error) {
           if (cancelled) return;
+          if (error instanceof ManagedResponseRejected) {
+            setNoticeState("SERVICE_UNAVAILABLE");
+            setNotice({
+              title: "The execution response was rejected.",
+              body: "No result is shown because the durable worker projection could not be verified.",
+              retryable: true,
+            });
+            return;
+          }
           failures.current += 1;
           if (failures.current >= FAILURES_BEFORE_UNAVAILABLE) {
             setNoticeState("SERVICE_UNAVAILABLE");
@@ -252,8 +311,7 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
 
   const model = adaptManagedIntake({
     view,
-    // Production runs the one qualified intake. Nothing else is turned on here.
-    capabilitySet: capabilities("MANAGED_COMBINED_INTAKE"),
+    capabilitySet,
     eligibility,
     wallet: null,
     claimsAuthored: view !== null,
@@ -287,6 +345,48 @@ export function LiveExecution({ workerOrigin, initialRunId, publicTestHolder }: 
         onStart: () => void start(),
         onRetry: retry,
       }}
+    />
+  );
+}
+
+/**
+ * Capability boundary between the already-qualified managed flow and the
+ * dormant participant-admission flow. The public page provides the capability
+ * set from server-side checks; no browser query or client environment flag can
+ * switch intake modes.
+ */
+export function LiveExecution({
+  workerOrigin,
+  initialRunId,
+  initialCaseCode = null,
+  publicTestHolder,
+  capabilitySet = capabilities("MANAGED_COMBINED_INTAKE"),
+  walletConnectProjectId = null,
+}: LiveExecutionProps) {
+  const intake = intakeMode(capabilitySet);
+  if (intake === "DIRECT_ADMISSION") {
+    const qualifiedWalletConnect = capabilitySet.WALLETCONNECT_AVAILABLE ? walletConnectProjectId : null;
+    return (
+      <WalletProvider walletConnectProjectId={qualifiedWalletConnect}>
+        <DirectParticipantExecution
+          workerOrigin={workerOrigin}
+          initialCaseCode={initialCaseCode}
+          publicTestHolder={publicTestHolder}
+          capabilitySet={capabilitySet}
+        />
+      </WalletProvider>
+    );
+  }
+
+  // The server page currently passes only the managed capability. Any other
+  // incomplete future set deliberately degrades to the managed-safe model
+  // rather than making a client-side route selectable.
+  return (
+    <ManagedLiveExecution
+      workerOrigin={workerOrigin}
+      initialRunId={initialRunId}
+      publicTestHolder={publicTestHolder}
+      capabilitySet={intake === "MANAGED_COMBINED" ? capabilitySet : capabilities("MANAGED_COMBINED_INTAKE")}
     />
   );
 }
