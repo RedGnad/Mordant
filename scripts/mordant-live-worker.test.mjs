@@ -375,6 +375,59 @@ test("pruning removes reproducible artifacts and preserves the receipt", () => {
   assert.deepEqual(summary.incomplete, []);
 });
 
+test("pruning preserves the direct-participant bridge evidence and still removes private artifacts", () => {
+  const config = configuration();
+  const paths = ensureWorkerLayout(config);
+  const runId = "22222222-2222-4222-8222-222222222222";
+  const runDir = join(paths.runRoot, runId);
+  for (const directory of ["public", "decryptor-private", "participant-private"]) {
+    mkdirSync(join(runDir, directory), { recursive: true });
+    writeFileSync(join(runDir, directory, "big.bin"), Buffer.alloc(1024));
+  }
+  // The signed governed result lives under public/ and is expendable precisely
+  // because the bridge evidence carries a complete copy of it.
+  writeFileSync(join(runDir, "public", "governed-conflict-result.json"), JSON.stringify({ conflict: true }));
+  writeFileSync(join(runDir, "custom-supervised-receipt.json"), JSON.stringify({ schemaVersion: "mordant.custom-supervised-protection-receipt/1" }));
+  writeFileSync(join(runDir, "operation-journal.json"), JSON.stringify({ records: [] }));
+  const bridgeEvidence = {
+    schemaVersion: "mordant.direct-participant-bridge-evidence/1",
+    runId,
+    governedResult: { conflict: true, signature: "signed" },
+  };
+  writeFileSync(join(runDir, "direct-participant-bridge-evidence.json"), JSON.stringify(bridgeEvidence));
+  mkdirSync(join(runDir, "admissions"), { recursive: true });
+  writeFileSync(join(runDir, "admissions", "participant_a.json"), JSON.stringify({
+    role: "PARTICIPANT_A", claimCommitment: "0x01", eligibilityBlock: 51_507_855,
+  }));
+  writeFileSync(join(runDir, "execution.json"), JSON.stringify({
+    stage: "COMPLETE",
+    executionVariant: "CUSTOM_SUPERVISED",
+    admittedClaims: {
+      PARTICIPANT_A: { participantWallet: "0xa", claim: { activeFrom: 777, activeUntil: 888 } },
+      PARTICIPANT_B: { participantWallet: "0xb", claim: { activeFrom: 999, activeUntil: 1111 } },
+    },
+  }));
+
+  const removed = pruneReproducibleArtifacts(paths.runRoot, runId);
+  assert.deepEqual(removed.sort(), ["decryptor-private", "participant-private", "private-input", "public"]);
+
+  // The bridge authorization survives, byte for byte.
+  const retained = join(runDir, "direct-participant-bridge-evidence.json");
+  assert.equal(existsSync(retained), true, "bridge evidence must survive pruning");
+  assert.deepEqual(JSON.parse(readFileSync(retained, "utf8")), bridgeEvidence);
+  // The durable admission ledger survives; the admitted intervals do not.
+  assert.equal(existsSync(join(runDir, "admissions", "participant_a.json")), true);
+  const persisted = readFileSync(join(runDir, "execution.json"), "utf8");
+  for (const forbidden of ["activeFrom", "activeUntil", "777", "888", "999", "1111"]) {
+    assert.equal(persisted.includes(forbidden), false, `durable state kept ${forbidden}`);
+  }
+  assert.equal(JSON.parse(persisted).admittedClaims.PARTICIPANT_A.participantWallet, "0xa");
+  // Reproducible and private material is gone, including the raw signed result.
+  assert.equal(existsSync(join(runDir, "public")), false);
+  assert.equal(existsSync(join(runDir, "decryptor-private")), false);
+  assert.equal(existsSync(join(runDir, "participant-private")), false);
+});
+
 test("startup reconciliation reports an incomplete run instead of inventing completion", () => {
   const config = configuration();
   const paths = ensureWorkerLayout(config);

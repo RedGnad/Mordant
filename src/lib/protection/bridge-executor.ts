@@ -28,6 +28,7 @@ import {
   createPublicClient,
   decodeEventLog,
   getAddress,
+  hashTypedData,
   http,
   keccak256,
   parseAbi,
@@ -43,17 +44,27 @@ import {
   MONAD_TESTNET_CHAIN_ID,
   checkAdapterV2Compatibility,
   loadCanonicalRecourseBridgeArtifacts,
+  loadCanonicalRecourseConfiguration,
   retryReadOnly,
   type AdapterV2ReadOnlyReader,
   type AdapterV2ReadOnlyState,
   type CanonicalRecourseBridgeArtifacts,
+  type CanonicalRecourseConfiguration,
 } from "./adapter-compatibility";
+import { CANONICAL_CLEANVERSE_ASSET_DIGEST } from "./cleanverse-asset";
 import type { EnvironmentLike } from "./ccp-eligibility";
 import {
   SUPERSEDED_ADAPTER_ADDRESS,
+  buildGovernedBridgePayload,
+  governedReleaseStructHash,
   type GovernedBridgePayload,
   type VerifiedGovernedRelease,
 } from "./governed-recourse-bridge";
+import { digestToBytes32 } from "./participant-authorization";
+import {
+  assertDirectParticipantBridgeEvidence,
+  type VerifiedDirectParticipantBridgeEvidence,
+} from "./direct-participant-bridge-evidence";
 import {
   assertPublicProtectionEvidence,
   verifyGovernedResultSignature,
@@ -296,7 +307,12 @@ export type PreparedBridge = Readonly<{
 
 type PreparedState = Readonly<{
   prepared: PreparedBridge;
-  canonical: CanonicalRecourseBridgeArtifacts;
+  /**
+   * Present only for the retained V4 path. The direct-participant path
+   * establishes its release from its own verified evidence, so it has no
+   * canonical handoff to carry, and nothing after preparation reads this.
+   */
+  canonical?: CanonicalRecourseBridgeArtifacts;
 }>;
 
 function intentDigestOf(input: Readonly<{
@@ -542,6 +558,251 @@ async function buildPrepared(
     signerAddress,
   });
   return Object.freeze({ prepared, canonical });
+}
+
+// ------------------------------------------------- direct-participant bridging
+
+export type DirectParticipantPrepareInput = Readonly<{
+  /** The `mordant.direct-participant-bridge-evidence/1` artifact, as read from disk. */
+  evidence: unknown;
+  /** The source commit of the checkout that executed the run. */
+  sourceCommit: string;
+  nonce: bigint;
+  issuedAt: number;
+  expiry: number;
+}>;
+
+/**
+ * Adapter reconciliation for a case-specific deployment.
+ *
+ * The retained V4 path reconciles against the one committed adapter, and stays
+ * exactly as it was. A direct-participant run has a fresh governed authority, so
+ * its adapter is deployed per case and cannot be pinned by a committed address.
+ * The run-specific pins therefore come from the VERIFIED signed governed result
+ * and from nowhere else, while everything that is not run-specific, the reviewed
+ * bytecode, the settlement token, the verifier, the facility, the attestor and
+ * the payouts, is still required to equal the committed configuration.
+ */
+async function checkDirectParticipantAdapter(
+  reader: AdapterReader,
+  configuration: CanonicalRecourseConfiguration,
+  verified: VerifiedDirectParticipantBridgeEvidence,
+  release: VerifiedGovernedRelease,
+  window: Readonly<{ nonce: bigint; issuedAt: number; expiry: number }>,
+): Promise<Readonly<{
+  adapter: AdapterState;
+  payload: GovernedBridgePayload;
+  typedDataDigest: Hex;
+  structHash: Hex;
+}>> {
+  const state = await reader.readAdapterState();
+  const expected = configuration.adapter;
+  const participants = configuration.participants;
+
+  if (state.chainId !== MONAD_TESTNET_CHAIN_ID) fail("CHAIN_MISMATCH", "The adapter is not on Monad testnet");
+  if (state.address.toLowerCase() === SUPERSEDED_ADAPTER_ADDRESS.toLowerCase()) {
+    fail("SUPERSEDED_ADAPTER", "The configured adapter is the superseded deployment");
+  }
+  // Same reviewed contract, different constructor pins. Byte-identical runtime
+  // code is what makes "the same audited adapter" a checkable claim.
+  if (state.codeHash.toLowerCase() !== expected.codeHash.toLowerCase()) {
+    fail("ADAPTER_CODE", "The case-specific adapter is not the reviewed Adapter V2 runtime code");
+  }
+  if (state.runtimeBytes !== expected.runtimeBytes) fail("ADAPTER_CODE", "Adapter runtime byte length differs from the reviewed artifact");
+  if (state.settlementToken.toLowerCase() !== expected.settlementToken.toLowerCase()) {
+    fail("ADAPTER_TOKEN", "The case-specific adapter settles a different token");
+  }
+  if (state.cviVerifier.toLowerCase() !== expected.verifier.toLowerCase()) {
+    fail("ADAPTER_VERIFIER", "The case-specific adapter uses a different compliance verifier");
+  }
+  if (state.facility.toLowerCase() !== expected.facility.toLowerCase()) {
+    fail("ADAPTER_FACILITY", "The case-specific adapter names a different facility");
+  }
+  if (state.attestor.toLowerCase() !== expected.attestor.toLowerCase()) {
+    fail("ADAPTER_ATTESTOR", "The case-specific adapter names a different bridge attestor");
+  }
+
+  // Run-specific pins, taken from the verified signature and compared literally.
+  if (state.assetIdentityDigest.toLowerCase() !== digestToBytes32(release.assetIdentity)) {
+    fail("ADAPTER_ASSET", "The adapter asset pin is not the signed receivable");
+  }
+  if (state.expectedGovernedReleaseAuthorityId.toLowerCase() !== digestToBytes32(release.releaseAuthorityId)) {
+    fail("ADAPTER_AUTHORITY", "The adapter authority pin is not this run's signed governed authority");
+  }
+  if (state.circuitHash.toLowerCase() !== digestToBytes32(release.circuitDigest)) {
+    fail("ADAPTER_CIRCUIT", "The adapter circuit pin is not the signed circuit digest");
+  }
+  if (state.parameterFingerprint.toLowerCase() !== digestToBytes32(release.parameterFingerprint)) {
+    fail("ADAPTER_PARAMETERS", "The adapter parameter pin is not the signed parameter fingerprint");
+  }
+
+  const payoutTotal = participants.payoutA + participants.payoutB;
+  if (!state.solvent || state.tokenBalance < state.availableReserve + state.openReserved + state.entitledUnpaid) {
+    fail("INSOLVENT", "The case-specific adapter is not solvent for its reserve and liability accounting");
+  }
+  if (state.openReserved !== 0n || state.entitledUnpaid !== 0n) {
+    fail("OPEN_LIABILITY", "The case-specific adapter must carry no open or entitled liability");
+  }
+  if (state.availableReserve < payoutTotal) {
+    fail("INSUFFICIENT_RESERVE", "The case-specific adapter reserve does not cover the canonical payouts");
+  }
+
+  if (participants.holderA.toLowerCase() === participants.holderB.toLowerCase()) {
+    fail("CANONICAL_PARTICIPANTS", "The canonical holders are not distinct");
+  }
+  // The holders are the wallets the evidence verifier reconciled to the canonical
+  // configuration, so a payout can only ever reach an admitted canonical wallet.
+  if (verified.holderA.toLowerCase() !== participants.holderA.toLowerCase()
+    || verified.holderB.toLowerCase() !== participants.holderB.toLowerCase()) {
+    fail("CANONICAL_PARTICIPANTS", "The admitted participants are not the canonical holders");
+  }
+  for (const excluded of Object.values(participants.excluded)) {
+    if (excluded.toLowerCase() === participants.holderA.toLowerCase()
+      || excluded.toLowerCase() === participants.holderB.toLowerCase()) {
+      fail("CANONICAL_EXCLUDED_PARTICIPANT", "An excluded wallet is configured as a participant");
+    }
+  }
+
+  const [
+    holderAEligible, holderBEligible, facilityEligible, negativeControlEligible,
+    transferAAllowed, transferBAllowed,
+  ] = await Promise.all([
+    reader.isEligible(state.cviVerifier, participants.holderA, state.roleHolder),
+    reader.isEligible(state.cviVerifier, participants.holderB, state.roleHolder),
+    reader.isEligible(state.cviVerifier, state.facility, state.roleFacility),
+    reader.isEligible(state.cviVerifier, participants.excluded.negativeControl, state.roleHolder),
+    reader.isAssetTransferAllowed(state.cviVerifier, state.settlementToken, state.address, participants.holderA, participants.payoutA),
+    reader.isAssetTransferAllowed(state.cviVerifier, state.settlementToken, state.address, participants.holderB, participants.payoutB),
+  ]);
+  if (!holderAEligible || !holderBEligible) fail("PARTICIPANT_INELIGIBLE", "Every canonical holder must be currently eligible");
+  if (!facilityEligible) fail("FACILITY_INELIGIBLE", "The facility must currently hold Adapter V2 ROLE_FACILITY");
+  if (negativeControlEligible) fail("NEGATIVE_CONTROL_ELIGIBLE", "The canonical negative control must remain ineligible for ROLE_HOLDER");
+  if (!transferAAllowed || !transferBAllowed) fail("TRANSFER_POLICY", "Every canonical payout transfer must be currently permitted");
+
+  const payload = buildGovernedBridgePayload({
+    release,
+    participants: {
+      holderA: participants.holderA,
+      holderB: participants.holderB,
+      // Payouts come only from the committed deployment configuration.
+      payoutA: participants.payoutA,
+      payoutB: participants.payoutB,
+    },
+    pins: {
+      address: state.address,
+      chainId: state.chainId,
+      assetIdentityDigest: state.assetIdentityDigest,
+      releaseAuthorityId: state.expectedGovernedReleaseAuthorityId,
+      releaseMode: state.releaseMode,
+      circuitHash: state.circuitHash,
+      parameterFingerprint: state.parameterFingerprint,
+    },
+    interpretation: "PINS_GOVERNED_AUTHORITY",
+    nonce: window.nonce,
+    issuedAt: window.issuedAt,
+    expiry: window.expiry,
+  });
+  const typedDataDigest = hashTypedData({
+    domain: payload.domain,
+    types: payload.types,
+    primaryType: payload.primaryType,
+    message: payload.message,
+  });
+  const structHash = governedReleaseStructHash(payload);
+  const [onChainDigest, consumed] = await Promise.all([
+    reader.hashRelease(payload),
+    reader.resultConsumed(payload.message.governedResultDigest),
+  ]);
+  if (consumed) fail("RESULT_CONSUMED", "The governed result has already been consumed by this adapter");
+  if (onChainDigest.toLowerCase() !== typedDataDigest.toLowerCase()) {
+    fail("DIGEST_MISMATCH", "Adapter hashRelease disagrees with the independently encoded typed-data digest");
+  }
+  return Object.freeze({ adapter: state, payload, typedDataDigest, structHash });
+}
+
+/**
+ * Derives the bridge release from the verified direct-participant evidence.
+ *
+ * Every field is read out of the governed result whose Ed25519 signature the
+ * verifier already checked. The terminal Boolean in particular comes from
+ * `verified.conflict`, which the verifier returns only after that check.
+ */
+function directParticipantRelease(verified: VerifiedDirectParticipantBridgeEvidence): VerifiedGovernedRelease {
+  const result = verified.governedResult;
+  return Object.freeze({
+    runId: verified.evidence.runId,
+    fheCaseId: result.caseId,
+    caseBindingDigest: result.caseBindingDigest,
+    assetIdentity: result.assetIdentity,
+    governedResultDigest: verified.evidence.governedResultDigest,
+    resultCiphertextDigest: result.resultCiphertextDigest,
+    participantArtifactDigests: Object.freeze([
+      result.participantArtifactDigests[0],
+      result.participantArtifactDigests[1],
+    ]) as readonly [`sha256:${string}`, `sha256:${string}`],
+    circuitDigest: result.circuitDigest,
+    parameterFingerprint: result.parameterFingerprint,
+    releaseAuthorityId: result.releaseAuthorityId,
+    releaseMode: result.releaseMode,
+    conflict: verified.conflict,
+  });
+}
+
+async function buildPreparedDirect(
+  configuration: BridgeConfiguration,
+  reader: AdapterReader,
+  input: DirectParticipantPrepareInput,
+  loadConfiguration: () => CanonicalRecourseConfiguration,
+): Promise<PreparedBridge> {
+  let canonicalConfiguration: CanonicalRecourseConfiguration;
+  try {
+    canonicalConfiguration = loadConfiguration();
+  } catch (error) {
+    return bridgeError(error, "CANONICAL_LOAD", "The canonical V2 configuration could not be loaded");
+  }
+  let verified: VerifiedDirectParticipantBridgeEvidence;
+  try {
+    verified = assertDirectParticipantBridgeEvidence(input.evidence, {
+      sourceCommit: input.sourceCommit,
+      assetIdentity: CANONICAL_CLEANVERSE_ASSET_DIGEST,
+      holderA: canonicalConfiguration.participants.holderA,
+      holderB: canonicalConfiguration.participants.holderB,
+      excludedWallets: Object.values(canonicalConfiguration.participants.excluded),
+    });
+  } catch (error) {
+    return bridgeError(error, "DIRECT_EVIDENCE", "The direct-participant bridge evidence was rejected");
+  }
+  const release = directParticipantRelease(verified);
+  let checked: Awaited<ReturnType<typeof checkDirectParticipantAdapter>>;
+  try {
+    checked = await checkDirectParticipantAdapter(
+      withReadOnlyRetries(reader),
+      canonicalConfiguration,
+      verified,
+      release,
+      { nonce: input.nonce, issuedAt: input.issuedAt, expiry: input.expiry },
+    );
+  } catch (error) {
+    return bridgeError(error, "ADAPTER_READ", "The case-specific adapter compatibility check failed");
+  }
+  if (checked.adapter.address.toLowerCase() !== configuration.adapterAddress.toLowerCase()) {
+    fail("ADAPTER_MISMATCH", "The reconciled adapter is not the configured adapter");
+  }
+  return Object.freeze({
+    schemaVersion: BRIDGE_EXECUTION_SCHEMA,
+    payload: checked.payload,
+    typedDataDigest: checked.typedDataDigest,
+    structHash: checked.structHash,
+    intentDigest: intentDigestOf({
+      adapter: checked.adapter.address,
+      chainId: checked.adapter.chainId,
+      typedDataDigest: checked.typedDataDigest,
+      signer: checked.adapter.attestor,
+      governedResultDigest: checked.payload.message.governedResultDigest,
+    }),
+    adapter: checked.adapter,
+    signerAddress: checked.adapter.attestor,
+  });
 }
 
 export type BridgeOperationRecord = Readonly<{
@@ -945,7 +1206,14 @@ function releaseConsumedEvents(
 }
 
 export type BridgeExecutor = Readonly<{
+  /** Retained V4 evidence path. Unchanged. */
   prepare: (input: PrepareInput) => Promise<PreparedBridge>;
+  /**
+   * Fresh direct-participant path. Accepts ONLY
+   * `mordant.direct-participant-bridge-evidence/1`; it never reaches
+   * `assertPublicProtectionEvidence` and cannot consume V4 evidence.
+   */
+  prepareDirect: (input: DirectParticipantPrepareInput) => Promise<PreparedBridge>;
   /** Produces an opaque simulation permit, never a signature. */
   simulate: (prepared: PreparedBridge) => Promise<SimulatedBridge>;
   /** Releases exactly one signature only from a fresh, successful simulation permit. */
@@ -960,6 +1228,7 @@ export type BridgeExecutor = Readonly<{
 
 type ExecutorDependencies = Readonly<{
   loadCanonical: () => CanonicalRecourseBridgeArtifacts;
+  loadConfiguration: () => CanonicalRecourseConfiguration;
   loadSigner: () => SigningCapability;
   verifyEvidence: (evidence: unknown, canonical: CanonicalRecourseBridgeArtifacts) => VerifiedGovernedRelease;
 }>;
@@ -999,6 +1268,19 @@ function createBridgeExecutorInternal(options: ExecutorOptions, dependencies: Ex
       );
       preparedStates.set(state.prepared as object, state);
       return state.prepared;
+    },
+    prepareDirect: async (input: DirectParticipantPrepareInput) => {
+      const prepared = await buildPreparedDirect(
+        options.configuration,
+        options.reader,
+        input,
+        dependencies.loadConfiguration,
+      );
+      // The direct path shares the simulate/sign/reconcile discipline exactly;
+      // only how the release was established differs. `canonical` is carried for
+      // shape compatibility and is not consulted again after preparation.
+      preparedStates.set(prepared as object, Object.freeze({ prepared }));
+      return prepared;
     },
     simulate: async (prepared: PreparedBridge) => {
       const state = requirePrepared(prepared);
@@ -1120,6 +1402,7 @@ export function createBridgeExecutor(options: ExecutorOptions & Readonly<{ envir
   const environment = options.environment ?? process.env;
   return createBridgeExecutorInternal(options, {
     loadCanonical: () => loadCanonicalRecourseBridgeArtifacts(),
+    loadConfiguration: () => loadCanonicalRecourseConfiguration(),
     loadSigner: () => loadSigningCapability(environment),
     verifyEvidence: verifiedReleaseFromEvidence,
   });
@@ -1138,6 +1421,7 @@ export function createBridgeExecutorForTest(options: ExecutorOptions & Readonly<
 }>): BridgeExecutor {
   return createBridgeExecutorInternal(options, {
     loadCanonical: () => options.canonical,
+    loadConfiguration: () => options.canonical.configuration,
     loadSigner: () => Object.freeze({ signerAddress: options.signerAddress, sign: options.sign }),
     verifyEvidence: options.verifyEvidence ?? ((_evidence, canonical) => canonical.release),
   });

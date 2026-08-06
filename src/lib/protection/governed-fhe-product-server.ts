@@ -102,6 +102,11 @@ import {
   customSupervisedBindingDigestV2,
   type MordantCustomSupervisedBindingV2,
 } from "./custom-supervised-v2";
+import {
+  assertDirectParticipantBridgeEvidence,
+  buildDirectParticipantBridgeEvidence,
+  type DirectParticipantAdmissionFact,
+} from "./direct-participant-bridge-evidence";
 
 const execFileAsync = promisify(execFile);
 
@@ -1014,6 +1019,95 @@ function protectionAuthorizationBindingDigest(state: InternalState): Sha256Diges
   return state.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
     ? customSupervisedBindingDigestV2(protectionAuthorizationBinding(state) as MordantCustomSupervisedBindingV2)
     : protectionBindingDigest(protectionBindingFromCase(state.protectionCase));
+}
+
+/** Where a direct-participant run's bridge authorization is retained. */
+export const DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE = "direct-participant-bridge-evidence.json";
+
+export function directParticipantBridgeEvidencePath(runRoot: string, runId: string): string {
+  assertRunId(runId);
+  return join(runRoot, runId, DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE);
+}
+
+function admissionFact(
+  runtime: ProtectionRuntime,
+  runId: string,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+): DirectParticipantAdmissionFact | null {
+  const record = readAdmission(runtime.runRoot, runId, role);
+  if (record === null) return null;
+  // Only commitments and observations cross over. The admitted claim window is
+  // private execution input and is deliberately not carried.
+  return Object.freeze({
+    role,
+    participantWallet: record.participantWallet,
+    authorizationDigest: record.authorizationDigest,
+    claimCommitment: record.claimCommitment,
+    authorizationNonce: record.authorizationNonce,
+    chainId: record.chainId,
+    eligibilityBlock: record.eligibilityBlock,
+  });
+}
+
+/**
+ * Writes the direct-participant bridge authorization for a completed run.
+ *
+ * Only a run with two durable wallet admissions produces one: an operator-driven
+ * custom run has no admitted wallets and is silently skipped. The governed
+ * result is copied from the decryptor's published object as-is and the artifact
+ * is verified before it is written, so an unverifiable authorization can never
+ * reach the disk.
+ */
+function persistDirectParticipantBridgeEvidence(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  receipt: CustomSupervisedProtectionReceipt,
+): void {
+  const admissionA = admissionFact(runtime, state.runId, "PARTICIPANT_A");
+  const admissionB = admissionFact(runtime, state.runId, "PARTICIPANT_B");
+  if (admissionA === null || admissionB === null) return;
+  if (state.release === undefined || state.keygen === undefined) {
+    throw new ProtectionProductError("A complete direct-participant run is required", 500);
+  }
+  const binding = readJson<FheCaseBinding>(join(state.paths.publicRoot, "case-binding.json"));
+  const result = readJson<GovernedSignedResult>(join(state.paths.publicRoot, "governed-conflict-result.json"));
+  const pins = state.release.trustedRecoursePins;
+  const evidence = buildDirectParticipantBridgeEvidence({
+    sourceCommit: receipt.sourceCommit,
+    runId: state.runId,
+    fheCaseId: state.protectionCase.fheCaseId,
+    protectionBindingDigest: protectionAuthorizationBindingDigest(state),
+    caseBindingDigest: state.keygen.bindingDigest,
+    caseBinding: {
+      caseId: binding.caseId,
+      assetIdentity: binding.assetIdentity,
+      policyId: binding.policyId,
+      circuitDigest: binding.circuitDigest,
+      parameterFingerprint: binding.parameterFingerprint,
+      releaseMode: binding.releaseMode,
+      releaseAuthorityId: binding.releaseAuthorityId,
+      releaseAuthorityPublicKey: binding.releaseAuthorityPublicKey,
+    },
+    participants: [admissionA, admissionB],
+    participantArtifactDigestA: pins.participantArtifactDigestA,
+    participantArtifactDigestB: pins.participantArtifactDigestB,
+    evaluatedArtifactDigest: pins.evaluatedArtifactDigest,
+    governedResult: result,
+    customReceiptDigest: receipt.receiptDigest,
+  });
+  const canonical = loadCanonicalRecourseConfiguration();
+  assertDirectParticipantBridgeEvidence(evidence, {
+    sourceCommit: receipt.sourceCommit,
+    assetIdentity: CANONICAL_CLEANVERSE_ASSET_DIGEST,
+    holderA: canonical.participants.holderA,
+    holderB: canonical.participants.holderB,
+    excludedWallets: [
+      canonical.participants.excluded.negativeControl,
+      canonical.participants.excluded.uncontrolledApassWallet,
+    ],
+    runId: state.runId,
+  });
+  writeJsonAtomic(directParticipantBridgeEvidencePath(runtime.runRoot, state.runId), evidence, 0o600);
 }
 
 function buildCustomSupervisedReceipt(
@@ -2076,6 +2170,11 @@ async function exportProtectionEvidenceRuntime(runtime: ProtectionRuntime, runId
       const receipt = buildCustomSupervisedReceipt(runtime, state, governedFheEvidence, attestation.chronology);
       assertCustomSupervisedReceipt(receipt);
       writeJsonAtomic(join(state.paths.root, "custom-supervised-receipt.json"), receipt, 0o644);
+      // A direct-participant run additionally emits its own bridge authorization
+      // artifact. It is written under the durable run root, never under
+      // `public/`, so it survives the worker's post-terminal pruning while the
+      // reproducible and private artifacts it was derived from do not.
+      persistDirectParticipantBridgeEvidence(runtime, state, receipt);
       runtime.failpoint("after-evidence-publication-before-state-save");
       state = saveState(runtime, { ...state, stage: "COMPLETE", customReceipt: receipt });
       finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
