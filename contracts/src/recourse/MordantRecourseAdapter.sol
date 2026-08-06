@@ -10,11 +10,19 @@ import { ICviVerifier } from "../interfaces/ICviVerifier.sol";
 
 /// @notice Consumes one governed FHE conflict decision and runs the settlement consequence.
 ///
-/// @dev The governed release is signed in Ed25519, which the EVM cannot verify. This contract
-/// therefore consumes a secp256k1 EIP-712 attestation produced by the release authority only
-/// *after* that Ed25519 release has been verified off-chain. The attestor key is consequently a
-/// second key held by the same authority: it adds no new party, but compromising it is equivalent
-/// to compromising the decryptor, and nothing here should be read as claiming otherwise.
+/// @dev Two distinct identities meet here, and they are deliberately not conflated.
+///
+/// `expectedGovernedReleaseAuthorityId` is the identifier of the Ed25519 governed release
+/// authority, derived from the FHE result itself. It is data: the contract compares it, it never
+/// verifies an Ed25519 signature, because the EVM cannot.
+///
+/// `attestor` is a secp256k1 key that signs the EIP-712 bridge attestation after the Ed25519
+/// release has been verified off-chain. It is a signer, not an identity claim.
+///
+/// They are different keys, on different curves, doing different jobs. A release is admitted only
+/// when both hold: the bridge signature recovers to `attestor`, and the governed authority carried
+/// in the attestation equals the pinned one. Neither alone is sufficient, and nothing here should
+/// be read as asserting that the bridge key is the governed authority.
 ///
 /// Every economic parameter is fixed at deployment. There is no upgrade path, no arbitrary call,
 /// no settable settlement token and no settable recipient: a payout can only ever reach the holder
@@ -49,6 +57,8 @@ contract MordantRecourseAdapter is ReentrancyGuard {
         uint256 payoutA;
         uint256 payoutB;
         bool conflict;
+        /// @dev The Ed25519 governed release authority identifier, taken from the verified FHE
+        /// result. Not the bridge signer.
         bytes32 releaseAuthorityId;
         bytes32 releaseMode;
         bytes32 circuitHash;
@@ -78,11 +88,13 @@ contract MordantRecourseAdapter is ReentrancyGuard {
 
     IERC20 public immutable settlementToken;
     ICviVerifier public immutable cviVerifier;
+    /// @notice secp256k1 signer of the bridge attestation. Never the governed authority.
     address public immutable attestor;
     address public immutable facility;
     address public immutable owner;
     bytes32 public immutable assetIdentityDigest;
-    bytes32 public immutable releaseAuthorityId;
+    /// @notice The one Ed25519 governed release authority whose results this adapter settles.
+    bytes32 public immutable expectedGovernedReleaseAuthorityId;
     bytes32 public immutable releaseMode;
     bytes32 public immutable circuitHash;
     bytes32 public immutable parameterFingerprint;
@@ -119,7 +131,9 @@ contract MordantRecourseAdapter is ReentrancyGuard {
     error AttestationConsumed(bytes32 attestationDigest);
     error BadAttestor(address recovered);
     error BadAsset(bytes32 supplied);
-    error BadAuthority();
+    /// @dev Kept separate from a bad signature so the two failures are never confused.
+    error GovernedAuthorityMismatch(bytes32 supplied, bytes32 expected);
+    error BadReleaseMode(bytes32 supplied);
     error BadCircuit();
     error Expired(uint64 expiry);
     error NotYetIssued(uint64 issuedAt);
@@ -139,7 +153,7 @@ contract MordantRecourseAdapter is ReentrancyGuard {
         address initialFacility,
         address initialOwner,
         bytes32 initialAssetIdentityDigest,
-        bytes32 initialReleaseAuthorityId,
+        bytes32 initialExpectedGovernedReleaseAuthorityId,
         bytes32 initialReleaseMode,
         bytes32 initialCircuitHash,
         bytes32 initialParameterFingerprint,
@@ -150,7 +164,7 @@ contract MordantRecourseAdapter is ReentrancyGuard {
                 || initialAttestor == address(0) || initialFacility == address(0) || initialOwner == address(0)
         ) revert ZeroAddress();
         if (
-            initialAssetIdentityDigest == bytes32(0) || initialReleaseAuthorityId == bytes32(0)
+            initialAssetIdentityDigest == bytes32(0) || initialExpectedGovernedReleaseAuthorityId == bytes32(0)
                 || initialReleaseMode == bytes32(0) || initialCircuitHash == bytes32(0)
                 || initialParameterFingerprint == bytes32(0) || initialCureWindow == 0
         ) revert ZeroAmount();
@@ -161,7 +175,7 @@ contract MordantRecourseAdapter is ReentrancyGuard {
         facility = initialFacility;
         owner = initialOwner;
         assetIdentityDigest = initialAssetIdentityDigest;
-        releaseAuthorityId = initialReleaseAuthorityId;
+        expectedGovernedReleaseAuthorityId = initialExpectedGovernedReleaseAuthorityId;
         releaseMode = initialReleaseMode;
         circuitHash = initialCircuitHash;
         parameterFingerprint = initialParameterFingerprint;
@@ -200,7 +214,10 @@ contract MordantRecourseAdapter is ReentrancyGuard {
         if (caseByRun[r.runId].state != CaseState.None) revert RunConsumed(r.runId);
         if (resultConsumed[r.governedResultDigest]) revert ResultConsumed(r.governedResultDigest);
         if (r.assetIdentityDigest != assetIdentityDigest) revert BadAsset(r.assetIdentityDigest);
-        if (r.releaseAuthorityId != releaseAuthorityId || r.releaseMode != releaseMode) revert BadAuthority();
+        if (r.releaseAuthorityId != expectedGovernedReleaseAuthorityId) {
+            revert GovernedAuthorityMismatch(r.releaseAuthorityId, expectedGovernedReleaseAuthorityId);
+        }
+        if (r.releaseMode != releaseMode) revert BadReleaseMode(r.releaseMode);
         if (r.circuitHash != circuitHash || r.parameterFingerprint != parameterFingerprint) revert BadCircuit();
         if (block.timestamp > r.expiry) revert Expired(r.expiry);
         if (block.timestamp < r.issuedAt) revert NotYetIssued(r.issuedAt);

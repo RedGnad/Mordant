@@ -550,4 +550,186 @@ contract MordantRecourseAdapterTest is Test {
         _assertSolvent();
         adapter.assertSolvency();
     }
+
+    // ------------------------------------------------- governed authority separation
+
+    /// @dev A plausible generic label. The former adapter pinned exactly this shape, which is
+    /// precisely the confusion these tests exist to prevent.
+    bytes32 private constant GENERIC_LABEL =
+        keccak256("mordant.governed-decryptor-v1.release-authority");
+    /// @dev Stands in for the sha256-derived identifier the real Ed25519 result carries.
+    bytes32 private constant REAL_GOVERNED_AUTHORITY =
+        0x9f1d4c2b6a8e07f35d94c1b0e2a76f38c5d0b419e83a7c26df5108b4a37e69c2;
+    bytes32 private constant OTHER_GOVERNED_AUTHORITY = keccak256("some.other.release.authority");
+    /// @dev Produced independently by viem's hashTypedData over the same struct, domain and
+    /// verifying contract. Recorded here so a drift in either implementation fails loudly.
+    bytes32 private constant VIEM_VECTOR_DIGEST =
+        0x51bca185f3e8a0fc8d1788c882c62acf2e514c61e0d371c96aca27f2a48a593c;
+
+    function _deployWithAuthority(bytes32 authority) private returns (MordantRecourseAdapter) {
+        return new MordantRecourseAdapter(
+            IERC20(address(token)),
+            ICviVerifier(address(eligibility)),
+            attestor,
+            facility,
+            owner,
+            ASSET,
+            authority,
+            MODE,
+            CIRCUIT,
+            PARAMS,
+            CURE_WINDOW
+        );
+    }
+
+    function _signFor(
+        MordantRecourseAdapter target,
+        MordantRecourseAdapter.GovernedRelease memory r,
+        uint256 key
+    ) private view returns (bytes memory) {
+        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(key, target.hashRelease(r));
+        return abi.encodePacked(rr, ss, v);
+    }
+
+    function test_theRealGovernedAuthorityIsAccepted() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(REAL_GOVERNED_AUTHORITY);
+        assertEq(pinned.expectedGovernedReleaseAuthorityId(), REAL_GOVERNED_AUTHORITY);
+        token.mint(funder, RESERVE);
+        vm.prank(funder);
+        token.approve(address(pinned), type(uint256).max);
+        vm.prank(funder);
+        pinned.fundReserve(RESERVE);
+
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(50)), true);
+        r.releaseAuthorityId = REAL_GOVERNED_AUTHORITY;
+        pinned.consumeGovernedRelease(r, _signFor(pinned, r, ATTESTOR_KEY));
+        assertEq(pinned.caseState(r.runId), uint8(MordantRecourseAdapter.CaseState.CureOpen));
+    }
+
+    function test_theGenericLabelIsRejectedByAnAdapterPinnedToTheRealAuthority() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(REAL_GOVERNED_AUTHORITY);
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(51)), true);
+        r.releaseAuthorityId = GENERIC_LABEL;
+        bytes memory signature = _signFor(pinned, r, ATTESTOR_KEY);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MordantRecourseAdapter.GovernedAuthorityMismatch.selector,
+                GENERIC_LABEL,
+                REAL_GOVERNED_AUTHORITY
+            )
+        );
+        pinned.consumeGovernedRelease(r, signature);
+    }
+
+    function test_anyOtherGovernedAuthorityIsRejected() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(REAL_GOVERNED_AUTHORITY);
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(52)), true);
+        r.releaseAuthorityId = OTHER_GOVERNED_AUTHORITY;
+        bytes memory signature = _signFor(pinned, r, ATTESTOR_KEY);
+        vm.expectRevert();
+        pinned.consumeGovernedRelease(r, signature);
+    }
+
+    /// @dev The bridge key is not the governed identity: a perfect bridge signature over the wrong
+    /// governed authority must still fail.
+    function test_correctBridgeSignerWithWrongGovernedAuthorityIsRejected() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(REAL_GOVERNED_AUTHORITY);
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(53)), true);
+        r.releaseAuthorityId = GENERIC_LABEL;
+        bytes memory signature = _signFor(pinned, r, ATTESTOR_KEY);
+        assertEq(vm.addr(ATTESTOR_KEY), pinned.attestor(), "the bridge signature is genuinely correct");
+        vm.expectRevert();
+        pinned.consumeGovernedRelease(r, signature);
+    }
+
+    /// @dev And the governed identity is not the bridge key: the right authority signed by the
+    /// wrong key must fail too.
+    function test_wrongBridgeSignerWithCorrectGovernedAuthorityIsRejected() public {
+        MordantRecourseAdapter pinned = _deployWithAuthority(REAL_GOVERNED_AUTHORITY);
+        token.mint(funder, RESERVE);
+        vm.prank(funder);
+        token.approve(address(pinned), type(uint256).max);
+        vm.prank(funder);
+        pinned.fundReserve(RESERVE);
+
+        MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(54)), true);
+        r.releaseAuthorityId = REAL_GOVERNED_AUTHORITY;
+        bytes memory signature = _signFor(pinned, r, OTHER_KEY);
+        vm.expectRevert();
+        pinned.consumeGovernedRelease(r, signature);
+    }
+
+    /// @dev One fixed struct, every field a distinct constant, so a field-ordering mistake in
+    /// either implementation changes the digest.
+    function _canonicalVector()
+        private
+        pure
+        returns (MordantRecourseAdapter.GovernedRelease memory r)
+    {
+        r.runId = bytes32(uint256(0x01));
+        r.fheCaseId = bytes32(uint256(0x02));
+        r.caseBindingDigest = bytes32(uint256(0x03));
+        r.assetIdentityDigest = bytes32(uint256(0x04));
+        r.governedResultDigest = bytes32(uint256(0x05));
+        r.resultCiphertextDigest = bytes32(uint256(0x06));
+        r.participantArtifactDigestA = bytes32(uint256(0x07));
+        r.participantArtifactDigestB = bytes32(uint256(0x08));
+        r.holderA = address(0x00000000000000000000000000000000000000A1);
+        r.holderB = address(0x00000000000000000000000000000000000000B1);
+        r.payoutA = 600_000;
+        r.payoutB = 400_000;
+        r.conflict = true;
+        r.releaseAuthorityId = bytes32(uint256(0x09));
+        r.releaseMode = bytes32(uint256(0x0a));
+        r.circuitHash = bytes32(uint256(0x0b));
+        r.parameterFingerprint = bytes32(uint256(0x0c));
+        r.nonce = 42;
+        r.issuedAt = 1_785_000_000;
+        r.expiry = 1_785_000_600;
+    }
+
+
+    /// @dev A viem-produced vector. If either implementation drifts, this stops being equal.
+    function test_theSolidityDigestMatchesTheViemVector() public view {
+        MordantRecourseAdapter.GovernedRelease memory r = _canonicalVector();
+        assertEq(adapter.hashRelease(r), VIEM_VECTOR_DIGEST, "viem and Solidity must agree");
+    }
+
+    function test_allTwentySignedFieldsRemainMutationSensitive() public view {
+        MordantRecourseAdapter.GovernedRelease memory base = _canonicalVector();
+        bytes32 baseline = adapter.hashRelease(base);
+        uint256 observed;
+
+        MordantRecourseAdapter.GovernedRelease memory m = base;
+        m.runId = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.fheCaseId = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.caseBindingDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.assetIdentityDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.governedResultDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.resultCiphertextDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.participantArtifactDigestA = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.participantArtifactDigestB = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.holderA = address(0xDEAD); observed += _differs(baseline, m); m = base;
+        m.holderB = address(0xDEAD); observed += _differs(baseline, m); m = base;
+        m.payoutA += 1; observed += _differs(baseline, m); m = base;
+        m.payoutB += 1; observed += _differs(baseline, m); m = base;
+        m.conflict = !base.conflict; observed += _differs(baseline, m); m = base;
+        m.releaseAuthorityId = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.releaseMode = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.circuitHash = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.parameterFingerprint = keccak256("x"); observed += _differs(baseline, m); m = base;
+        m.nonce += 1; observed += _differs(baseline, m); m = base;
+        m.issuedAt += 1; observed += _differs(baseline, m); m = base;
+        m.expiry += 1; observed += _differs(baseline, m);
+
+        assertEq(observed, 20, "every one of the twenty signed fields must move the digest");
+    }
+
+    function _differs(bytes32 baseline, MordantRecourseAdapter.GovernedRelease memory m)
+        private
+        view
+        returns (uint256)
+    {
+        return adapter.hashRelease(m) == baseline ? 0 : 1;
+    }
 }
