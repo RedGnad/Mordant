@@ -75,6 +75,7 @@ import {
 } from "./protection-operation-journal";
 import {
   assertSupervisedPledgeWindows,
+  type SupervisedPledgeWindow,
   type SupervisedPledgeWindows,
 } from "./supervised-pledge-windows";
 import {
@@ -271,6 +272,26 @@ type InternalState = Readonly<{
    * it. Its only use is writing the transient participant pledge files.
    */
   supervisedPledgeWindows?: SupervisedPledgeWindows;
+  /**
+   * Role-specific admitted claims, written by the participant admission path.
+   *
+   * This is the two-wallet replacement for `supervisedPledgeWindows`: instead of
+   * one operator entering both windows before anything exists, each participant
+   * writes only their own. `claim` is private execution input under exactly the
+   * same discipline as the operator windows above: `publicView` never reads it,
+   * `customSupervisedView` never reads it, `beginOperation` never records it and
+   * no error message quotes it. The durable admission ledger holds only its
+   * commitment, so the claim can be pruned while the admission stays provable.
+   */
+  admittedClaims?: Readonly<Partial<Record<"PARTICIPANT_A" | "PARTICIPANT_B", Readonly<{
+    participantWallet: string;
+    authorizationDigest: string;
+    claimCommitment: string;
+    authorizationNonce: string;
+    issuedAt: number;
+    expiresAt: number;
+    claim: SupervisedPledgeWindow;
+  }>>>>;
   /**
    * Neutral marker for a supervised custom run. Its presence, and nothing about
    * the entered windows, selects the V2 authorization path.
@@ -1063,11 +1084,17 @@ async function createProtectionCaseRuntime(
   scenario: ProductScenario,
   creationRequestId: string,
   supervisedPledgeWindows?: SupervisedPledgeWindows,
+  // A participant-admitted case is neutral and carries no private input at all
+  // at creation: each window arrives later, with its own wallet authorization.
+  participantAdmission = false,
 ): Promise<ProtectionCaseView> {
   const windows = supervisedPledgeWindows === undefined
     ? undefined
     : assertSupervisedPledgeWindows(supervisedPledgeWindows);
-  const custom = windows !== undefined;
+  if (windows !== undefined && participantAdmission) {
+    throw new ProtectionProductError("A participant-admitted case cannot carry operator windows", 400);
+  }
+  const custom = windows !== undefined || participantAdmission;
   if (!custom && scenario !== "conflict" && scenario !== "no-conflict") {
     throw new ProtectionProductError("Unsupported product scenario", 400);
   }
@@ -1221,15 +1248,118 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
   });
 }
 
+/**
+ * Exactly what a participant wallet must bind, and nothing else.
+ *
+ * `protectionBindingDigest` is the V2 authorization digest the case already
+ * derives and that keygen already verifies. Exposing it here lets a wallet sign
+ * against the same binding the engine enforces, without widening the audited
+ * custom view or introducing a second derivation of it.
+ */
+export type ParticipantAdmissionContext = Readonly<{
+  runId: string;
+  stage: ExecutionStage;
+  fheCaseId: Sha256Digest;
+  assetIdentityDigest: Sha256Digest;
+  protectionBindingDigest: Sha256Digest;
+}>;
+
+async function readParticipantAdmissionContextRuntime(
+  runtime: ProtectionRuntime,
+  runId: string,
+): Promise<ParticipantAdmissionContext> {
+  const state = await loadState(runtime, runId, false);
+  if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+    throw new ProtectionProductError("This case does not admit participants", 409);
+  }
+  return Object.freeze({
+    runId: state.runId,
+    stage: state.stage,
+    fheCaseId: state.protectionCase.fheCaseId,
+    assetIdentityDigest: state.protectionCase.cleanverseAssetDigest,
+    protectionBindingDigest: protectionAuthorizationBindingDigest(state),
+  });
+}
+
+export type AdmittedParticipantClaim = Readonly<{
+  participantWallet: string;
+  authorizationDigest: string;
+  claimCommitment: string;
+  authorizationNonce: string;
+  issuedAt: number;
+  expiresAt: number;
+  claim: SupervisedPledgeWindow;
+}>;
+
+/**
+ * Records one participant's admitted claim against a prepared case.
+ *
+ * This is the durable admission point and it deliberately does no FHE work: the
+ * ledger write commits first, the expensive submission runs afterwards under its
+ * own lock. A crash between the two leaves an admitted role with no submission,
+ * which the existing submission path completes idempotently on retry.
+ *
+ * The role's turn is enforced against the engine's own stage, so B cannot be
+ * admitted before A and neither can be admitted before the case is prepared.
+ */
+async function admitParticipantClaimRuntime(
+  runtime: ProtectionRuntime,
+  runId: string,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  admission: AdmittedParticipantClaim,
+): Promise<ProtectionCaseView> {
+  return exclusive(runId, async () => {
+    let state = await loadState(runtime, runId);
+    if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
+      throw new ProtectionProductError("This case does not admit participants", 409);
+    }
+    if (state.supervisedPledgeWindows !== undefined) {
+      throw new ProtectionProductError("This case was created with operator windows", 409);
+    }
+    const existing = state.admittedClaims?.[role];
+    if (existing !== undefined) {
+      // An exact retry is idempotent. A different authorization or a different
+      // claim for an occupied role is refused without touching durable state.
+      if (
+        existing.authorizationDigest !== admission.authorizationDigest
+        || existing.claimCommitment !== admission.claimCommitment
+        || existing.participantWallet !== admission.participantWallet
+        || existing.authorizationNonce !== admission.authorizationNonce
+      ) {
+        throw new ProtectionProductError(`${role} has already been admitted for this case`, 409);
+      }
+      return publicView(state, runtime);
+    }
+    const expectedStage: ExecutionStage = role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
+    if (state.stage !== expectedStage) {
+      throw new ProtectionProductError(`Participant ${role} admission is out of order`, 409);
+    }
+    state = saveState(runtime, {
+      ...state,
+      admittedClaims: { ...state.admittedClaims, [role]: admission },
+    });
+    return publicView(state, runtime);
+  });
+}
+
 function pledgeFor(state: InternalState, role: "PARTICIPANT_A" | "PARTICIPANT_B") {
   const base = state.protectionCase.cleanverseAssetDigest;
   // A supervised custom run substitutes only the two window bounds. Every other
   // field, and every derivation below, is identical to the fixed fixture, so
   // the Go pledge schema, the circuit and all signing semantics are unchanged.
+  //
+  // Two sources can supply that window and they never mix. A participant-admitted
+  // run reads only this role's own claim, written by this role's own wallet; the
+  // operator-entered path is unchanged and still reads the pair. Admission wins
+  // when present, so a case that admitted participants can never silently fall
+  // back to operator input for a role.
+  const admitted = state.admittedClaims?.[role];
   const custom = state.supervisedPledgeWindows;
-  const window = custom === undefined
-    ? undefined
-    : role === "PARTICIPANT_A" ? custom.participantA : custom.participantB;
+  const window = admitted !== undefined
+    ? admitted.claim
+    : custom === undefined
+      ? undefined
+      : role === "PARTICIPANT_A" ? custom.participantA : custom.participantB;
   const activeFrom = window !== undefined
     ? window.activeFrom
     : role === "PARTICIPANT_A" ? 100 : state.protectionCase.productScenario === "conflict" ? 200 : 500;
@@ -2072,6 +2202,20 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
     ) => (
       createProtectionCaseRuntime(runtime, scenario, creationRequestId, supervisedPledgeWindows)
     ),
+    /**
+     * A neutral case that admits two participants. It carries no scenario and no
+     * private input: the placeholder first argument is never bound, never derived
+     * from and never displayed, exactly as on the operator-entered custom path.
+     */
+    createNeutralParticipantCase: (creationRequestId: string = randomUUID()) => (
+      createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true)
+    ),
+    readParticipantAdmissionContext: (runId: string) => readParticipantAdmissionContextRuntime(runtime, runId),
+    admitParticipantClaim: (
+      runId: string,
+      role: "PARTICIPANT_A" | "PARTICIPANT_B",
+      admission: AdmittedParticipantClaim,
+    ) => admitParticipantClaimRuntime(runtime, runId, role, admission),
     preparePrivateMatch: (runId: string) => preparePrivateMatchRuntime(runtime, runId),
     submitParticipantPledge: (
       runId: string,
@@ -2116,6 +2260,9 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
 const DEFAULT_ORCHESTRATOR = createProtectionOrchestrator();
 
 export const createProtectionCase = DEFAULT_ORCHESTRATOR.createProtectionCase;
+export const createNeutralParticipantCase = DEFAULT_ORCHESTRATOR.createNeutralParticipantCase;
+export const readParticipantAdmissionContext = DEFAULT_ORCHESTRATOR.readParticipantAdmissionContext;
+export const admitParticipantClaim = DEFAULT_ORCHESTRATOR.admitParticipantClaim;
 export const preparePrivateMatch = DEFAULT_ORCHESTRATOR.preparePrivateMatch;
 export const submitParticipantPledge = DEFAULT_ORCHESTRATOR.submitParticipantPledge;
 export const evaluatePrivateConflict = DEFAULT_ORCHESTRATOR.evaluatePrivateConflict;
