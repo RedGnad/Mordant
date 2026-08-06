@@ -24,7 +24,7 @@ const VIEWPORTS = [
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /(public-product|public-experience|live-product|wallet-modal)\.spec\.ts/,
+  testMatch: /(public-product|public-experience|live-product|live-product-model|wallet-modal)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
