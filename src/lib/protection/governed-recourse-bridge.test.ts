@@ -202,6 +202,119 @@ test("the verifying contract and chain are part of the digest", () => {
   );
 });
 
+// ------------------------------------------------------------------ contract handoff
+
+/**
+ * The fixture handed to the contract developer.
+ *
+ * It is derived from the retained governed result whose Ed25519 signature and
+ * cross-references were verified before it was written, and it is built under the
+ * corrected semantics: `releaseAuthorityId` carries the governed Ed25519 release
+ * authority, not the value the currently deployed adapter pins. These tests are
+ * what keep the published fixture and this module from drifting apart.
+ */
+const HANDOFF = JSON.parse(
+  readFileSync("docs/evidence/runtime-contract-handoff-2026-08-06.json", "utf8"),
+) as {
+  runtimeCandidateCommit: string;
+  governedResult: Record<string, string | boolean>;
+  eip712: { typeHash: string; primaryType: string; fields: { index: number; name: string; type: string }[]; domain: Record<string, unknown> };
+  canonicalPayload: Record<string, string | boolean>;
+  expectedDigests: Record<string, string | boolean>;
+  expectedBridgeSigner: { address: string };
+};
+
+function handoffPayload() {
+  const p = HANDOFF.canonicalPayload;
+  const strip = (d: string) => d.slice("sha256:".length);
+  const governed = HANDOFF.governedResult as Record<string, string>;
+  return buildGovernedBridgePayload({
+    release: {
+      runId: governed.runId,
+      fheCaseId: governed.fheCaseId as `sha256:${string}`,
+      caseBindingDigest: governed.caseBindingDigest as `sha256:${string}`,
+      assetIdentity: governed.assetIdentityDigest as `sha256:${string}`,
+      governedResultDigest: governed.governedResultDigest as `sha256:${string}`,
+      resultCiphertextDigest: governed.resultCiphertextDigest as `sha256:${string}`,
+      participantArtifactDigests: [
+        governed.participantArtifactDigestA as `sha256:${string}`,
+        governed.participantArtifactDigestB as `sha256:${string}`,
+      ],
+      circuitDigest: governed.circuitDigest as `sha256:${string}`,
+      parameterFingerprint: governed.parameterFingerprint as `sha256:${string}`,
+      releaseAuthorityId: governed.releaseAuthorityId as `sha256:${string}`,
+      releaseMode: "governed-decryptor-v1",
+      conflict: HANDOFF.governedResult.conflict as boolean,
+    },
+    participants: {
+      holderA: p.holderA as `0x${string}`,
+      holderB: p.holderB as `0x${string}`,
+      payoutA: BigInt(p.payoutA as string),
+      payoutB: BigInt(p.payoutB as string),
+    },
+    pins: {
+      address: (HANDOFF.eip712.domain.verifyingContract as string) as `0x${string}`,
+      chainId: HANDOFF.eip712.domain.chainId as number,
+      assetIdentityDigest: `0x${strip(governed.assetIdentityDigest)}`,
+      releaseAuthorityId: `0x${strip(governed.releaseAuthorityId)}`,
+      releaseMode: p.releaseMode as `0x${string}`,
+      circuitHash: `0x${strip(governed.circuitDigest)}`,
+      parameterFingerprint: `0x${strip(governed.parameterFingerprint)}`,
+    },
+    interpretation: "PINS_GOVERNED_AUTHORITY",
+    nonce: BigInt(p.nonce as string),
+    issuedAt: Number(p.issuedAt),
+    expiry: Number(p.expiry),
+    governedSignatureVerified: true,
+    crossReferencesVerified: true,
+  });
+}
+
+test("the handoff fixture pins this runtime candidate", () => {
+  assert.equal(HANDOFF.runtimeCandidateCommit, "5ca3382c90c37935b685853cecf96e1c74294e4c");
+});
+
+test("the handoff fixture declares the twenty fields in contract order", () => {
+  assert.equal(HANDOFF.eip712.primaryType, "GovernedRelease");
+  assert.equal(HANDOFF.eip712.typeHash, RELEASE_TYPEHASH);
+  const declared = HANDOFF.eip712.fields;
+  assert.equal(declared.length, 20);
+  declared.forEach((field, index) => {
+    assert.equal(field.index, index, "field indices must be contiguous and ordered");
+  });
+});
+
+test("the handoff fixture reproduces its own published digests", () => {
+  const payload = handoffPayload();
+  assert.equal(digestOf(payload), HANDOFF.expectedDigests.viemTypedDataDigest);
+  assert.equal(governedReleaseStructHash(payload), HANDOFF.expectedDigests.viemStructHash);
+  // The published Solidity result and the published viem digest are the same value.
+  assert.equal(
+    HANDOFF.expectedDigests.soliditySolidityHashReleaseResult,
+    HANDOFF.expectedDigests.viemTypedDataDigest,
+  );
+});
+
+test("the handoff fixture is deterministic", () => {
+  assert.equal(digestOf(handoffPayload()), digestOf(handoffPayload()));
+});
+
+test("the handoff fixture carries the governed Ed25519 authority, not the deployed pin", () => {
+  const payload = handoffPayload();
+  assert.equal(payload.message.releaseAuthorityId, `0x${GOVERNED_AUTHORITY}`);
+  assert.notEqual(payload.message.releaseAuthorityId, DEPLOYED_PINS.releaseAuthorityId);
+  assert.equal(payload.authorityInterpretation, "PINS_GOVERNED_AUTHORITY");
+});
+
+test("the handoff fixture carries no secret material", () => {
+  const raw = readFileSync("docs/evidence/runtime-contract-handoff-2026-08-06.json", "utf8");
+  for (const forbidden of ["PRIVATE KEY", "privateKey", "apiKey", "API_KEY", "secret:", "mnemonic"]) {
+    assert.equal(raw.includes(forbidden), false, `${forbidden} must not appear in a public fixture`);
+  }
+  // No 64-hex-character 0x literal that is not one of the declared digests.
+  assert.equal(/0x[0-9a-fA-F]{64}/u.test(raw), true);
+});
+
 test("no adapter address is hard-coded anywhere in the module", () => {
   const source = readFileSync("src/lib/protection/governed-recourse-bridge.ts", "utf8");
   // A deployment address in the module would bind every payload to one contract,

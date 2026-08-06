@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "mordant.runtime-contract-handoff/1",
+  "generatedAt": "2026-08-06",
+  "runtimeCandidateCommit": "5ca3382c90c37935b685853cecf96e1c74294e4c",
+  "runtimeCandidateBranch": "feat/live-participant-admission-v1-runtime-candidate",
+  "sourceRetainedGovernedResult": "docs/evidence/conflicting-pledge-protection/conflict.json",
+  "sourceCommitPin": "b5587f6489933c6dc462da7fda56e57bd5f9e31b",
+
+  "semantics": {
+    "releaseAuthorityId": "Identifies the governed Ed25519 release authority: the designated decryptor whose Ed25519 signature over MordantGovernedConflictResult/v1 is the sole authority for the terminal Boolean. It is a content digest of that authority's identity, not an address and not a key.",
+    "bridgeAttestor": "The ECDSA bridge attestor is a SEPARATE key and a SEPARATE role. It is a secp256k1 EOA that signs the EIP-712 GovernedRelease so the adapter can authenticate the relayed payload. It does not produce, and cannot produce, the governed Boolean.",
+    "separation": "Two distinct keys, two distinct roles. Ed25519 governed release authority decides the outcome; secp256k1 bridge attestor only transports an already decided outcome on-chain.",
+    "deployedAdapterDiscrepancy": "The adapter currently deployed at 0x27677c837287b060D285d5C90096f06fBe675938 pins releaseAuthorityId = 0x130d619731ab2a03a81de297e058ef57a6a85656d0ddf76d26e7a20cfa2d3651, which is NOT the governed Ed25519 release authority below and could not be derived from it under any tested encoding. It also pins circuitHash and parameterFingerprint as keccak256 hashes of label strings rather than the governed sha256 content digests. This fixture is built under the corrected semantics above; the deployed adapter would revert with BadAuthority and BadCircuit until redeployed with the pins listed in expectedAdapterConstructorPins."
+  },
+
+  "governedResult": {
+    "releaseAuthorityId": "sha256:c21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+    "releaseAuthorityPublicKeyEd25519Base64": "sfww+eg80N03kdzIV1V4aF4FUIHxzUqOhb2vK355AN8=",
+    "governedResultDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+    "resultCiphertextDigest": "sha256:c9e91f5cb13f2b63e4b0f8ae024b3593b9766bf338de5f2651b93c5f908bcf4e",
+    "participantArtifactDigestA": "sha256:13843298b396c0ba36618479f6e45184297bac431dbef640c138561c5ba4c562",
+    "participantArtifactDigestB": "sha256:6236e12424aa7fdcd0a50fb678b51a3e565a5a4d2c63bff2d8a82a9a22947591",
+    "evaluatedArtifactDigest": "sha256:b7c1497b3a47233cd3d535a4794a81ead4763ab0c66e913e3d4f17d8110e5db9",
+    "caseBindingDigest": "sha256:03737b30468af0f0b703207ee591a3926c68817349f7db05df06be883243a542",
+    "assetIdentityDigest": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "releaseMode": "governed-decryptor-v1",
+    "fheCaseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+    "runId": "30ef645f-8047-45ee-8b7c-19952a54555f",
+    "conflict": true
+  },
+
+  "settlement": {
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "chainId": 10143,
+    "network": "Monad testnet"
+  },
+
+  "eip712": {
+    "domain": {
+      "name": "MordantRecourseAdapter",
+      "version": "1",
+      "chainId": 10143,
+      "verifyingContract": "0x27677c837287b060D285d5C90096f06fBe675938"
+    },
+    "primaryType": "GovernedRelease",
+    "typeString": "GovernedRelease(bytes32 runId,bytes32 fheCaseId,bytes32 caseBindingDigest,bytes32 assetIdentityDigest,bytes32 governedResultDigest,bytes32 resultCiphertextDigest,bytes32 participantArtifactDigestA,bytes32 participantArtifactDigestB,address holderA,address holderB,uint256 payoutA,uint256 payoutB,bool conflict,bytes32 releaseAuthorityId,bytes32 releaseMode,bytes32 circuitHash,bytes32 parameterFingerprint,uint256 nonce,uint64 issuedAt,uint64 expiry)",
+    "typeHash": "0x5e5f1a6c601ddff4a7d452bf8cf5c106c0efb68a0d0e17832da59c95a6ac0a8d",
+    "fields": [
+      { "index": 0, "name": "runId", "type": "bytes32" },
+      { "index": 1, "name": "fheCaseId", "type": "bytes32" },
+      { "index": 2, "name": "caseBindingDigest", "type": "bytes32" },
+      { "index": 3, "name": "assetIdentityDigest", "type": "bytes32" },
+      { "index": 4, "name": "governedResultDigest", "type": "bytes32" },
+      { "index": 5, "name": "resultCiphertextDigest", "type": "bytes32" },
+      { "index": 6, "name": "participantArtifactDigestA", "type": "bytes32" },
+      { "index": 7, "name": "participantArtifactDigestB", "type": "bytes32" },
+      { "index": 8, "name": "holderA", "type": "address" },
+      { "index": 9, "name": "holderB", "type": "address" },
+      { "index": 10, "name": "payoutA", "type": "uint256" },
+      { "index": 11, "name": "payoutB", "type": "uint256" },
+      { "index": 12, "name": "conflict", "type": "bool" },
+      { "index": 13, "name": "releaseAuthorityId", "type": "bytes32" },
+      { "index": 14, "name": "releaseMode", "type": "bytes32" },
+      { "index": 15, "name": "circuitHash", "type": "bytes32" },
+      { "index": 16, "name": "parameterFingerprint", "type": "bytes32" },
+      { "index": 17, "name": "nonce", "type": "uint256" },
+      { "index": 18, "name": "issuedAt", "type": "uint64" },
+      { "index": 19, "name": "expiry", "type": "uint64" }
+    ]
+  },
+
+  "canonicalPayload": {
+    "runId": "0x1d41624ec568c2b5948a5453ef294568a63cd81b971bd4404cfde2ea0de456de",
+    "fheCaseId": "0x806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+    "caseBindingDigest": "0x03737b30468af0f0b703207ee591a3926c68817349f7db05df06be883243a542",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "governedResultDigest": "0xf53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+    "resultCiphertextDigest": "0xc9e91f5cb13f2b63e4b0f8ae024b3593b9766bf338de5f2651b93c5f908bcf4e",
+    "participantArtifactDigestA": "0x13843298b396c0ba36618479f6e45184297bac431dbef640c138561c5ba4c562",
+    "participantArtifactDigestB": "0x6236e12424aa7fdcd0a50fb678b51a3e565a5a4d2c63bff2d8a82a9a22947591",
+    "holderA": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+    "holderB": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+    "payoutA": "600000",
+    "payoutB": "400000",
+    "conflict": true,
+    "releaseAuthorityId": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+    "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "circuitHash": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "nonce": "1",
+    "issuedAt": "1785000000",
+    "expiry": "1785003600"
+  },
+
+  "canonicalPayloadNotes": {
+    "runId": "keccak256(utf8(\"30ef645f-8047-45ee-8b7c-19952a54555f\")); the adapter carries bytes32, the runtime carries a UUID",
+    "releaseMode": "keccak256(utf8(\"governed-decryptor-v1\"))",
+    "holders": "The two A-Pass qualified Monad testnet EOAs used for qualification. holderA is the public Cleanverse-issued A-Pass holder.",
+    "payouts": "Bounded testnet minor units of the settlement token, 60/40 to match the record-date holder allocation. Total 1000000.",
+    "issuedAtExpiry": "Fixed, so the fixture is deterministic and reproducible. Regenerate for a live submission."
+  },
+
+  "expectedDigests": {
+    "viemDomainSeparator": "0x42290a14393411f6089a8de1c8f2086ae31e9740e697be2c178228d305731135",
+    "viemStructHash": "0x7af22b003f59156fc66cabd20f93dc4e68aa8aaee30924438f891c52e9630d52",
+    "viemTypedDataDigest": "0x72498d7329c458036cb28fe92875edad59c6efd4bb491d78d1cf75bf2bd25e10",
+    "soliditySolidityHashReleaseResult": "0x72498d7329c458036cb28fe92875edad59c6efd4bb491d78d1cf75bf2bd25e10",
+    "byteIdentical": true
+  },
+
+  "expectedBridgeSigner": {
+    "address": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "curve": "secp256k1",
+    "role": "ECDSA bridge attestor",
+    "note": "Read from the deployed adapter's attestor() immutable. This key is not held by the runtime; no bridge transaction has been signed or sent."
+  },
+
+  "expectedAdapterConstructorPins": {
+    "note": "Required for the deployed adapter to accept the canonical payload above. The three marked CHANGED differ from the currently deployed values.",
+    "initialAssetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "initialReleaseAuthorityId": "0xc21276405a249b7c178914508d99e9f0286ce29e5e3bb085ad3697f0cc665c3d",
+    "initialReleaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "initialCircuitHash": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "initialParameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "changed": ["initialReleaseAuthorityId", "initialCircuitHash", "initialParameterFingerprint"],
+    "currentlyDeployed": {
+      "releaseAuthorityId": "0x130d619731ab2a03a81de297e058ef57a6a85656d0ddf76d26e7a20cfa2d3651",
+      "circuitHash": "0xed716235e5b273fef1afcd500823af52e729e8f82106145b7fe6429f0f1b4f5b",
+      "parameterFingerprint": "0x7cf76ba57a3793d251d621e3faa6037b0364e20625f1a2e1dea6dedac6811060"
+    }
+  },
+
+  "compatibilityAssertions": {
+    "governedEd25519SignatureVerified": true,
+    "crossReferencesVerified": true,
+    "noBrowserSuppliedBoolean": true,
+    "noBrowserSuppliedPayload": true,
+    "allTwentySignedFieldsPresentInContractOrder": true,
+    "eachSignedFieldMutationChangesDigest": true,
+    "deterministic": true,
+    "consumedByBridgeTests": true,
+    "liveBridgeTransactionSent": false
+  },
+
+  "containsNoSecrets": true
+}
