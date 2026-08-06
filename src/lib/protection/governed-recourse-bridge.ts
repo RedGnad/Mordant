@@ -85,16 +85,35 @@ export type AdapterPins = Readonly<{
 /**
  * How the adapter's pinned authority identity relates to the real governed one.
  *
- * `PINS_GOVERNED_AUTHORITY` is the only interpretation under which a payload can
- * carry the real Ed25519 authority identity straight through. Anything else has to
- * be stated explicitly by whoever deployed the adapter, and is recorded on the
- * payload so a reviewer can see which claim is being made.
+ * Adapter V2 pins `expectedGovernedReleaseAuthorityId` to the real Ed25519
+ * governed authority, so `PINS_GOVERNED_AUTHORITY` is the production
+ * interpretation and the only one the executor will sign under.
+ *
+ * `PINS_SEPARATE_BRIDGE_ATTESTOR` survives only to describe the superseded V1
+ * deployment, whose authority pin was `keccak256` of an invented label string. It
+ * is retained so the superseded deployment can still be described accurately, and
+ * is refused by `assertProductionInterpretation`.
  */
 export const AUTHORITY_INTERPRETATIONS = [
   "PINS_GOVERNED_AUTHORITY",
   "PINS_SEPARATE_BRIDGE_ATTESTOR",
 ] as const;
 export type AuthorityInterpretation = (typeof AUTHORITY_INTERPRETATIONS)[number];
+
+/**
+ * The superseded V1 deployment. Recorded so a configuration pointing at it is
+ * refused by name rather than merely failing a digest comparison later.
+ */
+export const SUPERSEDED_ADAPTER_ADDRESS = "0x27677c837287b060D285d5C90096f06fBe675938" as const;
+
+export function assertProductionInterpretation(interpretation: AuthorityInterpretation): void {
+  if (interpretation !== "PINS_GOVERNED_AUTHORITY") {
+    fail(
+      "SUPERSEDED_INTERPRETATION",
+      "Only an adapter pinning the governed Ed25519 release authority may be used in production",
+    );
+  }
+}
 
 export type VerifiedGovernedRelease = Readonly<{
   runId: string;
@@ -157,26 +176,26 @@ export function reconcileAdapter(
   if (pins.assetIdentityDigest.toLowerCase() !== digestToBytes32(release.assetIdentity)) {
     problems.push("assetIdentityDigest: the adapter is pinned to a different receivable");
   }
-  // The governed result names its release mode and circuit as strings; the adapter
-  // pins keccak hashes of those labels. That is a stated, checkable convention.
+  // `releaseMode` keeps its documented label convention: the governed result names
+  // it as a string and the adapter pins keccak of that string.
   if (pins.releaseMode.toLowerCase() !== keccak256(toHex(release.releaseMode))) {
     problems.push("releaseMode: the adapter pin is not keccak of the governed release mode");
   }
-  if (pins.circuitHash.toLowerCase() === digestToBytes32(release.circuitDigest)) {
-    // Consistent with the governed digest convention.
-  } else if (pins.circuitHash.toLowerCase() !== keccak256(toHex("mordant.identity-full-fhe-256"))) {
-    problems.push("circuitHash: the adapter pin is neither the governed circuit digest nor keccak of the circuit id");
+  // Circuit and parameters are content-derived and nothing else. A keccak of the
+  // circuit id or the profile id names the circuit without committing to it, and
+  // Adapter V2 pins the governed digests, so the label form is not accepted here.
+  if (pins.circuitHash.toLowerCase() !== digestToBytes32(release.circuitDigest)) {
+    problems.push("circuitHash: the adapter pin is not the governed content-derived circuit digest");
   }
-  if (pins.parameterFingerprint.toLowerCase() !== digestToBytes32(release.parameterFingerprint)
-    && pins.parameterFingerprint.toLowerCase() !== keccak256(toHex("mordant.bgv.identity-full-fhe-256.n15/v1"))) {
-    problems.push("parameterFingerprint: the adapter pin is neither the governed fingerprint nor keccak of the profile id");
+  if (pins.parameterFingerprint.toLowerCase() !== digestToBytes32(release.parameterFingerprint)) {
+    problems.push("parameterFingerprint: the adapter pin is not the governed content-derived fingerprint");
   }
   if (interpretation === "PINS_GOVERNED_AUTHORITY"
     && pins.releaseAuthorityId.toLowerCase() !== digestToBytes32(release.releaseAuthorityId)) {
-    problems.push(
-      "releaseAuthorityId: the adapter does not pin the governed Ed25519 release authority; "
-      + "declare PINS_SEPARATE_BRIDGE_ATTESTOR and carry the governed authority separately, or redeploy",
-    );
+    problems.push("releaseAuthorityId: the adapter does not pin the governed Ed25519 release authority");
+  }
+  if (pins.address.toLowerCase() === SUPERSEDED_ADAPTER_ADDRESS.toLowerCase()) {
+    problems.push("address: this is the superseded adapter and must not be used");
   }
   return Object.freeze(problems);
 }
