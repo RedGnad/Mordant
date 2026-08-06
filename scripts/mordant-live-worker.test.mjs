@@ -458,3 +458,300 @@ test("preflight on an unknown route is refused", async () => {
     assert.equal(preflight.status, 404);
   });
 });
+
+// ------------------------------------------------------------------ participant admission
+
+/**
+ * The two-wallet surface.
+ *
+ * These tests drive the real HTTP routes against a stubbed admission service, so
+ * what is under test is the worker's own contract: which routes exist, what they
+ * refuse, and that a case is never carried forward on one participant.
+ */
+
+const WALLET_A = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
+const WALLET_B = "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0";
+const CASE_CODE = "ABCDEFGH23456789";
+
+function participantView(stage) {
+  return {
+    schemaVersion: "mordant.custom-supervised-protection-view/1",
+    runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    executionVariant: "CUSTOM_SUPERVISED",
+    stage, nextOperation: null, terminalScenario: null,
+    protectionCase: {
+      cleanverseAssetDigest: `sha256:${"a".repeat(64)}`, fheCaseId: `sha256:${"b".repeat(64)}`,
+      incidentState: "PRIVATE_MATCH_OPEN", recourseState: "NOT_OPEN", cureDeadline: null,
+    },
+    participantArtifactDigests: { participantA: null, participantB: null },
+    evaluatedArtifactDigest: null, governedResult: null, recourse: null, receipt: null,
+  };
+}
+
+function projection(a, b) {
+  return {
+    schemaVersion: "mordant.participant-case/1",
+    caseCode: CASE_CODE,
+    runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    lifecycle: b ? "PARTICIPANT_B_ADMITTED" : a ? "PARTICIPANT_A_ADMITTED" : "MATCH_PREPARED",
+    participantA: { admitted: a, wallet: a ? WALLET_A : null },
+    participantB: { admitted: b, wallet: b ? WALLET_B : null },
+    bothAdmitted: a && b,
+    abandoned: false,
+  };
+}
+
+function mockAdmission(overrides = {}) {
+  const admitted = { a: false, b: false };
+  const calls = { created: 0, admitted: [], challenges: 0 };
+  return {
+    calls,
+    admittedState: admitted,
+    resolveCaseCode: () => "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    verifyApass: async (wallet) => ({ eligible: true, holderAddress: wallet, observedBlock: 1 }),
+    verifyTypedData: async () => true,
+    admissionFailure: (error) => (
+      error?.name === "ParticipantAdmissionError"
+        ? { status: error.status, code: error.code, message: error.message }
+        : { status: 500, code: "ADMISSION", message: "Participant admission failed" }
+    ),
+    assertAdmissionRequest: (body) => body,
+    createParticipantCase: async () => {
+      calls.created += 1;
+      return { runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", caseCode: CASE_CODE, view: participantView("MATCH_PREPARED"), admission: projection(false, false) };
+    },
+    readParticipantCase: async () => ({
+      runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", caseCode: CASE_CODE,
+      view: participantView("MATCH_PREPARED"), admission: projection(admitted.a, admitted.b),
+    }),
+    participantAdmissionChallenge: async () => {
+      calls.challenges += 1;
+      return { schemaVersion: "mordant.participant-admission-challenge/1", domain: {}, primaryType: "ParticipantAdmissionV1", types: {}, message: {} };
+    },
+    admitParticipant: async (_deps, request) => {
+      calls.admitted.push(request.role);
+      if (request.role === "PARTICIPANT_A") admitted.a = true; else admitted.b = true;
+      return {
+        runId: "3f2504e0-4f89-11d3-9a0c-0305e82c3301", caseCode: CASE_CODE, role: request.role,
+        participantWallet: request.role === "PARTICIPANT_A" ? WALLET_A : WALLET_B,
+        eligibilityBlock: 1, newlyAdmitted: true,
+        view: participantView(request.role === "PARTICIPANT_A" ? "PARTICIPANT_A_SUBMITTED" : "PARTICIPANT_B_SUBMITTED"),
+        admission: projection(admitted.a, admitted.b),
+      };
+    },
+    ...overrides,
+  };
+}
+
+async function withParticipantWorker(config, orchestrator, admission, run) {
+  const worker = createLiveWorker({ configuration: config, createOrchestrator: () => orchestrator, admission });
+  worker.server.listen(0, "127.0.0.1");
+  await once(worker.server, "listening");
+  const { port } = worker.server.address();
+  try {
+    await run(`http://127.0.0.1:${port}`, worker);
+  } finally {
+    worker.server.close();
+    await once(worker.server, "close");
+  }
+}
+
+function admissionBody(role) {
+  return JSON.stringify({
+    role,
+    authorization: { role },
+    signature: `0x${"ab".repeat(65)}`,
+    claim: { activeFrom: 120, activeUntil: 420 },
+  });
+}
+
+test("a neutral case is created with an empty body and no windows", async () => {
+  const config = configuration();
+  const admission = mockAdmission();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), admission, async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` },
+      body: "{}",
+    });
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.equal(body.admission.bothAdmitted, false);
+    assert.equal(admission.calls.created, 1);
+    // No interval reaches this route at all.
+    assert.equal(JSON.stringify(body).includes("activeFrom"), false);
+  });
+});
+
+test("a neutral case refuses any body member", async () => {
+  const config = configuration();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` },
+      body: JSON.stringify(WINDOWS),
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, "BODY_MEMBERS");
+  });
+});
+
+test("participant routes require the exact origin and content type", async () => {
+  const config = configuration();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
+    const url = `${base}/v1/participant-cases/${CASE_CODE}/admissions`;
+    let response = await fetch(url, {
+      method: "POST",
+      headers: { origin: "https://evil.example", "content-type": "application/json" },
+      body: admissionBody("PARTICIPANT_A"),
+    });
+    assert.equal(response.status, 403);
+    response = await fetch(url, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "text/plain" },
+      body: admissionBody("PARTICIPANT_A"),
+    });
+    assert.equal(response.status, 415);
+  });
+});
+
+test("two wallets admit independently and the journey starts only after both", async () => {
+  const config = configuration();
+  const admission = mockAdmission();
+  const orchestrator = mockEngineOrchestrator({});
+  await withParticipantWorker(config, orchestrator, admission, async (base) => {
+    const post = (role) => fetch(`${base}/v1/participant-cases/${CASE_CODE}/admissions`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: admissionBody(role),
+    });
+
+    const first = await post("PARTICIPANT_A");
+    assert.equal(first.status, 201);
+    assert.equal((await first.json()).admission.bothAdmitted, false);
+    // Nothing downstream of admission has run on one participant.
+    assert.equal(orchestrator.stages.includes("evaluate"), false);
+
+    const second = await post("PARTICIPANT_B");
+    assert.equal(second.status, 201);
+    assert.equal((await second.json()).admission.bothAdmitted, true);
+    assert.deepEqual(admission.calls.admitted, ["PARTICIPANT_A", "PARTICIPANT_B"]);
+
+    // The remainder of the journey is reachable now, and each role's artifact was
+    // already published at its own admission, so no submission step reappears.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(orchestrator.stages.includes("evaluate"), true);
+    assert.equal(orchestrator.stages.filter((s) => s === "submit").length, 0);
+  });
+});
+
+test("a challenge is issued without any signature prompt state on the worker", async () => {
+  const config = configuration();
+  const admission = mockAdmission();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), admission, async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/challenge`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ role: "PARTICIPANT_A", participantWallet: WALLET_A, claim: { activeFrom: 1, activeUntil: 2 } }),
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).challenge.primaryType, "ParticipantAdmissionV1");
+    assert.equal(admission.calls.challenges, 1);
+  });
+});
+
+test("a challenge refuses an inexact body", async () => {
+  const config = configuration();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/challenge`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ role: "PARTICIPANT_A", participantWallet: WALLET_A }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, "BODY_MEMBERS");
+  });
+});
+
+test("a typed admission refusal keeps its status and code", async () => {
+  const config = configuration();
+  const refusing = mockAdmission({
+    admitParticipant: async () => {
+      const error = new Error("That wallet already holds the other role in this case");
+      error.name = "ParticipantAdmissionError";
+      error.status = 409;
+      error.code = "DUPLICATE_SIGNER";
+      throw error;
+    },
+  });
+  await withParticipantWorker(config, mockEngineOrchestrator({}), refusing, async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/admissions`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: admissionBody("PARTICIPANT_B"),
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).code, "DUPLICATE_SIGNER");
+  });
+});
+
+test("an internal admission failure never leaks its message", async () => {
+  const config = configuration();
+  const broken = mockAdmission({
+    admitParticipant: async () => { throw new Error("postgres://user:secret@host/db is unreachable"); },
+  });
+  await withParticipantWorker(config, mockEngineOrchestrator({}), broken, async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/admissions`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: admissionBody("PARTICIPANT_A"),
+    });
+    assert.equal(response.status, 500);
+    const body = await response.text();
+    assert.equal(body.includes("secret"), false);
+    assert.equal(body.includes("postgres"), false);
+  });
+});
+
+test("an oversized admission body is refused", async () => {
+  const config = configuration();
+  await withParticipantWorker(config, mockEngineOrchestrator({}), mockAdmission(), async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases/${CASE_CODE}/admissions`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ role: "PARTICIPANT_A", authorization: {}, signature: `0x${"ab".repeat(20_000)}`, claim: {} }),
+    });
+    assert.equal(response.status, 413);
+  });
+});
+
+test("participant routes are absent when admission is not configured", async () => {
+  const config = configuration();
+  await withWorker(config, mockEngineOrchestrator({}), async (base) => {
+    const response = await fetch(`${base}/v1/participant-cases`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json", authorization: `Bearer ${token(Date.now())}` },
+      body: "{}",
+    });
+    assert.equal(response.status, 404);
+  });
+});
+
+test("pruning removes an admitted claim while leaving the admission provable", () => {
+  const root = mkdtempSync(join(tmpdir(), "mordant-prune-"));
+  const runId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+  mkdirSync(join(root, runId), { recursive: true });
+  writeFileSync(join(root, runId, "execution.json"), JSON.stringify({
+    runId,
+    admittedClaims: {
+      PARTICIPANT_A: { participantWallet: WALLET_A, claimCommitment: `0x${"2".repeat(64)}`, claim: { activeFrom: 120, activeUntil: 420 } },
+    },
+  }));
+  const removed = pruneReproducibleArtifacts(root, runId);
+  assert.ok(removed.includes("private-input"));
+  const after = JSON.parse(readFileSync(join(root, runId, "execution.json"), "utf8"));
+  assert.equal(after.admittedClaims.PARTICIPANT_A.claim, undefined);
+  // The commitment survives, so the admission stays checkable without the interval.
+  assert.equal(after.admittedClaims.PARTICIPANT_A.claimCommitment, `0x${"2".repeat(64)}`);
+  assert.equal(after.admittedClaims.PARTICIPANT_A.participantWallet, WALLET_A);
+});

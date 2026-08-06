@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "mordant.p1-recourse-adapter/1",
+  "closedAt": "2026-08-06T02:42:26.169Z",
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143
+  },
+  "bytecode": {
+    "runtimeBytes": 9992,
+    "creationBytes": 11031,
+    "eip170Limit": 24576,
+    "withinEip170": true
+  },
+  "foundry": {
+    "adapterSuite": {
+      "tests": 25,
+      "passed": 25,
+      "failed": 0
+    },
+    "fullRepository": {
+      "suites": 15,
+      "tests": 298,
+      "passed": 298,
+      "failed": 0
+    }
+  },
+  "simulation": {
+    "verifierCreationGas": 731904,
+    "gasPriceWei": "102000000000",
+    "simulatedBefore": "broadcast"
+  },
+  "deployed": {
+    "verifier": {
+      "address": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+      "tx": "0x25226c097e65eaf0a6c80a17449eb43d3315552de433e29848ea453097d26a60",
+      "runtimeBytes": 2902
+    },
+    "adapter": {
+      "address": "0x27677c837287b060D285d5C90096f06fBe675938",
+      "tx": "0x17d6f5bfe93b256a143891957098e0000b012e57e441c77e066902e36fb45d9e",
+      "runtimeBytes": 9992
+    }
+  },
+  "immutablesReadBack": {
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "cviVerifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "attestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "releaseAuthorityId": "0x130d619731ab2a03a81de297e058ef57a6a85656d0ddf76d26e7a20cfa2d3651",
+    "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "circuitHash": "0xed716235e5b273fef1afcd500823af52e729e8f82106145b7fe6429f0f1b4f5b",
+    "parameterFingerprint": "0x7cf76ba57a3793d251d621e3faa6037b0364e20625f1a2e1dea6dedac6811060",
+    "cureWindowSeconds": 600
+  },
+  "contractAPass": {
+    "issued": true,
+    "envelopeCode": "0000",
+    "customerId": "mordantrecourseadapter27677c8372",
+    "expiresIso": "2027-08-06T02:41:18.000Z",
+    "isValidAPassOnChain": true
+  },
+  "aUsdcPolicy": {
+    "fundedHolderToAdapter": true,
+    "adapterToHolderA": true,
+    "adapterToHolderB": true
+  },
+  "atomicTransfer": {
+    "fundReserveOneUnitTx": "0x64bcbe13d0e921fef5d6be43d811c88f1d16d205ea16aa3f0a1b81b15866885b",
+    "withdrawOneUnitTx": "0x396fc51be1007db995a09bb0584139be0f46a9a77acb9bdb23058311cd2250a7",
+    "balanceAfter": 0,
+    "solventAfter": true
+  },
+  "demoReserve": {
+    "fundTx": "0xef11279bce6c590da6890d1b45bb342071c09aaad2a90cd5dfc602ed52184d85",
+    "availableReserveRawUnits": 5000,
+    "solvent": true
+  },
+  "minv01": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "touched": false
+  },
+  "credentialsRecorded": "none"
+}

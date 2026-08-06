@@ -78,6 +78,18 @@ function exactWindow(value: unknown, role: "participantA" | "participantB"): Sup
   return Object.freeze({ activeFrom, activeUntil });
 }
 
+/**
+ * One window on its own, for the participant-admission path where each wallet
+ * submits only its own claim. Exactly the same validation the pair form applies
+ * to each half, so a single-sided claim can never be laxer than an operator one.
+ */
+export function assertSupervisedPledgeWindow(
+  value: unknown,
+  role: "participantA" | "participantB",
+): SupervisedPledgeWindow {
+  return exactWindow(value, role);
+}
+
 export function assertSupervisedPledgeWindows(value: unknown): SupervisedPledgeWindows {
   if (!exactKeys(value, ["participantA", "participantB"])) {
     fail("PLEDGE_WINDOWS_FIELDS", "Pledges must carry exactly participantA and participantB");
