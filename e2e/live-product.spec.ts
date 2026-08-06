@@ -242,3 +242,67 @@ test.describe("layout and motion", () => {
     expect(small).toEqual([]);
   });
 });
+
+test.describe("participant admission, behind a disabled capability", () => {
+  test("production never renders the two-wallet surface", async ({ page }) => {
+    await open(page, "authorize");
+    await expect(page.getByTestId("participant-admission")).toHaveCount(0);
+    await expect(page.getByTestId("handoff")).toHaveCount(0);
+    // The production disclosure is the managed one, and only that one.
+    await expect(page.getByTestId("intake-disclosure"))
+      .toContainText("submits both demo claims to Mordant's managed execution service");
+    await expect(page.locator("body")).not.toContainText("independently authorize role-bound");
+  });
+
+  test("participant A sees only its own claim and one authorization", async ({ page }) => {
+    await open(page, "admission-a");
+    const surface = page.getByTestId("participant-admission");
+    await expect(surface).toBeVisible();
+    await expect(surface).toContainText("Authorize claim A");
+    await expect(surface).toContainText("Active from 120 until 420");
+    // Participant B's interval is not on this screen.
+    await expect(surface).not.toContainText("until 520");
+    await expect(page.getByRole("button", { name: /Authorize claim B/u })).toHaveCount(0);
+  });
+
+  test("the handoff is deliberate and never disconnects for you", async ({ page }) => {
+    await open(page, "admission-handoff");
+    const handoff = page.getByTestId("handoff");
+    await expect(handoff).toBeVisible();
+    await expect(handoff).toContainText("must use a different address");
+    await expect(handoff).toContainText("Nothing is disconnected for you");
+    await expect(handoff.getByRole("button", { name: "Continue as Participant B" })).toBeVisible();
+  });
+
+  test("the same address is visibly refused for the second role", async ({ page }) => {
+    await open(page, "admission-same");
+    const refusal = page.getByTestId("same-address-B");
+    await expect(refusal).toBeVisible();
+    await expect(refusal).toContainText("must be a different address");
+    await expect(page.getByRole("button", { name: /Authorize claim B/u })).toBeDisabled();
+  });
+
+  test("a distinct second wallet may authorize its own claim", async ({ page }) => {
+    await open(page, "admission-b");
+    await expect(page.getByTestId("same-address-B")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Authorize claim B/u })).toBeEnabled();
+    await expect(page.getByTestId("admitted-A")).toBeVisible();
+  });
+
+  test("no claim about independent institutions is made", async ({ page }) => {
+    for (const scenario of ["admission-a", "admission-handoff", "admission-b"]) {
+      await open(page, scenario);
+      const text = (await page.locator("body").innerText()).toLowerCase();
+      for (const forbidden of [
+        "independent institution",
+        "two institutions",
+        "device-side",
+        "no server sees",
+        "threshold release",
+        "trustless",
+      ]) {
+        expect(text).not.toContain(forbidden);
+      }
+    }
+  });
+});

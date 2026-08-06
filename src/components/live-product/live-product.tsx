@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { OnchainPanel } from "./onchain-panel";
+import { ParticipantAdmission } from "./participant-admission";
 import { ReceiptDrawer } from "./receipt-drawer";
 import styles from "./live-product.module.css";
 import {
@@ -238,6 +239,26 @@ export function LiveProduct({
             reveal="none"
           />
 
+          {model.intake === "MANAGED_COMBINED" ? null : (
+            <ParticipantAdmission
+              claimA={model.claimA}
+              claimB={model.claimB}
+              wallet={model.wallet}
+              windowA={model.claimA.window}
+              windowB={model.claimB.window}
+              activeRole={model.activeRole}
+              handoffRequired={model.handoffRequired}
+              busy={busy}
+              actions={{
+                onConnectWallet: actions.onConnectWallet,
+                onSwitchNetwork: actions.onSwitchNetwork,
+                onAuthorizeClaim: actions.onAuthorizeClaim,
+                onContinueAsParticipantB: actions.onContinueAsParticipantB,
+              }}
+            />
+          )}
+
+          {model.intake !== "MANAGED_COMBINED" ? null : (
           <div className={styles.claims}>
             {(["A", "B"] as const).map((role) => {
               const fromKey = role === "A" ? "aFrom" : "bFrom";
@@ -285,6 +306,7 @@ export function LiveProduct({
               );
             })}
           </div>
+          )}
 
           {formError === null ? null : <p className={styles.error} role="alert">{formError}</p>}
 
@@ -293,9 +315,11 @@ export function LiveProduct({
             Authorizing a claim does not transfer funds and does not move the receivable.
           </p>
 
-          <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
-            {busy ? "Starting the confidential check" : "Run the confidential check"}
-          </button>
+          {model.intake !== "MANAGED_COMBINED" ? null : (
+            <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
+              {busy ? "Starting the confidential check" : "Run the confidential check"}
+            </button>
+          )}
         </section>
       )}
 

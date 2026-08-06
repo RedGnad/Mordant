@@ -34,6 +34,13 @@ const DRAFT: ClaimDraft = { aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "
 const DISJOINT: ClaimDraft = { aFrom: "120", aUntil: "300", bFrom: "420", bUntil: "620" };
 
 const MANAGED = capabilities("MANAGED_COMBINED_INTAKE");
+/**
+ * Never reachable in production. The runtime branch has not published a
+ * qualified capability flag, so direct admission exists only here.
+ */
+const WITH_ADMISSION = capabilities("DIRECT_PARTICIPANT_ADMISSION");
+const WALLET_A = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
+const WALLET_B = "0x1111111111111111111111111111111111111111";
 /** Never reachable in production: the harness is the only place this is on. */
 const WITH_ONCHAIN = capabilities("MANAGED_COMBINED_INTAKE", "ONCHAIN_RECOURSE_CONNECTED");
 
@@ -100,6 +107,68 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       draft: DRAFT,
     };
   }
+  if (scenario.startsWith("admission")) {
+    const base2 = adaptManagedIntake({ ...base, capabilitySet: WITH_ADMISSION, view: null, claimsAuthored: false, elapsedSeconds: null });
+    const wallet = {
+      state: "CONNECTED" as const,
+      address: scenario === "admission-b" || scenario === "admission-same" ? WALLET_B : WALLET_A,
+      connectorName: "Alpha Wallet",
+      connectorUid: "fixture",
+      chainId: 10_143,
+      expectedChainId: 10_143,
+      problem: null,
+    };
+    const claim = (role: "A" | "B", walletAddress: string | null, admitted: boolean) => Object.freeze({
+      ...(role === "A" ? base2.claimA : base2.claimB),
+      window: role === "A" ? { activeFrom: 120, activeUntil: 420 } : { activeFrom: 220, activeUntil: 520 },
+      admission: (admitted ? "ADMITTED" : "REQUIRED") as "ADMITTED" | "REQUIRED",
+      wallet: walletAddress,
+      eligibilityVerified: walletAddress !== null,
+    });
+
+    if (scenario === "admission-handoff") {
+      return {
+        model: Object.freeze({
+          ...base2,
+          wallet,
+          claimA: claim("A", WALLET_A, true),
+          claimB: claim("B", null, false),
+          handoffRequired: true,
+          activeRole: null,
+        }),
+        draft: DRAFT,
+      };
+    }
+    if (scenario === "admission-same") {
+      return {
+        model: Object.freeze({
+          ...base2,
+          wallet: { ...wallet, address: WALLET_A },
+          claimA: claim("A", WALLET_A, true),
+          claimB: claim("B", WALLET_A, false),
+          activeRole: "B" as const,
+        }),
+        draft: DRAFT,
+      };
+    }
+    if (scenario === "admission-b") {
+      return {
+        model: Object.freeze({
+          ...base2,
+          wallet,
+          claimA: claim("A", WALLET_A, true),
+          claimB: claim("B", WALLET_B, false),
+          activeRole: "B" as const,
+        }),
+        draft: DRAFT,
+      };
+    }
+    return {
+      model: Object.freeze({ ...base2, wallet, claimA: claim("A", WALLET_A, false), claimB: claim("B", null, false), activeRole: "A" as const }),
+      draft: DRAFT,
+    };
+  }
+
   if (scenario.startsWith("onchain-")) {
     const phase = scenario.slice("onchain-".length).toUpperCase().replace(/-/gu, "_") as OnchainPhase;
     const model = adaptManagedIntake({ ...base, capabilitySet: WITH_ONCHAIN, view: conflictView(), elapsedSeconds: null });
