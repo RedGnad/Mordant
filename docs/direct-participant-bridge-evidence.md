@@ -64,12 +64,19 @@ configuration. Nothing is accepted from a browser.
 Because the governed authority is minted per case, the adapter for a
 direct-participant run is deployed per case. `checkDirectParticipantAdapter`
 therefore takes the run-specific pins (asset, authority, circuit, parameters)
-from the verified signed result, while still requiring the reviewed runtime code
-hash, the committed settlement token, verifier, facility and attestor, zero open
-and entitled liabilities, a reserve covering the canonical payouts, live
-eligibility for both holders and the facility, a refused negative control,
-permitted payout transfers, an unconsumed result, and byte-identical Viem and
-Solidity release digests.
+from the verified signed result, while still requiring the committed settlement
+token, verifier, facility and attestor, zero open and entitled liabilities, a
+reserve covering the canonical payouts, live eligibility for both holders and the
+facility, a refused negative control, permitted payout transfers, an unconsumed
+result, and byte-identical Viem and Solidity release digests.
+
+Solidity embeds immutables INTO the runtime code, so a case-specific deployment
+cannot share the committed deployment's code hash and comparing the two would
+always fail. What the executor checks at run time is the exact runtime byte
+length plus every immutable above, which is a complete account of how two
+deployments of this source may differ. The immutable-masked bytecode equality
+against the reviewed artifact needs the compiler's immutable spans, which no RPC
+exposes, so it is proved once at deployment and recorded in evidence.
 
 ## Pruning
 
