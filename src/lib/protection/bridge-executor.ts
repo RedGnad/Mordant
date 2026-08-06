@@ -187,14 +187,43 @@ export type AdapterReader = AdapterV2ReadOnlyReader & Readonly<{
  * ownership stays with the executor so a failed read can never turn into a retry
  * of signing, file persistence, or a transaction mutation.
  */
+/**
+ * Minimum spacing between RPC requests, in milliseconds.
+ *
+ * The public Monad endpoint refuses more than fifteen requests per second, and
+ * `readAdapterState` alone issues eighteen reads at once. Without pacing, a
+ * perfectly healthy adapter fails its compatibility check for a reason that has
+ * nothing to do with the adapter. This paces idempotent reads only; it is not a
+ * retry, and no state-changing call passes through here.
+ */
+const RPC_MIN_INTERVAL_MS = 80;
+
+function pacedQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(operation: () => Promise<T>): Promise<T> => {
+    const scheduled = tail.then(async () => {
+      await new Promise((resolve) => setTimeout(resolve, RPC_MIN_INTERVAL_MS));
+      return operation();
+    });
+    tail = scheduled.then(() => undefined, () => undefined);
+    return scheduled as Promise<T>;
+  };
+}
+
 export function createAdapterReader(configuration: BridgeConfiguration): AdapterReader {
-  const client = createPublicClient({ transport: http(configuration.rpcUrl) }) as PublicClient;
+  // Batching collapses concurrent reads into single HTTP requests; the queue
+  // below bounds the rate of whatever is left. Neither changes which calls are
+  // made or what they return.
+  const client = createPublicClient({
+    transport: http(configuration.rpcUrl, { batch: { wait: 16 } }),
+  }) as PublicClient;
+  const paced = pacedQueue();
   const address = configuration.adapterAddress;
   const readContract = client.readContract as unknown as (
     parameters: Readonly<{ address: `0x${string}`; abi: typeof ADAPTER_ABI; functionName: string; args?: readonly unknown[] }>,
   ) => Promise<unknown>;
-  const read = <T>(functionName: string, args: readonly unknown[] = []) => (
-    readContract({ address, abi: ADAPTER_ABI, functionName, args }) as Promise<T>
+  const read = <T>(functionName: string, args: readonly unknown[] = []) => paced(
+    () => readContract({ address, abi: ADAPTER_ABI, functionName, args }) as Promise<T>,
   );
   return Object.freeze({
     readAdapterState: async () => {
@@ -203,8 +232,8 @@ export function createAdapterReader(configuration: BridgeConfiguration): Adapter
         expectedGovernedReleaseAuthorityId, releaseMode, circuitHash, parameterFingerprint,
         availableReserve, openReserved, entitledUnpaid, solvent, domainSeparator, roleHolder, roleFacility,
       ] = await Promise.all([
-        client.getChainId(),
-        client.getCode({ address }),
+        paced(() => client.getChainId()),
+        paced(() => client.getCode({ address })),
         read<`0x${string}`>("settlementToken"),
         read<`0x${string}`>("cviVerifier"),
         read<`0x${string}`>("attestor"),
@@ -242,34 +271,34 @@ export function createAdapterReader(configuration: BridgeConfiguration): Adapter
         availableReserve,
         openReserved,
         entitledUnpaid,
-        tokenBalance: await client.readContract({
+        tokenBalance: await paced(() => client.readContract({
           address: getAddress(settlementToken), abi: ERC20_ABI, functionName: "balanceOf", args: [address],
-        }) as bigint,
+        })) as bigint,
         solvent,
         domainSeparator,
         roleHolder: Number(roleHolder),
         roleFacility: Number(roleFacility),
       });
     },
-    isEligible: (verifier, account, role) => client.readContract({
+    isEligible: (verifier, account, role) => paced(() => client.readContract({
       address: verifier, abi: CVI_ABI, functionName: "isEligible", args: [account, role],
-    }) as Promise<boolean>,
-    isAssetTransferAllowed: (verifier, asset, from, to, amount) => client.readContract({
+    })) as Promise<boolean>,
+    isAssetTransferAllowed: (verifier, asset, from, to, amount) => paced(() => client.readContract({
       address: verifier,
       abi: CVI_ABI,
       functionName: "isAssetTransferAllowed",
       args: [asset, from, to, amount],
-    }) as Promise<boolean>,
+    })) as Promise<boolean>,
     hashRelease: (payload) => read<Hex>("hashRelease", [releaseTuple(payload)]),
     resultConsumed: (governedResultDigest) => read<boolean>("resultConsumed", [governedResultDigest]),
     simulate: async (payload, signature, account) => {
-      await client.simulateContract({
+      await paced(() => client.simulateContract({
         address,
         abi: ADAPTER_ABI,
         functionName: "consumeGovernedRelease",
         args: [releaseTuple(payload), signature],
         account,
-      });
+      }));
     },
   });
 }
@@ -603,12 +632,17 @@ async function checkDirectParticipantAdapter(
   if (state.address.toLowerCase() === SUPERSEDED_ADAPTER_ADDRESS.toLowerCase()) {
     fail("SUPERSEDED_ADAPTER", "The configured adapter is the superseded deployment");
   }
-  // Same reviewed contract, different constructor pins. Byte-identical runtime
-  // code is what makes "the same audited adapter" a checkable claim.
-  if (state.codeHash.toLowerCase() !== expected.codeHash.toLowerCase()) {
-    fail("ADAPTER_CODE", "The case-specific adapter is not the reviewed Adapter V2 runtime code");
+  // Same reviewed contract, different constructor pins. Solidity embeds
+  // immutables INTO the runtime code, so a case-specific deployment cannot have
+  // the committed deployment's code hash and comparing them would always fail.
+  // What is checkable at runtime is the exact runtime length plus every one of
+  // the immutables below, which is a complete account of how two deployments of
+  // this source may differ. The immutable-masked bytecode equality against the
+  // reviewed artifact is proved once at deployment and recorded in evidence,
+  // because it needs the compiler's immutable spans, which no RPC exposes.
+  if (state.runtimeBytes !== expected.runtimeBytes) {
+    fail("ADAPTER_CODE", "Adapter runtime byte length differs from the reviewed artifact");
   }
-  if (state.runtimeBytes !== expected.runtimeBytes) fail("ADAPTER_CODE", "Adapter runtime byte length differs from the reviewed artifact");
   if (state.settlementToken.toLowerCase() !== expected.settlementToken.toLowerCase()) {
     fail("ADAPTER_TOKEN", "The case-specific adapter settles a different token");
   }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "mordant.activation-bridge-evidence-verification/1",
-  "verifiedAtIso": "2026-08-06T23:32:24.711Z",
+  "verifiedAtIso": "2026-08-06T23:53:39.710Z",
   "runId": "76005a0c-2787-4c50-b196-636e45b71781",
   "evidenceSchema": "mordant.direct-participant-bridge-evidence/1",
   "evidenceDigest": "sha256:aa0286fb3f79b6738b53cff30a96e02f3d235561c41ec0c3845cd194e6c208f3",

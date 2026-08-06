@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "mordant.activation-case-adapter-plan/1",
+  "generatedAt": "2026-08-06T23:35:24.281Z",
+  "runId": "76005a0c-2787-4c50-b196-636e45b71781",
+  "sourceCommit": "85d1d9f5ac66630b39ce2de3c60c420019223a6a",
+  "reviewedBytecode": {
+    "artifactMaskedHash": "0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e",
+    "reviewedArtifactMaskedHash": "0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e",
+    "immutableSpansMasked": 28,
+    "runtimeBytes": 10088,
+    "reviewedRuntimeBytes": 10088,
+    "matchesReviewedArtifact": true
+  },
+  "pins": {
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "cviVerifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "attestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "expectedGovernedReleaseAuthorityId": "0xe73e0834bce686ac7eb1b962653765e4b8813d559bccc1b7c36f1a7df6be1890",
+    "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "circuitHash": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "cureWindow": 600
+  },
+  "constructorArgs": "0x000000000000000000000000ac0893567d43c3e7e6e35a72803df05416c1f20d000000000000000000000000cffa4cbf5117718eb7fc0de2e13e07ce75b840ab000000000000000000000000ee3260ba47d097de5a8601107e1b83454593617c000000000000000000000000344412229b3b581c19572f9bf1f5d08d4ae897e600000000000000000000000079c53151315fad9163f75a65a8bd4d04a10e1e457613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95ce73e0834bce686ac7eb1b962653765e4b8813d559bccc1b7c36f1a7df6be189029d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2ed0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d60000000000000000000000000000000000000000000000000000000000000258",
+  "funding": {
+    "payoutTotal": "4000",
+    "ownerAddress": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "ownerSettlementBalance": "999",
+    "ownerMonWei": "10645427521838310952",
+    "shortfall": "3001",
+    "withdrawalRequired": true,
+    "supersededAdapter": {
+      "address": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "ownerControlsIt": true,
+      "availableReserve": "4000",
+      "openReserved": "0",
+      "entitledUnpaid": "0",
+      "liabilitiesZero": true,
+      "withdrawable": true
+    }
+  }
+}

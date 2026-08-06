@@ -28,12 +28,12 @@ async function main() {
   const evidencePath = join(runRoot, runId, "direct-participant-bridge-evidence.json");
   const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
 
-  const module = await import("../.product-test-dist/src/lib/protection/direct-participant-bridge-evidence.js");
+  const bridgeEvidence = await import("../.product-test-dist/src/lib/protection/direct-participant-bridge-evidence.js");
   const compatibility = await import("../.product-test-dist/src/lib/protection/adapter-compatibility.js");
   const asset = await import("../.product-test-dist/src/lib/protection/cleanverse-asset.js");
 
   const configuration = compatibility.loadCanonicalRecourseConfiguration(ROOT);
-  const verified = module.assertDirectParticipantBridgeEvidence(evidence, {
+  const verified = bridgeEvidence.assertDirectParticipantBridgeEvidence(evidence, {
     sourceCommit: evidence.sourceCommit,
     assetIdentity: asset.CANONICAL_CLEANVERSE_ASSET_DIGEST,
     holderA: configuration.participants.holderA,

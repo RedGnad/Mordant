@@ -78,3 +78,26 @@ worker's post-terminal pruning preserves it while still removing `public/`,
 `decryptor-private/`, `participant-private/` and the admitted intervals. The raw
 `governed-conflict-result.json` is expendable after that precisely because this
 artifact carries a complete copy of it.
+
+## Live qualification, 2026-08-07
+
+One fresh two-wallet journey was consumed end to end on Monad testnet at
+activation commit `85d1d9f5ac66630b39ce2de3c60c420019223a6a`.
+
+| | |
+|---|---|
+| Run | `76005a0c-2787-4c50-b196-636e45b71781` |
+| Governed authority (fresh) | `sha256:e73e0834bce686ac7eb1b962653765e4b8813d559bccc1b7c36f1a7df6be1890` |
+| Bridge evidence digest | `sha256:aa0286fb3f79b6738b53cff30a96e02f3d235561c41ec0c3845cd194e6c208f3` |
+| Case-specific adapter | `0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935` |
+| ReleaseConsumed | `0xa46797440a14549fd8fb4cea7d7dcff40d78b84babf48746daa58e8d314d14f6`, block 51518455 |
+| Cure deadline | 1786060246, a real 600 s window from `block.timestamp` |
+| Finalize (permissionless) | `0x4fc798bd0608f57543e0004ddcc21e36f9dd881055144c160585da2ea87aff64`, block 51520431 |
+| Claim A | `0x46b2cb6bd0978a3003d05c3fef6a07f89d2e598ad205d3e1f68463061f4115f4`, 2400 |
+| Claim B | `0x8670482a2cbaba08a66f693150bdb34a5d46d1453f5feea9d56939d5e7e64147`, 1600 |
+
+The adapter's masked runtime bytecode equals the reviewed artifact
+(`0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e`, 28
+immutable spans, 10088 bytes), so only its constructor pins differ. The bridge
+evidence was verified again after the worker pruned the run, with the Ed25519
+signature checked against the copy it carries.
