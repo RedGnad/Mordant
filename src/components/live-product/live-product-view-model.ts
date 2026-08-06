@@ -431,3 +431,93 @@ export function assertNoPrematureOutcome(model: LiveProductViewModel): void {
     throw new Error(`A pre-release state (${model.state}) must not carry a decision rail`);
   }
 }
+
+// ---------------------------------------------------------------- chapters
+
+/**
+ * The five chapters a visitor actually experiences. Runtime stages and on-chain
+ * phases are deliberately not chapters: they live inside the execution trace and
+ * the receipt, so the primary surface never shows thirty states at equal weight.
+ */
+export type LiveChapterId = "VERIFY" | "AUTHORIZE" | "DECIDE" | "ACT" | "PROVE";
+
+export const LIVE_CHAPTERS: readonly Readonly<{ id: LiveChapterId; ordinal: string; title: string }>[] = Object.freeze([
+  { id: "VERIFY", ordinal: "1", title: "Verify" },
+  { id: "AUTHORIZE", ordinal: "2", title: "Authorize" },
+  { id: "DECIDE", ordinal: "3", title: "Decide privately" },
+  { id: "ACT", ordinal: "4", title: "Act on the result" },
+  { id: "PROVE", ordinal: "5", title: "Prove" },
+]);
+
+const CHAPTER_OF: Readonly<Record<LiveProductState, LiveChapterId>> = Object.freeze({
+  INTRODUCTION: "VERIFY",
+  ELIGIBILITY_REQUIRED: "VERIFY",
+  ELIGIBILITY_CHECKING: "VERIFY",
+  ELIGIBILITY_ACCEPTED: "VERIFY",
+  ELIGIBILITY_REFUSED: "VERIFY",
+  CASE_READY: "AUTHORIZE",
+  CLAIM_A_REQUIRED: "AUTHORIZE",
+  CLAIM_A_AUTHORIZING: "AUTHORIZE",
+  CLAIM_A_ADMITTED: "AUTHORIZE",
+  CLAIM_B_REQUIRED: "AUTHORIZE",
+  CLAIM_B_AUTHORIZING: "AUTHORIZE",
+  CLAIM_B_ADMITTED: "AUTHORIZE",
+  WAITING_FOR_OTHER_PARTICIPANT: "AUTHORIZE",
+  PREPARING_ENCRYPTION: "DECIDE",
+  PARTICIPANT_A_ENCRYPTED: "DECIDE",
+  PARTICIPANT_B_ENCRYPTED: "DECIDE",
+  ENCRYPTED_EVALUATION: "DECIDE",
+  GOVERNED_VERIFICATION: "DECIDE",
+  RELEASE_AVAILABLE: "ACT",
+  CONFLICT_REVEALED: "ACT",
+  NO_CONFLICT_REVEALED: "ACT",
+  ONCHAIN_SUBMISSION: "ACT",
+  CURE_OPEN: "ACT",
+  CURED: "ACT",
+  ENTITLED: "ACT",
+  CLAIM_A_AVAILABLE: "ACT",
+  CLAIM_B_AVAILABLE: "ACT",
+  CLAIMED: "ACT",
+  RECOURSE_REFUSED: "ACT",
+  RECEIPT_SEALED: "PROVE",
+  BUSY: "VERIFY",
+  SERVICE_UNAVAILABLE: "VERIFY",
+  RECOVERY_AVAILABLE: "DECIDE",
+  EXECUTION_FAILED: "DECIDE",
+});
+
+export function chapterFor(state: LiveProductState): LiveChapterId {
+  return CHAPTER_OF[state];
+}
+
+export function chapterIndex(id: LiveChapterId): number {
+  return LIVE_CHAPTERS.findIndex((chapter) => chapter.id === id);
+}
+
+/**
+ * The one sentence that names all three Cleanverse boundaries. It is shown at
+ * the top of the product, not in a separate technology section.
+ */
+export const CLEANVERSE_LINE =
+  "Cleanverse verifies the asset and who may participate. Mordant privately decides whether the "
+  + "claims conflict. The governed result opens or refuses recourse in aUSDC.";
+
+/** A deadline is always rendered from an instant, never from a stored string. */
+export function formatDeadline(iso: string | null, now: Date = new Date()): Readonly<{
+  absolute: string; relative: string; expired: boolean;
+}> | null {
+  if (iso === null) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  const absolute = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23", timeZone: "UTC",
+  }).format(at);
+  const minutes = Math.round((at.getTime() - now.getTime()) / 60_000);
+  const expired = minutes <= 0;
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const relative = expired
+    ? "the window has closed"
+    : hours >= 1 ? `in about ${hours} hour${hours === 1 ? "" : "s"}` : `in ${Math.abs(minutes)} minutes`;
+  return Object.freeze({ absolute: `${absolute} UTC`, relative, expired });
+}

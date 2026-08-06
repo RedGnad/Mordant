@@ -36,7 +36,10 @@ function WalletRow({ option, onSelect, busy }: {
             </svg>
           ) : (
             // Constrained image source only. Wallet-supplied markup is never
-            // inserted into the document.
+            // inserted into the document, and the URL is deliberately not sent
+            // through next/image: that would proxy an untrusted third-party
+            // source through our own origin.
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={option.icon} alt="" width={22} height={22} loading="lazy" decoding="async" />
           )}
         </span>

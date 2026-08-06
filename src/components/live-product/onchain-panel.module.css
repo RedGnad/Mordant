@@ -1,0 +1,123 @@
+.panel {
+  margin-top: 26px;
+  padding: 18px 0 0 18px;
+  border-left: 3px solid var(--rule);
+}
+
+.panel[data-connected="true"] {
+  border-left-color: var(--receivable);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.disabled {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.phase {
+  margin: 0 0 14px;
+  font-size: clamp(17px, 1.7vw, 21px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.rows {
+  display: grid;
+  margin: 0;
+  gap: 0;
+}
+
+.rows > div {
+  display: grid;
+  padding: 9px 0;
+  border-top: 1px solid var(--soft-rule);
+  gap: 3px 18px;
+  grid-template-columns: minmax(110px, 0.3fr) minmax(0, 1fr);
+}
+
+.rows dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rows dd {
+  margin: 0;
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.entitlement {
+  margin-top: 20px;
+}
+
+.entitlement ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  list-style: none;
+}
+
+.entitlement li {
+  display: grid;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--soft-rule);
+  gap: 4px 18px;
+  grid-template-columns: minmax(90px, 0.24fr) minmax(0, 1fr) auto;
+}
+
+.entitlement span {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.entitlement strong {
+  font-size: clamp(19px, 2vw, 26px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.entitlement small {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.entitlement em {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .panel {
+    padding-left: 14px;
+  }
+
+  .rows > div,
+  .entitlement li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

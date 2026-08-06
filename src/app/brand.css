@@ -65,3 +65,19 @@
 .mordant-shell * {
   box-sizing: border-box;
 }
+
+/**
+ * Reduced motion is honoured for the whole branded surface, not only inside
+ * individual modules: a visitor who asks for less motion should not have to
+ * discover which component happened to opt in.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .mordant-shell *,
+  .mordant-shell *::before,
+  .mordant-shell *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
