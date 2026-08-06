@@ -252,9 +252,17 @@ export function assertParticipantAdmissionMessage(value: unknown): ParticipantAd
  * wallet actually is such an account is not asserted here, and the demo qualifies
  * only the EOA A-Pass holders that are tested.
  */
+/**
+ * The verifier receives the struct and its digest together. They are consistent
+ * by construction, because the digest is derived from that exact struct here and
+ * nowhere else. A `verifyTypedData` backend uses the struct; a `verifyHash` one
+ * uses the digest; neither has to re-derive anything and so neither can disagree
+ * with the runtime about what was signed.
+ */
 export type TypedDataVerifier = (input: Readonly<{
   address: `0x${string}`;
   typedData: ReturnType<typeof participantAdmissionTypedData>;
+  digest: Bytes32;
   signature: `0x${string}`;
 }>) => Promise<boolean>;
 
@@ -340,11 +348,13 @@ export async function verifyParticipantAuthorization(
   }
 
   const chainId = expected.chainId ?? CCP_CHAIN_ID;
+  const typedData = participantAdmissionTypedData(message, chainId);
   const authorizationDigest = participantAdmissionDigest(message, chainId);
   let valid: boolean;
   try {
     valid = await verifyTypedData({
       address: message.participantWallet,
+      typedData,
       digest: authorizationDigest,
       signature: signature as `0x${string}`,
     });

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { recoverAddress } from "viem";
+import { hashTypedData, recoverAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import type { CustomSupervisedProtectionView } from "./custom-supervised-view";
@@ -296,8 +296,8 @@ function view(stage: string): CustomSupervisedProtectionView {
  * `publicClient.verifyHash`, which also answers for deployed ERC-1271 accounts;
  * nothing here exercises that, and nothing claims it does.
  */
-const eoaVerifier: TypedDataVerifier = async ({ address, digest, signature }) => {
-  const recovered = await recoverAddress({ hash: digest, signature });
+const eoaVerifier: TypedDataVerifier = async ({ address, typedData, signature }) => {
+  const recovered = await recoverAddress({ hash: hashTypedData(typedData), signature });
   return recovered.toLowerCase() === address.toLowerCase();
 };
 

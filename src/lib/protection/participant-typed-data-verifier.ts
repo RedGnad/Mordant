@@ -8,12 +8,11 @@ import type { TypedDataVerifier } from "./participant-authorization";
 /**
  * Authoritative signature validation against Monad.
  *
- * `verifyHash` is used rather than address recovery because it answers for both
- * account kinds from one call: an EOA is checked by recovery, and a deployed
- * ERC-1271 contract account is asked its own `isValidSignature`. The digest it
- * receives is the EIP-712 digest of the exact ParticipantAdmissionV1 struct, so
- * there is one hashing path and the browser and the server cannot disagree about
- * what was signed.
+ * `verifyTypedData` is used rather than address recovery because it answers for
+ * both account kinds from one call: an EOA is checked by recovery, and a deployed
+ * ERC-1271 contract account is asked its own `isValidSignature`. It receives the
+ * exact ParticipantAdmissionV1 struct the runtime built, so the browser and the
+ * server cannot disagree about what was signed.
  *
  * Which account kind a given wallet actually is, is not asserted anywhere in this
  * codebase. Only the EOA A-Pass holders are covered by tests, and no
@@ -27,9 +26,12 @@ export function createMonadTypedDataVerifier(
   environment: EnvironmentLike = process.env,
 ): TypedDataVerifier {
   const client = createPublicClient({ transport: http(readCcpRpcUrl(environment)) });
-  return async ({ address, digest, signature }) => client.verifyHash({
+  return async ({ address, typedData, signature }) => client.verifyTypedData({
     address,
-    hash: digest,
+    domain: typedData.domain,
+    types: typedData.types,
+    primaryType: typedData.primaryType,
+    message: typedData.message,
     signature,
   });
 }
