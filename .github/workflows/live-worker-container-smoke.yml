@@ -83,7 +83,23 @@ jobs:
             test -f /app/test/stubs/server-only.js
             test -f /app/scripts/mordant-live-worker.mjs
             echo "engine, stubs and worker present"
+            node -e "require.resolve(\"viem\", { paths: [\"/app\"] })"
+            echo "viem resolves from the runtime image"
+            if find /app -maxdepth 2 -name ".env*" | grep -q .; then
+              echo "an env file was baked into the image"; exit 1
+            fi
+            echo "no env file baked into the image"
           '
+          # No credential may be frozen into the image configuration either.
+          docker image inspect mordant-live-worker:gate --format "{{json .Config.Env}}" \
+            | node -e '
+              let raw = ""; process.stdin.on("data", (c) => { raw += c; });
+              process.stdin.on("end", () => {
+                const leaked = JSON.parse(raw).filter((entry) => /secret|private|token|api[_-]?key/iu.test(entry));
+                if (leaked.length > 0) { console.error("image config carries " + leaked.join(", ")); process.exit(1); }
+                console.log("image configuration carries no credential");
+              });
+            '
 
       - name: Record disk after image build
         id: disk_after_build
@@ -94,6 +110,8 @@ jobs:
 
       - name: Start the worker on a mounted data directory
         id: start
+        env:
+          EXPECTED_SHA: ${{ steps.prepare.outputs.sha }}
         run: |
           # Ephemeral, job-scoped secret. Never printed, never stored.
           SECRET="$(openssl rand -hex 32)"
@@ -114,6 +132,7 @@ jobs:
             -e MORDANT_WORKER_COOLDOWN_MS=1000 \
             -e MORDANT_WORKER_DISK_FLOOR_BYTES=2187329536 \
             -e MORDANT_PROTECTION_SOURCE_COMMIT="${{ steps.prepare.outputs.sha }}" \
+            -e MORDANT_MONAD_RPC_URL="http://127.0.0.1:8545" \
             mordant-live-worker:gate
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8080/health > /tmp/health.json 2>/dev/null; then
@@ -121,6 +140,19 @@ jobs:
               echo "startup=$((END-START))" >> "$GITHUB_OUTPUT"
               echo "Worker healthy after $((END-START))s"
               cat /tmp/health.json
+              node -e '
+                const health = require("/tmp/health.json");
+                const fail = (m) => { console.error("health contract: " + m); process.exit(1); };
+                if (health.status !== "READY") fail("status is " + health.status);
+                if (health.worker !== "IDLE") fail("worker is " + health.worker);
+                if (health.acceptingCases !== true) fail("acceptingCases is " + health.acceptingCases);
+                if (health.diskSufficient !== true) fail("diskSufficient is " + health.diskSufficient);
+                if (health.version !== process.env.EXPECTED_SHA) fail("version " + health.version + " is not the built commit");
+                for (const key of Object.keys(health)) {
+                  if (/secret|token|key|rpc/iu.test(key)) fail("health exposes " + key);
+                }
+                console.log("health contract satisfied: READY, IDLE, acceptingCases, correct commit, nothing sensitive");
+              '
               exit 0
             fi
             sleep 1
@@ -213,6 +245,7 @@ jobs:
             -e MORDANT_WORKER_ALLOWED_ORIGIN=https://preview.example \
             -e MORDANT_WORKER_DISK_FLOOR_BYTES=2187329536 \
             -e MORDANT_PROTECTION_SOURCE_COMMIT="${{ steps.prepare.outputs.sha }}" \
+            -e MORDANT_MONAD_RPC_URL="http://127.0.0.1:8545" \
             mordant-live-worker:gate
           for i in $(seq 1 60); do
             curl -fsS http://127.0.0.1:8080/health > /tmp/health2.json 2>/dev/null && break
