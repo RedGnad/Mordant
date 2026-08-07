@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "mordant.activation-case-adapter-configuration/1",
+  "address": "0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935",
+  "gates": {
+    "adapterApass": true,
+    "holderAEligible": true,
+    "holderBEligible": true,
+    "facilityEligible": true,
+    "funderToAdapter": true,
+    "adapterToHolderA": true,
+    "adapterToHolderB": true
+  },
+  "approveTx": "0xc56cfdb4fd3ca58a5faa46d1a07bafbe5d7199a17b81e5d1e11e8793efa65398",
+  "fundTx": "0xc8c6ef8cb37cbf840879669223ade73c8188bf0f83e3d0c35e2a5cd8f5a30a16",
+  "fundBlock": 51517797,
+  "availableReserve": "4000",
+  "openReserved": "0",
+  "entitledUnpaid": "0",
+  "tokenBalance": "4000",
+  "solvent": true,
+  "payoutTotal": "4000"
+}

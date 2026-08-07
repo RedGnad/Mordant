@@ -8,6 +8,7 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".cleanverse-test-dist/**",
+    ".product-test-dist/**",
     "contracts/lib/**",
     "contracts/out/**",
     "contracts/cache/**",

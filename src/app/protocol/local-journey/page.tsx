@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Local transaction journey",
   description:
     "Run the synthetic Mordant recourse journey against a deterministic local protocol double.",
+  robots: { index: false, follow: false },
 };
 
 export default function LocalJourneyPage() {

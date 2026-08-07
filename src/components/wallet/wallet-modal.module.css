@@ -1,0 +1,303 @@
+/* The Mordant wallet surface. Cream, ink, rules and rails, no crypto-kit cards. */
+
+.backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: clamp(12px, 4vw, 48px);
+  background: rgb(33 25 35 / 62%);
+  overflow-y: auto;
+}
+
+.dialog {
+  width: min(560px, 100%);
+  max-height: min(88svh, 900px);
+  padding: clamp(20px, 3.4vw, 34px);
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-product), Arial, sans-serif;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.header {
+  display: grid;
+  align-items: start;
+  gap: 4px 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.eyebrow {
+  grid-column: 1;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  grid-column: 1;
+  margin: 0;
+  font-size: clamp(21px, 2.6vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: var(--target);
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.context {
+  display: grid;
+  margin: 22px 0 0;
+  gap: 0;
+}
+
+.context > div {
+  display: grid;
+  padding: 9px 0;
+  border-top: 1px solid var(--soft-rule);
+  gap: 4px 18px;
+  grid-template-columns: minmax(130px, 0.4fr) minmax(0, 1fr);
+}
+
+.context dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.context dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.note {
+  margin: 18px 0 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--receivable);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.problem {
+  margin: 16px 0 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--protection);
+  color: var(--protection);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.empty {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wallets {
+  display: grid;
+  margin: 20px 0 0;
+  padding: 0;
+  gap: 0;
+  list-style: none;
+}
+
+.walletRow {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid var(--soft-rule);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  gap: 12px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  text-align: left;
+}
+
+.wallets li:last-child .walletRow {
+  border-bottom: 1px solid var(--soft-rule);
+}
+
+.walletRow:hover:not(:disabled),
+.walletRow:focus-visible {
+  background: color-mix(in srgb, var(--action) 12%, transparent);
+}
+
+.walletRow:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.walletIcon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
+.walletIcon svg {
+  width: 15px;
+  fill: var(--ink);
+  transform: rotate(7deg);
+}
+
+.walletIcon img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.walletName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walletState {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+
+.mobile h3 {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pairing {
+  display: grid;
+  margin-top: 16px;
+  gap: 20px;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: start;
+}
+
+.qr {
+  width: 168px;
+  padding: 8px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pairingText p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.copy {
+  min-height: var(--target);
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.status {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  min-height: 1em;
+}
+
+/* ---------------------------------------------------------------- small screens */
+
+@media (max-width: 620px) {
+  .backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: 92svh;
+    padding: 20px 18px calc(24px + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--ink);
+  }
+
+  .header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .close {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    margin-top: 14px;
+    order: 9;
+  }
+
+  .context > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pairing {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    transition: none;
+    animation: none;
+  }
+}

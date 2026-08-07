@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "mordant.activation-case-adapter-deployment/1",
+  "runId": "e618abc2-0ac7-4d79-b201-44959a54b68c",
+  "address": "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1",
+  "transactionHash": "0x56027c66313e4424d8c50d0c10f79aed010c4c0937c88b0676fdb20048c974c8",
+  "blockNumber": 51559582,
+  "runtimeBytes": 10088,
+  "deployedCodeHash": "0x3fe60ba9ce84d22b752ff1874116b00ddf9b986a2a3534572ef604c7910cb33d",
+  "deployedMaskedHash": "0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e",
+  "artifactMaskedHash": "0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e",
+  "maskedMatchesReviewedArtifact": true,
+  "immutableSpansMasked": 28,
+  "immutables": {
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "cviVerifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "attestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "expectedGovernedReleaseAuthorityId": "0xa241d6cf105dc55ee2fecacf962fa413fd19e1b7868b0815567c5155884d5c13",
+    "releaseMode": "0x29d74d033f25761ba7e8fbb0e872d7420cb42498951e9a85e3993b7ef59600fa",
+    "circuitHash": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "cureWindow": 600
+  },
+  "immutablesMatchPlan": true
+}

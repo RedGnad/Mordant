@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Protocol operations",
   description:
     "Inspect execution gates, state transitions, on-chain evidence, and recovery paths in the Mordant prototype.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ProtocolPage({

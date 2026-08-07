@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mordant.activation-reserve-withdrawal/1",
+  "supersededAdapter": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+  "to": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+  "amount": "3001",
+  "transactionHash": "0x4054187337498ae28ea0232819d37ca4d75408b54bf817c5952d1728a6819280",
+  "blockNumber": 51517745,
+  "status": "success",
+  "ownerBalanceBefore": "999",
+  "ownerBalanceAfter": "4000",
+  "ownerDelta": "3001",
+  "supersededAvailableBefore": "4000",
+  "supersededAvailableAfter": "999"
+}

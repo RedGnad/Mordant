@@ -1,0 +1,76 @@
+.panel {
+  max-width: 720px;
+  padding: clamp(48px, 9vw, 120px) var(--shell-gutter);
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font: 11px var(--font-proof), monospace;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.panel h1 {
+  margin: 0 0 16px;
+  font-size: clamp(38px, 6vw, 66px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 0.92;
+}
+
+.lede {
+  margin: 0 0 32px;
+  max-width: 46ch;
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  padding: 0 20px;
+  border: 1px solid var(--ink);
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--action-fill);
+}
+
+.primary:hover,
+.primary:focus-visible {
+  background: var(--action-fill-hover);
+}
+
+.secondary {
+  background: transparent;
+  font-weight: 500;
+}
+
+.secondary:hover,
+.secondary:focus-visible {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+@media (max-width: 760px) {
+  .actions {
+    display: grid;
+  }
+
+  .primary,
+  .secondary {
+    justify-content: center;
+  }
+}

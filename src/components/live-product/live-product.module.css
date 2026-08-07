@@ -1,0 +1,636 @@
+/* The live product. Rules and rails, one chapter at a time, four intentional
+   compositions rather than one shrinking layout. */
+
+.product {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(28px, 4vw, 56px) var(--shell-gutter) clamp(60px, 8vw, 110px);
+}
+
+.mono {
+  font-family: var(--font-proof), monospace;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- case bar */
+
+.caseBar {
+  display: grid;
+  align-items: end;
+  gap: 22px clamp(24px, 4vw, 64px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.caseAsset h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.6vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.caseFacts {
+  display: flex;
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+}
+
+.caseFacts > div {
+  display: grid;
+  gap: 3px;
+}
+
+.caseFacts dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.caseFacts dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.caseFacts small {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cleanverseLine {
+  max-width: 78ch;
+  margin: 20px 0 0;
+  font-size: clamp(14px, 1.15vw, 17px);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- chapters */
+
+.chapterRail {
+  display: grid;
+  margin: 30px 0 0;
+  padding: 0;
+  gap: 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.chapterRail li {
+  display: grid;
+  align-content: start;
+  padding: 12px 12px 14px 0;
+  border-top: 3px solid transparent;
+  gap: 4px;
+  margin-top: -1px;
+}
+
+.chapterRail li[data-state="done"] {
+  border-top-color: var(--ink);
+}
+
+.chapterRail li[data-state="current"] {
+  border-top-color: var(--action);
+}
+
+.chapterOrdinal {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.chapterTitle {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.chapterRail li[data-state="pending"] .chapterTitle,
+.chapterRail li[data-state="pending"] .chapterOrdinal {
+  color: var(--muted);
+}
+
+.chapterRail li[data-state="current"] .chapterTitle {
+  font-weight: 600;
+}
+
+.chapter,
+.reveal,
+.notice {
+  margin-top: clamp(34px, 4.5vw, 60px);
+}
+
+.chapterHeading {
+  max-width: 22ch;
+  margin: 0 0 14px;
+  font-size: clamp(28px, 3.8vw, 48px);
+  font-weight: 600;
+  letter-spacing: -0.042em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 62ch;
+  margin: 0 0 26px;
+  font-size: clamp(14px, 1.2vw, 17px);
+  line-height: 1.5;
+}
+
+.privacy,
+.disclosure {
+  max-width: 66ch;
+  margin: 16px 0 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.disclosure {
+  border-left-color: var(--receivable);
+  color: var(--ink);
+}
+
+.error {
+  max-width: 62ch;
+  margin: 0 0 18px;
+  padding-left: 14px;
+  border-left: 3px solid var(--protection);
+  color: var(--protection);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.verified {
+  margin: 18px 0 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--cleared);
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- fields */
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 16px;
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--protection);
+  border-width: 2px;
+}
+
+.testHolder {
+  display: grid;
+  margin-top: 20px;
+  padding: 16px 0 18px 16px;
+  border-left: 3px solid var(--rule);
+  gap: 10px;
+  justify-items: start;
+}
+
+.testHolder p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.testHolder code {
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- claims */
+
+.timeline {
+  display: grid;
+  margin: 0 0 24px;
+  gap: 8px;
+}
+
+.timelineTrack {
+  position: relative;
+  height: 20px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.timelineBarA,
+.timelineBarB {
+  display: block;
+  height: 100%;
+  min-inline-size: 3px;
+}
+
+.timelineBarA {
+  background: var(--receivable);
+}
+
+.timelineBarB {
+  background: var(--muted);
+}
+
+.timeline[data-reveal="conflict"] .timelineBarB {
+  background: var(--protection);
+}
+
+.timeline[data-reveal="cleared"] .timelineBarB {
+  background: var(--cleared);
+}
+
+.claims {
+  display: grid;
+  gap: 0;
+}
+
+.claim {
+  display: grid;
+  padding: 20px 0 22px 20px;
+  border-left: 3px solid var(--receivable);
+  gap: 8px;
+}
+
+.claim[data-role="B"] {
+  margin-top: 16px;
+  border-left-color: var(--muted);
+}
+
+.claim strong {
+  font-size: clamp(19px, 1.9vw, 25px);
+  font-weight: 600;
+  letter-spacing: -0.028em;
+}
+
+.claimWallet {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+}
+
+.claimFields {
+  display: grid;
+  margin-top: 8px;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 460px;
+}
+
+/* ---------------------------------------------------------------- decide */
+
+.waitFact {
+  max-width: 62ch;
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.elapsed {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.trace {
+  display: grid;
+  margin: 16px 0 0;
+  padding: 0;
+  gap: 0;
+  list-style: none;
+}
+
+.trace li {
+  padding: 10px 0 10px 14px;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+}
+
+.trace li[data-progress="done"] {
+  border-left-color: var(--ink);
+  color: var(--ink);
+}
+
+.trace li[data-progress="active"] {
+  border-left-color: var(--action);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- reveal */
+
+.reveal {
+  padding-top: clamp(26px, 3vw, 40px);
+  border-top: 4px solid var(--ink);
+}
+
+.reveal[data-outcome="conflict"] {
+  border-top-color: var(--protection);
+}
+
+.reveal[data-outcome="cleared"] {
+  border-top-color: var(--cleared);
+}
+
+.revealHeading {
+  max-width: 18ch;
+  margin: 0 0 12px;
+  font-size: clamp(34px, 5.2vw, 68px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 0.94;
+}
+
+.reveal[data-outcome="conflict"] .revealHeading {
+  color: var(--protection);
+}
+
+.revealLede {
+  max-width: 56ch;
+  margin: 0 0 28px;
+  font-size: clamp(15px, 1.5vw, 19px);
+  line-height: 1.4;
+}
+
+.decisionRail {
+  display: grid;
+  margin: 26px 0 0;
+  gap: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--rule);
+}
+
+.decisionRail > div {
+  display: grid;
+  align-content: start;
+  padding: 16px 18px 20px 0;
+  gap: 6px;
+}
+
+.decisionRail > div + div {
+  padding-left: 18px;
+  border-left: 1px solid var(--soft-rule);
+}
+
+.decisionRail dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.decisionRail dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.reveal[data-outcome="conflict"] .decisionRail > div:nth-child(3) dd {
+  color: var(--action);
+  font-weight: 600;
+}
+
+.proveRows {
+  display: grid;
+  margin: 0 0 8px;
+  gap: 0;
+}
+
+.proveRows > div {
+  display: grid;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--soft-rule);
+  gap: 4px 20px;
+  grid-template-columns: minmax(150px, 0.32fr) minmax(0, 1fr);
+}
+
+.proveRows dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.proveRows dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------- notices */
+
+.notice {
+  padding: 22px 0 24px 20px;
+  border-left: 3px solid var(--action);
+}
+
+.notice h2 {
+  margin: 0 0 10px;
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.notice p {
+  max-width: 60ch;
+  margin: 0 0 18px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- actions */
+
+.primary,
+.secondary,
+.disclose {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 26px;
+  padding: 0 22px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--action-fill);
+}
+
+.primary:hover:not(:disabled),
+.primary:focus-visible {
+  background: var(--action-fill-hover);
+}
+
+.primary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.secondary,
+.disclose {
+  background: transparent;
+  font-weight: 500;
+}
+
+.secondary:hover,
+.secondary:focus-visible,
+.disclose:hover,
+.disclose:focus-visible {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.testHolder .secondary {
+  margin-top: 0;
+}
+
+/* ================================================================ laptop */
+
+@media (max-width: 1100px) {
+  .decisionRail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .decisionRail > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .decisionRail > div:nth-child(n + 3) {
+    border-top: 1px solid var(--soft-rule);
+  }
+}
+
+/* ================================================================ tablet */
+
+@media (max-width: 900px) {
+  .caseBar {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .chapterRail {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chapterRail li {
+    padding-right: 8px;
+  }
+}
+
+/* ================================================================ mobile */
+
+@media (max-width: 700px) {
+  .product {
+    padding: 22px 20px calc(56px + env(safe-area-inset-bottom));
+  }
+
+  .chapterRail {
+    grid-template-columns: minmax(0, 1fr);
+    border-top: 0;
+  }
+
+  /* On a phone the rail is a position marker, not five headings. */
+  .chapterRail li {
+    display: none;
+  }
+
+  .chapterRail li[data-state="current"] {
+    display: grid;
+    padding: 12px 0 14px;
+    border-top: 3px solid var(--action);
+  }
+
+  .chapterHeading,
+  .revealHeading {
+    max-width: none;
+    font-size: clamp(26px, 8vw, 36px);
+    letter-spacing: -0.036em;
+  }
+
+  .revealHeading {
+    font-size: clamp(30px, 10vw, 42px);
+  }
+
+  .claimFields,
+  .decisionRail,
+  .proveRows > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decisionRail > div + div {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--soft-rule);
+  }
+
+  .primary,
+  .secondary,
+  .disclose {
+    width: 100%;
+  }
+
+  .testHolder .secondary {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

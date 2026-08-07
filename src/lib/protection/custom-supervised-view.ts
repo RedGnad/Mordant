@@ -79,6 +79,9 @@ const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
  */
 const FORBIDDEN_VIEW_KEYS = Object.freeze([
   "productScenario", "activeFrom", "activeUntil", "supervisedPledgeWindows", "pledges",
+  // The participant-admission path stores each role's private window under these
+  // names. They are execution input and belong in no browser-visible view.
+  "admittedClaims", "claim",
 ]);
 
 /**

@@ -170,20 +170,36 @@ test.describe("public discovery and fixed product viewport", () => {
       await page.setViewportSize(viewport);
       await page.goto("/");
 
-      const truthBoundary = page.getByRole("region", { name: "MVP evidence and execution boundaries" });
-      await expectAboveFold(page, truthBoundary);
-      await expect(truthBoundary).toContainText("Cleanverse / Monad testnet asset identity is retained real evidence");
-      await expect(truthBoundary).toContainText("BGV runs locally off-chain on synthetic lender pledge fixtures");
-      await expect(truthBoundary).toContainText("recourse is a local protocol double, not live settlement");
-      await expect(truthBoundary).toContainText("designated decryptor is trusted");
+      // The boundary section closes the landing rather than opening it, because
+      // leading with caveats buries the product. What matters is that it is
+      // present, reachable and honest in BOTH directions: it must not overstate
+      // what is real, and it must not understate it either, now that the cure
+      // window and the claims have actually settled on chain.
+      const truthBoundary = page.getByRole("region", { name: "What this is, and what it is not." });
+      await expect(truthBoundary).toBeVisible();
+      await expect(truthBoundary).toContainText("asset identity is retained real evidence");
+      await expect(truthBoundary).toContainText("lender pledge intervals are synthetic fixtures");
+      await expect(truthBoundary).toContainText("aUSDC claims are real on Monad testnet");
+      await expect(truthBoundary).toContainText("not production authorized");
+      await expect(truthBoundary).toContainText("designated decryptor recomputes the circuit");
+      // The superseded understatement must never come back: it contradicted the
+      // settled run this product leads with.
+      await expect(truthBoundary).not.toContainText("None of them is represented as live");
+      await expect(truthBoundary).not.toContainText("not live settlement");
 
-      const publicNavigation = page.getByRole("navigation", { name: "Public navigation" });
-      const protectionLink = publicNavigation.getByRole("link", { name: /Protection/u });
+      // A judge must be able to reach the settled run from the landing itself.
+      await expect(page.getByTestId("landing-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
+
+      const publicNavigation = page.getByRole("navigation", { name: "Product navigation" });
+      const protectionLink = publicNavigation.getByRole("link", { name: "Evidence" });
       await expectMinimumTarget(protectionLink);
-      await expect(page.getByRole("link", { name: "Open Conflicting Pledge Protection" })).toHaveAttribute(
-        "href",
-        "/protection?scenario=conflict",
-      );
+      // The landing offers this route more than once by design. Every one of
+      // them must reach the same evidence, so none is asserted in isolation.
+      const evidenceLinks = page.getByRole("link", { name: "Inspect verified evidence" });
+      await expect(evidenceLinks.first()).toBeVisible();
+      const hrefs = await evidenceLinks.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
+      expect(hrefs.length).toBeGreaterThan(0);
+      expect(new Set(hrefs)).toEqual(new Set(["/protection?scenario=conflict"]));
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`landing-${viewport.name}.png`), fullPage: true });
 

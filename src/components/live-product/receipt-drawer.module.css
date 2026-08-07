@@ -1,0 +1,217 @@
+/* The layered proof surface. Opaque at every width: the previous drawer relied
+   on a token that did not resolve here, so the panel and the page overlapped. */
+
+.backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  justify-items: end;
+  background: rgb(33 25 35 / 58%);
+}
+
+.panel {
+  width: min(620px, 100%);
+  height: 100%;
+  padding: clamp(20px, 3vw, 34px);
+  border-left: 1px solid var(--ink);
+  /* Opaque, with a literal fallback so a missing token can never make the
+     surface transparent again. */
+  background: #fbfaf5;
+  background: var(--paper, #fbfaf5);
+  color: var(--ink, #211923);
+  font-family: var(--font-product), Arial, sans-serif;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.header {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.header h2 {
+  margin: 6px 0 0;
+  font-size: clamp(20px, 2.4vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.close {
+  min-height: var(--target);
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.decisionRows,
+.proofRows {
+  display: grid;
+  margin: 0;
+  gap: 0;
+}
+
+.decisionRows > div,
+.proofRows > div {
+  display: grid;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--soft-rule);
+  gap: 4px 20px;
+  grid-template-columns: minmax(150px, 0.36fr) minmax(0, 1fr);
+}
+
+.decisionRows dt,
+.proofRows dt {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.decisionRows dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.proofRows dd {
+  display: grid;
+  align-items: start;
+  margin: 0;
+  gap: 8px 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.proofRows dd span {
+  min-width: 0;
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  /* Digests wrap inside the column instead of widening the panel. */
+  overflow-wrap: anywhere;
+}
+
+.copy {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.copy:hover,
+.copy:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.layer {
+  margin-top: 30px;
+}
+
+.layer > .eyebrow {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.disclose {
+  min-height: var(--target);
+  margin-top: 14px;
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.raw {
+  max-height: 340px;
+  margin: 14px 0 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  background: var(--proof, #241a2a);
+  color: var(--on-proof, #fffef9);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- mobile */
+
+@media (max-width: 700px) {
+  .backdrop {
+    align-content: end;
+    justify-items: stretch;
+  }
+
+  .panel {
+    width: 100%;
+    height: auto;
+    max-height: 92svh;
+    padding: 20px 18px calc(24px + env(safe-area-inset-bottom));
+    border-left: 0;
+    border-top: 1px solid var(--ink);
+  }
+
+  .header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .close {
+    justify-self: start;
+  }
+
+  .decisionRows > div,
+  .proofRows > div,
+  .proofRows dd {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .copy {
+    justify-self: start;
+  }
+}
+
+/* At 200% zoom the two-column rows would leave no room for a digest. */
+@media (max-width: 900px) and (min-resolution: 1.5dppx), (max-width: 480px) {
+  .decisionRows > div,
+  .proofRows > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .panel {
+    animation: none;
+    transition: none;
+  }
+}

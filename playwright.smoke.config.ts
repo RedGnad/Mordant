@@ -25,7 +25,10 @@ export default defineConfig({
   webServer: {
     command: "next dev --hostname 127.0.0.1 --port 3101",
     url: "http://127.0.0.1:3101",
-    reuseExistingServer: true,
+    // Never reuse a server this run did not start. A dev server left behind by
+    // another checkout answers on the same port and the whole suite then grades a
+    // foreign tree, which is a false green rather than a slow one.
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

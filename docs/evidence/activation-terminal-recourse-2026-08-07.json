@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "mordant.activation-terminal-recourse/1",
+  "runId": "76005a0c-2787-4c50-b196-636e45b71781",
+  "adapter": "0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935",
+  "bridgeRunId": "0x1fa4296d161496036731646fa08679a2ecfbb9631eab20eb9b3775ccc3501138",
+  "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+  "cured": false,
+  "cureDeadlineUnix": 1786060246,
+  "finalizedAtChainTime": 1786060255,
+  "permissionlessCaller": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+  "callerIsHolder": false,
+  "finalize": {
+    "transactionHash": "0x4fc798bd0608f57543e0004ddcc21e36f9dd881055144c160585da2ea87aff64",
+    "blockNumber": 51520431,
+    "adapterLogs": 1,
+    "entitlementOpened": true,
+    "entitledUnpaidAfterFinalize": "4000",
+    "stateAfter": "Entitled"
+  },
+  "claims": {
+    "holderA": {
+      "address": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "transactionHash": "0x46b2cb6bd0978a3003d05c3fef6a07f89d2e598ad205d3e1f68463061f4115f4",
+      "blockNumber": 51520433,
+      "amount": "2400"
+    },
+    "holderB": {
+      "address": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "transactionHash": "0x8670482a2cbaba08a66f693150bdb34a5d46d1453f5feea9d56939d5e7e64147",
+      "blockNumber": 51520435,
+      "amount": "1600"
+    }
+  },
+  "balances": {
+    "before": {
+      "adapter": "4000",
+      "holderA": "0",
+      "holderB": "0"
+    },
+    "after": {
+      "adapter": "0",
+      "holderA": "2400",
+      "holderB": "1600"
+    }
+  },
+  "reconciliation": {
+    "holderADelta": "2400",
+    "holderBDelta": "1600",
+    "adapterDelta": "-4000",
+    "expectedHolderADelta": "2400",
+    "expectedHolderBDelta": "1600",
+    "expectedAdapterDelta": "-4000",
+    "exact": true
+  },
+  "terminal": {
+    "state": "Claimed",
+    "paidA": true,
+    "paidB": true,
+    "availableReserve": "0",
+    "openReserved": "0",
+    "entitledUnpaid": "0",
+    "solvent": true,
+    "reservedLiabilityCleared": true,
+    "unpaidEntitlementCleared": true
+  },
+  "minv01": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "adapterBalanceBefore": "0",
+    "adapterBalanceAfter": "0",
+    "touched": false
+  }
+}

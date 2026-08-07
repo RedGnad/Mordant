@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { PilotApplicationForm } from "@/components/pilot-application-form";
-import { PublicFooter, PublicHeader } from "@/components/public-chrome";
+import { PublicFooter, PublicHeader } from "@/components/public-shell";
 
 import styles from "./pilot.module.css";
 
@@ -16,7 +16,7 @@ export default function PilotPage() {
   return (
     <div className={styles.page}>
       <a className={styles.skip} href="#pilot-form">Skip to application</a>
-      <PublicHeader />
+      <PublicHeader surface="pilot" />
       <main>
         <section className={styles.intro} aria-labelledby="pilot-title">
           <div>
