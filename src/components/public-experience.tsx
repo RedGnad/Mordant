@@ -89,6 +89,12 @@ const CONSEQUENCES = [
  * privately, whether the claims collide; the governed signature is what turns
  * that answer into money moving on Monad.
  */
+const JUNCTION_MARK_CLASSES = [
+  styles.claimMarkPrimary,
+  styles.claimMarkSatelliteOne,
+  styles.claimMarkSatelliteTwo,
+] as const;
+
 const INTEGRATION_STEPS = [
   {
     label: "Cleanverse verifies",
@@ -161,15 +167,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const transformationRef = useRef<HTMLElement>(null);
   const scrollFrame = useRef<number | null>(null);
   const heroRef = useRef<HTMLElement>(null);
-  const heroScrollFrame = useRef<number | null>(null);
+  const integrationFlowRef = useRef<HTMLDivElement>(null);
   const integrationPathRef = useRef<SVGPathElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
-  const integrationMotionFrame = useRef<number | null>(null);
-  const integrationProgress = useRef(0);
-  const integrationRef = useRef<HTMLDivElement>(null);
+  const heroScrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
-  /** Once the reader drives the path themselves, scroll stops taking it back. */
-  const integrationTaken = useRef(false);
+  const integrationMotionFrame = useRef<number | null>(null);
+  const integrationMotionProgress = useRef(0);
+  const integrationInteractionLockUntil = useRef(0);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -194,64 +199,56 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     return () => chapterObserver.disconnect();
   }, []);
 
-  /**
-   * The symbol leaves with the hero rather than staying pinned to it.
-   *
-   * Only a custom property moves, so the composition is untouched and the
-   * browser animates a single composited transform. Reduced motion opts out
-   * entirely: the property is simply never set and the symbol stays at rest.
-   */
   useEffect(() => {
     const hero = heroRef.current;
     if (hero === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const update = () => {
+    const updateHeroParallax = () => {
       heroScrollFrame.current = null;
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
-      hero.style.setProperty("--symbol-scroll-y", `${progress * -56}px`);
-    };
-    const onScroll = () => {
-      if (heroScrollFrame.current !== null) return;
-      heroScrollFrame.current = window.requestAnimationFrame(update);
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -64}px`);
     };
 
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    const onHeroScroll = () => {
+      if (heroScrollFrame.current !== null) return;
+      heroScrollFrame.current = window.requestAnimationFrame(updateHeroParallax);
+    };
+
+    updateHeroParallax();
+    window.addEventListener("scroll", onHeroScroll, { passive: true });
+    window.addEventListener("resize", onHeroScroll);
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("scroll", onHeroScroll);
+      window.removeEventListener("resize", onHeroScroll);
       if (heroScrollFrame.current !== null) window.cancelAnimationFrame(heroScrollFrame.current);
     };
   }, []);
 
-  /**
-   * Scrolling past the section walks the path on its own.
-   *
-   * A reader who never touches it still sees the four responsibilities in order,
-   * which is the point of the motif. The moment someone selects a stage
-   * themselves, scroll hands over and stops overriding them.
-   */
   useEffect(() => {
-    const section = integrationRef.current;
-    if (section === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const flow = integrationFlowRef.current;
+    if (flow === null) return;
 
-    const update = () => {
+    const updateFromScroll = () => {
       integrationScrollFrame.current = null;
-      if (integrationTaken.current) return;
-      const bounds = section.getBoundingClientRect();
-      const travelled = window.innerHeight - bounds.top;
-      const progress = travelled / Math.max(1, window.innerHeight * 0.55 + bounds.height);
-      const index = Math.min(INTEGRATION_STEPS.length - 1, Math.max(0, Math.floor(progress * INTEGRATION_STEPS.length)));
-      setIntegrationStep((current) => (current === index ? current : index));
+      if (performance.now() < integrationInteractionLockUntil.current) return;
+      const bounds = flow.getBoundingClientRect();
+      const activeTop = window.innerHeight * 0.88;
+      const activeBottom = window.innerHeight * 0.18;
+      if (bounds.top > activeTop || bounds.bottom < activeBottom) return;
+
+      const range = activeTop - activeBottom + bounds.height;
+      const progress = Math.min(1, Math.max(0, (activeTop - bounds.top) / Math.max(1, range)));
+      const nextStep = progress < 0.2 ? 0 : progress < 0.44 ? 1 : progress < 0.68 ? 2 : 3;
+      setIntegrationStep((current) => current === nextStep ? current : nextStep);
     };
+
     const onScroll = () => {
       if (integrationScrollFrame.current !== null) return;
-      integrationScrollFrame.current = window.requestAnimationFrame(update);
+      integrationScrollFrame.current = window.requestAnimationFrame(updateFromScroll);
     };
 
-    update();
+    updateFromScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
@@ -261,43 +258,41 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     };
   }, []);
 
-  /**
-   * The signal travels the integration path to the selected stage.
-   *
-   * The path is measured rather than guessed, so the mark stays on the line at
-   * any viewport width. Under reduced motion it is placed, not animated.
-   */
   useEffect(() => {
     const path = integrationPathRef.current;
     const signal = integrationSignalRef.current;
     if (path === null || signal === null) return;
 
-    const to = integrationStep / Math.max(1, INTEGRATION_STEPS.length - 1);
-    const from = integrationProgress.current;
+    const targets = [0, 0.42, 0.633, 1];
+    const from = integrationMotionProgress.current;
+    const to = targets[integrationStep] ?? 0;
     const length = path.getTotalLength();
-    const place = (progress: number) => {
+    const placeSignal = (progress: number) => {
       const point = path.getPointAtLength(length * progress);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
-      integrationProgress.current = progress;
+      integrationMotionProgress.current = progress;
     };
 
     if (integrationMotionFrame.current !== null) {
       window.cancelAnimationFrame(integrationMotionFrame.current);
-      integrationMotionFrame.current = null;
     }
+
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || from === to) {
-      place(to);
+      placeSignal(to);
       return;
     }
 
     const startedAt = performance.now();
-    const duration = 280 + (Math.abs(to - from) * 360);
+    const duration = 280 + Math.abs(to - from) * 360;
     const animate = (now: number) => {
       const elapsed = Math.min(1, (now - startedAt) / duration);
-      place(from + ((to - from) * (1 - Math.pow(1 - elapsed, 3))));
-      integrationMotionFrame.current = elapsed < 1 ? window.requestAnimationFrame(animate) : null;
+      const eased = 1 - Math.pow(1 - elapsed, 3);
+      placeSignal(from + ((to - from) * eased));
+      if (elapsed < 1) integrationMotionFrame.current = window.requestAnimationFrame(animate);
+      else integrationMotionFrame.current = null;
     };
     integrationMotionFrame.current = window.requestAnimationFrame(animate);
+
     return () => {
       if (integrationMotionFrame.current !== null) {
         window.cancelAnimationFrame(integrationMotionFrame.current);
@@ -305,40 +300,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       }
     };
   }, [integrationStep]);
-
-  useEffect(() => {
-    const section = transformationRef.current;
-    if (section === null) return;
-
-    const updateFromScroll = () => {
-      scrollFrame.current = null;
-      // Below the sticky breakpoint the four states are sequential blocks, so
-      // scroll position must not drive the selection at all.
-      if (!window.matchMedia(STICKY_SCENE).matches) return;
-      const bounds = section.getBoundingClientRect();
-      const range = Math.max(1, section.offsetHeight - window.innerHeight);
-      const progress = Math.min(1, Math.max(0, -bounds.top / range));
-      let nextStep = 0;
-      TRANSFORMATION_SCROLL_THRESHOLDS.forEach((threshold, index) => {
-        if (progress >= threshold) nextStep = index;
-      });
-      setStep((current) => current === nextStep ? current : nextStep);
-    };
-
-    const onScroll = () => {
-      if (scrollFrame.current !== null) return;
-      scrollFrame.current = window.requestAnimationFrame(updateFromScroll);
-    };
-
-    updateFromScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
-    };
-  }, []);
 
   const selectStep = (index: number) => {
     const section = transformationRef.current;
@@ -352,23 +313,22 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     window.scrollTo({ top: sectionTop + (range * targetProgress), behavior: "instant" });
   };
 
-  /**
-   * The symbol tracks the pointer within the hero, by a few pixels only.
-   *
-   * Enough that the mark reads as part of the composition rather than an image
-   * dropped beside it, small enough that it never becomes the subject. Coarse
-   * pointers get nothing, since there is no hover to answer.
-   */
   const moveHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.pointerType !== "mouse") return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--symbol-x", `${((event.clientX - bounds.left) / bounds.width - 0.5) * 20}px`);
-    event.currentTarget.style.setProperty("--symbol-y", `${((event.clientY - bounds.top) / bounds.height - 0.5) * 13}px`);
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 22;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 14;
+    event.currentTarget.style.setProperty("--symbol-x", `${x}px`);
+    event.currentTarget.style.setProperty("--symbol-y", `${y}px`);
   };
 
-  const restHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
+  const resetHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
     event.currentTarget.style.setProperty("--symbol-x", "0px");
     event.currentTarget.style.setProperty("--symbol-y", "0px");
+  };
+
+  const selectIntegrationStep = (index: number, interactionTimestamp: number) => {
+    integrationInteractionLockUntil.current = interactionTimestamp + 500;
+    setIntegrationStep(index);
   };
 
   return (
@@ -383,31 +343,29 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           aria-labelledby="hero-title"
           ref={heroRef}
           onPointerMove={moveHeroSymbol}
-          onPointerLeave={restHeroSymbol}
+          onPointerLeave={resetHeroSymbol}
         >
-          <div className={styles.heroText}>
-            <h1 id="hero-title">
-              <span className={styles.heroLine}><span>Conflict</span></span>
-              <span className={styles.heroLine}>
-                <span className={styles.heroPhrase}><span>became</span> <span>recourse.</span></span>
-              </span>
-            </h1>
-            <p className={styles.heroPromise}>When private claims collide, Mordant keeps tokenized credit moving.</p>
-            <p className={styles.heroSupport}>
-              Mordant privately detects conflicting pledges on verified receivables and turns confirmed
-              conflicts into governed, auditable recourse, without exposing lender records to the evaluator.
-            </p>
-            <div className={styles.actions}>
-              <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
-              <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
-            </div>
-            <p className={styles.heroNote}>A real encrypted check on a verified receivable. Usually about a minute.</p>
-          </div>
+          <h1 id="hero-title">
+            <span className={styles.heroLine}><span>Conflict</span></span>
+            <span className={styles.heroLine}>
+              <span className={styles.heroPhrase}><span>became</span> <span>recourse.</span></span>
+            </span>
+          </h1>
           <div className={styles.heroSymbolField} aria-hidden="true">
             <div className={styles.heroSymbolRotation}>
               <Symbol className={styles.heroSymbol} />
             </div>
           </div>
+          <p className={styles.heroPromise}>When private claims collide, Mordant keeps tokenized credit moving.</p>
+          <p className={styles.heroSupport}>
+            Mordant privately detects conflicting pledges on verified receivables and turns confirmed
+            conflicts into governed, auditable recourse, without exposing lender records to the evaluator.
+          </p>
+          <div className={styles.actions}>
+            <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
+            <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
+          </div>
+          <p className={styles.heroNote}>A real encrypted check on a verified receivable. Usually about a minute.</p>
         </section>
 
         {/* 2. The economic problem */}
@@ -465,12 +423,11 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                 <strong>Receivable</strong>
               </div>
 
-              {/* The junction mark: Mordant appears exactly where the second
-                  claim meets the receivable, and only once there is a conflict
-                  to answer. One mark, at the one moment it means something. */}
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>
-                <Symbol className={styles.claimMark} />
+                {JUNCTION_MARK_CLASSES.map((markClass) => (
+                  <Symbol className={`${styles.claimMark} ${markClass}`} key={markClass} />
+                ))}
               </div>
 
               <div className={styles.protectionLane}>
@@ -577,44 +534,37 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             </div>
           </div>
 
-          {/* The four responsibilities, as one path rather than a list. */}
-          <div
-            className={styles.flow}
-            ref={integrationRef}
-            data-step={integrationStep}
-            aria-label="How a case moves from the verified asset to settlement"
-          >
+          {/* The old integration flow, verbatim in structure: the same 3fr/9fr
+              composition, the same measured motion path, the same hover, focus
+              and click selection with a 500ms lock so a deliberate choice is not
+              immediately overridden by scrolling. Only the route is a stage
+              longer, because the truthful narrative has four responsibilities
+              rather than three. */}
+          <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
             <div className={styles.flowCanvas}>
               <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
-                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 108H300L360 48H560L640 108H960" />
-                {/* The whole route, faint: the reader sees where the signal is
-                    going, not only where it has been. */}
-                <path className={styles.flowTrack} d="M40 108H300L360 48H560L640 108H960" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAsset}`} d="M40 108H300" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePrivate}`} pathLength="100" d="M300 108H360L560 48" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="100" d="M560 48H640L680 108" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteSettle}`} pathLength="100" d="M680 108H960" />
-                <g ref={integrationSignalRef} className={styles.flowSignal} transform="translate(40 108)">
-                  <rect x="-16" y="-16" width="32" height="32" />
+                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H392L460 34H612L680 102H920" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="352" d="M40 102H392" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="164" d="M392 102H392L460 34H540" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="168" d="M540 34H612L680 102" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="240" d="M680 102H920" />
+                <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
+                  <rect x="-18" y="-18" width="36" height="36" />
                 </g>
               </svg>
-              <p className={styles.flowStory} aria-live="polite">
+              <p className={styles.integrationStory} aria-live="polite">
                 <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
               </p>
             </div>
-            <div className={styles.flowStages} aria-label="Integration stages">
+            <div className={styles.integrationStages} aria-label="Integration stages">
               {INTEGRATION_STEPS.map((stage, index) => (
                 <button
                   type="button"
                   key={stage.label}
                   aria-pressed={integrationStep === index}
-                  onClick={() => { integrationTaken.current = true; setIntegrationStep(index); }}
-                  onFocus={() => { integrationTaken.current = true; setIntegrationStep(index); }}
-                  onPointerEnter={(event) => {
-                    if (event.pointerType !== "mouse") return;
-                    integrationTaken.current = true;
-                    setIntegrationStep(index);
-                  }}
+                  onClick={(event) => selectIntegrationStep(index, event.timeStamp)}
+                  onFocus={(event) => selectIntegrationStep(index, event.timeStamp)}
+                  onPointerEnter={(event) => selectIntegrationStep(index, event.timeStamp)}
                 >
                   <strong>{stage.label}</strong>
                   <small>{stage.detail}</small>
