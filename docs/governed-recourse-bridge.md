@@ -1,11 +1,22 @@
 # Governed recourse bridge V2
 
-Status: **read-only integration preflight; live submission is disabled.**
+Status: **the reviewed reference deployment and its pins.** A governed release has
+since been submitted and consumed for real, on a case-specific deployment of this
+same reviewed contract: run `e618abc2-0ac7-4d79-b201-44959a54b68c` on adapter
+`0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`. See
+[`direct-participant-bridge-evidence.md`](./direct-participant-bridge-evidence.md).
 
-The integration is pinned to `MordantRecourseAdapter` V2 at
+A case-specific adapter is required rather than optional: the governed release
+authority is minted per FHE case and Adapter V2 pins it as an immutable, so each
+run needs its own deployment of the reviewed source. That is why the address below
+is the reviewed reference rather than the address any given run settles on, and
+why identity is carried by masked-bytecode equality plus a deployment proof rather
+than by a fixed address.
+
+The reference deployment is `MordantRecourseAdapter` V2 at
 `0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18` on Monad testnet (chain `10143`).
-The superseded V1 adapter is retained only in historical evidence and must not be
-selected by runtime configuration.
+The superseded V1 adapter `0x27677c837287b060D285d5C90096f06fBe675938` is retained
+only in historical evidence, and the executor refuses it by address.
 
 The authoritative configuration is
 `docs/evidence/recourse-v2-demo-config-2026-08-06.json`. The runtime/contract
