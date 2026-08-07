@@ -135,6 +135,7 @@ const TEST_FILES = Object.freeze([
   "test/protection-experience-mounted.test.cjs",
   "scripts/protection-local-adapter.test.mjs",
   "scripts/mordant-live-worker.test.mjs",
+  "scripts/worker-runtime-deps.test.mjs",
   "scripts/live-token-route.test.mjs",
 ]);
 

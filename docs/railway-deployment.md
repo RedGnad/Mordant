@@ -51,7 +51,8 @@ Set on the Railway service:
 | `MORDANT_WORKER_MAX_ACTIVE_CASES` | `1` |
 | `MORDANT_WORKER_DAILY_CASE_LIMIT` | e.g. `24` |
 | `MORDANT_WORKER_DISK_FLOOR_BYTES` | `2187329536` |
-| `MORDANT_PROTECTION_SOURCE_COMMIT` | the deployed source commit |
+| `MORDANT_MONAD_RPC_URL` | the Monad testnet RPC endpoint, HTTPS. **Required.** The worker builds its compliance reader at startup and exits if this is absent, so a missing value is a boot failure rather than an unchecked admission. Server-side only; the value is never committed to this repository |
+| `MORDANT_PROTECTION_SOURCE_COMMIT` | the deployed source commit. It stamps `sourceCommit` on every receipt the worker produces, so it must name the commit actually running |
 | `PORT` | injected by Railway |
 
 Set on Vercel:
