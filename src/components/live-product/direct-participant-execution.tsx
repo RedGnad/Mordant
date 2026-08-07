@@ -185,6 +185,16 @@ export function DirectParticipantExecution({
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [restoring, setRestoring] = useState(initialCaseCode !== null && CASE_CODE.test(initialCaseCode));
   const [elapsed, setElapsed] = useState<number | null>(null);
+  /**
+   * What this client is doing right now, for the seconds before the run exists.
+   *
+   * Deliberately local and deliberately narrow: once the worker owns the case,
+   * the run's own state is the truth and this goes back to null rather than
+   * competing with it. It exists because several of these steps take a visible
+   * moment (an A-Pass read, a wallet prompt) during which the older screen said
+   * nothing at all.
+   */
+  const [phase, setPhase] = useState<string | null>(null);
   const failures = useRef(0);
   const startedAt = useRef<number | null>(null);
 
@@ -336,6 +346,7 @@ export function DirectParticipantExecution({
 
   const checkEligibility = useCallback(async (role: DirectParticipantRole) => {
     if (authorizing || activeRole !== role || eligibility.state === "CHECKING") return;
+    setPhase("Checking A-Pass eligibility on Monad");
     const walletAddress = wallet.view.address;
     if (wallet.view.state !== "CONNECTED" || walletAddress === null) {
       setFormError("Connect the wallet for this role on Monad testnet before checking its A-Pass.");
@@ -390,6 +401,8 @@ export function DirectParticipantExecution({
         state: "ERROR", holderAddress: walletAddress, chainId: null, gateAddress: null, observedBlock: null,
         problem: "A-Pass eligibility could not be verified right now. No admission was requested.",
       }));
+    } finally {
+      setPhase(null);
     }
   }, [activeRole, authorizing, eligibility.state, launchAuthorization, wallet.view.address, wallet.view.state, workerOrigin]);
 
@@ -398,6 +411,7 @@ export function DirectParticipantExecution({
     if (pendingPost !== null) {
       setAuthorizing(true);
       setFormError(null);
+      setPhase("Submitting the signed admission");
       try {
         if (participantCase === null) throw new WorkerResponseRejected();
         await postAdmission(pendingPost, participantCase);
@@ -409,6 +423,7 @@ export function DirectParticipantExecution({
         }
       } finally {
         setAuthorizing(false);
+        setPhase(null);
       }
       return;
     }
@@ -443,11 +458,13 @@ export function DirectParticipantExecution({
         setFormError("The A-Pass launch authorization has expired. Check this wallet's A-Pass again before creating a neutral case.");
         return;
       }
+      setPhase(participantCase === null ? "Creating the private case" : "Preparing the authorization");
       const currentCase = participantCase ?? await createNeutralCase(launchAuthorization!);
       const workerRole = workerRoleFor(role);
       const fheCaseId = digestToBytes32(currentCase.view.protectionCase.fheCaseId);
       const assetIdentityDigest = digestToBytes32(currentCase.view.protectionCase.cleanverseAssetDigest);
       if (fheCaseId === null || assetIdentityDigest === null) throw new WorkerResponseRejected();
+      setPhase("Preparing the authorization to sign");
       const challengeResponse = await fetch(`${workerOrigin}/v1/participant-cases/${currentCase.admission.caseCode}/challenge`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -469,12 +486,14 @@ export function DirectParticipantExecution({
       if (challenge === null) throw new WorkerResponseRejected();
       // This is the only call that can open a signature request. It occurs only
       // in response to the participant pressing the authorization button.
+      setPhase("Waiting for the wallet signature");
       const signature = await wallet.signParticipantAdmission(challenge);
       if (!SIGNATURE.test(signature)) throw new WorkerResponseRejected();
       const post: AdmissionPost = Object.freeze({ role: workerRole, authorization: challenge.message, signature, claim });
       // Preserve this exact signed payload before the POST. A lost response can
       // therefore be retried without a second challenge or signature.
       setPendingPost(post);
+      setPhase("Submitting the signed admission");
       await postAdmission(post, currentCase);
     } catch (error) {
       if (error instanceof WorkerResponseRejected) {
@@ -483,6 +502,7 @@ export function DirectParticipantExecution({
         setFormError(workerMessage(error, "The typed authorization could not be completed."));
       }
     } finally {
+      setPhase(null);
       setAuthorizing(false);
     }
   }, [activeRole, authorizing, createNeutralCase, eligibility.holderAddress, eligibility.state, failClosed, launchAuthorization, ownDraft, participantCase, pendingPost, postAdmission, wallet]);
@@ -502,13 +522,14 @@ export function DirectParticipantExecution({
     ownDraft,
     wallet: wallet.view,
     authorizing,
+    actionPhase: phase,
     retryReady: pendingPost !== null,
     elapsedSeconds: terminal(participantCase) ? null : elapsed,
     notice: restoring && participantCase === null && notice === null
       ? { title: "Restoring this participant case.", body: "Reading the durable public admission state.", retryable: false }
       : notice,
     noticeState: restoring && participantCase === null && notice === null ? "RECOVERY_AVAILABLE" : noticeState,
-  }), [activeRole, authorizing, capabilitySet, eligibility, elapsed, notice, noticeState, ownDraft, participantCase, pendingPost, restoring, wallet.view]);
+  }), [activeRole, authorizing, capabilitySet, eligibility, elapsed, notice, noticeState, ownDraft, participantCase, pendingPost, phase, restoring, wallet.view]);
 
   return (
     <>

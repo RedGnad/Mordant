@@ -5,14 +5,22 @@
 Mordant privately detects conflicting pledges on verified receivables and turns confirmed conflicts
 into governed, auditable recourse, without exposing lender records.
 
-The current MVP combines retained Cleanverse asset and participant provenance on Monad with real
-local BGV FHE, a governed signed result, and publicly verifiable evidence.
-
 > Conflict became recourse.
 
+|  |  |
+| --- | --- |
+| **The problem** | One receivable can carry two financing claims. Publishing a pledge book is how a lender loses its book, so the windows stay private, the overlap stays invisible, and the safe decision is to stop lending. |
+| **Why Cleanverse** | Cleanverse establishes what the asset is and who may hold a claim against it. MINV01 is the verified receivable; the A-Pass decides which wallets are eligible; aUSDC is the compliant rail the consequence settles on. Mordant needs all three and provides none of them. |
+| **What Mordant adds** | The private decision. Mordant detects whether two claims collide **without either lender disclosing its window**, and turns a confirmed collision into governed, auditable recourse. |
+| **What is genuinely live** | Real BGV over ciphertexts, a governed Ed25519 signed result, and a real bounded settlement on Monad testnet: a 600-second cure window that expired uncured, permissionless finalization, and both aUSDC claims paid and reconciled. |
+| **Where to verify it** | [`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run), every transaction linked to the public explorer. Or run the private check yourself: [`docs/reviewer-access.md`](docs/reviewer-access.md). |
+
+Cleanverse verifies the asset and who may participate. Mordant privately decides whether the claims
+conflict. The governed result opens or refuses recourse in aUSDC.
+
 This is a working bounded hackathon MVP, built for Cleanverse Build: Trusted Assets. It is not
-production-authorized. Pledge records are synthetic and no real lender funds move. See
-[Current boundary](#current-boundary).
+production-authorized. The lender pledge inputs are synthetic fixtures; the BGV execution and the
+Monad settlement are real. See [Current boundary](#current-boundary).
 
 ## Current state: verified live run on Monad
 
@@ -180,6 +188,21 @@ Where this goes next, in order:
    governed settlement on Monad.
 
 None of these are implemented today.
+
+## Scalability roadmap
+
+**Every item below is NOT IMPLEMENTED TODAY.** They are the concrete next steps
+between this bounded MVP and something that could carry real volume, listed so
+the current limits are legible rather than hidden.
+
+| Not implemented today | What exists now, and why it does not scale |
+| --- | --- |
+| **Adapter factory and governed-authority registry** | The governed release authority is minted per FHE case and Adapter V2 pins it as an immutable, so today every case needs its own full adapter deployment. A factory plus a registry would let one deployment serve many cases without weakening the pin. |
+| **Horizontally isolated execution slots** | One worker runs one case at a time, because the durable journal and the single-active-case guarantee depend on it. Real throughput needs isolated slots that can run in parallel without sharing that journal. |
+| **Participant-side encryption** | Mordant's managed service prepares and encrypts the inputs today, so it sees participant plaintext. Encrypting on the participant's own device removes that trust entirely, and is the single most valuable item on this list. |
+| **ERC-1271 support** | Admission verifies an EOA secp256k1 signature. Smart-account participants, which is what an institution would actually use, need contract-signature verification. |
+| **Evaluator and decryptor across independent operators** | Both run on one supervised host. Separating them across organizations is what makes "the evaluator holds no decryption key" an organizational fact rather than a process boundary. |
+| **Threshold or multi-party governed release** | A single designated decryptor signs the result. Threshold release removes that one party's ability to refuse or forge an answer. |
 
 ## Cleanverse and Monad
 

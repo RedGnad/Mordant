@@ -163,6 +163,20 @@ function RolePanel({ admission, actions, busy }: {
               ? "Retry this signed admission"
               : `Authorize claim ${current.role}`}
         </button>
+
+        {/*
+          Several of these steps take a visible moment: an A-Pass read hits the
+          chain, and a wallet prompt waits on a human. The screen used to say
+          nothing at all during them, so a reviewer could not tell a slow step
+          from a dead button. This names the step instead, and announces it.
+        */}
+        {current.actionPhase === null ? null : (
+          <p className={styles.actionPhase} role="status" aria-live="polite" data-testid={`action-phase-${current.role}`}>
+            <span className={styles.actionPhaseSpinner} aria-hidden="true" />
+            {current.actionPhase}
+            <span className={styles.actionPhaseDots} aria-hidden="true">…</span>
+          </p>
+        )}
       </section>
       <PublicOtherRole admission={admission} />
     </div>

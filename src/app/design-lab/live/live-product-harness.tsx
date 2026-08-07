@@ -138,6 +138,7 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       ownDraft: Readonly<{ activeFrom: string; activeUntil: string }>;
       walletAddress: string;
       eligibility: EligibilityView;
+      actionPhase?: string | null;
     }>) => adaptDirectParticipantIntake({
       view: null,
       admission: input.admission,
@@ -145,6 +146,7 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       activeRole: input.activeRole,
       eligibility: input.eligibility,
       ownDraft: input.ownDraft,
+      actionPhase: input.actionPhase ?? null,
       wallet: { ...wallet, address: input.walletAddress },
       authorizing: false,
       retryReady: false,

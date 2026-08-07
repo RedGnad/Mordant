@@ -58,6 +58,12 @@
  * word "recourse." at every width from 1024px down.
  */
 .hero {
+  --symbol-x: 0px;
+  --symbol-y: 0px;
+  --symbol-scroll-y: 0px;
+  /* How far the mark reaches back under the headline column. Zero by default:
+     only the widths that provably have room opt in, further down. */
+  --symbol-bleed: 0px;
   display: grid;
   min-height: calc(100svh - var(--shell-height));
   align-items: center;
@@ -120,6 +126,19 @@
   display: inline-block;
 }
 
+/*
+ * The mark belongs to the composition, and stays out of the reading path.
+ *
+ * `difference` is what produced the original colour tension: where the mark
+ * crosses the background it inverts it, so the hero reads as one image rather
+ * than a headline beside an illustration. The earlier implementation put the
+ * mark ABOVE the text, which is what made "recourse." unreadable at some widths.
+ * Here it stays at z-index 1 while the headline sits at 3, so the blend only
+ * ever meets the background and the text is painted over it at full contrast.
+ *
+ * The transform is the pointer offset plus the scroll offset, both custom
+ * properties, so nothing reflows and reduced motion simply never sets them.
+ */
 .heroSymbolField {
   position: relative;
   z-index: 1;
@@ -127,6 +146,28 @@
   justify-self: center;
   width: min(100%, 340px);
   pointer-events: none;
+  mix-blend-mode: difference;
+  /* The bleed rides in the transform, not in the margin: `justify-self: center`
+     absorbs part of a negative margin, so the overlap would depend on the column
+     width. A transform moves exactly what it says and costs no layout. */
+  transform: translate3d(
+    calc(var(--symbol-x) - var(--symbol-bleed)),
+    calc(var(--symbol-y) + var(--symbol-scroll-y)),
+    0
+  );
+  transition: transform 240ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+
+/* `difference` against the page ground is what makes the mark read as white. */
+.heroSymbolField .heroSymbol {
+  fill: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroSymbolField {
+    transition: none;
+  }
 }
 
 .heroSymbol {
@@ -422,6 +463,46 @@
 
 .transformation[data-state="recourse"] .claim span {
   color: var(--action);
+}
+
+/*
+ * The junction mark.
+ *
+ * Sits at the foot of the second-claim line, where the two claims actually
+ * meet, and is the only place the Mordant symbol appears inside the scene. It
+ * arrives with the conflict and takes the action colour once responsibility is
+ * assigned, so it reads as the thing that answered rather than decoration.
+ */
+.claimMark {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: var(--junction-size);
+  height: var(--junction-size);
+  fill: var(--protection);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 50%) rotate(7deg) scale(0.42);
+  transition:
+    fill 200ms ease-out,
+    opacity 180ms 90ms ease-out,
+    transform 320ms cubic-bezier(0.4, 0.14, 0.3, 1);
+}
+
+.transformation:is([data-state="conflict"], [data-state="recourse"]) .claimMark {
+  opacity: 1;
+  transform: translate(-50%, 50%) rotate(7deg) scale(1);
+}
+
+.transformation[data-state="recourse"] .claimMark {
+  fill: var(--action);
+  transform: translate(-50%, 50%) rotate(18deg) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claimMark {
+    transition: none;
+  }
 }
 
 .transformation:is([data-state="conflict"], [data-state="recourse"]) .protectionLane {
@@ -1358,27 +1439,169 @@
   line-height: 1.5;
 }
 
-.stageList {
+/* The integration path. One line, four responsibilities, one travelling mark. */
+
+.flow {
   display: grid;
-  margin: 0;
-  padding: 0;
-  gap: 0;
-  list-style: none;
+  gap: clamp(16px, 2vw, 26px);
+  align-content: start;
+  min-width: 0;
 }
 
-.stageList li {
-  padding: 11px 0 11px 16px;
-  border-left: 3px solid var(--rule);
+.flowCanvas {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.flowGraphic {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Carries the geometry the signal is measured against, and paints nothing. */
+.flowMotionPath {
+  fill: none;
+  stroke: none;
+}
+
+.flowTrack {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 9;
+  stroke-linecap: butt;
+  vector-effect: non-scaling-stroke;
+}
+
+.flowRouteSegment {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-dashoffset 460ms cubic-bezier(0.4, 0.14, 0.3, 1);
+}
+
+.flowRouteAsset {
+  stroke: var(--receivable);
+}
+
+.flowRoutePrivate,
+.flowRouteGoverned,
+.flowRouteSettle {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+.flowRoutePrivate {
+  stroke: var(--protection);
+}
+
+.flowRouteGoverned {
+  stroke: var(--protection);
+}
+
+.flowRouteSettle {
+  stroke: var(--action);
+}
+
+.flow[data-step="1"] .flowRoutePrivate,
+.flow[data-step="2"] :is(.flowRoutePrivate, .flowRouteGoverned),
+.flow[data-step="3"] :is(.flowRoutePrivate, .flowRouteGoverned, .flowRouteSettle) {
+  stroke-dashoffset: 0;
+}
+
+.flowSignal {
+  fill: var(--receivable);
+  stroke: transparent;
+  stroke-width: 0;
+  transition: fill 180ms ease-out, stroke 180ms ease-out, stroke-width 180ms ease-out;
+}
+
+.flow[data-step="1"] .flowSignal,
+.flow[data-step="2"] .flowSignal {
+  fill: var(--protection);
+}
+
+.flow[data-step="3"] .flowSignal {
+  fill: var(--ground);
+  stroke: var(--action);
+  stroke-width: 9px;
+  transition-delay: 380ms, 380ms, 380ms;
+}
+
+.flowStory {
+  min-height: 3.4em;
+  margin: 0;
   color: var(--muted);
+  font-size: clamp(13px, 1.05vw, 15px);
+  line-height: 1.5;
+}
+
+.flowStory > span {
+  display: block;
+  animation: flowStoryIn 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes flowStoryIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.flowStages {
+  display: grid;
+  gap: 0;
+}
+
+.flowStages button {
+  display: grid;
+  min-height: 44px;
+  padding: 11px 0 11px 16px;
+  border: 0;
+  border-left: 3px solid var(--rule);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  gap: 2px;
+  text-align: left;
+  transition: border-color 180ms ease-out, color 180ms ease-out;
+}
+
+.flowStages button strong {
   font-family: var(--font-proof), monospace;
   font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0.03em;
 }
 
-.stageList li:first-child,
-.stageList li:last-child {
+.flowStages button small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.flowStages button[aria-pressed="true"] {
   border-left-color: var(--ink);
   color: var(--ink);
+}
+
+.flowStages button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowRouteSegment,
+  .flowSignal,
+  .flowStages button {
+    transition: none;
+  }
+
+  .flowStory > span {
+    animation: none;
+  }
 }
 
 /* ---------------------------------------------------------------- 6. consequence */
@@ -1551,6 +1774,18 @@
 
   .invitation {
     gap: clamp(26px, 4vw, 40px);
+  }
+}
+
+/*
+ * Only the two widest qualified viewports let the mark reach back under the
+ * headline column. Below this the columns are already tight, so the mark stays
+ * in its own column and the composition simply loses the overlap rather than
+ * risking the headline.
+ */
+@media (min-width: 1280px) {
+  .hero {
+    --symbol-bleed: clamp(80px, 10vw, 170px);
   }
 }
 
@@ -1826,5 +2061,52 @@
 
   .receiptNode strong {
     font-size: clamp(22px, 6vw, 30px);
+  }
+}
+
+/* The three Cleanverse boundaries. Named, compact, and above the product facts. */
+
+.cleanverseFacts {
+  display: grid;
+  margin: 0 0 6px;
+  gap: 0;
+}
+
+.cleanverseFacts > div {
+  display: grid;
+  padding: 14px 0 14px 18px;
+  border-top: 1px solid var(--rule);
+  border-left: 3px solid var(--receivable);
+  gap: 4px 24px;
+  grid-template-columns: minmax(96px, 0.2fr) minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.cleanverseFacts dt {
+  color: var(--ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.cleanverseFacts dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(13px, 1.05vw, 15px);
+  line-height: 1.5;
+}
+
+.cleanverseNote {
+  margin: 0 0 26px;
+  padding-left: 18px;
+  border-left: 3px solid transparent;
+  color: var(--muted);
+  font-size: clamp(13px, 1.05vw, 15px);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .cleanverseFacts > div {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -85,6 +85,8 @@ export function adaptDirectParticipantIntake(input: Readonly<{
   ownDraft: DirectClaimDraft;
   wallet: WalletView | null;
   authorizing: boolean;
+  /** What the client is doing before the run exists. Null once the worker owns it. */
+  actionPhase: string | null;
   retryReady: boolean;
   elapsedSeconds: number | null;
   notice: LiveProductViewModel["notice"];
@@ -109,6 +111,7 @@ export function adaptDirectParticipantIntake(input: Readonly<{
       role: activeRole,
       label: activeRole === "A" ? "Participant A" : "Participant B",
       draft: Object.freeze({ ...input.ownDraft }),
+      actionPhase: input.actionPhase,
       admission: input.authorizing ? "AUTHORIZING" : own?.admitted ? "ADMITTED" : "REQUIRED",
       wallet: input.wallet,
       eligibility: input.eligibility,
