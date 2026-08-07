@@ -224,3 +224,46 @@
     width: auto;
   }
 }
+
+/*
+ * The named action phase.
+ *
+ * Deliberately a line of text with one small mark rather than a percentage bar:
+ * none of these steps reports progress, and inventing a percentage for a step
+ * whose duration is unknown is a lie the user can see through the moment it
+ * stalls at 90%.
+ */
+.actionPhase {
+  display: flex;
+  align-items: center;
+  margin: 12px 0 0;
+  gap: 9px;
+  color: var(--muted, #6b6b6b);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.actionPhaseSpinner {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: actionPhaseSpin 720ms linear infinite;
+}
+
+.actionPhaseDots {
+  opacity: 0.65;
+}
+
+@keyframes actionPhaseSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionPhaseSpinner {
+    animation-duration: 2.4s;
+  }
+}

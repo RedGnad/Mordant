@@ -244,6 +244,13 @@ export type DirectParticipantView = Readonly<{
   label: string;
   /** Only the active participant's own draft is ever held in this model. */
   draft: DirectClaimDraft;
+  /**
+   * What the client is doing right now, for the steps before a run exists.
+   *
+   * Null whenever nothing is in flight, and null once the worker owns the case,
+   * so it can never compete with the run's own reported state.
+   */
+  actionPhase: string | null;
   admission: ClaimAdmission;
   wallet: WalletView | null;
   /** The active wallet's explicit, role-local A-Pass check. */

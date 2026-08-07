@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { LIVE_PRODUCT_CTA, LIVE_PRODUCT_HREF, PublicFooter, PublicHeader } from "./public-shell";
 import styles from "./public-experience.module.css";
@@ -75,21 +75,41 @@ const CONSEQUENCES = [
     id: "claimable",
     verdict: "Conflict uncured",
     title: "Fixed aUSDC recourse becomes claimable.",
-    body: "When the cure window closes unresolved, the reserved protection is claimable by the affected holder.",
-    status: "Coming through the qualified testnet integration",
+    body: "When the cure window closes unresolved, the reserved protection is claimable by the affected holder. This has been executed on Monad testnet: a real 600-second window expired uncured, anyone could finalize, and both holders were paid.",
+    status: "Live today",
   },
 ] as const;
 
-const STAGES = [
-  "Case authorized",
-  "Claim inputs admitted",
-  "Private encryption prepared",
-  "Participant A encrypted",
-  "Participant B encrypted",
-  "Encrypted evaluation running",
-  "Governed result verification",
-  "Recourse application",
-  "Receipt sealed",
+/**
+ * The integration path, told as the product actually works.
+ *
+ * Four stages rather than three, because the Cleanverse boundary and the private
+ * decision are different responsibilities and a judge must not read them as one.
+ * Cleanverse says what the asset is and who may participate; Mordant decides,
+ * privately, whether the claims collide; the governed signature is what turns
+ * that answer into money moving on Monad.
+ */
+const INTEGRATION_STEPS = [
+  {
+    label: "Cleanverse verifies",
+    detail: "MINV01 + A-Pass",
+    story: "Cleanverse establishes the receivable and which wallets may hold a claim against it.",
+  },
+  {
+    label: "Mordant decides privately",
+    detail: "BGV over ciphertexts",
+    story: "The evaluator runs the fixed circuit over ciphertexts and holds no decryption key.",
+  },
+  {
+    label: "Governed result",
+    detail: "Signed Boolean",
+    story: "A designated decryptor recomputes the circuit and signs the answer. No result exists before that signature.",
+  },
+  {
+    label: "Monad recourse",
+    detail: "aUSDC settlement",
+    story: "The signed result opens or refuses recourse, and the aUSDC claims settle on Monad testnet.",
+  },
 ] as const;
 
 const BOUNDARIES = [
@@ -136,9 +156,20 @@ function Symbol({ className }: { readonly className: string }) {
 
 export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
   const [step, setStep] = useState(0);
+  const [integrationStep, setIntegrationStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
   const transformationRef = useRef<HTMLElement>(null);
   const scrollFrame = useRef<number | null>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const heroScrollFrame = useRef<number | null>(null);
+  const integrationPathRef = useRef<SVGPathElement>(null);
+  const integrationSignalRef = useRef<SVGGElement>(null);
+  const integrationMotionFrame = useRef<number | null>(null);
+  const integrationProgress = useRef(0);
+  const integrationRef = useRef<HTMLDivElement>(null);
+  const integrationScrollFrame = useRef<number | null>(null);
+  /** Once the reader drives the path themselves, scroll stops taking it back. */
+  const integrationTaken = useRef(false);
   const moment = TRANSFORMATION[step];
 
   useEffect(() => {
@@ -152,16 +183,128 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       return;
     }
 
-    const observer = new IntersectionObserver((entries) => {
+    const chapterObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
         (entry.target as HTMLElement).dataset.visible = "true";
-        observer.unobserve(entry.target);
+        chapterObserver.unobserve(entry.target);
       });
     }, { rootMargin: "0px 0px -12%", threshold: 0.08 });
-    chapters.forEach((chapter) => observer.observe(chapter));
-    return () => observer.disconnect();
+    chapters.forEach((chapter) => chapterObserver.observe(chapter));
+    return () => chapterObserver.disconnect();
   }, []);
+
+  /**
+   * The symbol leaves with the hero rather than staying pinned to it.
+   *
+   * Only a custom property moves, so the composition is untouched and the
+   * browser animates a single composited transform. Reduced motion opts out
+   * entirely: the property is simply never set and the symbol stays at rest.
+   */
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (hero === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const update = () => {
+      heroScrollFrame.current = null;
+      const bounds = hero.getBoundingClientRect();
+      const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -56}px`);
+    };
+    const onScroll = () => {
+      if (heroScrollFrame.current !== null) return;
+      heroScrollFrame.current = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (heroScrollFrame.current !== null) window.cancelAnimationFrame(heroScrollFrame.current);
+    };
+  }, []);
+
+  /**
+   * Scrolling past the section walks the path on its own.
+   *
+   * A reader who never touches it still sees the four responsibilities in order,
+   * which is the point of the motif. The moment someone selects a stage
+   * themselves, scroll hands over and stops overriding them.
+   */
+  useEffect(() => {
+    const section = integrationRef.current;
+    if (section === null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const update = () => {
+      integrationScrollFrame.current = null;
+      if (integrationTaken.current) return;
+      const bounds = section.getBoundingClientRect();
+      const travelled = window.innerHeight - bounds.top;
+      const progress = travelled / Math.max(1, window.innerHeight * 0.55 + bounds.height);
+      const index = Math.min(INTEGRATION_STEPS.length - 1, Math.max(0, Math.floor(progress * INTEGRATION_STEPS.length)));
+      setIntegrationStep((current) => (current === index ? current : index));
+    };
+    const onScroll = () => {
+      if (integrationScrollFrame.current !== null) return;
+      integrationScrollFrame.current = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (integrationScrollFrame.current !== null) window.cancelAnimationFrame(integrationScrollFrame.current);
+    };
+  }, []);
+
+  /**
+   * The signal travels the integration path to the selected stage.
+   *
+   * The path is measured rather than guessed, so the mark stays on the line at
+   * any viewport width. Under reduced motion it is placed, not animated.
+   */
+  useEffect(() => {
+    const path = integrationPathRef.current;
+    const signal = integrationSignalRef.current;
+    if (path === null || signal === null) return;
+
+    const to = integrationStep / Math.max(1, INTEGRATION_STEPS.length - 1);
+    const from = integrationProgress.current;
+    const length = path.getTotalLength();
+    const place = (progress: number) => {
+      const point = path.getPointAtLength(length * progress);
+      signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      integrationProgress.current = progress;
+    };
+
+    if (integrationMotionFrame.current !== null) {
+      window.cancelAnimationFrame(integrationMotionFrame.current);
+      integrationMotionFrame.current = null;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || from === to) {
+      place(to);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const duration = 280 + (Math.abs(to - from) * 360);
+    const animate = (now: number) => {
+      const elapsed = Math.min(1, (now - startedAt) / duration);
+      place(from + ((to - from) * (1 - Math.pow(1 - elapsed, 3))));
+      integrationMotionFrame.current = elapsed < 1 ? window.requestAnimationFrame(animate) : null;
+    };
+    integrationMotionFrame.current = window.requestAnimationFrame(animate);
+    return () => {
+      if (integrationMotionFrame.current !== null) {
+        window.cancelAnimationFrame(integrationMotionFrame.current);
+        integrationMotionFrame.current = null;
+      }
+    };
+  }, [integrationStep]);
 
   useEffect(() => {
     const section = transformationRef.current;
@@ -209,6 +352,25 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
     window.scrollTo({ top: sectionTop + (range * targetProgress), behavior: "instant" });
   };
 
+  /**
+   * The symbol tracks the pointer within the hero, by a few pixels only.
+   *
+   * Enough that the mark reads as part of the composition rather than an image
+   * dropped beside it, small enough that it never becomes the subject. Coarse
+   * pointers get nothing, since there is no hover to answer.
+   */
+  const moveHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType !== "mouse") return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--symbol-x", `${((event.clientX - bounds.left) / bounds.width - 0.5) * 20}px`);
+    event.currentTarget.style.setProperty("--symbol-y", `${((event.clientY - bounds.top) / bounds.height - 0.5) * 13}px`);
+  };
+
+  const restHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
+    event.currentTarget.style.setProperty("--symbol-x", "0px");
+    event.currentTarget.style.setProperty("--symbol-y", "0px");
+  };
+
   return (
     <div className={styles.page} ref={pageRef}>
       <a className={styles.skip} href="#content">Skip to content</a>
@@ -216,7 +378,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
 
       <main id="content">
         {/* 1. Hero */}
-        <section className={styles.hero} aria-labelledby="hero-title">
+        <section
+          className={styles.hero}
+          aria-labelledby="hero-title"
+          ref={heroRef}
+          onPointerMove={moveHeroSymbol}
+          onPointerLeave={restHeroSymbol}
+        >
           <div className={styles.heroText}>
             <h1 id="hero-title">
               <span className={styles.heroLine}><span>Conflict</span></span>
@@ -233,7 +401,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
               <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
             </div>
-            <p className={styles.heroNote}>A real encrypted check on a verified receivable. About 30 seconds.</p>
+            <p className={styles.heroNote}>A real encrypted check on a verified receivable. Usually about a minute.</p>
           </div>
           <div className={styles.heroSymbolField} aria-hidden="true">
             <div className={styles.heroSymbolRotation}>
@@ -297,8 +465,12 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
                 <strong>Receivable</strong>
               </div>
 
+              {/* The junction mark: Mordant appears exactly where the second
+                  claim meets the receivable, and only once there is a conflict
+                  to answer. One mark, at the one moment it means something. */}
               <div className={styles.claim} aria-hidden={step === 0}>
                 <span>Second claim</span>
+                <Symbol className={styles.claimMark} />
               </div>
 
               <div className={styles.protectionLane}>
@@ -347,6 +519,28 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <p className={styles.productLede}>
               Mordant&rsquo;s first workflow for keeping tokenized credit moving through private conflict.
             </p>
+            {/* The three Cleanverse boundaries, named once and precisely. A judge
+                must be able to see what Cleanverse provides and what it does not
+                without reading the whole page: it verifies the asset and who may
+                participate, and it does not perform the private decision. */}
+            <dl className={styles.cleanverseFacts} aria-label="What Cleanverse provides">
+              <div>
+                <dt>MINV01</dt>
+                <dd>The verified receivable. Cleanverse establishes the asset; it is the RWA in this case.</dd>
+              </div>
+              <div>
+                <dt>A-Pass</dt>
+                <dd>Participant eligibility. Cleanverse decides which wallets may hold a claim against it.</dd>
+              </div>
+              <div>
+                <dt>aUSDC</dt>
+                <dd>The compliant settlement rail the consequence is paid on. A rail, not the receivable.</dd>
+              </div>
+            </dl>
+            <p className={styles.cleanverseNote}>
+              Cleanverse verifies the asset and who may participate. The private conflict decision is
+              Mordant&rsquo;s, and Cleanverse never sees a pledge window.
+            </p>
             <dl className={styles.productFacts}>
               <div>
                 <dt>What enters</dt>
@@ -372,7 +566,7 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
         <section className={styles.invitation} aria-labelledby="invitation-title" data-reveal>
           <div className={styles.invitationText}>
             <p className={styles.eyebrow}>Run it</p>
-            <h2 id="invitation-title">The check on this site is real, and it takes about 30 seconds.</h2>
+            <h2 id="invitation-title">The check on this site is real, and it usually takes about a minute.</h2>
             <p>
               Your two claim windows go to Mordant&rsquo;s managed execution service, which prepares and
               encrypts them. The evaluator then runs the fixed circuit over ciphertexts only. No result
@@ -382,9 +576,52 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
               <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
             </div>
           </div>
-          <ol className={styles.stageList} aria-label="Execution stages">
-            {STAGES.map((stage) => <li key={stage}>{stage}</li>)}
-          </ol>
+
+          {/* The four responsibilities, as one path rather than a list. */}
+          <div
+            className={styles.flow}
+            ref={integrationRef}
+            data-step={integrationStep}
+            aria-label="How a case moves from the verified asset to settlement"
+          >
+            <div className={styles.flowCanvas}>
+              <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
+                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 108H300L360 48H560L640 108H960" />
+                {/* The whole route, faint: the reader sees where the signal is
+                    going, not only where it has been. */}
+                <path className={styles.flowTrack} d="M40 108H300L360 48H560L640 108H960" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAsset}`} d="M40 108H300" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePrivate}`} pathLength="100" d="M300 108H360L560 48" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="100" d="M560 48H640L680 108" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteSettle}`} pathLength="100" d="M680 108H960" />
+                <g ref={integrationSignalRef} className={styles.flowSignal} transform="translate(40 108)">
+                  <rect x="-16" y="-16" width="32" height="32" />
+                </g>
+              </svg>
+              <p className={styles.flowStory} aria-live="polite">
+                <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
+              </p>
+            </div>
+            <div className={styles.flowStages} aria-label="Integration stages">
+              {INTEGRATION_STEPS.map((stage, index) => (
+                <button
+                  type="button"
+                  key={stage.label}
+                  aria-pressed={integrationStep === index}
+                  onClick={() => { integrationTaken.current = true; setIntegrationStep(index); }}
+                  onFocus={() => { integrationTaken.current = true; setIntegrationStep(index); }}
+                  onPointerEnter={(event) => {
+                    if (event.pointerType !== "mouse") return;
+                    integrationTaken.current = true;
+                    setIntegrationStep(index);
+                  }}
+                >
+                  <strong>{stage.label}</strong>
+                  <small>{stage.detail}</small>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* 6. Economic consequence */}
