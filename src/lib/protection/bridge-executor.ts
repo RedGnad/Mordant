@@ -61,6 +61,7 @@ import {
   type VerifiedGovernedRelease,
 } from "./governed-recourse-bridge";
 import { digestToBytes32 } from "./participant-authorization";
+import { readAdmission } from "./participant-admission-store";
 import {
   loadCaseAdapterDeploymentProof,
   type CaseAdapterDeploymentProof,
@@ -920,13 +921,40 @@ async function buildPreparedDirect(
   // Settlement requires the wallet authorizations to be independently re-provable,
   // not merely asserted by digest. A run whose admissions predate this retention
   // cannot be settled, which is the correct outcome: the proof does not exist.
+  //
+  // The signed ParticipantAdmissionV1 struct necessarily contains that
+  // participant's own interval, so it is read from the DURABLE admission ledger
+  // rather than carried in the bridge evidence: the public artifact keeps only
+  // commitments, and the private execution input never leaves the server. The
+  // two are cross-checked below so they cannot disagree.
   try {
     for (const participant of verified.evidence.participants) {
-      await assertParticipantAdmissionProof(participant, {
-        runId: verified.evidence.runId,
-        fheCaseId: verified.evidence.fheCaseId,
-        protectionBindingDigest: verified.evidence.protectionBindingDigest,
-      });
+      const record = readAdmission(runRoot, verified.evidence.runId, participant.role);
+      if (record === null) {
+        fail("ADMISSION_PROOF", `${participant.role} has no durable admission record for this run`);
+      }
+      const crossReferences: readonly (readonly [string, string | number, string | number])[] = [
+        ["wallet", record.participantWallet, participant.participantWallet],
+        ["authorizationDigest", record.authorizationDigest, participant.authorizationDigest],
+        ["authorizationNonce", record.authorizationNonce, participant.authorizationNonce],
+        ["claimCommitment", record.claimCommitment, participant.claimCommitment],
+        ["chainId", record.chainId, participant.chainId],
+        ["eligibilityBlock", record.eligibilityBlock, participant.eligibilityBlock],
+      ];
+      for (const [name, durable, evidenceValue] of crossReferences) {
+        const same = typeof durable === "string" && typeof evidenceValue === "string"
+          ? durable.toLowerCase() === evidenceValue.toLowerCase()
+          : durable === evidenceValue;
+        if (!same) fail("ADMISSION_PROOF", `The durable admission ${name} disagrees with the bridge evidence`);
+      }
+      await assertParticipantAdmissionProof(
+        { ...participant, authorization: record.authorization, signature: record.signature },
+        {
+          runId: verified.evidence.runId,
+          fheCaseId: verified.evidence.fheCaseId,
+          protectionBindingDigest: verified.evidence.protectionBindingDigest,
+        },
+      );
     }
   } catch (error) {
     return bridgeError(error, "ADMISSION_PROOF", "A participant wallet authorization could not be re-verified");
