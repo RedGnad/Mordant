@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, createPrivateKey, generateKeyPairSync, sign as edSign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -13,7 +14,7 @@ import {
   type DirectParticipantBridgeEvidence,
   type DirectParticipantBridgeExpectations,
 } from "./direct-participant-bridge-evidence";
-import type { GovernedSignedResult } from "./protection-evidence";
+import { governedResultDigest, type GovernedSignedResult } from "./protection-evidence";
 
 /**
  * The signed governed result is taken from the retained evidence rather than
@@ -312,6 +313,104 @@ test("no raw pledge window or private material can ride along", () => {
   }
   // The claim itself is a commitment, never the interval.
   assert.match(encoded, /"claimCommitment":"0x[0-9a-f]{64}"/u);
+});
+
+// ------------------------------------------------- F-01: forged release authority
+
+/** The exact value the Go decryptor signs, with the signature slot nulled. */
+function governedSigningValue(result: Record<string, unknown>): object {
+  return {
+    schemaVersion: result.schemaVersion,
+    caseId: result.caseId,
+    caseBindingDigest: result.caseBindingDigest,
+    assetIdentity: result.assetIdentity,
+    serviceId: result.serviceId,
+    serviceVersion: result.serviceVersion,
+    policyId: result.policyId,
+    policyVersion: result.policyVersion,
+    circuitId: result.circuitId,
+    circuitVersion: result.circuitVersion,
+    circuitDigest: result.circuitDigest,
+    parameterProfile: result.parameterProfile,
+    parameterFingerprint: result.parameterFingerprint,
+    participantArtifactDigests: [...(result.participantArtifactDigests as unknown[])],
+    evaluatedArtifactDigest: result.evaluatedArtifactDigest,
+    resultCiphertextDigest: result.resultCiphertextDigest,
+    resultCiphertextCommitment: result.resultCiphertextCommitment,
+    conflict: result.conflict,
+    releaseOrdinal: result.releaseOrdinal,
+    releaseMode: result.releaseMode,
+    releaseAuthorityId: result.releaseAuthorityId,
+    releaseAuthorityPublicKey: result.releaseAuthorityPublicKey,
+    releasedAtUnix: result.releasedAtUnix,
+    sourceProvenance: result.sourceProvenance,
+    signature: null,
+  };
+}
+
+/** A real attacker key, and a real Ed25519 signature over the real canonical bytes. */
+function attackerSign(result: Record<string, unknown>): { publicKeyBase64: string; signature: string } {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const rawPublic = publicKey.export({ format: "jwk" }).x as string;
+  const publicKeyBase64 = Buffer.from(rawPublic, "base64url").toString("base64");
+  const signed = { ...result, releaseAuthorityPublicKey: publicKeyBase64 };
+  const message = Buffer.concat([
+    Buffer.from("MordantGovernedConflictResult/v1"),
+    Buffer.of(0),
+    Buffer.from(JSON.stringify(governedSigningValue(signed))),
+  ]);
+  const signature = edSign(null, message, createPrivateKey(privateKey.export({ format: "pem", type: "pkcs8" })));
+  return { publicKeyBase64, signature: signature.toString("base64") };
+}
+
+test("F-01: a self-signed attacker key cannot reuse the legitimate authority id", () => {
+  const legitimate = governedResult();
+  const forged = tamper((draft) => {
+    const result = draft.governedResult as Record<string, unknown>;
+    // The forger keeps the real, pinned authority id and substitutes their own
+    // signing key, then produces a genuinely valid signature over it.
+    const { publicKeyBase64, signature } = attackerSign(result);
+    result.releaseAuthorityPublicKey = publicKeyBase64;
+    result.signature = signature;
+    result.releaseAuthorityId = legitimate.releaseAuthorityId;
+    (draft.caseBinding as Record<string, unknown>).releaseAuthorityPublicKey = publicKeyBase64;
+    (draft.caseBinding as Record<string, unknown>).releaseAuthorityId = legitimate.releaseAuthorityId;
+    // Reseal the result digest as well, so the only remaining defect is the
+    // forged authority. Otherwise the digest check fires first and this test
+    // would pass for the wrong reason.
+    draft.governedResultDigest = governedResultDigest(result as unknown as GovernedSignedResult);
+  });
+
+  // The signature itself is valid: this is not a malformed-signature test.
+  const forgedResult = (forged as Record<string, unknown>).governedResult as Record<string, unknown>;
+  assert.notEqual(forgedResult.releaseAuthorityPublicKey, legitimate.releaseAuthorityPublicKey);
+  assert.equal(forgedResult.releaseAuthorityId, legitimate.releaseAuthorityId);
+
+  refuses("RELEASE_AUTHORITY_IDENTITY", forged);
+});
+
+test("F-01: a self-consistent forgery derives a different authority than the pinned one", () => {
+  const legitimate = governedResult();
+  // A forger who is honest about the derivation gets an authority id of their
+  // own, which no deployed adapter pins. The evidence may be internally
+  // consistent; it can never be consumed by this run's adapter.
+  const { publicKeyBase64 } = attackerSign(governedResult());
+  const derived = createHash("sha256").update(Buffer.concat([
+    Buffer.from("MordantReleaseAuthorityIdentity/v1"), Buffer.of(0),
+    Buffer.from(String(legitimate.releaseMode)), Buffer.of(0),
+    Buffer.from(publicKeyBase64, "base64"),
+  ])).digest("hex");
+  assert.notEqual(`sha256:${derived}`, legitimate.releaseAuthorityId);
+});
+
+test("F-01: the legitimate authority id is exactly the canonical derivation of its key", () => {
+  const result = governedResult();
+  const derived = createHash("sha256").update(Buffer.concat([
+    Buffer.from("MordantReleaseAuthorityIdentity/v1"), Buffer.of(0),
+    Buffer.from(String(result.releaseMode)), Buffer.of(0),
+    Buffer.from(String(result.releaseAuthorityPublicKey), "base64"),
+  ])).digest("hex");
+  assert.equal(`sha256:${derived}`, result.releaseAuthorityId);
 });
 
 test("retained protection evidence v4 is refused by this verifier", () => {

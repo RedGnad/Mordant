@@ -31,7 +31,13 @@ import { dirname, join } from "node:path";
 
 import type { Bytes32, ParticipantRole } from "./participant-authorization";
 
-export const PARTICIPANT_ADMISSION_RECORD_SCHEMA = "mordant.participant-admission-record/2" as const;
+export const PARTICIPANT_ADMISSION_RECORD_SCHEMA = "mordant.participant-admission-record/3" as const;
+/**
+ * The pre-hardening record. It carried only the authorization DIGEST, so a
+ * pruned run could never independently re-prove that the wallet actually signed.
+ * Readable so historical runs still parse; never written again.
+ */
+export const PARTICIPANT_ADMISSION_RECORD_SCHEMA_V2 = "mordant.participant-admission-record/2" as const;
 export const PARTICIPANT_CASE_CODE_SCHEMA = "mordant.participant-case-code/1" as const;
 
 /** Unambiguous alphabet: no I, L, O, U, and no lowercase. */
@@ -40,8 +46,15 @@ export const CASE_CODE_LENGTH = 16;
 export const CASE_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{16}$/u;
 
 export type ParticipantAdmissionRecord = Readonly<{
-  schemaVersion: typeof PARTICIPANT_ADMISSION_RECORD_SCHEMA;
+  schemaVersion: typeof PARTICIPANT_ADMISSION_RECORD_SCHEMA | typeof PARTICIPANT_ADMISSION_RECORD_SCHEMA_V2;
   runId: string;
+  /**
+   * The exact ParticipantAdmissionV1 struct the wallet signed, and its signature.
+   * Retained so the authorization stays independently verifiable after pruning.
+   * Absent only on historical `/2` records, where it was never captured.
+   */
+  authorization?: Readonly<Record<string, unknown>>;
+  signature?: `0x${string}`;
   role: ParticipantRole;
   participantWallet: `0x${string}`;
   authorizationDigest: Bytes32;
@@ -182,7 +195,8 @@ export function resolveCaseCode(runRoot: string, caseCode: string): string | nul
 
 function assertAdmissionRecord(record: ParticipantAdmissionRecord, runId: string, role: ParticipantRole): void {
   if (
-    record.schemaVersion !== PARTICIPANT_ADMISSION_RECORD_SCHEMA
+    (record.schemaVersion !== PARTICIPANT_ADMISSION_RECORD_SCHEMA
+      && record.schemaVersion !== PARTICIPANT_ADMISSION_RECORD_SCHEMA_V2)
     || record.runId !== runId
     || record.role !== role
     || typeof record.participantWallet !== "string"

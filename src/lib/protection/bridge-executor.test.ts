@@ -102,8 +102,15 @@ function stateFor(
   });
 }
 
+const OWNER = "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45" as const;
+const CURE_WINDOW_SECONDS = 600;
+const RUNTIME_CODE = `0x${"60".repeat(64)}` as const;
+
 type ReaderOptions = Readonly<{
   state?: Partial<AdapterState>;
+  owner?: `0x${string}`;
+  cureWindow?: number;
+  runtimeCode?: `0x${string}`;
   /** Undefined means use the canonical live eligibility baseline. */
   eligibility?: (account: `0x${string}`, role: number) => boolean | undefined;
   transferAllowed?: (to: `0x${string}`, amount: bigint) => boolean;
@@ -132,6 +139,18 @@ function reader(
     readAdapterState: async () => {
       failRead("state");
       return state;
+    },
+    readOwner: async () => {
+      failRead("state");
+      return options.owner ?? OWNER;
+    },
+    readCureWindow: async () => {
+      failRead("state");
+      return options.cureWindow ?? CURE_WINDOW_SECONDS;
+    },
+    readRuntimeCode: async () => {
+      failRead("state");
+      return options.runtimeCode ?? RUNTIME_CODE;
     },
     isEligible: async (_verifier, account, role) => {
       failRead("eligibility");

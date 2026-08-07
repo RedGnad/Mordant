@@ -22,9 +22,18 @@
 
 import { createHash } from "node:crypto";
 
+import { recoverTypedDataAddress } from "viem";
+
 import { canonicalJson, type Sha256Digest } from "./cleanverse-asset";
+import {
+  assertParticipantAdmissionMessage,
+  digestToBytes32,
+  participantAdmissionDigest,
+  participantAdmissionTypedData,
+} from "./participant-authorization";
 import { CUSTOM_SUPERVISED_EXECUTION_VARIANT } from "./custom-supervised-v2";
 import {
+  assertReleaseAuthorityIdentity,
   governedResultDigest,
   verifyGovernedResultSignature,
   type GovernedSignedResult,
@@ -49,7 +58,88 @@ export type DirectParticipantAdmissionFact = Readonly<{
   authorizationNonce: string;
   chainId: number;
   eligibilityBlock: number;
+  /**
+   * The exact ParticipantAdmissionV1 struct the wallet signed, and its signature.
+   *
+   * Without these an admission is only an assertion that a digest once existed,
+   * which a holder of the evidence file could simply write. With them the
+   * authorization is independently re-provable after the run is pruned, which is
+   * why settlement requires them.
+   */
+  authorization?: Readonly<Record<string, unknown>>;
+  signature?: string;
 }>;
+
+export type VerifiedAdmissionProof = Readonly<{
+  role: DirectParticipantRole;
+  wallet: string;
+  recoveredSigner: string;
+  authorizationDigest: string;
+}>;
+
+/**
+ * Re-proves one wallet admission offline.
+ *
+ * Recovery is ECDSA over the exact typed data, so it answers for EOAs only. The
+ * canonical participants are EOAs; a smart-account participant would need its
+ * ERC-1271 answer read from chain, and this deliberately does not pretend to
+ * cover that case.
+ */
+export async function assertParticipantAdmissionProof(
+  fact: DirectParticipantAdmissionFact,
+  expected: Readonly<{ runId: string; fheCaseId: Sha256Digest; protectionBindingDigest: Sha256Digest }>,
+): Promise<VerifiedAdmissionProof> {
+  if (fact.authorization === undefined || typeof fact.signature !== "string") {
+    fail("ADMISSION_PROOF_MISSING", `${fact.role} carries no signed admission authorization`);
+  }
+  if (!/^0x[0-9a-fA-F]{130}$/u.test(fact.signature)) {
+    fail("ADMISSION_PROOF_SIGNATURE", `${fact.role} admission signature has an unexpected shape`);
+  }
+  const message = assertParticipantAdmissionMessage(fact.authorization);
+
+  // Every field the wallet signed must be the field this run is acting on.
+  if (message.role !== fact.role) fail("ADMISSION_PROOF_ROLE", "The signed admission is for a different role");
+  if (message.participantWallet.toLowerCase() !== fact.participantWallet.toLowerCase()) {
+    fail("ADMISSION_PROOF_WALLET", "The signed admission is for a different wallet");
+  }
+  if (message.runId !== expected.runId) fail("ADMISSION_PROOF_RUN", "The signed admission is for a different run");
+  if (message.fheCaseId !== digestToBytes32(expected.fheCaseId)) {
+    fail("ADMISSION_PROOF_CASE", "The signed admission is for a different FHE case");
+  }
+  if (message.protectionBindingDigest !== digestToBytes32(expected.protectionBindingDigest)) {
+    fail("ADMISSION_PROOF_BINDING", "The signed admission is for a different protection binding");
+  }
+  if (message.authorizationNonce.toLowerCase() !== fact.authorizationNonce.toLowerCase()) {
+    fail("ADMISSION_PROOF_NONCE", "The signed admission carries a different nonce");
+  }
+  if (fact.chainId !== 10_143) fail("ADMISSION_PROOF_CHAIN", "The admission is not bound to Monad testnet");
+
+  const digest = participantAdmissionDigest(message, fact.chainId);
+  if (digest.toLowerCase() !== fact.authorizationDigest.toLowerCase()) {
+    fail("ADMISSION_PROOF_DIGEST", "The retained authorization digest is not the digest of the signed struct");
+  }
+
+  let recovered: string;
+  try {
+    // Exactly the struct the server built for signing, so the browser and the
+    // verifier cannot disagree about what was authorized.
+    recovered = await recoverTypedDataAddress({
+      ...participantAdmissionTypedData(message, fact.chainId),
+      signature: fact.signature as `0x${string}`,
+    });
+  } catch {
+    fail("ADMISSION_PROOF_SIGNATURE", `${fact.role} admission signature could not be recovered`);
+  }
+  if (recovered.toLowerCase() !== fact.participantWallet.toLowerCase()) {
+    fail("ADMISSION_PROOF_SIGNER", "The admission was signed by a different wallet");
+  }
+  return Object.freeze({
+    role: fact.role,
+    wallet: fact.participantWallet,
+    recoveredSigner: recovered,
+    authorizationDigest: fact.authorizationDigest,
+  });
+}
 
 /** The fresh FHE case binding fields the governed result must agree with. */
 export type DirectParticipantCaseBinding = Readonly<{
@@ -104,6 +194,8 @@ const ADMISSION_FIELDS = Object.freeze([
   "role", "participantWallet", "authorizationDigest", "claimCommitment",
   "authorizationNonce", "chainId", "eligibilityBlock",
 ]);
+/** Records written after the admission-proof hardening carry two more members. */
+const ADMISSION_FIELDS_WITH_PROOF = Object.freeze([...ADMISSION_FIELDS, "authorization", "signature"]);
 
 const CASE_BINDING_FIELDS = Object.freeze([
   "caseId", "assetIdentity", "policyId", "circuitDigest", "parameterFingerprint",
@@ -308,6 +400,24 @@ export function assertDirectParticipantBridgeEvidence(
   if (result.releaseAuthorityPublicKey !== binding.releaseAuthorityPublicKey) {
     fail("RELEASE_AUTHORITY", "The signing authority key is not the key this case binding designated");
   }
+  // The signature above proves only that SOMEONE signed with the embedded key.
+  // Without this, a forger supplies their own key, self-signs a syntactically
+  // valid result, and keeps the legitimate pinned authority id: both equality
+  // checks above pass because the forger controls both sides of them, and the
+  // adapter never verifies Ed25519 itself. Deriving the identity from the key
+  // that actually signed is what makes the authority pin mean anything.
+  try {
+    assertReleaseAuthorityIdentity(
+      result.releaseAuthorityPublicKey,
+      result.releaseMode,
+      result.releaseAuthorityId,
+      "RELEASE_AUTHORITY_IDENTITY",
+    );
+  } catch (error) {
+    fail("RELEASE_AUTHORITY_IDENTITY", error instanceof Error
+      ? `The governed authority identity is not derived from the signing key: ${error.message}`
+      : "The governed authority identity is not derived from the signing key");
+  }
   if (result.circuitDigest !== bindingCircuit) fail("CIRCUIT", "The governed result circuit is not this case's circuit");
   if (result.parameterFingerprint !== bindingParameters) {
     fail("PARAMETERS", "The governed result parameters are not this case's parameters");
@@ -339,7 +449,11 @@ export function assertDirectParticipantBridgeEvidence(
   }
   const admissions = (raw.participants as readonly unknown[]).map((entry, index) => {
     const label = `participants[${index}]`;
-    const record = exactKeys(entry, ADMISSION_FIELDS, "ADMISSION_FIELDS", label);
+    const hasProof = entry !== null && typeof entry === "object"
+      && Object.hasOwn(entry as object, "signature");
+    const record = exactKeys(
+      entry, hasProof ? ADMISSION_FIELDS_WITH_PROOF : ADMISSION_FIELDS, "ADMISSION_FIELDS", label,
+    );
     if (record.role !== DIRECT_PARTICIPANT_ROLES[index]) {
       fail("ADMISSION_ROLE", `${label} must be ${DIRECT_PARTICIPANT_ROLES[index]}`);
     }

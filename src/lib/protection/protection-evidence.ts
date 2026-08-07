@@ -700,13 +700,43 @@ function assertParticipantAuthorization(evidence: MordantProtectionEvidence): vo
       bindingDigest: signature.bindingDigest,
     }, signature.signature, "PARTICIPANT_AUTHORITY_SIGNATURE");
   }
-  const rawAuthority = Buffer.from(binding.releaseAuthorityPublicKey, "base64");
-  const authorityIdentity = sha256Raw(Buffer.concat([
-    Buffer.from("MordantReleaseAuthorityIdentity/v1"), Buffer.of(0), Buffer.from(binding.releaseMode), Buffer.of(0), rawAuthority,
-  ]));
-  if (rawAuthority.length !== 32 || authorityIdentity !== binding.releaseAuthorityId) {
-    fail("RELEASE_AUTHORITY_IDENTITY", "Release authority identity mismatch");
+  assertReleaseAuthorityIdentity(
+    binding.releaseAuthorityPublicKey,
+    binding.releaseMode,
+    binding.releaseAuthorityId,
+    "RELEASE_AUTHORITY_IDENTITY",
+  );
+}
+
+/**
+ * The canonical governed-FHE release authority identity.
+ *
+ * Mirrors `releaseAuthorityIdentity` in fhe-lab/lattigo/governedfhe/types.go:
+ * sha256("MordantReleaseAuthorityIdentity/v1" ‖ 0x00 ‖ releaseMode ‖ 0x00 ‖ raw
+ * Ed25519 public key). Exported so every verifier binds an authority identity to
+ * the key that actually signs, instead of trusting two fields that a forger
+ * controls together.
+ */
+export function releaseAuthorityIdentity(releaseAuthorityPublicKey: string, releaseMode: string): Sha256Digest {
+  const raw = Buffer.from(releaseAuthorityPublicKey, "base64");
+  if (raw.length !== 32 || raw.toString("base64") !== releaseAuthorityPublicKey) {
+    fail("RELEASE_AUTHORITY_KEY", "Invalid Ed25519 release authority public key");
   }
+  return sha256Raw(Buffer.concat([
+    Buffer.from("MordantReleaseAuthorityIdentity/v1"), Buffer.of(0), Buffer.from(releaseMode), Buffer.of(0), raw,
+  ]));
+}
+
+/** Requires the claimed authority identity to be the one that key and mode derive. */
+export function assertReleaseAuthorityIdentity(
+  releaseAuthorityPublicKey: string,
+  releaseMode: string,
+  claimedAuthorityId: string,
+  code = "RELEASE_AUTHORITY_IDENTITY",
+): Sha256Digest {
+  const derived = releaseAuthorityIdentity(releaseAuthorityPublicKey, releaseMode);
+  if (derived !== claimedAuthorityId) fail(code, "Release authority identity mismatch");
+  return derived;
 }
 
 function assertSignedProtectionBinding(evidence: MordantProtectionEvidence): Sha256Digest {

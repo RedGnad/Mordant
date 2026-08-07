@@ -503,6 +503,11 @@ export async function admitParticipant(
     expiresAt: message.expiresAt,
     eligibilityBlock: verdict.observedBlock,
     admittedAtUnix: dependencies.now(),
+    // The signed struct and its signature, retained verbatim. Nothing here is
+    // secret: it is the participant's own public authorization, and keeping it
+    // is what lets the bridge re-verify the wallet after the run is pruned.
+    authorization: { ...verified.message },
+    signature: verified.signature,
   });
 
   await dependencies.orchestrator.admitParticipantClaim(runId, request.role, {

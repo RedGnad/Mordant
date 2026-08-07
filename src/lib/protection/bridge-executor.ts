@@ -62,7 +62,12 @@ import {
 } from "./governed-recourse-bridge";
 import { digestToBytes32 } from "./participant-authorization";
 import {
+  loadCaseAdapterDeploymentProof,
+  type CaseAdapterDeploymentProof,
+} from "./case-adapter-deployment-proof";
+import {
   assertDirectParticipantBridgeEvidence,
+  assertParticipantAdmissionProof,
   type VerifiedDirectParticipantBridgeEvidence,
 } from "./direct-participant-bridge-evidence";
 import {
@@ -86,6 +91,8 @@ export const ADAPTER_ABI = parseAbi([
   "function cviVerifier() view returns (address)",
   "function attestor() view returns (address)",
   "function facility() view returns (address)",
+  "function owner() view returns (address)",
+  "function cureWindow() view returns (uint64)",
   "function assetIdentityDigest() view returns (bytes32)",
   "function expectedGovernedReleaseAuthorityId() view returns (bytes32)",
   "function releaseMode() view returns (bytes32)",
@@ -178,6 +185,16 @@ export function releaseTuple(payload: GovernedBridgePayload) {
 
 export type AdapterState = AdapterV2ReadOnlyState;
 export type AdapterReader = AdapterV2ReadOnlyReader & Readonly<{
+  /**
+   * Immutables the shared V4 state does not carry. They matter for a
+   * case-specific deployment: `owner` can still withdraw unreserved reserve and
+   * `cureWindow` decides how long recourse may be cured, so a deployment that
+   * differs in either is not the reviewed economic path.
+   */
+  readOwner: () => Promise<`0x${string}`>;
+  readCureWindow: () => Promise<number>;
+  /** Raw deployed runtime code, for binding the live adapter to its deployment proof. */
+  readRuntimeCode: () => Promise<Hex>;
   /** eth_call simulation only; this module exposes no transaction-mutation equivalent. */
   simulate: (payload: GovernedBridgePayload, signature: Hex, account: `0x${string}`) => Promise<void>;
 }>;
@@ -289,6 +306,13 @@ export function createAdapterReader(configuration: BridgeConfiguration): Adapter
       functionName: "isAssetTransferAllowed",
       args: [asset, from, to, amount],
     })) as Promise<boolean>,
+    readOwner: () => read<`0x${string}`>("owner").then((value) => getAddress(value)),
+    readCureWindow: () => read<bigint>("cureWindow").then((value) => Number(value)),
+    readRuntimeCode: async () => {
+      const code = await paced(() => client.getCode({ address }));
+      if (code === undefined || code === "0x") fail("ADAPTER_CODE_UNAVAILABLE", "The configured adapter has no runtime code");
+      return code;
+    },
     hashRelease: (payload) => read<Hex>("hashRelease", [releaseTuple(payload)]),
     resultConsumed: (governedResultDigest) => read<boolean>("resultConsumed", [governedResultDigest]),
     simulate: async (payload, signature, account) => {
@@ -310,6 +334,9 @@ function withReadOnlyRetries(reader: AdapterReader): RetriedAdapterReader {
     readAdapterState: () => retryReadOnly(reader.readAdapterState),
     isEligible: (verifier, account, role) => retryReadOnly(() => reader.isEligible(verifier, account, role)),
     isAssetTransferAllowed: (verifier, asset, from, to, amount) => retryReadOnly(() => reader.isAssetTransferAllowed(verifier, asset, from, to, amount)),
+    readOwner: () => retryReadOnly(reader.readOwner),
+    readCureWindow: () => retryReadOnly(reader.readCureWindow),
+    readRuntimeCode: () => retryReadOnly(reader.readRuntimeCode),
     hashRelease: (payload) => retryReadOnly(() => reader.hashRelease(payload)),
     resultConsumed: (digest) => retryReadOnly(() => reader.resultConsumed(digest)),
     simulate: (payload, signature, account) => retryReadOnly(() => reader.simulate(payload, signature, account)),
@@ -591,15 +618,49 @@ async function buildPrepared(
 
 // ------------------------------------------------- direct-participant bridging
 
+export const DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE = "direct-participant-bridge-evidence.json" as const;
+
+/**
+ * What a caller may ask for.
+ *
+ * Deliberately NOT the evidence itself, and deliberately not a source commit.
+ * Both are trust anchors, and an anchor a caller supplies is not an anchor: the
+ * previous shape let the artifact vouch for its own provenance, so a resealed
+ * `sourceCommit`, an envelope from another run, or a legitimate signed governed
+ * result relabelled into a new envelope would all have been accepted. The
+ * executor now reads the artifact from the durable run root itself and takes the
+ * expected source commit from the server's own build pin.
+ */
 export type DirectParticipantPrepareInput = Readonly<{
-  /** The `mordant.direct-participant-bridge-evidence/1` artifact, as read from disk. */
-  evidence: unknown;
-  /** The source commit of the checkout that executed the run. */
-  sourceCommit: string;
+  /** Which durable run to settle. The evidence is loaded from it, never passed in. */
+  runId: string;
   nonce: bigint;
   issuedAt: number;
   expiry: number;
 }>;
+
+const RUN_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+/** The server's own execution provenance pin. Never read from an artifact. */
+export function readExecutionSourceCommit(environment: EnvironmentLike = process.env): string {
+  const configured = environment.MORDANT_PROTECTION_SOURCE_COMMIT;
+  if (typeof configured !== "string" || !/^[0-9a-f]{40}$/u.test(configured.trim())) {
+    fail("SOURCE_COMMIT_NOT_CONFIGURED", "MORDANT_PROTECTION_SOURCE_COMMIT must be a full lowercase commit id");
+  }
+  return configured.trim();
+}
+
+/** Loads the run's own bridge evidence from durable state. */
+function readDirectParticipantBridgeEvidence(runRoot: string, runId: string): unknown {
+  if (!RUN_ID_SHAPE.test(runId)) fail("RUN_ID", "The direct-participant run id is rejected");
+  const path = join(runRoot, runId, DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE);
+  if (!existsSync(path)) fail("DIRECT_EVIDENCE_MISSING", "This run has no direct-participant bridge evidence");
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as unknown;
+  } catch {
+    fail("DIRECT_EVIDENCE_JSON", "The retained direct-participant bridge evidence is not valid JSON");
+  }
+}
 
 /**
  * Adapter reconciliation for a case-specific deployment.
@@ -618,6 +679,7 @@ async function checkDirectParticipantAdapter(
   verified: VerifiedDirectParticipantBridgeEvidence,
   release: VerifiedGovernedRelease,
   window: Readonly<{ nonce: bigint; issuedAt: number; expiry: number }>,
+  proof: CaseAdapterDeploymentProof,
 ): Promise<Readonly<{
   adapter: AdapterState;
   payload: GovernedBridgePayload;
@@ -642,6 +704,20 @@ async function checkDirectParticipantAdapter(
   // because it needs the compiler's immutable spans, which no RPC exposes.
   if (state.runtimeBytes !== expected.runtimeBytes) {
     fail("ADAPTER_CODE", "Adapter runtime byte length differs from the reviewed artifact");
+  }
+  // Length alone lets a same-length hostile contract through. The deployment
+  // proof establishes that a SPECIFIC runtime differs from the reviewed artifact
+  // only at known immutable spans; hashing the live code and requiring it to be
+  // that exact runtime is what ties the proof to the address being settled.
+  if (proof.runtimeBytes !== state.runtimeBytes) {
+    fail("ADAPTER_CODE", "The deployment proof describes a different runtime length");
+  }
+  const liveCode = await reader.readRuntimeCode();
+  if (keccak256(liveCode).toLowerCase() !== proof.deployedCodeHash.toLowerCase()) {
+    fail("ADAPTER_CODE", "The live adapter runtime is not the runtime the deployment proof covers");
+  }
+  if ((liveCode.length - 2) / 2 !== proof.runtimeBytes) {
+    fail("ADAPTER_CODE", "The live adapter runtime length disagrees with the deployment proof");
   }
   if (state.settlementToken.toLowerCase() !== expected.settlementToken.toLowerCase()) {
     fail("ADAPTER_TOKEN", "The case-specific adapter settles a different token");
@@ -669,6 +745,35 @@ async function checkDirectParticipantAdapter(
   if (state.parameterFingerprint.toLowerCase() !== digestToBytes32(release.parameterFingerprint)) {
     fail("ADAPTER_PARAMETERS", "The adapter parameter pin is not the signed parameter fingerprint");
   }
+
+  const [liveOwner, liveCureWindow] = await Promise.all([reader.readOwner(), reader.readCureWindow()]);
+  const provenImmutables: readonly (readonly [string, string | number, string | number])[] = [
+    ["settlementToken", state.settlementToken, proof.immutables.settlementToken],
+    ["cviVerifier", state.cviVerifier, proof.immutables.cviVerifier],
+    ["attestor", state.attestor, proof.immutables.attestor],
+    ["facility", state.facility, proof.immutables.facility],
+    ["owner", liveOwner, proof.immutables.owner],
+    ["assetIdentityDigest", state.assetIdentityDigest, proof.immutables.assetIdentityDigest],
+    ["governedAuthority", state.expectedGovernedReleaseAuthorityId, proof.immutables.expectedGovernedReleaseAuthorityId],
+    ["releaseMode", state.releaseMode, proof.immutables.releaseMode],
+    ["circuitHash", state.circuitHash, proof.immutables.circuitHash],
+    ["parameterFingerprint", state.parameterFingerprint, proof.immutables.parameterFingerprint],
+    ["cureWindow", liveCureWindow, proof.immutables.cureWindow],
+  ];
+  for (const [name, live, proven] of provenImmutables) {
+    const same = typeof live === "string" && typeof proven === "string"
+      ? live.toLowerCase() === proven.toLowerCase()
+      : live === proven;
+    if (!same) fail("ADAPTER_IMMUTABLE", `The live adapter ${name} disagrees with its deployment proof`);
+  }
+  // The cure window is an economic term, not a formality: a shortened window
+  // changes who can finalize and when, so it must be the reviewed one.
+  if (liveCureWindow !== configuration.cureWindowSeconds) {
+    fail("ADAPTER_CURE_WINDOW", "The case-specific adapter does not use the reviewed cure window");
+  }
+  // Ownership still governs withdrawal of unreserved reserve on this adapter.
+  // The proof loader has already required its owner to be the reviewed one, so
+  // binding the live readback to the proof is what closes the loop here.
 
   const payoutTotal = participants.payoutA + participants.payoutB;
   if (!state.solvent || state.tokenBalance < state.availableReserve + state.openReserved + state.entitledUnpaid) {
@@ -787,6 +892,8 @@ async function buildPreparedDirect(
   reader: AdapterReader,
   input: DirectParticipantPrepareInput,
   loadConfiguration: () => CanonicalRecourseConfiguration,
+  runRoot: string,
+  expectedSourceCommit: string,
 ): Promise<PreparedBridge> {
   let canonicalConfiguration: CanonicalRecourseConfiguration;
   try {
@@ -794,10 +901,14 @@ async function buildPreparedDirect(
   } catch (error) {
     return bridgeError(error, "CANONICAL_LOAD", "The canonical V2 configuration could not be loaded");
   }
+  const evidence = readDirectParticipantBridgeEvidence(runRoot, input.runId);
   let verified: VerifiedDirectParticipantBridgeEvidence;
   try {
-    verified = assertDirectParticipantBridgeEvidence(input.evidence, {
-      sourceCommit: input.sourceCommit,
+    verified = assertDirectParticipantBridgeEvidence(evidence, {
+      // Both anchors are external: the server's build pin and the run being
+      // settled. The artifact can no longer vouch for either.
+      sourceCommit: expectedSourceCommit,
+      runId: input.runId,
       assetIdentity: CANONICAL_CLEANVERSE_ASSET_DIGEST,
       holderA: canonicalConfiguration.participants.holderA,
       holderB: canonicalConfiguration.participants.holderB,
@@ -806,6 +917,21 @@ async function buildPreparedDirect(
   } catch (error) {
     return bridgeError(error, "DIRECT_EVIDENCE", "The direct-participant bridge evidence was rejected");
   }
+  // Settlement requires the wallet authorizations to be independently re-provable,
+  // not merely asserted by digest. A run whose admissions predate this retention
+  // cannot be settled, which is the correct outcome: the proof does not exist.
+  try {
+    for (const participant of verified.evidence.participants) {
+      await assertParticipantAdmissionProof(participant, {
+        runId: verified.evidence.runId,
+        fheCaseId: verified.evidence.fheCaseId,
+        protectionBindingDigest: verified.evidence.protectionBindingDigest,
+      });
+    }
+  } catch (error) {
+    return bridgeError(error, "ADMISSION_PROOF", "A participant wallet authorization could not be re-verified");
+  }
+
   const release = directParticipantRelease(verified);
   let checked: Awaited<ReturnType<typeof checkDirectParticipantAdapter>>;
   try {
@@ -815,6 +941,7 @@ async function buildPreparedDirect(
       verified,
       release,
       { nonce: input.nonce, issuedAt: input.issuedAt, expiry: input.expiry },
+      loadCaseAdapterDeploymentProof(configuration.adapterAddress, input.runId),
     );
   } catch (error) {
     return bridgeError(error, "ADAPTER_READ", "The case-specific adapter compatibility check failed");
@@ -1263,6 +1390,8 @@ export type BridgeExecutor = Readonly<{
 type ExecutorDependencies = Readonly<{
   loadCanonical: () => CanonicalRecourseBridgeArtifacts;
   loadConfiguration: () => CanonicalRecourseConfiguration;
+  /** The server's execution provenance pin, read outside any artifact. */
+  expectedSourceCommit: () => string;
   loadSigner: () => SigningCapability;
   verifyEvidence: (evidence: unknown, canonical: CanonicalRecourseBridgeArtifacts) => VerifiedGovernedRelease;
 }>;
@@ -1309,6 +1438,8 @@ function createBridgeExecutorInternal(options: ExecutorOptions, dependencies: Ex
         options.reader,
         input,
         dependencies.loadConfiguration,
+        options.runRoot,
+        dependencies.expectedSourceCommit(),
       );
       // The direct path shares the simulate/sign/reconcile discipline exactly;
       // only how the release was established differs. `canonical` is carried for
@@ -1437,6 +1568,7 @@ export function createBridgeExecutor(options: ExecutorOptions & Readonly<{ envir
   return createBridgeExecutorInternal(options, {
     loadCanonical: () => loadCanonicalRecourseBridgeArtifacts(),
     loadConfiguration: () => loadCanonicalRecourseConfiguration(),
+    expectedSourceCommit: () => readExecutionSourceCommit(environment),
     loadSigner: () => loadSigningCapability(environment),
     verifyEvidence: verifiedReleaseFromEvidence,
   });
@@ -1449,6 +1581,7 @@ export function createBridgeExecutor(options: ExecutorOptions & Readonly<{ envir
  */
 export function createBridgeExecutorForTest(options: ExecutorOptions & Readonly<{
   canonical: CanonicalRecourseBridgeArtifacts;
+  expectedSourceCommit?: string;
   signerAddress: `0x${string}`;
   sign: (payload: GovernedBridgePayload) => Promise<Hex>;
   verifyEvidence?: (evidence: unknown, canonical: CanonicalRecourseBridgeArtifacts) => VerifiedGovernedRelease;
@@ -1456,6 +1589,7 @@ export function createBridgeExecutorForTest(options: ExecutorOptions & Readonly<
   return createBridgeExecutorInternal(options, {
     loadCanonical: () => options.canonical,
     loadConfiguration: () => options.canonical.configuration,
+    expectedSourceCommit: () => options.expectedSourceCommit ?? options.canonical.expectedSourceCommit,
     loadSigner: () => Object.freeze({ signerAddress: options.signerAddress, sign: options.sign }),
     verifyEvidence: options.verifyEvidence ?? ((_evidence, canonical) => canonical.release),
   });
