@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
 import styles from "./onchain-panel.module.css";
 import type { OnchainPhase, OnchainView } from "./live-product-view-model";
 
@@ -61,6 +64,57 @@ export function safeMonadExplorerHref(
   }
 }
 
+/** Phases where the contract's real cure window is the thing to explain. */
+const CURE_WINDOW_PHASES: ReadonlySet<OnchainPhase> = new Set<OnchainPhase>([
+  "CURE_OPEN",
+  "AWAITING_CURE_DEADLINE",
+]);
+
+function remainingLabel(deadlineMs: number, nowMs: number): string {
+  const seconds = Math.max(0, Math.floor((deadlineMs - nowMs) / 1_000));
+  if (seconds === 0) return "the window has closed";
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s remaining`;
+}
+
+/**
+ * The real cure window, counted down honestly.
+ *
+ * The contract gives the facility ten real minutes and the product does not
+ * pretend otherwise or shorten it. When the deadline passes this says so rather
+ * than claiming an outcome the chain has not produced.
+ */
+function CureWindow({ deadlineIso }: { readonly deadlineIso: string }) {
+  const deadlineMs = Date.parse(deadlineIso);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  useEffect(() => {
+    setNowMs(Date.now());
+    const timer = setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+  if (!Number.isFinite(deadlineMs)) return null;
+  return (
+    <div className={styles.cure} data-testid="cure-window">
+      <p className={styles.eyebrow}>Cure window</p>
+      <p className={styles.cureLine}>
+        Conflict confirmed, recourse opened. The facility has 10 real minutes to cure before this
+        case can be finalized by anyone.
+      </p>
+      <p className={styles.cureDeadline} data-testid="cure-deadline">
+        Deadline {deadlineIso}
+        {nowMs === null ? null : <span className={styles.cureRemaining}> · {remainingLabel(deadlineMs, nowMs)}</span>}
+      </p>
+      <Link className={styles.cureLink} href="/protection/verified-run" data-testid="live-to-verified-run">
+        See a completed verified live run
+      </Link>
+      <p className={styles.cureNote}>
+        That page is a different, already-completed real run on Monad. It shows the same path after
+        its deadline expired: finalize, entitlement opened, and both holder claims paid.
+      </p>
+    </div>
+  );
+}
+
 export function OnchainPanel({ view }: { readonly view: OnchainView }) {
   if (view.phase === "NOT_CONNECTED") {
     return (
@@ -107,6 +161,10 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
           </dd>
         </div>
       </dl>
+
+      {view.cureDeadlineIso !== null && CURE_WINDOW_PHASES.has(view.phase)
+        ? <CureWindow deadlineIso={view.cureDeadlineIso} />
+        : null}
 
       {view.entitlement === null ? null : (
         <div className={styles.entitlement}>

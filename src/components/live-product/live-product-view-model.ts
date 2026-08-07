@@ -146,6 +146,22 @@ export type TokenAmount = Readonly<{
   symbol: "aUSDC";
 }>;
 
+/**
+ * Exact six-decimal aUSDC, with no rounding at all.
+ *
+ * `ausdcFromAtomic` shows two decimals, which is right for a protected amount in
+ * whole units but wrong for a settlement of 2400 atomic units: that is 0.002400
+ * aUSDC and would print as "0.00". Anywhere a real payout is shown, the exact
+ * value is the only honest one.
+ */
+export function formatAusdcExact(atomic: string): string {
+  if (!/^\d+$/u.test(atomic)) throw new Error("An atomic amount must be whole and non-negative");
+  const units = BigInt(atomic);
+  const scale = 10n ** BigInt(AUSDC_DECIMALS);
+  const whole = (units / scale).toString().replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
+  return `${whole}.${(units % scale).toString().padStart(AUSDC_DECIMALS, "0")}`;
+}
+
 export function ausdcFromAtomic(atomic: string): TokenAmount {
   if (!/^\d+$/u.test(atomic)) throw new Error("An atomic amount must be whole and non-negative");
   const units = BigInt(atomic);
@@ -396,6 +412,12 @@ export type OnchainView = Readonly<{
   phase: OnchainPhase;
   evidence: OnchainEvidence;
   entitlement: EntitlementView | null;
+  /**
+   * The contract's real cure deadline, carried from chain state. Never a
+   * client-side clock and never shortened: the window is 600 seconds on chain
+   * and the product tells the truth about that rather than hurrying it.
+   */
+  cureDeadlineIso: string | null;
   /** Set when the adapter is present but the capability is off. */
   disabledReason: string | null;
 }>;
@@ -404,6 +426,7 @@ export const ONCHAIN_NOT_CONNECTED: OnchainView = Object.freeze({
   phase: "NOT_CONNECTED" as const,
   evidence: Object.freeze({ transactionHash: null, blockNumber: null, contractAddress: null, explorerBase: null }),
   entitlement: null,
+  cureDeadlineIso: null,
   disabledReason: "On-chain recourse is not connected on this deployment.",
 });
 

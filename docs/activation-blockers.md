@@ -1,3 +1,22 @@
+> # ⚠ SUPERSEDED — HISTORICAL RECORD ONLY
+>
+> **These blockers were resolved. They do NOT describe the current product.**
+>
+> Every blocker below was closed by the direct-participant bridge evidence
+> correction, and a fresh two-wallet BGV journey has since been **consumed end to
+> end on Monad testnet**: `ReleaseConsumed`, a real 600-second cure window,
+> permissionless finalization, and both holder claims paid and reconciled exactly.
+>
+> - Current status: [`README.md` → Current state](../README.md#current-state-verified-live-run-on-monad)
+> - The correction: [`direct-participant-bridge-evidence.md`](./direct-participant-bridge-evidence.md)
+> - Frozen tag: `mordant-v5-hackathon-live-e2e1` → `199034d81ee9bed67d27898abb832774be5380c6`
+> - Qualified run: `76005a0c-2787-4c50-b196-636e45b71781`
+>
+> This file is kept unedited below as the honest record of what was refused and
+> why, before the architecture correction was authorized. Read it as history.
+
+---
+
 # Live activation blockers
 
 Status: **stopped before any deployment or broadcast.** Nothing was signed for

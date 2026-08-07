@@ -121,3 +121,46 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.cure {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cureLine {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cureDeadline {
+  margin: 0;
+  font-family: var(--font-proof);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.cureRemaining {
+  color: var(--protection);
+}
+
+.cureLink {
+  align-self: flex-start;
+  color: var(--action);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.cureNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}

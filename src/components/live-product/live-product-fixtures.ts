@@ -189,6 +189,7 @@ export function onchainFixture(phase: OnchainView["phase"]): OnchainView {
         claimedByB: false,
       })
       : null,
+    cureDeadlineIso: null,
     disabledReason: null,
   });
 }
