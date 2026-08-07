@@ -88,23 +88,38 @@ artifact carries a complete copy of it.
 
 ## Live qualification, 2026-08-07
 
-One fresh two-wallet journey was consumed end to end on Monad testnet at
-activation commit `85d1d9f5ac66630b39ce2de3c60c420019223a6a`.
+Two fresh two-wallet journeys were consumed end to end on Monad testnet. The
+authoritative one is the hardened run below, executed at source commit
+`5f2156107e61d9d88eb0d1eb82e8676827717dc4`.
 
 | | |
 |---|---|
-| Run | `76005a0c-2787-4c50-b196-636e45b71781` |
-| Governed authority (fresh) | `sha256:e73e0834bce686ac7eb1b962653765e4b8813d559bccc1b7c36f1a7df6be1890` |
-| Bridge evidence digest | `sha256:aa0286fb3f79b6738b53cff30a96e02f3d235561c41ec0c3845cd194e6c208f3` |
-| Case-specific adapter | `0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935` |
-| ReleaseConsumed | `0xa46797440a14549fd8fb4cea7d7dcff40d78b84babf48746daa58e8d314d14f6`, block 51518455 |
-| Cure deadline | 1786060246, a real 600 s window from `block.timestamp` |
-| Finalize (permissionless) | `0x4fc798bd0608f57543e0004ddcc21e36f9dd881055144c160585da2ea87aff64`, block 51520431 |
-| Claim A | `0x46b2cb6bd0978a3003d05c3fef6a07f89d2e598ad205d3e1f68463061f4115f4`, 2400 |
-| Claim B | `0x8670482a2cbaba08a66f693150bdb34a5d46d1453f5feea9d56939d5e7e64147`, 1600 |
+| Run | `e618abc2-0ac7-4d79-b201-44959a54b68c` |
+| Governed authority (fresh) | `sha256:a241d6cf105dc55ee2fecacf962fa413fd19e1b7868b0815567c5155884d5c13` |
+| Bridge evidence digest | `sha256:a0176d37443e41188e0b3b7e8ca2a1582aa408725d9ce3d00be46068945d1169` |
+| Case-specific adapter | `0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1` |
+| ReleaseConsumed | `0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651`, block 51573394 |
+| Cure deadline | 1786076998, a real 600 s window from `block.timestamp` |
+| Finalize (permissionless) | `0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34`, block 51575381 |
+| Claim A | `0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819`, 2400 |
+| Claim B | `0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb81430bfc50`, 1600 |
 
 The adapter's masked runtime bytecode equals the reviewed artifact
 (`0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e`, 28
 immutable spans, 10088 bytes), so only its constructor pins differ. The bridge
 evidence was verified again after the worker pruned the run, with the Ed25519
 signature checked against the copy it carries.
+
+Three things separate this run from the earlier one. Settlement re-verified each
+participant's retained `ParticipantAdmissionV1` payload and signature against the
+durable admission ledger, rather than accepting the digest the artifact carries.
+The expected source commit came from server configuration, so the artifact no
+longer vouches for its own provenance. And the case adapter was bound to a
+deployment proof located by its claimed address and run, so a proof retained for
+another deployment cannot stand in for it.
+
+The earlier journey, run `76005a0c-2787-4c50-b196-636e45b71781` on adapter
+`0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935` at activation commit
+`85d1d9f5ac66630b39ce2de3c60c420019223a6a`, is retained under
+`docs/evidence/activation-*` as a real settled execution that predates those
+three checks.

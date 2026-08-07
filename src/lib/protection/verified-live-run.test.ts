@@ -17,9 +17,9 @@ import {
 } from "./verified-live-run";
 import { ausdcFromAtomic } from "../../components/live-product/live-product-view-model";
 
-const RUN_ID = "76005a0c-2787-4c50-b196-636e45b71781";
-const ADAPTER = "0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935";
-const RELEASE_TX = "0xa46797440a14549fd8fb4cea7d7dcff40d78b84babf48746daa58e8d314d14f6";
+const RUN_ID = "e618abc2-0ac7-4d79-b201-44959a54b68c";
+const ADAPTER = "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1";
+const RELEASE_TX = "0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651";
 
 /** Copies the committed evidence into a scratch root so a tamper is never written back. */
 function scratchRoot(mutate?: (name: string, value: Record<string, unknown>) => void): string {
@@ -104,7 +104,7 @@ test("aUSDC renders with exact six-decimal atomic units behind it", () => {
 test("explorer links are built only from canonical network configuration", () => {
   assert.equal(monadExplorerHref("tx", RELEASE_TX), `${MONAD_TESTNET.explorerBase}/tx/${RELEASE_TX}`);
   assert.equal(monadExplorerHref("address", ADAPTER), `${MONAD_TESTNET.explorerBase}/address/${ADAPTER}`);
-  assert.equal(monadExplorerHref("block", "51518455"), `${MONAD_TESTNET.explorerBase}/block/51518455`);
+  assert.equal(monadExplorerHref("block", "51573394"), `${MONAD_TESTNET.explorerBase}/block/51573394`);
   // Anything malformed yields no link rather than a broken or misleading one.
   assert.equal(monadExplorerHref("tx", "not-a-hash"), null);
   assert.equal(monadExplorerHref("tx", null), null);

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "mordant.activation-bridge-evidence-verification/1",
+  "verifiedAtIso": "2026-08-07T04:31:42.737Z",
+  "runId": "e618abc2-0ac7-4d79-b201-44959a54b68c",
+  "evidenceSchema": "mordant.direct-participant-bridge-evidence/1",
+  "evidenceDigest": "sha256:a0176d37443e41188e0b3b7e8ca2a1582aa408725d9ce3d00be46068945d1169",
+  "sourceCommit": "5f2156107e61d9d88eb0d1eb82e8676827717dc4",
+  "prunedPublicDirectory": true,
+  "ed25519SignatureVerified": true,
+  "governedResultDigest": "sha256:bf2c4e77f44ed7fcbb650d1a71682bb39802dc1a34f9477968c74c69bdca5368",
+  "releaseAuthorityId": "sha256:a241d6cf105dc55ee2fecacf962fa413fd19e1b7868b0815567c5155884d5c13",
+  "releaseAuthorityPublicKey": "4YW9sQQYeM5h0q6OKrN6ObQDPNTeQ+VhhIQccSoLCPg=",
+  "signedConflict": true,
+  "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+  "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+  "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+  "resultCiphertextDigest": "sha256:527e716a89b822c0d53bcaab3069b3f95e69834d1501dbd3ed301a4e2b5392be",
+  "resultCiphertextCommitment": "sha256:e30d09350edc2f06ef5bd105ec2ad9fc549ad560fe4d0ba2eded0a1118c46861",
+  "sourceProvenance": "sha256:cbe3410ec4a99bf25841d52c43c295702507334a8cee9f8529cb362d2293baa4",
+  "participantArtifactDigestA": "sha256:acc3e7841fa1720f094006d34bfe8b2ce57bcaabfbe2f73024ee8d76bfc84655",
+  "participantArtifactDigestB": "sha256:f74613fd2b7d36d527ea4201f28c1e262b5f16bdeeb6fda5835dad91bc62e0f4",
+  "evaluatedArtifactDigest": "sha256:032ddf7b5a361b54aeccc15749dbdaf96aad6189d699e650a0c1b9098fe28034",
+  "holderA": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+  "holderB": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+  "participants": [
+    {
+      "role": "PARTICIPANT_A",
+      "participantWallet": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "authorizationDigest": "0x6bdcf466dbb758bd9d3ef7a346e221fc63028bdb4f16974e6dda2a986183dd15",
+      "claimCommitment": "0x9e7f115e4ef2b8d035881b9e12188bd18763e24227b2106ddbf242d461620408",
+      "authorizationNonce": "0x20510d87d194410776b6b042a3915b991977b4709db0a6c6fe8b7b5f25a53d1e",
+      "chainId": 10143,
+      "eligibilityBlock": 51557970
+    },
+    {
+      "role": "PARTICIPANT_B",
+      "participantWallet": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "authorizationDigest": "0x27b27ba9a1ed1c243e1daf7cb412150457ee177298081ac58974eef9cfbd9280",
+      "claimCommitment": "0x7dc66a1abd288320618cfe08bf70f1f71b8a70e6cd8b641795872851ba4d3f6a",
+      "authorizationNonce": "0x125b37e97fb740f769dc2d28d4d0898921199920135f313bf27dd6d5a7401190",
+      "chainId": 10143,
+      "eligibilityBlock": 51557984
+    }
+  ],
+  "customReceiptDigest": "sha256:f8e293f080bf64d6c4aa07723c0d096fd85971c7d2437f64e15d102983157d7f",
+  "containsNoSecrets": true
+}

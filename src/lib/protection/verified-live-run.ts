@@ -51,16 +51,26 @@ function fail(code: string, message: string): never {
 
 const EVIDENCE_DIRECTORY = join("docs", "evidence");
 
-/** The exact committed artifacts this receipt is built from. */
+/**
+ * The exact committed artifacts this receipt is built from.
+ *
+ * These name the HARDENED run, which is the authoritative one: its settlement
+ * re-verified each participant's retained ParticipantAdmissionV1 payload and
+ * signature, took its source commit from an external pin rather than from the
+ * artifact, and bound the case adapter to a deployment proof resolved by address
+ * and run. The earlier `activation-*` set describes a real completed journey too
+ * and is retained, but it predates those checks, so it is history rather than
+ * the receipt this product shows.
+ */
 export const VERIFIED_LIVE_RUN_SOURCES = Object.freeze({
-  bridgeEvidence: "activation-direct-participant-bridge-evidence-2026-08-07.json",
-  bridgeVerification: "activation-bridge-evidence-verification-2026-08-07.json",
-  receipt: "activation-custom-supervised-receipt-2026-08-07.json",
-  deployment: "activation-case-adapter-deployment-2026-08-07.json",
-  apass: "activation-case-adapter-apass-2026-08-07.json",
-  configuration: "activation-case-adapter-configuration-2026-08-07.json",
-  release: "activation-release-consumed-2026-08-07.json",
-  terminal: "activation-terminal-recourse-2026-08-07.json",
+  bridgeEvidence: "hardened-direct-participant-bridge-evidence-2026-08-07.json",
+  bridgeVerification: "hardened-bridge-evidence-verification-2026-08-07.json",
+  receipt: "hardened-custom-supervised-receipt-2026-08-07.json",
+  deployment: "hardened-case-adapter-deployment-2026-08-07.json",
+  apass: "hardened-case-adapter-apass-2026-08-07.json",
+  configuration: "hardened-case-adapter-configuration-2026-08-07.json",
+  release: "hardened-release-consumed-2026-08-07.json",
+  terminal: "hardened-terminal-recourse-2026-08-07.json",
 });
 
 export const MONAD_TESTNET = Object.freeze({

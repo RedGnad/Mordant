@@ -10,11 +10,11 @@ import { expect, test } from "@playwright/test";
  */
 
 const PATH = "/protection/verified-run";
-const RELEASE_TX = "0xa46797440a14549fd8fb4cea7d7dcff40d78b84babf48746daa58e8d314d14f6";
-const FINALIZE_TX = "0x4fc798bd0608f57543e0004ddcc21e36f9dd881055144c160585da2ea87aff64";
-const CLAIM_A_TX = "0x46b2cb6bd0978a3003d05c3fef6a07f89d2e598ad205d3e1f68463061f4115f4";
-const CLAIM_B_TX = "0x8670482a2cbaba08a66f693150bdb34a5d46d1453f5feea9d56939d5e7e64147";
-const ADAPTER = "0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935";
+const RELEASE_TX = "0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651";
+const FINALIZE_TX = "0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34";
+const CLAIM_A_TX = "0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819";
+const CLAIM_B_TX = "0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb81430bfc50";
+const ADAPTER = "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1";
 const EXPLORER = "https://testnet.monadexplorer.com";
 
 test.describe("verified live run", () => {
@@ -75,7 +75,7 @@ test.describe("verified live run", () => {
     for (const open of await details.evaluateAll((nodes) => nodes.map((node) => (node as HTMLDetailsElement).open))) {
       expect(open).toBe(false);
     }
-    const governedDigest = "sha256:fa60c0a35a509a48d54ad1cc4a09d376a70bffd297e30eea1775e6b69662f43c";
+    const governedDigest = "sha256:bf2c4e77f44ed7fcbb650d1a71682bb39802dc1a34f9477968c74c69bdca5368";
     expect(await page.locator("body").innerText()).not.toContain(governedDigest);
     await details.nth(2).locator("summary").click();
     await expect(page.getByText(governedDigest)).toBeVisible();
