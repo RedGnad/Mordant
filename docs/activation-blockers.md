@@ -1,16 +1,21 @@
-> # ⚠ SUPERSEDED — HISTORICAL RECORD ONLY
+> # ⚠ SUPERSEDED: HISTORICAL BLOCKER REPORT
 >
-> **These blockers were resolved. They do NOT describe the current product.**
+> **These blockers were resolved. They do NOT describe the current product, and
+> this file is not a current qualification.**
 >
 > Every blocker below was closed by the direct-participant bridge evidence
-> correction, and a fresh two-wallet BGV journey has since been **consumed end to
-> end on Monad testnet**: `ReleaseConsumed`, a real 600-second cure window,
+> correction, and a hardened two-wallet BGV journey has since been **consumed end
+> to end on Monad testnet**: `ReleaseConsumed`, a real 600-second cure window,
 > permissionless finalization, and both holder claims paid and reconciled exactly.
 >
 > - Current status: [`README.md` → Current state](../README.md#current-state-verified-live-run-on-monad)
 > - The correction: [`direct-participant-bridge-evidence.md`](./direct-participant-bridge-evidence.md)
-> - Frozen tag: `mordant-v5-hackathon-live-e2e1` → `199034d81ee9bed67d27898abb832774be5380c6`
-> - Qualified run: `76005a0c-2787-4c50-b196-636e45b71781`
+> - **Authoritative run: `e618abc2-0ac7-4d79-b201-44959a54b68c`** on adapter
+>   `0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`
+> - Pre-hardening run `76005a0c-2787-4c50-b196-636e45b71781`, tag
+>   `mordant-v5-hackathon-live-e2e1`, is also history: it settled for real, but it
+>   predates the settlement-time admission proofs, the external source pin and the
+>   deployment-proof binding, so it is not the current qualification either.
 >
 > This file is kept unedited below as the honest record of what was refused and
 > why, before the architecture correction was authorized. Read it as history.

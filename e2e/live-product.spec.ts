@@ -259,9 +259,17 @@ test.describe("participant admission, behind a disabled capability", () => {
     const surface = page.getByTestId("participant-admission");
     await expect(surface).toBeVisible();
     await expect(surface).toContainText("Authorize claim A");
-    await expect(surface).toContainText("Active from 120 until 420");
-    // Participant B's interval is not on this screen.
-    await expect(surface).not.toContainText("until 520");
+    // The interval is this participant's own editable input, not a rendered
+    // caption, so it is read as a field value. Asserting on the visible text
+    // would silently pass against an empty form, since an input's value is not
+    // part of innerText.
+    await expect(surface.locator("#admission-A-from")).toHaveValue("120");
+    await expect(surface.locator("#admission-A-until")).toHaveValue("420");
+    // Participant B's interval is on this screen in neither form.
+    await expect(surface).not.toContainText("520");
+    for (const field of ["#admission-A-from", "#admission-A-until"]) {
+      expect(await surface.locator(field).inputValue()).not.toBe("520");
+    }
     await expect(page.getByRole("button", { name: /Authorize claim B/u })).toHaveCount(0);
   });
 
@@ -278,7 +286,10 @@ test.describe("participant admission, behind a disabled capability", () => {
     await open(page, "admission-same");
     const refusal = page.getByTestId("same-address-B");
     await expect(refusal).toBeVisible();
-    await expect(refusal).toContainText("must be a different address");
+    // The refusal names the reason, not just the rule: a reader has to learn
+    // that this wallet already holds the other role in this same case.
+    await expect(refusal).toContainText("already holds the other role in this case");
+    await expect(refusal).toContainText("must use a different address");
     await expect(page.getByRole("button", { name: /Authorize claim B/u })).toBeDisabled();
   });
 

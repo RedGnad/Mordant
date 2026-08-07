@@ -22,16 +22,24 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = resolve(REPO, "docs/provenance/frozen-sources-af5baad.txt");
+// Pinned for a different reason than the af5baad freeze: this source is what a
+// live deployment's artifact was compiled from, and Solidity folds a hash of the
+// source bytes into the runtime code, so formatting it would change the very
+// artifact the retained deployment proofs assert.
+const DEPLOYED_MANIFEST = resolve(REPO, "docs/provenance/deployed-recourse-sources.txt");
 
+async function pinnedPaths(manifestPath) {
+  const manifest = await readFile(manifestPath, "utf8");
+  return manifest
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => line.split(/\s+/).slice(1).join(" "));
+}
+
+/** Every source the formatter must not touch, each one pinned to a hash elsewhere. */
 export async function frozenPaths() {
-  const manifest = await readFile(MANIFEST, "utf8");
-  return new Set(
-    manifest
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line !== "" && !line.startsWith("#"))
-      .map((line) => line.split(/\s+/).slice(1).join(" ")),
-  );
+  return new Set([...await pinnedPaths(MANIFEST), ...await pinnedPaths(DEPLOYED_MANIFEST)]);
 }
 
 export async function formattablePaths() {

@@ -110,8 +110,12 @@ const BOUNDARIES = [
     body: "A designated decryptor recomputes the circuit and signs the result. This is not native Monad FHE, threshold release or trustless decryption.",
   },
   {
-    title: "Synthetic economics",
-    body: "Lender fixtures are synthetic and no funds move. Cure time is simulated and recourse runs against a local protocol double, not live settlement.",
+    title: "Synthetic pledge book",
+    body: "The lender pledge intervals are synthetic fixtures and the protected notional is illustrative. No real lender book is represented.",
+  },
+  {
+    title: "Real but bounded settlement",
+    body: "The cure window, the permissionless finalization and the aUSDC claims are real on Monad testnet, at deliberately small amounts. Execution is supervised single-host and is not production authorized.",
   },
   {
     title: "Single execution slot",
@@ -419,10 +423,14 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </dl>
           <p className={styles.proofNote}>
             This receipt comes from the recorded lifecycle run, not from the live encrypted check.
-            A live run seals its own receipt, which you can inspect the moment it exists.
+            A live run seals its own receipt, which you can inspect the moment it exists. One such run
+            has already been settled on Monad testnet, end to end, with every transaction public.
           </p>
           <div className={styles.proofActions}>
             <Link className={styles.proofPrimary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
+            <Link className={styles.proofSecondary} href="/protection/verified-run" data-testid="landing-to-verified-run">
+              See the settled run
+            </Link>
             <Link className={styles.proofSecondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
             <Link className={styles.proofSecondary} href="/demo?checkpoint=reveal">See the full lifecycle</Link>
           </div>
@@ -443,8 +451,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             ))}
           </dl>
           <p className={styles.boundaryNote}>
-            Two-wallet participant admission, on-chain cure and aUSDC claims are in development on separate
-            branches. None of them is represented as live here.
+            Two-wallet participant admission, the on-chain cure window and the aUSDC claims have each run
+            end to end on Monad testnet. The completed run is linked above, with every transaction on the
+            public explorer, so none of it has to be taken on trust.
           </p>
         </section>
 

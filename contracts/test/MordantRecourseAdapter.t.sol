@@ -371,7 +371,8 @@ contract MordantRecourseAdapterTest is Test {
         adapter.consumeGovernedRelease(r, sig_r);
 
         // Fresh run, same governed result digest.
-        MordantRecourseAdapter.GovernedRelease memory sameResult = _release(bytes32(uint256(21)), true);
+        MordantRecourseAdapter.GovernedRelease memory sameResult =
+            _release(bytes32(uint256(21)), true);
         sameResult.governedResultDigest = r.governedResultDigest;
         bytes memory sig_sameResult = _sign(sameResult, ATTESTOR_KEY);
         vm.expectRevert();
@@ -467,7 +468,8 @@ contract MordantRecourseAdapterTest is Test {
         vm.expectRevert();
         adapter.finalize(r.runId);
 
-        MordantRecourseAdapter.GovernedRelease memory refused = _release(bytes32(uint256(29)), false);
+        MordantRecourseAdapter.GovernedRelease memory refused =
+            _release(bytes32(uint256(29)), false);
         _consume(refused);
         MordantRecourseAdapter.GovernedRelease memory upgrade = _release(refused.runId, true);
         bytes memory sig_upgrade = _sign(upgrade, ATTESTOR_KEY);
@@ -637,7 +639,9 @@ contract MordantRecourseAdapterTest is Test {
         MordantRecourseAdapter.GovernedRelease memory r = _release(bytes32(uint256(53)), true);
         r.releaseAuthorityId = GENERIC_LABEL;
         bytes memory signature = _signFor(pinned, r, ATTESTOR_KEY);
-        assertEq(vm.addr(ATTESTOR_KEY), pinned.attestor(), "the bridge signature is genuinely correct");
+        assertEq(
+            vm.addr(ATTESTOR_KEY), pinned.attestor(), "the bridge signature is genuinely correct"
+        );
         vm.expectRevert();
         pinned.consumeGovernedRelease(r, signature);
     }
@@ -688,7 +692,6 @@ contract MordantRecourseAdapterTest is Test {
         r.expiry = 1_785_000_600;
     }
 
-
     /// @dev A viem-produced vector. If either implementation drifts, this stops being equal.
     function test_theSolidityDigestMatchesTheViemVector() public view {
         MordantRecourseAdapter.GovernedRelease memory r = _canonicalVector();
@@ -701,26 +704,65 @@ contract MordantRecourseAdapterTest is Test {
         uint256 observed;
 
         MordantRecourseAdapter.GovernedRelease memory m = base;
-        m.runId = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.fheCaseId = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.caseBindingDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.assetIdentityDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.governedResultDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.resultCiphertextDigest = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.participantArtifactDigestA = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.participantArtifactDigestB = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.holderA = address(0xDEAD); observed += _differs(baseline, m); m = base;
-        m.holderB = address(0xDEAD); observed += _differs(baseline, m); m = base;
-        m.payoutA += 1; observed += _differs(baseline, m); m = base;
-        m.payoutB += 1; observed += _differs(baseline, m); m = base;
-        m.conflict = !base.conflict; observed += _differs(baseline, m); m = base;
-        m.releaseAuthorityId = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.releaseMode = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.circuitHash = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.parameterFingerprint = keccak256("x"); observed += _differs(baseline, m); m = base;
-        m.nonce += 1; observed += _differs(baseline, m); m = base;
-        m.issuedAt += 1; observed += _differs(baseline, m); m = base;
-        m.expiry += 1; observed += _differs(baseline, m);
+        m.runId = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.fheCaseId = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.caseBindingDigest = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.assetIdentityDigest = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.governedResultDigest = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.resultCiphertextDigest = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.participantArtifactDigestA = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.participantArtifactDigestB = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.holderA = address(0xDEAD);
+        observed += _differs(baseline, m);
+        m = base;
+        m.holderB = address(0xDEAD);
+        observed += _differs(baseline, m);
+        m = base;
+        m.payoutA += 1;
+        observed += _differs(baseline, m);
+        m = base;
+        m.payoutB += 1;
+        observed += _differs(baseline, m);
+        m = base;
+        m.conflict = !base.conflict;
+        observed += _differs(baseline, m);
+        m = base;
+        m.releaseAuthorityId = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.releaseMode = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.circuitHash = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.parameterFingerprint = keccak256("x");
+        observed += _differs(baseline, m);
+        m = base;
+        m.nonce += 1;
+        observed += _differs(baseline, m);
+        m = base;
+        m.issuedAt += 1;
+        observed += _differs(baseline, m);
+        m = base;
+        m.expiry += 1;
+        observed += _differs(baseline, m);
 
         assertEq(observed, 20, "every one of the twenty signed fields must move the digest");
     }
@@ -753,7 +795,11 @@ contract MordantRecourseAdapterTest is Test {
     /// @dev The struct schema is what makes the runtime's viem vector reproducible here. If the
     /// typehash ever drifts, every digest on both sides drifts with it.
     function test_theStructSchemaMatchesTheRuntimeHandoff() public view {
-        assertEq(adapter.RELEASE_TYPEHASH(), RUNTIME_RELEASE_TYPEHASH, "typehash must match the runtime fixture");
+        assertEq(
+            adapter.RELEASE_TYPEHASH(),
+            RUNTIME_RELEASE_TYPEHASH,
+            "typehash must match the runtime fixture"
+        );
     }
 
     /// @dev The three pins the runtime handoff found wrong on the former adapter.
@@ -775,9 +821,14 @@ contract MordantRecourseAdapterTest is Test {
         assertEq(pinned.circuitHash(), RUNTIME_GOVERNED_CIRCUIT);
         assertEq(pinned.parameterFingerprint(), RUNTIME_GOVERNED_PARAMETERS);
         assertEq(pinned.assetIdentityDigest(), RUNTIME_GOVERNED_ASSET);
-        assertEq(pinned.attestor(), RUNTIME_BRIDGE_ATTESTOR, "the bridge signer stays a separate address");
+        assertEq(
+            pinned.attestor(), RUNTIME_BRIDGE_ATTESTOR, "the bridge signer stays a separate address"
+        );
         // The governed authority is data, the bridge signer is a key. They must never coincide.
-        assertTrue(uint256(pinned.expectedGovernedReleaseAuthorityId()) != uint256(uint160(pinned.attestor())));
+        assertTrue(
+            uint256(pinned.expectedGovernedReleaseAuthorityId())
+                != uint256(uint160(pinned.attestor()))
+        );
     }
 
     /// @dev The former adapter's label, refused by an adapter pinned to the real authority.

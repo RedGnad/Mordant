@@ -39,7 +39,13 @@ test("the public story stays specific and its causal control does not move", asy
   await expect(boundaries).toContainText("managed execution service prepares and encrypts the inputs");
   await expect(boundaries).toContainText("ciphertexts and holds no decryption key");
   await expect(boundaries).toContainText("not native Monad FHE, threshold release or trustless decryption");
-  await expect(boundaries).toContainText("no funds move");
+  // What is synthetic is the pledge book, not the settlement. Real aUSDC moved
+  // on Monad testnet in the completed run, so "no funds move" would now be an
+  // understatement that contradicts the evidence this product leads with.
+  await expect(boundaries).toContainText("lender pledge intervals are synthetic fixtures");
+  await expect(boundaries).toContainText("aUSDC claims are real on Monad testnet");
+  await expect(boundaries).toContainText("not production authorized");
+  await expect(boundaries).not.toContainText("no funds move");
 
   // The recorded receipt names the chain that produced it, so it can never be
   // mistaken for the live encrypted check.
