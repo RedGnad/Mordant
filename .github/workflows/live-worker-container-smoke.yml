@@ -1,15 +1,27 @@
 name: Live worker container smoke
 
-# Manual only. This gate builds the real Dockerfile on a GitHub-hosted runner and
-# runs one real custom V2 BGV conflict journey inside the resulting container.
-# It publishes no image, needs no repository secret and touches no Railway or
+# This gate builds the real Dockerfile on a GitHub-hosted runner and runs one
+# real custom V2 BGV conflict journey inside the resulting container. It
+# publishes no image, needs no repository secret and touches no Railway or
 # Vercel resource.
-# `workflow_dispatch` alone cannot be triggered from a feature branch: GitHub
-# only exposes it once the file is on the default branch, and main is protected
-# here. So the gate also fires on a push to this one branch, restricted to the
-# paths that can actually invalidate the container.
+#
+# It runs on pull requests that touch anything able to invalidate the container.
+# It used to be manual only, and that is precisely how a worker image shipped
+# without a package its own module graph required: every other gate was green
+# because no other gate builds the image. A container failure must be visible
+# before merge, not after a deploy.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'package.json'
+      - 'scripts/mordant-live-worker.mjs'
+      - 'scripts/live-worker-container-smoke.mjs'
+      - '.github/workflows/live-worker-container-smoke.yml'
+      - 'fhe-lab/lattigo/**'
+      - 'src/lib/protection/**'
   push:
     branches:
       - feature/custom-supervised-pledges
