@@ -15,7 +15,7 @@
  * contract at a different address would satisfy every getter check.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 type Address = `0x${string}`;
@@ -188,4 +188,109 @@ export function loadCaseAdapterDeploymentProof(
     fail("PROOF_OWNER", "The case adapter names an owner the reviewed deployment does not");
   }
   return proof;
+}
+
+/**
+ * The identity a retained file CLAIMS, read from its parsed contents.
+ *
+ * Claiming is decided BEFORE strict parsing, and that ordering is the whole
+ * point: a file that names the requested adapter and run is a claimant even when
+ * it is otherwise malformed, so a broken proof can never be quietly stepped over
+ * in favour of some other file. Nothing here judges validity; the strict parser
+ * keeps that job.
+ */
+function claimedIdentity(raw: unknown): Readonly<{ address: string; runId: string }> | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  if (record.schemaVersion !== CASE_ADAPTER_DEPLOYMENT_PROOF_SCHEMA) return null;
+  if (typeof record.address !== "string" || typeof record.runId !== "string") return null;
+  return Object.freeze({ address: record.address, runId: record.runId });
+}
+
+/**
+ * Names the ONE retained file whose contents claim exactly this adapter address
+ * and this run.
+ *
+ * Selection is by claimed CONTENT alone. There is deliberately no fixed name, no
+ * newest-file or mtime tie-break, and no reading of the file name's text: each of
+ * those would let a file that is merely present, merely recent, or merely
+ * well-named stand in for the proof of the deployment actually being settled,
+ * which is the substitution this resolver exists to refuse.
+ *
+ * Zero claimants and more than one claimant are both refusals. The first has no
+ * proof at all; the second has no unambiguous one, and picking between them is
+ * precisely the judgement that must not be made here.
+ */
+export function resolveCaseAdapterDeploymentProofFile(
+  adapterAddress: string,
+  runId: string,
+  root: string = process.cwd(),
+): string {
+  if (typeof adapterAddress !== "string" || !/^0x[0-9a-fA-F]{40}$/u.test(adapterAddress)) {
+    fail("PROOF_ADDRESS", "A deployment proof can only be resolved for a well-formed adapter address");
+  }
+  if (typeof runId !== "string" || runId === "") {
+    fail("PROOF_RUN", "A deployment proof can only be resolved for a named run");
+  }
+  const directory = join(root, CASE_ADAPTER_PROOF_DIRECTORY);
+  let entries: readonly string[];
+  try {
+    // Regular files only, so a symlink cannot point the resolver outside the
+    // retained evidence directory. Sorted for a stable refusal message, never as
+    // a way to prefer one claimant over another.
+    entries = readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    fail("PROOF_DIRECTORY", "The retained deployment proof directory could not be read");
+  }
+  const wantedAddress = adapterAddress.toLowerCase();
+  const claimants: string[] = [];
+  for (const name of entries) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(join(directory, name), "utf8")) as unknown;
+    } catch {
+      // Unreadable or non-JSON evidence claims nothing. It cannot be this proof,
+      // and it cannot suppress the real one either.
+      continue;
+    }
+    const claimed = claimedIdentity(raw);
+    if (claimed === null) continue;
+    if (claimed.address.toLowerCase() !== wantedAddress || claimed.runId !== runId) continue;
+    claimants.push(name);
+  }
+  if (claimants.length === 0) {
+    fail("PROOF_UNRESOLVED", "No retained deployment proof names this adapter address and this run");
+  }
+  if (claimants.length > 1) {
+    fail(
+      "PROOF_AMBIGUOUS",
+      `More than one retained deployment proof names this adapter address and this run: ${claimants.join(", ")}`,
+    );
+  }
+  return claimants[0];
+}
+
+/**
+ * Loads the retained deployment proof for this adapter and run without being
+ * told which file holds it.
+ *
+ * Resolution only chooses the file. Everything that decides whether a proof is
+ * acceptable stays in `loadCaseAdapterDeploymentProof`, which re-reads and
+ * re-checks the resolved file, so the strict parser and every F-04 check remain
+ * the authority over what is returned here.
+ */
+export function loadCaseAdapterDeploymentProofForRun(
+  adapterAddress: string,
+  runId: string,
+  root: string = process.cwd(),
+): CaseAdapterDeploymentProof {
+  return loadCaseAdapterDeploymentProof(
+    adapterAddress,
+    runId,
+    root,
+    resolveCaseAdapterDeploymentProofFile(adapterAddress, runId, root),
+  );
 }

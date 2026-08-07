@@ -128,6 +128,7 @@ const TEST_FILES = Object.freeze([
   ".product-test-dist/src/lib/protection/controlled-live-settlement.test.js",
   ".product-test-dist/src/lib/protection/participant-admission-proof.test.js",
   ".product-test-dist/src/lib/protection/case-adapter-deployment-proof.test.js",
+  ".product-test-dist/src/lib/protection/case-adapter-proof-resolution.test.js",
   ".product-test-dist/src/lib/protection/direct-bridge-trust-anchor.test.js",
   ".product-test-dist/src/lib/protection/bridge-executor.test.js",
   ".product-test-dist/src/app/api/live-protection/recourse-compatibility/route.test.js",

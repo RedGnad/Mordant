@@ -63,7 +63,7 @@ import {
 import { digestToBytes32 } from "./participant-authorization";
 import { readAdmission } from "./participant-admission-store";
 import {
-  loadCaseAdapterDeploymentProof,
+  loadCaseAdapterDeploymentProofForRun,
   type CaseAdapterDeploymentProof,
 } from "./case-adapter-deployment-proof";
 import {
@@ -969,7 +969,9 @@ async function buildPreparedDirect(
       verified,
       release,
       { nonce: input.nonce, issuedAt: input.issuedAt, expiry: input.expiry },
-      loadCaseAdapterDeploymentProof(configuration.adapterAddress, input.runId),
+      // Resolved by claimed content, never by a fixed name: the proof that counts
+      // is the one naming THIS adapter and THIS run, wherever it was retained.
+      loadCaseAdapterDeploymentProofForRun(configuration.adapterAddress, input.runId),
     );
   } catch (error) {
     return bridgeError(error, "ADAPTER_READ", "The case-specific adapter compatibility check failed");
