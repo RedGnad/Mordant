@@ -1,0 +1,226 @@
+.roles {
+  display: grid;
+  margin-top: 26px;
+  gap: 0;
+}
+
+.role {
+  padding: 22px 0 26px 20px;
+  border-left: 3px solid var(--receivable);
+}
+
+.role[data-role="B"] {
+  margin-top: 18px;
+  border-left-color: var(--muted);
+}
+
+.role[data-admitted="true"] {
+  border-left-color: var(--cleared);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.role h3,
+.handoff h3 {
+  margin: 0 0 18px;
+  font-size: clamp(21px, 2.4vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.032em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.steps {
+  display: grid;
+  margin: 0 0 18px;
+  padding: 0;
+  gap: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: grid;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--soft-rule);
+  gap: 4px 20px;
+  grid-template-columns: minmax(140px, 0.3fr) minmax(0, 1fr) auto;
+}
+
+.steps li span {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.steps li strong {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.steps li[data-done="true"] strong {
+  color: var(--ink);
+}
+
+.steps li[data-done="false"] strong {
+  color: var(--muted);
+}
+
+.claimFields {
+  display: grid;
+  margin: 0 0 18px;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 16px;
+}
+
+.otherRole {
+  max-width: 62ch;
+  margin: 18px 0 0;
+  padding: 16px 0 16px 18px;
+  border-left: 3px solid var(--cleared);
+}
+
+.otherRole strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.otherRole p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.privacy {
+  max-width: 62ch;
+  margin: 0 0 18px;
+  padding-left: 14px;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.refused {
+  max-width: 62ch;
+  margin: 0 0 16px;
+  padding-left: 14px;
+  border-left: 3px solid var(--protection);
+  color: var(--protection);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.admitted {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--cleared);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.primary,
+.action {
+  display: inline-flex;
+  min-height: var(--target);
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.primary {
+  min-height: 50px;
+  background: var(--action-fill);
+  font-weight: 600;
+}
+
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.handoff {
+  margin-top: 26px;
+  padding: 24px 0 26px 20px;
+  border-left: 3px solid var(--action);
+}
+
+.handoffBody {
+  max-width: 62ch;
+  margin: 0 0 18px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.handoffActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .role,
+  .handoff {
+    padding-left: 16px;
+  }
+
+  .steps li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .claimFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .primary,
+  .action {
+    width: 100%;
+  }
+
+  .steps .action {
+    width: auto;
+  }
+}

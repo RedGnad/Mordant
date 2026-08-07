@@ -54,6 +54,8 @@ jobs:
         run: node scripts/verify-v5-typehashes.mjs
       - name: Frozen V5 contract sources
         run: node scripts/verify-frozen-v5-sources.mjs
+      - name: Deployed recourse source matches its compiled artifact
+        run: node scripts/verify-deployed-recourse-sources.mjs
       - name: ABI and selector drift
         run: pnpm verify:abi
       - name: Repository hygiene

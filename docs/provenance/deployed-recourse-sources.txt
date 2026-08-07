@@ -1,0 +1,24 @@
+# Deployed recourse contract source manifest
+#
+# The source below is the exact Solidity that the reviewed Adapter V2 artifact is
+# compiled from, and that artifact is what the case-adapter deployment proofs pin.
+#
+# It is listed here for one reason: so the formatter cannot touch it. Solidity
+# embeds a metadata hash derived from the source bytes into the runtime code, so
+# a purely cosmetic reformat still changes the compiled artifact. Measured on
+# 2026-08-07, `forge fmt` on this file moved the compiled runtime keccak from
+#
+#   0x29b610f1fa6592d70e7171b98dcaaa7ee48a7bf0896efa1f3bbe7a1f773e722e   (reviewed)
+#   0x15147c7089839b76bede3517ad3f186a23e4d5f8195f739416a934c33dd65d62   (reformatted)
+#
+# at an identical 10088 bytes. The first value is the `artifactMaskedHash` that
+# every retained deployment proof asserts, so reformatting would silently break
+# the only statement that ties the live adapter at
+# 0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1 to the reviewed contract.
+#
+# The rule this file relies on is the formatter gate's own: a source may escape
+# `forge fmt` only by being pinned to a hash, and a pinned source cannot drift.
+# Nothing here freezes semantics for their own sake; it freezes the exact bytes
+# a deployed artifact was built from.
+#
+bfa2e5e0f7eea155af321530c7a1f86f2d4d6f11 contracts/src/recourse/MordantRecourseAdapter.sol

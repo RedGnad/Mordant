@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "mordant.recourse-adapter-v2/1",
+  "preparedAt": "2026-08-06T12:05:29.778Z",
+  "status": "PREPARED — NOT DEPLOYED. Broadcast is gated on the runtime candidate supplying the real governed release authority identifier.",
+  "supersededDeployment": {
+    "address": "0x27677c837287b060D285d5C90096f06fBe675938",
+    "network": "monad-testnet",
+    "chainId": 10143,
+    "reason": "It pinned a generic keccak label as the release authority. The real governed Ed25519 result carries a distinct sha256-derived identifier. The two were never proven equivalent and must not be treated as such.",
+    "status": "SUPERSEDED — must not be used by the final journey",
+    "leftUntouched": true
+  },
+  "identitySeparation": {
+    "governedReleaseAuthority": {
+      "curve": "ed25519",
+      "role": "identity carried by the verified FHE result",
+      "pinnedAs": "expectedGovernedReleaseAuthorityId (immutable)",
+      "verifiedOnChain": false,
+      "note": "Compared as data. The EVM cannot verify an Ed25519 signature."
+    },
+    "bridgeAttestor": {
+      "curve": "secp256k1",
+      "role": "EIP-712 signer of the bridge attestation",
+      "pinnedAs": "attestor (immutable)",
+      "verifiedOnChain": true
+    },
+    "rule": "Both must hold independently. Neither alone admits a release. No claim is made that these are the same key or the same identity."
+  },
+  "eip712Vector": {
+    "domain": {
+      "name": "MordantRecourseAdapter",
+      "version": "1",
+      "chainId": 31337,
+      "verifyingContract": "0xF62849F9A0B5Bf2913b396098F7c7019b51A820a"
+    },
+    "digest": "0x51bca185f3e8a0fc8d1788c882c62acf2e514c61e0d371c96aca27f2a48a593c",
+    "viemAndSolidityAgree": true,
+    "signedFieldCount": 20
+  },
+  "bytecode": {
+    "runtimeBytes": 10088,
+    "creationBytes": 11134,
+    "eip170Limit": 24576,
+    "withinEip170": true
+  },
+  "tests": {
+    "adapterSuite": {
+      "total": 32,
+      "passed": 32
+    },
+    "fullRepository": {
+      "suites": 15,
+      "total": 305,
+      "passed": 305
+    }
+  },
+  "pendingBeforeBroadcast": [
+    "the complete real governed releaseAuthorityId",
+    "the canonical Viem/Solidity EIP-712 vector confirmed against runtime values",
+    "confirmation of the final signed field semantics"
+  ]
+}

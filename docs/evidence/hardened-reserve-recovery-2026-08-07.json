@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "mordant.activation-reserve-recovery/1",
+  "recoveries": [
+    {
+      "from": "holderA",
+      "address": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+      "amountAtomic": "2400",
+      "tx": "0x0a3c90c9f22350ec9ccd4a8d4cf92d57e01a6e948ad059a3c6345a376c9fb10f",
+      "block": 51559473,
+      "status": "success"
+    },
+    {
+      "from": "holderB",
+      "address": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+      "amountAtomic": "1600",
+      "tx": "0xb4b67e005e967073068e4128c4d6dbabdc6e62a3f91a2cf775dee88304cb8d20",
+      "block": 51559480,
+      "status": "success"
+    }
+  ],
+  "ownerBalanceAfter": "4000"
+}

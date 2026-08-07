@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "mordant.custom-supervised-protection-receipt/1",
+  "runId": "e618abc2-0ac7-4d79-b201-44959a54b68c",
+  "sourceCommit": "5f2156107e61d9d88eb0d1eb82e8676827717dc4",
+  "governedFheCommit": "5f2156107e61d9d88eb0d1eb82e8676827717dc4",
+  "executionVariant": "CUSTOM_SUPERVISED",
+  "authorization": {
+    "protectionBindingSchema": "mordant.protection-binding/2",
+    "protectionBindingDigest": "sha256:0cef8e8dd19f7863f6b47ce7394d5ce3ec9e2c8c7b5eb62a00c1cd112f5c193c",
+    "fheCaseId": "sha256:f732d28180f8c72db4babc29730b329189352bcce0eaf38e07cb6db3fb8b9b62",
+    "caseBindingDigest": "sha256:0cef8e8dd19f7863f6b47ce7394d5ce3ec9e2c8c7b5eb62a00c1cd112f5c193c"
+  },
+  "execution": {
+    "participantArtifactDigests": [
+      "sha256:acc3e7841fa1720f094006d34bfe8b2ce57bcaabfbe2f73024ee8d76bfc84655",
+      "sha256:f74613fd2b7d36d527ea4201f28c1e262b5f16bdeeb6fda5835dad91bc62e0f4"
+    ],
+    "evaluatedArtifactDigest": "sha256:032ddf7b5a361b54aeccc15749dbdaf96aad6189d699e650a0c1b9098fe28034",
+    "evaluatorProvenance": "sha256:0098a32e0da5d22f827cc2219e0657e74616765d31346378af1633e4fd083f9c",
+    "decryptorProvenance": "sha256:cbe3410ec4a99bf25841d52c43c295702507334a8cee9f8529cb362d2293baa4",
+    "circuitId": "mordant.identity-full-fhe-256",
+    "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1"
+  },
+  "governedResult": {
+    "conflict": true,
+    "digest": "sha256:bf2c4e77f44ed7fcbb650d1a71682bb39802dc1a34f9477968c74c69bdca5368",
+    "releaseMode": "governed-decryptor-v1",
+    "releaseOrdinal": 1,
+    "resultCiphertextDigest": "sha256:527e716a89b822c0d53bcaab3069b3f95e69834d1501dbd3ed301a4e2b5392be",
+    "independentlyRecomputedResultDigest": "sha256:527e716a89b822c0d53bcaab3069b3f95e69834d1501dbd3ed301a4e2b5392be"
+  },
+  "terminal": {
+    "incidentState": "CONFLICT_CONFIRMED",
+    "recourseState": "CURE_WINDOW",
+    "recourseOpened": true,
+    "recourseRefusal": null,
+    "recourseRecordDigest": "sha256:ba108952da52d7aa84978f71cc934eb4b86c129e80b1d2a54e939b186b55c443",
+    "originalReceivableState": "OUTSTANDING_INTACT"
+  },
+  "chronology": {
+    "clockClass": "SIMULATED_PROTOCOL_CLOCK",
+    "signedAtUnix": 1786071747,
+    "events": [
+      {
+        "ordinal": 1,
+        "kind": "PROTECTED_HOLDER_SNAPSHOT_FIXED",
+        "atUnix": 1786071634
+      },
+      {
+        "ordinal": 2,
+        "kind": "FHE_CASE_CREATED",
+        "atUnix": 1786071694
+      },
+      {
+        "ordinal": 3,
+        "kind": "PARTICIPANT_A_ARTIFACT_BOUND",
+        "atUnix": null
+      },
+      {
+        "ordinal": 4,
+        "kind": "PARTICIPANT_B_ARTIFACT_BOUND",
+        "atUnix": null
+      },
+      {
+        "ordinal": 5,
+        "kind": "FHE_EVALUATION_BOUND",
+        "atUnix": null
+      },
+      {
+        "ordinal": 6,
+        "kind": "GOVERNED_RESULT_RELEASED",
+        "atUnix": 1786071727
+      },
+      {
+        "ordinal": 7,
+        "kind": "RECOURSE_BOUND",
+        "atUnix": 1786071742
+      },
+      {
+        "ordinal": 8,
+        "kind": "SIMULATED_CURE_WINDOW_COMPLETED",
+        "atUnix": 1786158143
+      }
+    ]
+  },
+  "disclosures": [
+    "Supervised local single-host execution; not production authorized.",
+    "Participant-admitted pledge windows under verified durable wallet authorizations; synthetic lender fixtures and no real funds.",
+    "Designated trusted decryptor; no threshold release and no native Monad FHE.",
+    "The governed signed Boolean is the sole authority for the terminal outcome."
+  ],
+  "receiptDigest": "sha256:f8e293f080bf64d6c4aa07723c0d096fd85971c7d2437f64e15d102983157d7f"
+}

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "mordant.activation-case-adapter-apass/1",
+  "address": "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1",
+  "customerId": "mordantcase9cD93089E02d",
+  "expirationTimeRequested": 1817612330,
+  "envelopeCode": "0000",
+  "message": "success",
+  "isValidAPassOnChain": true,
+  "observedAtBlock": 51573201
+}

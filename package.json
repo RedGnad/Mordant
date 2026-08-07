@@ -18,7 +18,8 @@
     "build:contracts": "forge build --root contracts",
     "fmt:contracts": "forge fmt --root contracts --check",
     "test:contracts": "forge test --root contracts -vvv",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test && pnpm test:e2e:public",
+    "test:e2e:public": "playwright test --config playwright.public-experience.config.ts",
     "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
     "test:e2e:design": "playwright test --config playwright.design.config.ts",
     "evidence:cleanverse": "tsc -p tsconfig.cleanverse-tests.json && node .cleanverse-test-dist/src/lib/evidence/cli.js",
@@ -34,7 +35,7 @@
     "m05:dryrun": "node scripts/m05-dryrun-monad.mjs",
     "m05:check": "node scripts/m05-runner.mjs --check",
     "m05:fork": "node scripts/m05-runner.mjs --fork",
-    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs scripts/m14-manifest.test.mjs scripts/m15-phase.test.mjs scripts/m15-engine.test.mjs",
+    "test:runner": "node --test scripts/runner-controls.test.mjs scripts/m05-runner.test.mjs scripts/m07-ausdc-transfer.test.mjs scripts/m08-contract-apass.test.mjs scripts/m10-custody-roundtrip.test.mjs scripts/m11-invoice-atoken-launch.test.mjs scripts/m12-adapter-path.test.mjs scripts/m13-fork.test.mjs scripts/m13b-vault-binding.test.mjs scripts/m13c-activation-terminal.test.mjs scripts/m14-manifest.test.mjs scripts/m15-phase.test.mjs scripts/m15-engine.test.mjs scripts/verify-recourse-v2-demo-config.test.mjs",
     "revalidate:ausdc": "node --env-file=.env scripts/m06-ausdc-revalidation.mjs",
     "m07:check": "node --env-file=.env scripts/m07-ausdc-transfer.mjs --check",
     "m08:check": "node --env-file=.env scripts/m08-contract-apass.mjs --check",
@@ -60,8 +61,9 @@
     "verify:frozen": "node scripts/verify-frozen-sources.mjs",
     "verify:abi": "pnpm build:contracts && node scripts/verify-abi-selectors.mjs",
     "verify:hygiene": "node scripts/verify-repository-hygiene.mjs",
-    "verify:integration": "pnpm verify:frozen && pnpm verify:abi && pnpm verify:solidity-fmt && pnpm verify:hygiene",
-    "verify:solidity-fmt": "node scripts/verify-solidity-format.mjs"
+    "verify:integration": "pnpm verify:frozen && pnpm verify:deployed-sources && pnpm verify:abi && pnpm verify:solidity-fmt && pnpm verify:hygiene",
+    "verify:solidity-fmt": "node scripts/verify-solidity-format.mjs",
+    "verify:deployed-sources": "node scripts/verify-deployed-recourse-sources.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import localFont from "next/font/local";
 import "./foundations.css";
+import "./brand.css";
 import "./globals.css";
 import "./instruments.css";
 import "./surfaces.css";

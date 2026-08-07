@@ -14,6 +14,41 @@ This is a working bounded hackathon MVP, built for Cleanverse Build: Trusted Ass
 production-authorized. Pledge records are synthetic and no real lender funds move. See
 [Current boundary](#current-boundary).
 
+## Current state: verified live run on Monad
+
+**A fresh two-wallet BGV journey has been executed end to end on Monad testnet.** This is the
+authoritative status of the product. Any document describing an unresolved blocker is historical.
+
+| | |
+|---|---|
+| Run | `e618abc2-0ac7-4d79-b201-44959a54b68c` |
+| Network | Monad testnet, chain `10143` |
+| Participant A / B | `0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685` / `0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9`, each A-Pass verified and separately admitted |
+| Wallet authorization | Each participant's `ParticipantAdmissionV1` payload and signature retained durably and **re-verified at settlement**, not merely asserted by digest |
+| Private decision | Real BGV on the fixed circuit, governed Ed25519 result, **conflict confirmed** |
+| Case adapter | [`0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`](https://testnet.monadexplorer.com/address/0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1) |
+| Adapter identity | Masked runtime bytecode equal to the reviewed artifact, live runtime hashed to its deployment proof, all eleven immutables reconciled |
+| ReleaseConsumed | [`0x09b9bbfb…3936d651`](https://testnet.monadexplorer.com/tx/0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651), block 51573394 |
+| Cure window | Real 600 seconds, allowed to expire uncured |
+| Finalize, permissionless | [`0xc74051d8…45e4fc34`](https://testnet.monadexplorer.com/tx/0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34), block 51575381 |
+| Holder A claim | [`0x4831b0a7…ecbea819`](https://testnet.monadexplorer.com/tx/0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819) · 0.002400 aUSDC |
+| Holder B claim | [`0x36296bf9…430bfc50`](https://testnet.monadexplorer.com/tx/0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb81430bfc50) · 0.001600 aUSDC |
+| Reconciliation | Adapter reserve 0.004000 → 0, both holders paid exactly, liabilities cleared, adapter solvent, MINV01 untouched |
+| Execution source pin | `5f2156107e61d9d88eb0d1eb82e8676827717dc4`, taken from server configuration and never from the artifact |
+
+Read it in the product at **`/protection/verified-run`**, or as evidence in
+[`docs/direct-participant-bridge-evidence.md`](docs/direct-participant-bridge-evidence.md) and the
+`docs/evidence/hardened-*` artifacts.
+
+An earlier complete journey, run `76005a0c-2787-4c50-b196-636e45b71781` on adapter
+`0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935`, is retained under `docs/evidence/activation-*`. It is
+a real settled execution, kept as history: it predates the settlement-time admission proofs, the
+external source pin and the deployment-proof binding above, so it is no longer what the product
+shows.
+
+[`docs/activation-blockers.md`](docs/activation-blockers.md) is **superseded** and kept only as the
+historical record of what was refused before the architecture correction was authorized.
+
 ## Why Mordant
 
 A tokenized receivable can be public while the financing commitments against it stay private, held
@@ -36,7 +71,9 @@ outcome that anyone can verify afterwards.
 One receivable, two private pledge records, one governed answer.
 
 1. A verified receivable is selected as the case root.
-2. Two synthetic lender pledge records enter the private evaluation, each encrypted by its holder.
+2. Two synthetic lender pledge records enter the private evaluation. Each holder authorizes only its
+   own record; managed Mordant infrastructure prepares that record's encrypted artifact, and the
+   evaluator receives encrypted participant artifacts only.
 3. Real BGV FHE evaluates the fixed conflict circuit over the encrypted records.
 4. The evaluator holds no decrypt key: it cannot inspect the records, and it cannot dictate the
    result.

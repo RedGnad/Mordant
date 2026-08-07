@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "mordant.activation-release-consumed/1",
+  "runId": "76005a0c-2787-4c50-b196-636e45b71781",
+  "adapter": "0x00efE6AAcaC6Aa94A3c66d8F09D310197600D935",
+  "bridgeEvidenceDigest": "sha256:aa0286fb3f79b6738b53cff30a96e02f3d235561c41ec0c3845cd194e6c208f3",
+  "governedResultDigest": "0xfa60c0a35a509a48d54ad1cc4a09d376a70bffd297e30eea1775e6b69662f43c",
+  "bridgeRunId": "0x1fa4296d161496036731646fa08679a2ecfbb9631eab20eb9b3775ccc3501138",
+  "signedConflict": true,
+  "signerAddress": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+  "typedDataDigest": "0x08b814a1053a126433f703932e9686c9973093acae5ce3ef84f7e424efb8de61",
+  "structHash": "0x33a10eaaf64e73bfb5b15307c8d8258436ae90d93a3be258ac41ae0097b0512b",
+  "intentDigest": "0xc1895c04ff06030bac62b4cfe0977d3985a9726cce471b4bf84021f4bbd2687d",
+  "nonce": "1",
+  "transactionHash": "0xa46797440a14549fd8fb4cea7d7dcff40d78b84babf48746daa58e8d314d14f6",
+  "blockNumber": 51518455,
+  "blockTimestamp": 1786059646,
+  "gasUsed": "269187",
+  "releaseConsumed": true,
+  "caseState": {
+    "holderA": "0x3883CbE36BE79bd8d1b73ff160B8E7c3CB983685",
+    "holderB": "0x3DcF732b35406Cf5C115Bc0f5D40918DFD2aCdc9",
+    "payoutA": "2400",
+    "payoutB": "1600",
+    "cureDeadlineUnix": 1786060246,
+    "cureDeadlineIso": "2026-08-06T23:50:46.000Z",
+    "state": 1,
+    "stateName": "CureOpen",
+    "cureWindowSeconds": 600
+  }
+}
