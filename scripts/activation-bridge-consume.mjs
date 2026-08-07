@@ -37,6 +37,9 @@ async function main() {
   const runRoot = argument("--run-root", join(ROOT, ".mordant", "worker", "runs"));
 
   const executorModule = await import("../.product-test-dist/src/lib/protection/bridge-executor.js");
+  // Read only to report the evidence digest. The executor is NOT given it: the
+  // artifact and its source commit are trust anchors, so it loads the evidence
+  // from the durable run root itself and takes the commit from the server pin.
   const evidence = JSON.parse(readFileSync(
     join(runRoot, runId, "direct-participant-bridge-evidence.json"), "utf8",
   ));
@@ -47,13 +50,7 @@ async function main() {
 
   const issuedAt = Math.floor(Date.now() / 1_000) - 60;
   const expiry = issuedAt + 3_600;
-  const prepared = await executor.prepareDirect({
-    evidence,
-    sourceCommit: evidence.sourceCommit,
-    nonce: 1n,
-    issuedAt,
-    expiry,
-  });
+  const prepared = await executor.prepareDirect({ runId, nonce: 1n, issuedAt, expiry });
   process.stdout.write(
     `prepared adapter=${prepared.adapter.address} signer=${prepared.signerAddress}\n`
     + `  typedDataDigest ${prepared.typedDataDigest}\n`
