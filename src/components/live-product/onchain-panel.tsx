@@ -88,9 +88,15 @@ function CureWindow({ deadlineIso }: { readonly deadlineIso: string }) {
   const deadlineMs = Date.parse(deadlineIso);
   const [nowMs, setNowMs] = useState<number | null>(null);
   useEffect(() => {
-    setNowMs(Date.now());
+    // Scheduled, not synchronous: setting state inline in an effect cascades a
+    // render on mount. The countdown is a display detail and can start on the
+    // first tick.
     const timer = setInterval(() => setNowMs(Date.now()), 1_000);
-    return () => clearInterval(timer);
+    const first = setTimeout(() => setNowMs(Date.now()), 0);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(first);
+    };
   }, []);
   if (!Number.isFinite(deadlineMs)) return null;
   return (

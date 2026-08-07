@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { keccak256 } from "viem";
+
 import {
   CaseAdapterProofError,
   loadCaseAdapterDeploymentProof,
-  parseCaseAdapterDeploymentProof,
 } from "./case-adapter-deployment-proof";
 
 /**
@@ -205,7 +206,6 @@ test("F-04: a same-length hostile runtime cannot borrow this proof", () => {
   const proof = loadCaseAdapterDeploymentProof(ADAPTER, RUN_ID, scratchRoot());
   const hostileSameLength = `0x${"60".repeat(proof.runtimeBytes)}`;
   assert.equal((hostileSameLength.length - 2) / 2, proof.runtimeBytes);
-  const { keccak256 } = require("viem") as { keccak256: (value: `0x${string}`) => string };
   assert.notEqual(keccak256(hostileSameLength as `0x${string}`).toLowerCase(), proof.deployedCodeHash.toLowerCase());
 });
 
