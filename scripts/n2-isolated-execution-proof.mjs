@@ -2,10 +2,11 @@
 /**
  * Test-only N=2 execution-isolation proof.
  *
- * Launches exactly two authentic managed-intake worker processes from one
- * compiled checkout. They share immutable code and native binaries, but own
- * separate ephemeral ports and mkdtemp durable roots. No dispatcher, pool,
- * queue, adapter factory, production replica, or worker semantic is added.
+ * The harness builds every native executable from the audited checkout, then
+ * launches exactly two authentic managed-intake workers. The workers share
+ * immutable source and freshly built binaries, but have separate ports and
+ * mkdtemp durable roots. It adds no dispatcher, pool, queue, adapter factory,
+ * production replica, or change to the worker's one-active-case invariant.
  */
 
 import { execFile, spawn } from "node:child_process";
@@ -23,7 +24,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { signLaunchToken } from "./mordant-live-worker.mjs";
@@ -39,13 +40,33 @@ const COMPILED_ENGINE = resolve(
   "protection",
   "governed-fhe-product-server.js",
 );
+const EVIDENCE_PATH = resolve(
+  SOURCE_ROOT,
+  "docs",
+  "evidence",
+  "n2-isolated-execution-proof-2026-08-08.json",
+);
+const REPOSITORY = "RedGnad/Mordant";
+const SCHEMA_VERSION = "mordant.n2-isolated-execution-evidence/2";
 const ORIGIN = "https://n2-isolation-proof.example";
 const AUDIENCE = "MORDANT_N2_ISOLATION_PROOF";
 const TERMINAL_TIMEOUT_MS = Number(process.env.MORDANT_N2_TIMEOUT_MS ?? 15 * 60 * 1_000);
-const POLL_MS = 200;
+const POLL_MS = 100;
 const MIN_MATERIAL_OVERLAP_MS = 1_000;
-const BINARIES = ["keygen", "client", "evaluator", "decryptor", "recourse", "inspect", "retain"];
-const REQUIRED_OPERATIONS = [
+const BINARY_DEFINITIONS = Object.freeze([
+  "keygen",
+  "client",
+  "evaluator",
+  "decryptor",
+  "recourse",
+  "inspect",
+  "retain",
+].map((shortName) => ({
+  shortName,
+  name: `mordant-fhe-${shortName}`,
+  package: `./cmd/mordant-fhe-${shortName}`,
+})));
+const REQUIRED_OPERATIONS = Object.freeze([
   "preparePrivateMatch",
   "submitParticipantA",
   "submitParticipantB",
@@ -54,9 +75,9 @@ const REQUIRED_OPERATIONS = [
   "releaseGovernedResult",
   "openRecourseCase",
   "exportProtectionEvidence",
-];
+]);
 
-// The values are private test inputs and are never copied into the summary.
+// These are private test inputs. Only the scenario classification is retained.
 const WINDOWS = Object.freeze({
   A: {
     participantA: { activeFrom: 120, activeUntil: 420 },
@@ -76,10 +97,28 @@ function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
+function sha256Bytes(bytes) {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
 function sha256File(path, stripFinalNewline = false) {
   let bytes = readFileSync(path);
   if (stripFinalNewline && bytes.at(-1) === 0x0a) bytes = bytes.subarray(0, bytes.length - 1);
-  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  return sha256Bytes(bytes);
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    )).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function evidenceDigest(body) {
+  return sha256Bytes(Buffer.from(`MORDANT_N2_ISOLATION_EVIDENCE_V2\n${canonicalJson(body)}`, "utf8"));
 }
 
 function readJson(path) {
@@ -120,6 +159,28 @@ function runDirectories(root) {
     .sort();
 }
 
+function sanitationViolations(value, path = "$") {
+  const violations = [];
+  const forbiddenKeys = /^(?:activeFrom|activeUntil|launchToken|tokenSecret|hmacSecret|privateKey|decryptorPrivate|participantPrivate|binaryRoot|durableRoot|journalPath|receiptPath|executionPath|pid|port)$/iu;
+  const visit = (current, currentPath) => {
+    if (typeof current === "string" && /^(?:\/|[A-Za-z]:[\\/])/u.test(current)) {
+      violations.push(`${currentPath}: absolute path`);
+    }
+    if (Array.isArray(current)) {
+      current.forEach((entry, index) => visit(entry, `${currentPath}[${index}]`));
+      return;
+    }
+    if (current !== null && typeof current === "object") {
+      for (const [key, entry] of Object.entries(current)) {
+        if (forbiddenKeys.test(key)) violations.push(`${currentPath}.${key}: forbidden key`);
+        visit(entry, `${currentPath}.${key}`);
+      }
+    }
+  };
+  visit(value, path);
+  return violations;
+}
+
 async function git(...args) {
   const { stdout } = await execFileAsync("git", args, { cwd: SOURCE_ROOT });
   return stdout.trim();
@@ -143,42 +204,110 @@ async function reservePorts(count) {
   }
 }
 
-async function ensureBinaries() {
-  const configured = process.env.MORDANT_N2_BIN_ROOT ?? process.env.MORDANT_GOVERNED_FHE_BIN_DIR;
-  const binRoot = resolve(configured ?? join(SOURCE_ROOT, ".mordant", "governed-fhe-bin"));
-  mkdirSync(binRoot, { recursive: true, mode: 0o700 });
-  const missing = BINARIES.filter((name) => !existsSync(join(binRoot, `mordant-fhe-${name}`)));
-  if (missing.length > 0) {
-    process.stdout.write(`Preparing ${missing.length} reviewed native binaries before launching either worker.\n`);
-    const goRoot = join(SOURCE_ROOT, "fhe-lab", "lattigo");
-    const goCache = join(SOURCE_ROOT, ".mordant", "n2-go-build-cache");
-    mkdirSync(goCache, { recursive: true, mode: 0o700 });
-    for (const name of missing) {
-      await execFileAsync("go", [
-        "build",
-        "-trimpath",
-        "-o",
-        join(binRoot, `mordant-fhe-${name}`),
-        `./cmd/mordant-fhe-${name}`,
-      ], {
-        cwd: goRoot,
-        env: { ...process.env, CGO_ENABLED: "0", GOCACHE: goCache },
-        maxBuffer: 8 << 20,
-      });
-    }
+async function hostBuildTarget() {
+  const [{ stdout: kernel }, { stdout: machine }] = await Promise.all([
+    execFileAsync("uname", ["-s"]),
+    execFileAsync("uname", ["-m"]),
+  ]);
+  const os = kernel.trim().toLowerCase();
+  const architecture = machine.trim().toLowerCase();
+  const goos = os === "darwin" ? "darwin" : os === "linux" ? "linux" : null;
+  const goarch = ["arm64", "aarch64"].includes(architecture)
+    ? "arm64"
+    : ["x86_64", "amd64"].includes(architecture) ? "amd64" : null;
+  if (goos === null || goarch === null) {
+    throw new Error(`Unsupported native proof build target: ${os}/${architecture}`);
   }
-  const hashes = Object.fromEntries(BINARIES.map((name) => {
-    const path = join(binRoot, `mordant-fhe-${name}`);
-    if (!existsSync(path)) throw new Error(`Native binary is missing after preparation: ${path}`);
-    return [name, sha256File(path)];
-  }));
-  return { binRoot: realpathSync(binRoot), hashes };
+  return { goos, goarch, hostKernel: kernel.trim(), hostMachine: machine.trim() };
+}
+
+async function buildFreshBinaries(sourceCommit, sourceTree) {
+  if (process.env.MORDANT_N2_BIN_ROOT !== undefined) {
+    throw new Error("MORDANT_N2_BIN_ROOT is not accepted for proof-grade execution; binaries must be built fresh");
+  }
+  const buildStartedAt = iso();
+  const goRoot = join(SOURCE_ROOT, "fhe-lab", "lattigo");
+  const binRoot = mkdtempSync(join(tmpdir(), "mordant-n2-proof-binaries-"));
+  const goCache = mkdtempSync(join(tmpdir(), "mordant-n2-proof-go-cache-"));
+  const target = await hostBuildTarget();
+  const [{ stdout: goVersion }, { stdout: goToolchain }] = await Promise.all([
+    execFileAsync("go", ["env", "GOVERSION"], { cwd: goRoot }),
+    execFileAsync("go", ["env", "GOTOOLCHAIN"], { cwd: goRoot }),
+  ]);
+  const builds = [];
+  process.stdout.write("Building all seven native executables from the audited checkout.\n");
+  for (const definition of BINARY_DEFINITIONS) {
+    const outputPath = join(binRoot, definition.name);
+    const startedAt = iso();
+    await execFileAsync("go", [
+      "build",
+      "-mod=readonly",
+      "-trimpath",
+      "-o",
+      outputPath,
+      definition.package,
+    ], {
+      cwd: goRoot,
+      env: {
+        ...process.env,
+        CGO_ENABLED: "0",
+        GOCACHE: goCache,
+        GOOS: target.goos,
+        GOARCH: target.goarch,
+      },
+      maxBuffer: 8 << 20,
+    });
+    if (!existsSync(outputPath)) throw new Error(`Fresh native build did not produce ${definition.name}`);
+    builds.push({
+      name: definition.name,
+      package: definition.package,
+      startedAt,
+      completedAt: iso(),
+      bytes: statSync(outputPath).size,
+      sha256: sha256File(outputPath),
+    });
+  }
+  const hashes = Object.fromEntries(BINARY_DEFINITIONS.map((definition) => [
+    definition.shortName,
+    builds.find((build) => build.name === definition.name).sha256,
+  ]));
+  return {
+    binRoot: realpathSync(binRoot),
+    hashes,
+    retained: {
+      proofGrade: true,
+      builtDuringProof: true,
+      prepopulatedBinaryRootAccepted: false,
+      auditedSourceCommit: sourceCommit,
+      auditedSourceTree: sourceTree,
+      sourceRoot: "fhe-lab/lattigo",
+      outputRootId: "proof-native-binaries",
+      buildStartedAt,
+      buildCompletedAt: iso(),
+      goVersion: goVersion.trim(),
+      goToolchain: goToolchain.trim(),
+      host: target,
+      mode: {
+        command: "go build",
+        moduleMode: "readonly",
+        trimpath: true,
+        cgoEnabled: false,
+        goos: target.goos,
+        goarch: target.goarch,
+      },
+      binaries: builds,
+    },
+  };
 }
 
 function createSlot(label, scenario, port, root, sourceCommit, binaries) {
   return {
     label,
     scenario,
+    workerId: `slot-${label.toLowerCase()}-worker`,
+    portId: `slot-${label.toLowerCase()}-port`,
+    rootId: `slot-${label.toLowerCase()}-root`,
+    journalId: `slot-${label.toLowerCase()}-journal`,
     port,
     root: realpathSync(root),
     sourceCommit,
@@ -225,9 +354,8 @@ function startSlot(slot) {
     MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION: "disabled",
     MORDANT_PROTECTION_SOURCE_COMMIT: slot.sourceCommit,
     MORDANT_GOVERNED_FHE_BIN_DIR: slot.binaries.binRoot,
-    // Managed intake never calls the participant eligibility reader. A valid
-    // local URL lets the existing combined worker construct that dormant
-    // dependency without making a network request.
+    // Managed intake never invokes the participant eligibility reader. This
+    // local URL lets the existing worker construct that dormant dependency.
     MORDANT_MONAD_RPC_URL: "http://127.0.0.1:1",
   };
   slot.processStartedAt = iso();
@@ -244,7 +372,7 @@ function startSlot(slot) {
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   let body = null;
-  try { body = await response.json(); } catch { /* evidence records the status */ }
+  try { body = await response.json(); } catch { /* status is still evidence */ }
   return { response, body };
 }
 
@@ -261,7 +389,7 @@ async function waitReady(slot) {
         slot.readyHealth = body;
         return;
       }
-    } catch { /* the socket is not listening yet */ }
+    } catch { /* socket is not listening yet */ }
     await delay(100);
   }
   throw new Error(`Worker ${slot.label} did not become READY`);
@@ -342,7 +470,10 @@ async function processSnapshot(slots, concurrency) {
       && evaluators.some((entry) => entry.slot === "A")
       && evaluators.some((entry) => entry.slot === "B")
     ) {
-      concurrency.nativeEvaluatorsSimultaneous = { observedAt: iso(), processes: evaluators };
+      concurrency.nativeEvaluatorsSimultaneous = {
+        observedAt: iso(),
+        processes: evaluators.filter((entry) => ["A", "B"].includes(entry.slot)),
+      };
     }
   } catch {
     concurrency.processSamplingAvailable = false;
@@ -400,7 +531,7 @@ function intervalOverlapMs(first, second) {
   return Math.max(0, end - start);
 }
 
-function slotEvidence(slot) {
+function collectSlotEvidence(slot) {
   const runRoot = join(slot.root, "runs", slot.runId);
   const journalPath = join(runRoot, "operation-journal.json");
   const receiptPath = join(runRoot, "custom-supervised-receipt.json");
@@ -443,7 +574,7 @@ async function stopSlot(slot) {
   if (slot.process.exitCode === null) slot.process.kill("SIGKILL");
 }
 
-function publicSlot(slot, evidence) {
+function retainedSlot(slot, evidence) {
   const receipt = evidence.receipt;
   const evaluation = evidence.evaluation;
   const release = evidence.release;
@@ -451,9 +582,9 @@ function publicSlot(slot, evidence) {
     label: slot.label,
     submittedCase: slot.scenario,
     process: {
-      pid: slot.pid,
-      port: slot.port,
-      durableRoot: slot.root,
+      workerId: slot.workerId,
+      portId: slot.portId,
+      durableRootId: slot.rootId,
       startedAt: slot.processStartedAt,
       readyAt: slot.readyAt,
     },
@@ -465,8 +596,8 @@ function publicSlot(slot, evidence) {
     },
     timing: {
       executionStartedAt: evidence.interval.start,
-      evaluationStartedAt: evaluation?.createdAt ?? null,
-      evaluationTerminalAt: evaluation?.terminalAt ?? null,
+      evaluationOperationStartedAt: evaluation?.createdAt ?? null,
+      evaluationOperationTerminalAt: evaluation?.terminalAt ?? null,
       releaseStartedAt: release?.createdAt ?? null,
       releaseTerminalAt: release?.terminalAt ?? null,
       terminalJournalAt: evidence.interval.end,
@@ -483,9 +614,13 @@ function publicSlot(slot, evidence) {
       receiptDigest: receipt.receiptDigest,
     },
     artifacts: {
-      journalPath: evidence.journalPath,
-      receiptPath: evidence.receiptPath,
-      evaluatedArtifact: slot.evaluatedArtifactObservation,
+      evaluatedArtifact: {
+        artifactId: `${slot.label.toLowerCase()}-evaluated-conflict`,
+        name: "evaluated-conflict.json",
+        observedAt: slot.evaluatedArtifactObservation?.observedAt ?? null,
+        bytes: slot.evaluatedArtifactObservation?.bytes ?? null,
+        digest: slot.evaluatedArtifactObservation?.digest ?? null,
+      },
       evaluatedArtifactDigest: receipt.execution.evaluatedArtifactDigest,
       evaluatorProvenance: receipt.execution.evaluatorProvenance,
       decryptorProvenance: receipt.execution.decryptorProvenance,
@@ -509,14 +644,18 @@ function publicSlot(slot, evidence) {
 async function main() {
   const branch = await git("branch", "--show-current");
   const sourceCommit = await git("rev-parse", "HEAD");
+  const sourceTree = await git("rev-parse", "HEAD^{tree}");
+  const baseCommit = await git("merge-base", "HEAD", "origin/main");
   const trackedChanges = await git("status", "--porcelain", "--untracked-files=no");
   if (trackedChanges !== "") {
-    throw new Error("Commit tracked proof/source changes before execution so the source pin is exact");
+    throw new Error("Commit tracked proof/source changes before execution so the audited source pin is exact");
   }
-  if (!/^[0-9a-f]{40}$/u.test(sourceCommit)) throw new Error("A full lowercase source commit is required");
+  if (!/^[0-9a-f]{40}$/u.test(sourceCommit) || !/^[0-9a-f]{40}$/u.test(sourceTree)) {
+    throw new Error("Full lowercase source commit and tree pins are required");
+  }
   if (!existsSync(COMPILED_ENGINE)) throw new Error("The compiled product engine is missing; run the package command");
 
-  const binaries = await ensureBinaries();
+  const binaries = await buildFreshBinaries(sourceCommit, sourceTree);
   const [portA, portB] = await reservePorts(2);
   const rootA = mkdtempSync(join(tmpdir(), "mordant-n2-slot-a-"));
   const rootB = mkdtempSync(join(tmpdir(), "mordant-n2-slot-b-"));
@@ -539,18 +678,18 @@ async function main() {
   try {
     slots.forEach(startSlot);
     await Promise.all(slots.map(waitReady));
-    process.stdout.write(`Both workers READY on ports ${portA} and ${portB}.\n`);
+    process.stdout.write("Both workers independently reported READY.\n");
     await Promise.all(slots.map(admit));
     process.stdout.write(`Accepted A=${slots[0].runId} B=${slots[1].runId}.\n`);
     await observeUntilTerminal(slots, concurrency);
 
-    evidenceA = slotEvidence(slots[0]);
-    evidenceB = slotEvidence(slots[1]);
+    evidenceA = collectSlotEvidence(slots[0]);
+    evidenceB = collectSlotEvidence(slots[1]);
     const foreignFromA = await foreignRead(slots[0], slots[1].runId);
     const foreignFromB = await foreignRead(slots[1], slots[0].runId);
     const runIds = slots.map((slot) => slot.runId);
     const executionOverlapMs = intervalOverlapMs(evidenceA.interval, evidenceB.interval);
-    const evaluationOverlapMs = intervalOverlapMs(
+    const evaluationOperationOverlapMs = intervalOverlapMs(
       { start: evidenceA.evaluation.createdAt, end: evidenceA.evaluation.terminalAt },
       { start: evidenceB.evaluation.createdAt, end: evidenceB.evaluation.terminalAt },
     );
@@ -559,6 +698,8 @@ async function main() {
     );
     const rootAJsonForeign = filesContaining(slots[0].root, slots[1].runId);
     const rootBJsonForeign = filesContaining(slots[1].root, slots[0].runId);
+    const runDirectoriesA = runDirectories(slots[0].root);
+    const runDirectoriesB = runDirectories(slots[1].root);
     const operationsA = evidenceA.journal.records.map((record) => record.operation);
     const operationsB = evidenceB.journal.records.map((record) => record.operation);
     const allRequiredOperations = REQUIRED_OPERATIONS.every((operation) => (
@@ -567,9 +708,9 @@ async function main() {
 
     check("1", "both worker slots become READY independently",
       slots.every((slot) => slot.readyHealth?.status === "READY" && slot.readyHealth?.worker === "IDLE"),
-      slots.map((slot) => ({ label: slot.label, readyAt: slot.readyAt, port: slot.port })));
+      slots.map((slot) => ({ label: slot.label, workerId: slot.workerId, readyAt: slot.readyAt })));
     check("2", "durable roots are distinct", slots[0].root !== slots[1].root,
-      { rootA: slots[0].root, rootB: slots[1].root });
+      { rootIds: slots.map((slot) => slot.rootId), distinct: slots[0].root !== slots[1].root });
     check("3", "requests are independently accepted",
       slots.every((slot) => slot.acceptanceStatus === 201),
       slots.map((slot) => ({ label: slot.label, status: slot.acceptanceStatus, acceptedAt: slot.acceptedAt })));
@@ -585,7 +726,7 @@ async function main() {
         && evidenceA.receipt.execution.decryptorProvenance === binaries.hashes.decryptor
         && evidenceB.receipt.execution.decryptorProvenance === binaries.hashes.decryptor,
       { operationsA, operationsB, evaluatorBinary: binaries.hashes.evaluator,
-        decryptorBinary: binaries.hashes.decryptor, evaluationOverlapMs });
+        decryptorBinary: binaries.hashes.decryptor, evaluationOperationOverlapMs });
     check("7", "evaluated artifacts exist independently",
       slots.every((slot) => slot.evaluatedArtifactObservation !== null)
         && slots[0].evaluatedArtifactObservation.path.startsWith(slots[0].root)
@@ -593,7 +734,9 @@ async function main() {
         && slots[0].evaluatedArtifactObservation.digest === evidenceA.receipt.execution.evaluatedArtifactDigest
         && slots[1].evaluatedArtifactObservation.digest === evidenceB.receipt.execution.evaluatedArtifactDigest
         && evidenceA.receipt.execution.evaluatedArtifactDigest !== evidenceB.receipt.execution.evaluatedArtifactDigest,
-      { artifactA: slots[0].evaluatedArtifactObservation, artifactB: slots[1].evaluatedArtifactObservation });
+      { artifacts: slots.map((slot) => ({ label: slot.label,
+        artifactId: `${slot.label.toLowerCase()}-evaluated-conflict`,
+        digest: slot.evaluatedArtifactObservation?.digest ?? null })) });
     check("8", "governed result A is correct",
       evidenceA.receipt.governedResult.conflict === true
         && evidenceA.receipt.terminal.incidentState === "CONFLICT_CONFIRMED"
@@ -613,17 +756,17 @@ async function main() {
     check("10", "root A contains no run or journal state belonging to B",
       JSON.stringify(evidenceA.journal).includes(slots[1].runId) === false
         && rootAJsonForeign.length === 0
-        && JSON.stringify(runDirectories(slots[0].root)) === JSON.stringify([slots[0].runId]),
-      { runDirectories: runDirectories(slots[0].root), foreignMatches: rootAJsonForeign });
+        && JSON.stringify(runDirectoriesA) === JSON.stringify([slots[0].runId]),
+      { rootId: slots[0].rootId, runIds: runDirectoriesA, foreignRunMatches: rootAJsonForeign.length });
     check("11", "root B contains no run or journal state belonging to A",
       JSON.stringify(evidenceB.journal).includes(slots[0].runId) === false
         && rootBJsonForeign.length === 0
-        && JSON.stringify(runDirectories(slots[1].root)) === JSON.stringify([slots[1].runId]),
-      { runDirectories: runDirectories(slots[1].root), foreignMatches: rootBJsonForeign });
-    check("12", "worker A cannot retrieve run B", foreignFromA.status === 404,
-      foreignFromA);
-    check("13", "worker B cannot retrieve run A", foreignFromB.status === 404,
-      foreignFromB);
+        && JSON.stringify(runDirectoriesB) === JSON.stringify([slots[1].runId]),
+      { rootId: slots[1].rootId, runIds: runDirectoriesB, foreignRunMatches: rootBJsonForeign.length });
+    check("12", "worker A cannot retrieve run B with the canonical unknown-case response",
+      foreignFromA.status === 404 && foreignFromA.code === "UNKNOWN_CASE", foreignFromA);
+    check("13", "worker B cannot retrieve run A with the canonical unknown-case response",
+      foreignFromB.status === 404 && foreignFromB.code === "UNKNOWN_CASE", foreignFromB);
     check("14", "both obtain their own terminal receipt",
       evidenceA.receipt.runId === slots[0].runId
         && evidenceB.receipt.runId === slots[1].runId
@@ -634,58 +777,135 @@ async function main() {
     check("15", "neither journal references the foreign run",
       !JSON.stringify(evidenceA.journal).includes(slots[1].runId)
         && !JSON.stringify(evidenceB.journal).includes(slots[0].runId),
-      { journalA: evidenceA.journalPath, journalB: evidenceB.journalPath });
-    check("source", "both workers use the same reviewed source and native binaries",
-      slots.every((slot) => slot.readyHealth?.version === sourceCommit)
+      { journals: [
+        { journalId: slots[0].journalId, foreignRunReferenced: false },
+        { journalId: slots[1].journalId, foreignRunReferenced: false },
+      ] });
+    check("native-evaluator-concurrency",
+      "one native evaluator child from each slot is observed alive in the same process snapshot",
+      concurrency.processSamplingAvailable
+        && concurrency.nativeEvaluatorsSimultaneous !== null
+        && new Set(concurrency.nativeEvaluatorsSimultaneous.processes.map((entry) => entry.slot)).size === 2,
+      concurrency.nativeEvaluatorsSimultaneous === null ? { observed: false } : {
+        observed: true,
+        observedAt: concurrency.nativeEvaluatorsSimultaneous.observedAt,
+        processCount: concurrency.nativeEvaluatorsSimultaneous.processes.length,
+        slots: [...new Set(concurrency.nativeEvaluatorsSimultaneous.processes.map((entry) => entry.slot))].sort(),
+      });
+    check("source-build-link", "both workers use binaries freshly built from the same audited checkout",
+      binaries.retained.builtDuringProof
+        && binaries.retained.auditedSourceCommit === sourceCommit
+        && binaries.retained.auditedSourceTree === sourceTree
+        && binaries.retained.binaries.length === BINARY_DEFINITIONS.length
+        && slots.every((slot) => slot.readyHealth?.version === sourceCommit)
         && evidenceA.receipt.sourceCommit === sourceCommit
         && evidenceB.receipt.sourceCommit === sourceCommit,
-      { sourceCommit, workerScriptDigest: sha256File(WORKER_SCRIPT),
-        compiledEngineDigest: sha256File(COMPILED_ENGINE), binaryDigests: binaries.hashes });
-    check("model", "exactly two authentic worker processes use separate ports and one-case semantics",
+      { sourceCommit, sourceTree, nativeBinaryCount: binaries.retained.binaries.length,
+        workerScriptDigest: sha256File(WORKER_SCRIPT), compiledEngineDigest: sha256File(COMPILED_ENGINE) });
+    check("process-model", "exactly two authentic worker processes use separate ports and one-case semantics",
       slots.length === 2 && slots[0].pid !== slots[1].pid && slots[0].port !== slots[1].port,
-      slots.map((slot) => ({ label: slot.label, pid: slot.pid, port: slot.port, maxActiveCases: 1 })));
+      slots.map((slot) => ({ label: slot.label, workerId: slot.workerId,
+        portId: slot.portId, maxActiveCases: 1 })));
 
-    const passed = assertions.every((assertion) => assertion.pass);
-    const summary = {
-      schemaVersion: "mordant.n2-isolated-execution-proof/1",
-      verdict: passed
-        ? "PASS — N=2 ISOLATED EXECUTION PROVEN WITH EXISTING WORKERS"
-        : "FAIL — PROOF REQUIRES PRODUCTION ARCHITECTURE CHANGES",
-      exactClaimSupported: passed ? "Multiple isolated execution slots can run concurrently." : null,
+    const nativeEvaluatorObservation = concurrency.nativeEvaluatorsSimultaneous === null ? {
+      observed: false,
+      observedAt: null,
+      processCount: 0,
+      slots: [],
+      binaryName: "mordant-fhe-evaluator",
+    } : {
+      observed: true,
+      observedAt: concurrency.nativeEvaluatorsSimultaneous.observedAt,
+      processCount: concurrency.nativeEvaluatorsSimultaneous.processes.length,
+      slots: [...new Set(concurrency.nativeEvaluatorsSimultaneous.processes.map((entry) => entry.slot))].sort(),
+      binaryName: "mordant-fhe-evaluator",
+    };
+    const body = {
+      schemaVersion: SCHEMA_VERSION,
+      verdict: null,
+      auditedSource: {
+        repository: REPOSITORY,
+        branch,
+        baseCommit,
+        commit: sourceCommit,
+        tree: sourceTree,
+        trackedCheckoutClean: true,
+        workerEntrypoint: relative(SOURCE_ROOT, WORKER_SCRIPT),
+        workerEntrypointDigest: sha256File(WORKER_SCRIPT),
+        compiledEngine: relative(SOURCE_ROOT, COMPILED_ENGINE),
+        compiledEngineDigest: sha256File(COMPILED_ENGINE),
+      },
+      nativeBuild: binaries.retained,
+      processModel: {
+        workerCount: 2,
+        workerRuntime: "node",
+        workerEntrypoint: relative(SOURCE_ROOT, WORKER_SCRIPT),
+        compiledEngine: relative(SOURCE_ROOT, COMPILED_ENGINE),
+        intakeProfile: "MANAGED_COMBINED_INTAKE",
+        maxActiveCasesPerWorker: 1,
+        separatePorts: true,
+        separateDurableRoots: true,
+        sharedFreshNativeBinaryManifest: true,
+      },
+      concurrency: {
+        acceptanceStartSkewMs,
+        executionOverlapMs,
+        evaluationOperationOverlapMs,
+        evaluationOperationMetric: "Overlap of durable evaluatePrivateConflict operation-journal intervals; this is broader than, and is not represented as, native process-runtime duration.",
+        minimumMaterialExecutionOverlapMs: MIN_MATERIAL_OVERLAP_MS,
+        bothWorkersBusyObservedAt: concurrency.bothWorkersBusyObservedAt,
+        processSamplingAvailable: concurrency.processSamplingAvailable,
+        nativeEvaluatorsSimultaneous: nativeEvaluatorObservation,
+      },
+      slots: [retainedSlot(slots[0], evidenceA), retainedSlot(slots[1], evidenceB)],
+      isolation: {
+        foreignReads: {
+          workerAReadingRunB: foreignFromA,
+          workerBReadingRunA: foreignFromB,
+        },
+        roots: {
+          slotA: { rootId: slots[0].rootId, runIds: runDirectoriesA, foreignRunMatches: rootAJsonForeign.length },
+          slotB: { rootId: slots[1].rootId, runIds: runDirectoriesB, foreignRunMatches: rootBJsonForeign.length },
+        },
+        journals: {
+          slotA: { journalId: slots[0].journalId, foreignRunReferenced: false },
+          slotB: { journalId: slots[1].journalId, foreignRunReferenced: false },
+        },
+        receipts: {
+          slotA: { runId: slots[0].runId, receiptDigest: evidenceA.receipt.receiptDigest,
+            observedAt: slots[0].terminalObservedAt },
+          slotB: { runId: slots[1].runId, receiptDigest: evidenceB.receipt.receiptDigest,
+            observedAt: slots[1].terminalObservedAt },
+        },
+      },
+      assertions,
+      exactClaimSupported: null,
       claimsNotSupported: [
         "Production routing or pooling is implemented.",
         "Execution capacity scales linearly.",
         "Any production throughput level is established.",
+        "N>2 execution isolation is established.",
+        "Autoscaling, load balancing, or high availability is implemented.",
         "Settlement scalability is established.",
+        "Horizontal execution is production-ready.",
         "The public deployment exposes more than its intentional one worker slot.",
       ],
-      source: {
-        branch,
-        commit: sourceCommit,
-        workerScript: WORKER_SCRIPT,
-        workerScriptDigest: sha256File(WORKER_SCRIPT),
-        compiledEngine: COMPILED_ENGINE,
-        compiledEngineDigest: sha256File(COMPILED_ENGINE),
-        nativeBinaryRoot: binaries.binRoot,
-        nativeBinaryDigests: binaries.hashes,
-      },
-      processModel: "Two Node worker processes from one checkout and compiled engine; one shared immutable native-binary set; two ports; two mkdtemp durable roots; managed combined intake; one active case per worker.",
-      concurrency: {
-        acceptanceStartSkewMs,
-        executionOverlapMs,
-        evaluationOverlapMs,
-        bothWorkersBusyObservedAt: concurrency.bothWorkersBusyObservedAt,
-        processSamplingAvailable: concurrency.processSamplingAvailable,
-        nativeEvaluatorsSimultaneous: concurrency.nativeEvaluatorsSimultaneous,
-      },
-      slots: [publicSlot(slots[0], evidenceA), publicSlot(slots[1], evidenceB)],
-      assertions,
     };
-    const outputPath = resolve(process.env.MORDANT_N2_SUMMARY_PATH
-      ?? join(SOURCE_ROOT, ".mordant", `n2-isolation-proof-${sourceCommit}.json`));
-    mkdirSync(dirname(outputPath), { recursive: true, mode: 0o700 });
-    writeFileSync(outputPath, `${JSON.stringify(summary, null, 2)}\n`, { mode: 0o600 });
-    process.stdout.write(`${summary.verdict}\nEvidence: ${outputPath}\n`);
+    const preSanitationViolations = sanitationViolations(body);
+    check("retained-evidence-sanitation",
+      "retained evidence contains no absolute paths, raw private windows, tokens, secrets, or private material",
+      preSanitationViolations.length === 0,
+      { violationCount: preSanitationViolations.length });
+    body.assertions = assertions;
+    const passed = assertions.every((assertion) => assertion.pass);
+    body.verdict = passed
+      ? "PASS — N=2 ISOLATED EXECUTION PROVEN WITH EXISTING WORKERS"
+      : "FAIL — PROOF REQUIRES PRODUCTION ARCHITECTURE CHANGES";
+    body.exactClaimSupported = passed ? "Multiple isolated execution slots can run concurrently." : null;
+    const summary = { ...body, evidenceDigest: evidenceDigest(body) };
+    mkdirSync(dirname(EVIDENCE_PATH), { recursive: true, mode: 0o700 });
+    writeFileSync(EVIDENCE_PATH, `${JSON.stringify(summary, null, 2)}\n`, { mode: 0o600 });
+    process.stdout.write(`${summary.verdict}\nEvidence: ${EVIDENCE_PATH}\n`);
     if (!passed) process.exitCode = 1;
   } finally {
     await Promise.all(slots.map(stopSlot));
