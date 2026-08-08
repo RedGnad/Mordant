@@ -13,7 +13,7 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
-test("the compressed landing keeps the frozen hero and one truthful journey", async ({ page }) => {
+test("the compressed landing keeps the frozen hero and one truthful journey", async ({ page }, testInfo) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Conflict became recourse." })).toBeVisible();
@@ -32,13 +32,28 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(promiseGeometry.height).toBeLessThanOrEqual(promiseGeometry.lineHeight * 1.1);
   }
   await expect(page.getByText(
-    "Mordant privately checks whether financing claims conflict, then turns a confirmed conflict into governed recourse. Cleanverse verifies the receivable’s provenance and participant eligibility.",
+    "Mordant privately checks whether financing claims conflict, then turns a confirmed conflict into governed recourse.",
     { exact: true },
   )).toBeVisible();
+  await expect(page.getByText(
+    "Cleanverse verifies the receivable’s provenance and participant eligibility.",
+    { exact: true },
+  )).toHaveCount(0);
   await expect(page.getByText(
     "A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.",
     { exact: true },
   )).toHaveCount(0);
+
+  const symbolField = page.locator("[class*='heroSymbolField']");
+  await page.evaluate(() => window.scrollTo({ top: 240, behavior: "instant" }));
+  await expect.poll(() => symbolField.evaluate((node) => (
+    Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-rotation"))
+  ))).toBeGreaterThanOrEqual(0.5);
+  await expect.poll(() => symbolField.evaluate((node) => {
+    const matrix = new DOMMatrix(getComputedStyle(node).transform);
+    return Math.atan2(matrix.b, matrix.a) * (180 / Math.PI);
+  })).toBeGreaterThanOrEqual(0.5);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   // On the landing, both primary entry points move to its one real experiment.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
   await expect(page.getByRole("main").getByRole("link", { name: "Run the live check" }).first())
@@ -51,6 +66,33 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
   await expect(page.getByTestId("mini-live-check")).toContainText("synthetic financing-claim windows");
   await expect(page.getByTestId("mini-live-check")).toContainText("real encrypted evaluation");
+  const miniPanel = page.getByTestId("mini-live-check").locator("[class*='panel']");
+  await miniPanel.scrollIntoViewIfNeeded();
+  const panelOptics = await miniPanel.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const standardBackdrop = style.backdropFilter;
+    const prefixedBackdrop = style.getPropertyValue("-webkit-backdrop-filter");
+    return {
+      backdrop: standardBackdrop !== "none" ? standardBackdrop : prefixedBackdrop,
+      background: style.backgroundColor,
+      supportsBackdrop: CSS.supports("backdrop-filter", "blur(1px)")
+        || CSS.supports("-webkit-backdrop-filter", "blur(1px)"),
+      reducesTransparency: window.matchMedia("(prefers-reduced-transparency: reduce)").matches,
+    };
+  });
+  if (panelOptics.supportsBackdrop && !panelOptics.reducesTransparency) {
+    expect(panelOptics.backdrop).toContain("blur(20px)");
+  }
+  expect(panelOptics.background).not.toBe("rgba(0, 0, 0, 0)");
+
+  const viewport = page.viewportSize();
+  await page.mouse.move((viewport?.width ?? 1280) * 0.2, (viewport?.height ?? 800) * 0.45);
+  await expect.poll(() => symbolField.evaluate((node) => (
+    Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-x"))
+  ))).toBeLessThanOrEqual(-6);
+  if (testInfo.project.name === "1280x800") {
+    await page.screenshot({ path: testInfo.outputPath("mini-run-liquid-glass.png") });
+  }
   await expect(page.getByRole("region", { name: "One path. Four bounded responsibilities." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
   await expect(page.getByTestId("landing-to-verified-run"))
@@ -251,16 +293,14 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
         translateY: new DOMMatrix(style.transform).m42,
       };
     });
-    expect(restingTongue.opacity).toBeLessThanOrEqual(0.01);
-    expect(restingTongue.translateY).toBeLessThanOrEqual(-15);
+    expect(restingTongue.opacity).toBeGreaterThanOrEqual(0.99);
+    expect(Math.abs(restingTongue.translateY)).toBeLessThanOrEqual(0.1);
 
     await how.hover();
     await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
-      .toBeGreaterThanOrEqual(5.5);
-    await expect.poll(() => how.evaluate((node) => Number(getComputedStyle(node, "::before").opacity)))
-      .toBeGreaterThanOrEqual(0.99);
+      .toBeGreaterThanOrEqual(11.5);
     await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node, "::before").transform).m42))
-      .toBeGreaterThanOrEqual(-0.1);
+      .toBeGreaterThanOrEqual(11.5);
     expect(await how.boundingBox()).toEqual(beforeBox);
     if (testInfo.project.name === "1280x800") {
       await page.screenshot({ path: testInfo.outputPath("header-tongue-hover.png") });

@@ -497,6 +497,13 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
   await installManagedHarness(page, { create: () => ({ body: envelope(null) }) });
   await page.goto("/");
 
+  const reducedMotionSymbol = page.locator("[class*='heroSymbolField']");
+  await page.evaluate(() => window.scrollTo({ top: 240, behavior: "instant" }));
+  expect(await reducedMotionSymbol.evaluate((node) => (
+    getComputedStyle(node).getPropertyValue("--symbol-scroll-rotation").trim()
+  ))).toBe("0deg");
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+
   for (const legend of ["Financing claim A", "Financing claim B"]) {
     await expect(page.getByRole("group", { name: legend })).toBeVisible();
   }

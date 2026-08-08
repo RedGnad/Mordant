@@ -44,11 +44,39 @@
 }
 
 .panel {
+  position: relative;
+  z-index: 5;
   display: grid;
+  overflow: hidden;
   padding: clamp(20px, 2.4vw, 32px);
-  border: 1px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--rule) 72%, white 28%);
+  background: color-mix(in srgb, var(--ground) 68%, transparent);
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 58%),
+    inset -1px -1px 0 color-mix(in srgb, var(--ink) 12%, transparent),
+    0 18px 52px color-mix(in srgb, var(--ink) 8%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.18) contrast(1.04);
+  backdrop-filter: blur(20px) saturate(1.18) contrast(1.04);
   gap: 16px;
   align-content: start;
+  isolation: isolate;
+}
+
+.panel::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(110% 58% at 8% -8%, rgb(255 255 255 / 52%), transparent 48%),
+    linear-gradient(118deg, transparent 22%, rgb(255 255 255 / 18%) 43%, transparent 62%);
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .panel form,
@@ -593,6 +621,24 @@
   .spinner { animation: none; }
 
   .timelineHandle { scroll-behavior: auto; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .panel {
+    background: var(--ground);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .panel::before {
+    display: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .panel {
+    background: color-mix(in srgb, var(--ground) 96%, white);
+  }
 }
 
 @media (max-width: 900px) {

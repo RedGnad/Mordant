@@ -55,6 +55,7 @@
   --symbol-x: 0px;
   --symbol-y: 0px;
   --symbol-scroll-y: 0px;
+  --symbol-scroll-rotation: 0deg;
   position: relative;
   display: flex;
   min-height: calc(100svh - var(--shell-height));
@@ -139,7 +140,9 @@
   width: clamp(390px, 44vw, 680px);
   mix-blend-mode: difference;
   pointer-events: none;
-  transform: translate3d(var(--symbol-x), calc(var(--symbol-y) + var(--symbol-scroll-y)), 0);
+  transform:
+    translate3d(var(--symbol-x), calc(var(--symbol-y) + var(--symbol-scroll-y)), 0)
+    rotate(var(--symbol-scroll-rotation));
   transition: transform 240ms cubic-bezier(0.2, 0, 0, 1);
   will-change: transform;
 }
@@ -187,14 +190,6 @@
   text-wrap: pretty;
 }
 
-.heroSupport > span {
-  display: block;
-}
-
-.heroSupport > span + span {
-  margin-top: 5px;
-}
-
 .supportBreak {
   display: none;
 }
@@ -202,12 +197,6 @@
 @media (min-width: 1200px) {
   .supportBreak {
     display: block;
-  }
-
-  .heroSupport > span:last-child {
-    width: max-content;
-    max-width: 100%;
-    white-space: nowrap;
   }
 }
 
@@ -1091,11 +1080,6 @@
     max-width: 330px;
     margin: 0;
     font-size: 17px;
-  }
-
-  .heroSupport > span:last-child {
-    width: auto;
-    white-space: normal;
   }
 
   .heroPromise {

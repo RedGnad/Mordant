@@ -97,6 +97,7 @@ export function PublicExperience({ liveCheckHolder }: {
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
       hero.style.setProperty("--symbol-scroll-y", `${progress * -64}px`);
+      hero.style.setProperty("--symbol-scroll-rotation", `${progress * 6}deg`);
     };
 
     const onHeroScroll = () => {
@@ -191,16 +192,19 @@ export function PublicExperience({ liveCheckHolder }: {
   }, [integrationStep]);
 
   const moveHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 22;
-    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 14;
-    event.currentTarget.style.setProperty("--symbol-x", `${x}px`);
-    event.currentTarget.style.setProperty("--symbol-y", `${y}px`);
+    const hero = heroRef.current;
+    if (hero === null) return;
+    const x = (event.clientX / Math.max(1, window.innerWidth) - 0.5) * 22;
+    const y = (event.clientY / Math.max(1, window.innerHeight) - 0.5) * 14;
+    hero.style.setProperty("--symbol-x", `${x}px`);
+    hero.style.setProperty("--symbol-y", `${y}px`);
   };
 
-  const resetHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
-    event.currentTarget.style.setProperty("--symbol-x", "0px");
-    event.currentTarget.style.setProperty("--symbol-y", "0px");
+  const resetHeroSymbol = () => {
+    const hero = heroRef.current;
+    if (hero === null) return;
+    hero.style.setProperty("--symbol-x", "0px");
+    hero.style.setProperty("--symbol-y", "0px");
   };
 
   const selectIntegrationStep = (index: number, interactionTimestamp: number) => {
@@ -213,14 +217,12 @@ export function PublicExperience({ liveCheckHolder }: {
       <a className={styles.skip} href="#content">Skip to content</a>
       <PublicHeader surface="landing" />
 
-      <main id="content">
+      <main id="content" onPointerMove={moveHeroSymbol} onPointerLeave={resetHeroSymbol}>
         {/* 1. Hero */}
         <section
           className={styles.hero}
           aria-labelledby="hero-title"
           ref={heroRef}
-          onPointerMove={moveHeroSymbol}
-          onPointerLeave={resetHeroSymbol}
         >
           <h1 id="hero-title">
             <span className={styles.heroLine}><span>Conflict</span></span>
@@ -235,11 +237,8 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
           <p className={styles.heroPromise}>When private claims collide, keep tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            <span>
-              Mordant privately checks whether financing claims conflict,<br className={styles.supportBreak} /> then turns a
-              confirmed conflict into governed recourse.{" "}
-            </span>
-            <span>Cleanverse verifies the receivable’s provenance and participant eligibility.</span>
+            Mordant privately checks whether financing claims conflict,<br className={styles.supportBreak} /> then turns a
+            confirmed conflict into governed recourse.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
