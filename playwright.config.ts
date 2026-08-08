@@ -42,6 +42,11 @@ export default defineConfig({
     {
       command: "next dev --hostname 127.0.0.1 --port 3100",
       url: "http://127.0.0.1:3100",
+      env: {
+        ...process.env,
+        MORDANT_WORKER_TOKEN_SECRET: "public-e2e-token-secret-is-deterministic-only",
+        NEXT_PUBLIC_MORDANT_WORKER_ORIGIN: "https://mordant-worker.test",
+      },
     // Never reuse a server this run did not start. A dev server left behind by
     // another checkout answers on the same port and the whole suite then grades a
     // foreign tree, which is a false green rather than a slow one.

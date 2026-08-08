@@ -1326,6 +1326,7 @@
 
 .hardenedProof .proofPrimary {
   align-self: end;
+  border-color: var(--ground);
 }
 
 /* ---------------------------------------------------------------- 2. problem */
