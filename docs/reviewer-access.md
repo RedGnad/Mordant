@@ -1,27 +1,44 @@
 # Reviewer access
 
-> ## NEVER USE THESE REVIEWER WALLETS ON MAINNET.
+> ## The public deployment currently runs the MANAGED live check.
 >
-> **THE PRIVATE KEYS ARE DISTRIBUTED OUT-OF-BAND AND ARE NOT STORED IN THIS
-> REPOSITORY.** They are disposable wallets, funded only with Monad testnet MON
-> for gas and holding only testnet aUSDC. They have no value, they are shared
-> with reviewers, and they must be treated as public. Import them into a throwaway
-> browser profile, and delete them when you are finished.
+> The worker has exactly one BGV execution slot, and the two-wallet
+> direct-participant rail claims it exclusively by design, so a visitor cannot
+> race a reviewer mid-ceremony. The public submission deployment therefore
+> selects the **managed** profile, so that **every** judge can run a real
+> encrypted check from the landing page without importing a key.
+>
+> This is a deployment profile, not a removal:
+>
+> - the two-wallet direct-participant rail is **implemented, tested and
+>   qualified**. Its browser suite and adversarial batteries run in CI on every
+>   change;
+> - the authoritative hardened two-wallet run remains **publicly verifiable** at
+>   [`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run),
+>   with every Monad transaction linked;
+> - re-enabling it is one environment variable
+>   (`MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION=enabled`) on the worker
+>   and on Vercel, plus a worker redeploy.
+>
+> **While the managed profile is active the reviewer wallet keys are not
+> distributed and are not needed.** The addresses below are published so the
+> hardened run's participants can be checked on chain; the private keys stay
+> out-of-band and unused.
 
-**Production:** <https://mordant-two.vercel.app>
+## What a judge should do today
 
-## What reviewer access is for
+1. Open <https://mordant-two.vercel.app>.
+2. Run the live check on the landing page. It is a real BGV run on a verified
+   Cleanverse receivable, and it usually takes about a minute. One slot exists,
+   so if someone else is mid-run the page says so explicitly.
+3. Follow **See the completed on-chain recourse** to
+   [`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run)
+   for the settled two-wallet run, with `ReleaseConsumed`, the real 600-second
+   cure window, the permissionless finalization and both aUSDC claims.
 
-To let you run the private conflict check yourself, end to end, with two real
-wallets that each sign their own admission. That is the part of Mordant that
-cannot be shown convincingly in a video: two separate parties authorize two
-separate claims, neither claim is ever visible to the other, and the answer comes
-from a signature rather than from a screen.
-
-It is deliberately **not** self-service settlement. Signing and broadcasting the
-governed release stays server-side and capability-gated, and the on-chain
-settlement capability is disabled in production. The completed settlement is
-shown as retained evidence, not re-run on demand.
+The managed check prepares both pledge windows for the visitor under one eligible
+test context. It is a real encrypted decision, and it is **not** two independent
+wallets. The two-wallet ceremony is what the hardened run in step 3 records.
 
 ## The two wallets
 
@@ -33,7 +50,11 @@ shown as retained evidence, not re-run on demand.
 Both hold a genuine Cleanverse A-Pass on Monad testnet. The server refuses any
 other address for either role, so these are the only two wallets that can run it.
 
-## Running it
+## Running the two-wallet ceremony (requires the direct-participant profile)
+
+These steps apply when `MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION=enabled`.
+They are the exact steps the hardened run followed, retained so the qualified
+path stays documented rather than folkloric.
 
 1. **Import Participant A** into your wallet, on **Monad testnet (chain 10143)**.
 2. Open <https://mordant-two.vercel.app/protection/live> and connect wallet A.

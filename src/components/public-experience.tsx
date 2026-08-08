@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { MiniLiveCheck } from "./live-product/mini-live-check";
 import { LIVE_PRODUCT_CTA, LIVE_PRODUCT_HREF, PublicFooter, PublicHeader } from "./public-shell";
 import styles from "./public-experience.module.css";
 
@@ -160,7 +161,11 @@ function Symbol({ className }: { readonly className: string }) {
   );
 }
 
-export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
+export function PublicExperience({ proof, liveCheckHolder }: {
+  readonly proof: PublicProof;
+  /** The eligible managed test context, or null when the worker is unreachable. */
+  readonly liveCheckHolder: string | null;
+}) {
   const [step, setStep] = useState(0);
   const [integrationStep, setIntegrationStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -222,6 +227,40 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
       window.removeEventListener("scroll", onHeroScroll);
       window.removeEventListener("resize", onHeroScroll);
       if (heroScrollFrame.current !== null) window.cancelAnimationFrame(heroScrollFrame.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const section = transformationRef.current;
+    if (section === null) return;
+
+    const updateFromScroll = () => {
+      scrollFrame.current = null;
+      // Below the sticky breakpoint the four states are sequential blocks, so
+      // scroll position must not drive the selection at all.
+      if (!window.matchMedia(STICKY_SCENE).matches) return;
+      const bounds = section.getBoundingClientRect();
+      const range = Math.max(1, section.offsetHeight - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, -bounds.top / range));
+      let nextStep = 0;
+      TRANSFORMATION_SCROLL_THRESHOLDS.forEach((threshold, index) => {
+        if (progress >= threshold) nextStep = index;
+      });
+      setStep((current) => current === nextStep ? current : nextStep);
+    };
+
+    const onScroll = () => {
+      if (scrollFrame.current !== null) return;
+      scrollFrame.current = window.requestAnimationFrame(updateFromScroll);
+    };
+
+    updateFromScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
     };
   }, []);
 
@@ -368,36 +407,9 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           <p className={styles.heroNote}>A real encrypted check on a verified receivable. Usually about a minute.</p>
         </section>
 
-        {/* 2. The economic problem */}
-        <section className={styles.problem} id="problem" aria-labelledby="problem-title" data-reveal>
-          <header>
-            <p className={styles.eyebrow}>The economic problem</p>
-            <h2 id="problem-title">One receivable can carry two financing claims, and neither lender can prove it.</h2>
-          </header>
-          <div className={styles.problemBody}>
-            <div className={styles.claimants}>
-              <article>
-                <p>Lender A</p>
-                <strong>Already financed it.</strong>
-                <span>Holds a pledge over the receivable with its own active window.</span>
-              </article>
-              <article>
-                <p>Lender B</p>
-                <strong>Is about to finance it.</strong>
-                <span>Holds a pledge whose window may already overlap A&rsquo;s.</span>
-              </article>
-            </div>
-            <div className={styles.problemStatement}>
-              <p>
-                Publishing a pledge book is how a lender loses its book. So the two windows stay private,
-                the overlap stays invisible, and the safe decision is to stop lending.
-              </p>
-              <p className={styles.problemPayoff}>
-                Credit stops because nobody can check without disclosing.
-              </p>
-            </div>
-          </div>
-        </section>
+        {/* 2. The real check, immediately. The economic problem this replaced
+            said the same thing in a paragraph; here a visitor can run it. */}
+        {liveCheckHolder === null ? null : <MiniLiveCheck publicTestHolder={liveCheckHolder} />}
 
         {/* 3. The transformation */}
         <section
@@ -476,28 +488,6 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
             <p className={styles.productLede}>
               Mordant&rsquo;s first workflow for keeping tokenized credit moving through private conflict.
             </p>
-            {/* The three Cleanverse boundaries, named once and precisely. A judge
-                must be able to see what Cleanverse provides and what it does not
-                without reading the whole page: it verifies the asset and who may
-                participate, and it does not perform the private decision. */}
-            <dl className={styles.cleanverseFacts} aria-label="What Cleanverse provides">
-              <div>
-                <dt>MINV01</dt>
-                <dd>The verified receivable. Cleanverse establishes the asset; it is the RWA in this case.</dd>
-              </div>
-              <div>
-                <dt>A-Pass</dt>
-                <dd>Participant eligibility. Cleanverse decides which wallets may hold a claim against it.</dd>
-              </div>
-              <div>
-                <dt>aUSDC</dt>
-                <dd>The compliant settlement rail the consequence is paid on. A rail, not the receivable.</dd>
-              </div>
-            </dl>
-            <p className={styles.cleanverseNote}>
-              Cleanverse verifies the asset and who may participate. The private conflict decision is
-              Mordant&rsquo;s, and Cleanverse never sees a pledge window.
-            </p>
             <dl className={styles.productFacts}>
               <div>
                 <dt>What enters</dt>
@@ -519,19 +509,13 @@ export function PublicExperience({ proof }: { readonly proof: PublicProof }) {
           </div>
         </section>
 
-        {/* 5. Live execution invitation */}
+        {/* 5. Who is responsible for what, as one path. The invitation copy and
+            CTA that used to open this section are now the live check above; what
+            remains is the part nothing else says. */}
         <section className={styles.invitation} aria-labelledby="invitation-title" data-reveal>
           <div className={styles.invitationText}>
-            <p className={styles.eyebrow}>Run it</p>
-            <h2 id="invitation-title">The check on this site is real, and it usually takes about a minute.</h2>
-            <p>
-              Your two claim windows go to Mordant&rsquo;s managed execution service, which prepares and
-              encrypts them. The evaluator then runs the fixed circuit over ciphertexts only. No result
-              exists until the designated decryptor releases a signed Boolean.
-            </p>
-            <div className={styles.actions}>
-              <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
-            </div>
+            <p className={styles.eyebrow}>The path</p>
+            <h2 id="invitation-title">Four responsibilities, and only one of them is ours.</h2>
           </div>
 
           {/* The old integration flow, verbatim in structure: the same 3fr/9fr
