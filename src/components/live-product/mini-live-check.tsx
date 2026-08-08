@@ -271,8 +271,9 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
         )}
 
         <p className={styles.honesty}>
-          Real BGV, usually about a minute. This managed check prepares both windows for you under one
-          eligible test context; it is not two independent wallets.
+          Real BGV. Two runs on this deployment reached the governed result in 28 and 30 seconds. This
+          managed check prepares both windows for you under one eligible test context; it is not two
+          independent wallets.
         </p>
       </div>
     </section>

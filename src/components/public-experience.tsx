@@ -404,7 +404,7 @@ export function PublicExperience({ proof, liveCheckHolder }: {
             <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
             <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
           </div>
-          <p className={styles.heroNote}>A real encrypted check on a verified receivable. Usually about a minute.</p>
+          <p className={styles.heroNote}>A real encrypted check on a verified receivable. About 30 seconds.</p>
         </section>
 
         {/* 2. The real check, immediately. The economic problem this replaced
