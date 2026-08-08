@@ -530,6 +530,7 @@ test("the N=3 runner freezes and executes AB, then AC, then BC through RELEASED"
   assert.equal(result.intents.length, 3);
   assert.equal(result.bindings.length, 3);
   assert.equal(result.leaves.length, 3);
+  assert.deepEqual(result.failures, []);
   assert.deepEqual(result.leaves.map((leaf) => pairLabel(leaf.claimPair, labelsByClaimId)), ["AB", "AC", "BC"]);
   assert.deepEqual(result.leaves.map((leaf) => leaf.state), [
     "CONFLICT",

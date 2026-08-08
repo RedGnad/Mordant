@@ -737,7 +737,8 @@ async function main() {
   });
 
   if (result.leaves.length !== 3 || result.intents.length !== 3 || result.bindings.length !== 3) {
-    throw new Error("The real pair runner did not produce all three complete leaves");
+    const failures = result.failures.map((failure) => `${failure.phase}:${failure.code}`).join(",");
+    throw new Error(`The real pair runner did not produce all three complete leaves (${failures || "no failure detail"})`);
   }
   const intentByPair = new Map(result.intents.map((intent) => [intent.claimPair.pairId, intent]));
   const bindingByPair = new Map(result.bindings.map((binding) => [binding.claimPair.pairId, binding]));

@@ -140,6 +140,12 @@ export type ReceivableConflictSessionRunnerResult = Readonly<{
   intents: readonly GraphPairIntent[];
   bindings: readonly GraphPairBindingRecord[];
   leaves: readonly GraphPairEvidenceLeaf[];
+  failures: readonly Readonly<{
+    claimPair: CanonicalClaimPair;
+    pairRunId: string;
+    phase: string;
+    code: string;
+  }>[];
   aggregate: AggregateManifest;
   chronology: ReturnType<ReceivableConflictSession["chronology"]>;
   projections: ConflictGraphProjections;
@@ -318,6 +324,7 @@ export async function runReceivableConflictSession(
   const intents: GraphPairIntent[] = [];
   const bindings: GraphPairBindingRecord[] = [];
   const leaves: GraphPairEvidenceLeaf[] = [];
+  const failures: Array<ReceivableConflictSessionRunnerResult["failures"][number]> = [];
   let activePairCount = 0;
   let maxConcurrentPairsObserved: 0 | 1 = 0;
   let nextExecutionOrdinal = 0;
@@ -359,6 +366,7 @@ export async function runReceivableConflictSession(
         throw new ConflictGraphError("PAIR_CONCURRENCY", "More than one pair execution became active");
       }
       maxConcurrentPairsObserved = 1;
+      let phase = "CREATE";
 
       try {
         const windows = supervisedWindowsFromClaims(pairClaims);
@@ -367,12 +375,14 @@ export async function runReceivableConflictSession(
           pairRunId,
           "CASE_CREATED",
         );
+        phase = "PREPARE";
         requireEngineStage(
           await options.orchestrator.preparePrivateMatch(pairRunId),
           pairRunId,
           "MATCH_PREPARED",
         );
 
+        phase = "READ_BINDING";
         const caseBinding = publicCaseBinding(
           await options.readJson<FheCaseBinding>(
             pairRunId,
@@ -380,6 +390,7 @@ export async function runReceivableConflictSession(
           ),
         );
         const bound = observedTime(options.now);
+        phase = "BIND";
         const binding = createGraphPairBinding({
           intent,
           claims: pairClaims,
@@ -393,6 +404,7 @@ export async function runReceivableConflictSession(
         session.bindPair(binding, bound.iso);
         bindings.push(binding);
 
+        phase = "SUBMIT_A";
         requireEngineStage(
           await options.orchestrator.submitParticipantPledge(
             pairRunId,
@@ -402,6 +414,7 @@ export async function runReceivableConflictSession(
           pairRunId,
           "PARTICIPANT_A_SUBMITTED",
         );
+        phase = "SUBMIT_B";
         requireEngineStage(
           await options.orchestrator.submitParticipantPledge(
             pairRunId,
@@ -411,18 +424,22 @@ export async function runReceivableConflictSession(
           pairRunId,
           "PARTICIPANT_B_SUBMITTED",
         );
+        phase = "EVALUATE";
         requireEngineStage(
           await options.orchestrator.evaluatePrivateConflict(pairRunId),
           pairRunId,
           "EVALUATED",
         );
+        phase = "RELEASE";
         requireEngineStage(
           await options.orchestrator.releaseGovernedResult(pairRunId),
           pairRunId,
           "RELEASED",
         );
 
+        phase = "INSPECT";
         const inspection = publicInspection(await options.inspect(pairRunId));
+        phase = "READ_RELEASE_ARTIFACTS";
         const evaluated = await options.readJson<EvaluatedConflictReadback>(
           pairRunId,
           RECEIVABLE_CONFLICT_PAIR_PUBLIC_FILES.evaluatedConflict,
@@ -432,6 +449,7 @@ export async function runReceivableConflictSession(
           RECEIVABLE_CONFLICT_PAIR_PUBLIC_FILES.governedResult,
         );
         const completed = observedTime(options.now);
+        phase = "BUILD_LEAF";
         const leaf = createGraphPairEvidenceLeaf({
           graphSessionId: session.graphSessionId,
           receivableIdentity: session.receivableIdentity,
@@ -459,13 +477,17 @@ export async function runReceivableConflictSession(
           pins: options.pins,
         });
         session.validateActivePairEvidence(leaf, completed.iso);
+        phase = "PERSIST_LEAF";
         await options.persist.writeEvidenceLeaf(session.graphSessionId, pair.pairId, leaf);
+        phase = "COMPLETE_PAIR";
         session.completePair(leaf, completed.iso);
         leaves.push(leaf);
       } catch (error) {
+        const code = failureCode(error);
+        failures.push(Object.freeze({ claimPair: pair, pairRunId, phase, code }));
         const failed = observedTime(options.now);
         try {
-          session.failActivePair(failureCode(error), failed.iso);
+          session.failActivePair(code, failed.iso);
         } catch (failureError) {
           // completePair marks and closes its active pair when validation fails.
           if (!(failureError instanceof ConflictGraphError && failureError.code === "PAIR_ACTIVE")) {
@@ -502,6 +524,7 @@ export async function runReceivableConflictSession(
     intents: Object.freeze([...intents]),
     bindings: Object.freeze([...bindings]),
     leaves: Object.freeze([...leaves]),
+    failures: Object.freeze([...failures]),
     aggregate,
     chronology,
     projections,
