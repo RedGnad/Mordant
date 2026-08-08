@@ -42,8 +42,8 @@ for that vault. A local mock proves Mordant accounting only.
 
 The production-shaped boundaries themselves are no longer mocks. Their tests execute complete cash
 redemption and default-release paths, while using protocol-shaped doubles for the external A-Pass and
-A-Token contracts. What remains unproven is the current Monad sandbox deployment path for a newly
-issued invoice A-Token, not Mordant's adapter logic.
+A-Token contracts. The Monad sandbox deployment path for a newly issued invoice A-Token was unproven when this was
+written; it has since been executed, and MINV01 was issued with readback on Monad testnet.
 
 Each adapter must report a custom A-Token dedicated to one invoice. Activation requires both its
 issued supply and its vault credit to equal the initial beneficial units exactly, with the same six
