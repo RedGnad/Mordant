@@ -91,8 +91,8 @@ test.describe("live product presentation model", () => {
     const model = adapt(conflictView());
     expect(model.state).toBe("RECEIPT_SEALED");
     expect(model.release?.conflict).toBe(true);
-    expect(model.decisionRail?.nextDecision).toBe("Cure the conflict before the deadline");
-    expect(model.decisionRail?.responsibleNow).not.toBeNull();
+    expect(model.decisionRail?.nextDecision).toBe("Apply approved cure policy after conflict review");
+    expect(model.decisionRail?.responsibleNow).toBe("Policy / human review required");
 
     const deadline = model.decisionRail?.deadlineIso;
     expect(typeof deadline).toBe("string");
@@ -106,7 +106,7 @@ test.describe("live product presentation model", () => {
     expect(model.release?.conflict).toBe(false);
     expect(model.decisionRail?.nextDecision).toBe("No recourse action is available");
     expect(model.decisionRail?.deadlineIso).toBeNull();
-    expect(model.decisionRail?.consequence).toContain("cleared the case");
+    expect(model.decisionRail?.consequence).toContain("established no conflict between the submitted windows");
     const railText = JSON.stringify(model.decisionRail);
     for (const forbidden of ["approved", "approval", "creditworthy"]) {
       expect(railText.toLowerCase()).not.toContain(forbidden);

@@ -135,7 +135,7 @@ export function LiveProduct({
           before anything else. */}
       <header className={styles.caseBar}>
         <div className={styles.caseAsset}>
-          <p className={styles.eyebrow}>Verified receivable</p>
+          <p className={styles.eyebrow}>Cleanverse provenance</p>
           <h1>{model.assetLabel}</h1>
         </div>
         <dl className={styles.caseFacts}>
@@ -257,8 +257,8 @@ export function LiveProduct({
             Two private claims on the same receivable.
           </h2>
           <p className={styles.lede}>
-            Each participant holds a pledge with its own active interval. Neither will publish its book,
-            so the overlap cannot be checked in the open.
+            Each participant holds a pledge with its own active interval. The workflow does not require
+            either lender to disclose its pledge window to the counterparty.
           </p>
 
           {managedDraft === null ? null : (
@@ -400,8 +400,8 @@ export function LiveProduct({
           </h2>
           <p className={styles.revealLede}>
             {conflict
-              ? "The private claims overlap. The original receivable remains outstanding and intact."
-              : "The private check cleared. No reserve was assigned to this case."}
+              ? "The governed result establishes only that the private claim windows conflict. The original receivable remains outstanding and intact."
+              : "The governed result establishes only that the private claim windows do not conflict. The configured policy assigned no reserve."}
           </p>
 
           {managedDraft === null ? null : (
@@ -419,11 +419,11 @@ export function LiveProduct({
                 <dd>{model.decisionRail.nextDecision}</dd>
               </div>
               <div>
-                <dt>Responsible now</dt>
-                <dd>{model.decisionRail.responsibleNow ?? "Nobody. The case is closed."}</dd>
+                <dt>Action owner</dt>
+                <dd>{model.decisionRail.responsibleNow ?? "No action owner required."}</dd>
               </div>
               <div>
-                <dt>Deadline</dt>
+                <dt>Policy deadline</dt>
                 <dd data-testid="deadline">
                   {deadline === null
                     ? model.decisionRail.deadlineNote ?? "No deadline applies."

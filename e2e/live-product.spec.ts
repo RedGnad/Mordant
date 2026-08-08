@@ -27,13 +27,14 @@ test.describe("the judge acceptance path", () => {
   test("the asset, the network and the division of responsibility are stated first", async ({ page }) => {
     await open(page, "conflict");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("MINV01");
-    await expect(page.locator("header").filter({ hasText: "Verified receivable" })).toContainText("Monad testnet");
+    await expect(page.locator("header").filter({ hasText: "Cleanverse provenance" })).toContainText("Monad testnet");
 
     // The one line that names all three Cleanverse boundaries.
     const body = page.locator("body");
-    await expect(body).toContainText("Cleanverse verifies the asset and who may participate");
-    await expect(body).toContainText("Mordant privately decides whether the claims conflict");
-    await expect(body).toContainText("opens or refuses recourse in aUSDC");
+    await expect(body).toContainText("Cleanverse verifies asset provenance and identity plus participant eligibility");
+    await expect(body).toContainText("not legal validity or enforceability");
+    await expect(body).toContainText("governed result establishes only that conflict status");
+    await expect(body).toContainText("approved policy and human review determine recourse actions");
   });
 
   test("the journey is five chapters, not thirty runtime states", async ({ page }) => {
@@ -48,7 +49,7 @@ test.describe("the judge acceptance path", () => {
     const body = page.locator("body");
     await expect(body).toContainText("Participant A");
     await expect(body).toContainText("Participant B");
-    await expect(body).toContainText("Neither will publish its book");
+    await expect(body).toContainText("does not require either lender to disclose its pledge window to the counterparty");
     await expect(body).toContainText("does not transfer funds");
   });
 
@@ -85,12 +86,15 @@ test.describe("conflict reveal", () => {
     const reveal = page.getByTestId("reveal");
     await expect(reveal).toHaveAttribute("data-outcome", "conflict");
     await expect(reveal).toContainText("Conflict confirmed");
+    await expect(reveal).toContainText("establishes only that the private claim windows conflict");
     await expect(reveal).toContainText("remains outstanding and intact");
 
     const rail = page.getByTestId("decision-rail").first();
-    await expect(rail).toContainText("Cure the conflict before the deadline");
-    await expect(rail).toContainText("Responsible now");
-    await expect(rail).toContainText("becomes claimable");
+    await expect(rail).toContainText("Apply approved cure policy after conflict review");
+    await expect(rail).toContainText("Action owner");
+    await expect(rail).toContainText("Policy / human review required");
+    await expect(rail).toContainText("configured consequence applies");
+    await expect(rail).not.toContainText("The conflicting pledge holder");
 
     // The deadline is computed, never a retained historical date.
     const deadline = await page.getByTestId("deadline").first().innerText();
@@ -106,12 +110,12 @@ test.describe("no-conflict reveal", () => {
     const reveal = page.getByTestId("reveal");
     await expect(reveal).toHaveAttribute("data-outcome", "cleared");
     await expect(reveal).toContainText("No conflict");
-    await expect(reveal).toContainText("No reserve was assigned to this case");
+    await expect(reveal).toContainText("configured policy assigned no reserve");
     await expect(reveal).toContainText("This is not a credit approval");
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("No recourse action is available");
-    await expect(rail).toContainText("No cure window opens");
+    await expect(rail).toContainText("Configured policy opens no cure window");
   });
 
   test("the two outcomes differ by more than a word", async ({ page }) => {

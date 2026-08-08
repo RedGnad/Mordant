@@ -13,82 +13,73 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
-test("the public story stays specific and its causal control does not move", async ({ page }) => {
+test("the compressed landing keeps the frozen hero and one truthful journey", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", {
-    name: "Conflict became recourse.",
-  })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conflict became recourse." })).toBeVisible();
   await expect(page.getByText(
     "When private claims collide, Mordant keeps tokenized credit moving.",
     { exact: true },
   )).toBeVisible();
+  await expect(page.getByText(
+    "Mordant privately detects conflicting pledges on verified receivables and turns confirmed conflicts into governed, auditable recourse, without exposing lender records to the evaluator.",
+    { exact: true },
+  )).toBeVisible();
 
-  // The canonical primary action is the live product, in the shell and in the hero.
-  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
+  // On the landing, both primary entry points move to its one real experiment.
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
   await expect(page.getByRole("main").getByRole("link", { name: "Run the live check" }).first())
-    .toHaveAttribute("href", "/protection/live");
-  // Evidence is the secondary proof path and resolves to the protection surface.
+    .toHaveAttribute("href", "#product");
   await expect(page.getByRole("navigation", { name: "Product navigation" })
     .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection?scenario=conflict");
   await expect(page.getByRole("main").getByRole("link", { name: "Inspect verified evidence" }).first())
     .toHaveAttribute("href", "/protection?scenario=conflict");
 
-  // Every material limitation stays on the page, below the value explanation.
+  await expect(page.getByTestId("mini-live-check")).toBeVisible();
+  await expect(page.getByRole("region", { name: "One path. Four bounded responsibilities." })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
+  await expect(page.getByTestId("landing-to-verified-run"))
+    .toHaveAttribute("href", "/protection/verified-run");
+
+  const integration = page.locator('[aria-label="Integration stages"]');
+  await page.locator("#how").scrollIntoViewIfNeeded();
+  await expect(page.locator("#how")).toHaveAttribute("data-visible", "true");
+  const monadStage = integration.getByRole("button", { name: /Monad recourse/ });
+  await monadStage.click();
+  await expect(monadStage).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(
+    "In the separate hardened run, preconfigured demo policy opened the cure path and deployment configuration determined holders and payouts before settlement.",
+    { exact: true },
+  )).toBeVisible();
+
+  // Every material limitation remains, compressed into three boundaries.
   const boundaries = page.locator("#boundaries");
-  await expect(boundaries).toContainText("managed execution service prepares and encrypts the inputs");
-  await expect(boundaries).toContainText("ciphertexts and holds no decryption key");
+  await expect(boundaries).toContainText("managed service prepares their encryption");
+  await expect(boundaries).toContainText("evaluator holds no decryption key");
   await expect(boundaries).toContainText("not native Monad FHE, threshold release or trustless decryption");
-  // What is synthetic is the pledge book, not the settlement. Real aUSDC moved
-  // on Monad testnet in the completed run, so "no funds move" would now be an
-  // understatement that contradicts the evidence this product leads with.
-  await expect(boundaries).toContainText("lender pledge intervals are synthetic fixtures");
-  await expect(boundaries).toContainText("aUSDC claims are real on Monad testnet");
+  await expect(boundaries).toContainText("Cleanverse provenance and identity");
+  await expect(boundaries).toContainText("does not establish invoice authenticity, legal validity or enforceability");
+  await expect(boundaries).toContainText("financing-claim windows are synthetic");
+  await expect(boundaries).toContainText("separate hardened two-wallet run");
+  await expect(boundaries).toContainText("does not settle aUSDC");
   await expect(boundaries).toContainText("not production authorized");
-  await expect(boundaries).not.toContainText("no funds move");
+  await expect(boundaries).toContainText("result establishes only conflict status");
 
-  // The recorded receipt names the chain that produced it, so it can never be
-  // mistaken for the live encrypted check.
-  await expect(page.getByRole("region", { name: /verifiable transition/iu })).toContainText("Anvil");
-
-  // A landing must not carry a fixed historical deadline.
-  expect(await page.locator("body").innerText()).not.toMatch(/\b30 Jul\b/u);
-
+  // The accepted scrollytelling is preserved in source but intentionally absent
+  // from this first compressed render.
+  await expect(page.getByRole("navigation", { name: "Transformation states" })).toHaveCount(0);
+  for (const removedHeading of [
+    "Conflicting Pledge Protection",
+    "The answer is not the product. The consequence is.",
+    "One receipt. One verifiable transition.",
+    "Test accountable recourse beside the process you already trust.",
+  ]) {
+    await expect(page.getByRole("heading", { name: removedHeading, exact: true })).toHaveCount(0);
+  }
   const renderedText = await page.locator("body").innerText();
+  expect(renderedText).not.toMatch(/\b30 Jul\b/u);
   expect(renderedText).not.toMatch(/\b0[1-5]\s*[·/]\s*/u);
   expect(renderedText).not.toContain("Continue");
-
-  const states = [
-    "Stable",
-    "Conflict",
-    "Recourse",
-    "Proof",
-  ] as const;
-  let anchor: { x: number; y: number; width: number; height: number } | null = null;
-  const transformation = page.getByRole("navigation", { name: "Transformation states" });
-  await transformation.scrollIntoViewIfNeeded();
-
-  for (const label of states) {
-    const control = transformation.getByRole("button", { name: label });
-    await expect(control).toBeVisible();
-    const bounds = await control.evaluate((element) => {
-      const bounds = element.getBoundingClientRect();
-      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-    });
-
-    if (anchor === null) {
-      anchor = bounds;
-    } else {
-      expect(Math.abs(bounds.y - anchor.y)).toBeLessThanOrEqual(1);
-      expect(Math.abs(bounds.width - anchor.width)).toBeLessThanOrEqual(1);
-      expect(Math.abs(bounds.height - anchor.height)).toBeLessThanOrEqual(1);
-    }
-  }
-
-  await transformation.getByRole("button", { name: "Conflict" }).click();
-  await expect(transformation.getByRole("button", { name: "Conflict" })).toHaveAttribute("aria-pressed", "true");
-  await transformation.getByRole("button", { name: "Proof" }).click();
-  await expect(transformation.getByRole("button", { name: "Proof" })).toHaveAttribute("aria-pressed", "true");
 
   await expectNoHorizontalOverflow(page);
 });
@@ -233,7 +224,7 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   // The live product is the only primary action, and it is never duplicated as a
   // second navigation destination.
   await expect(navigation.getByRole("link", { name: /live check|Run the live check/u })).toHaveCount(0);
-  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
 
   // Old destinations must not reappear anywhere in the public chrome.
   for (const retired of ["/workspace", "/participant", "/protocol", "/design-system"]) {
@@ -244,6 +235,6 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   await page.goto("/protection/live");
   await expect(page.getByRole("navigation", { name: "Product navigation" })).toBeVisible();
   await expect(page.getByTestId("shell-live-cta")).toHaveCount(0);
-  await expect(page.getByRole("contentinfo").getByRole("link", { name: "Run the live check" }))
+  await expect(page.getByRole("contentinfo").getByRole("link", { name: "Advanced live product" }))
     .toHaveAttribute("href", "/protection/live");
 });
