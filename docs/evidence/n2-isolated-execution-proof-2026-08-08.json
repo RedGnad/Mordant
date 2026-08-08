@@ -1,0 +1,768 @@
+{
+  "schemaVersion": "mordant.n2-isolated-execution-evidence/2",
+  "verdict": "PASS — N=2 ISOLATED EXECUTION PROVEN WITH EXISTING WORKERS",
+  "auditedSource": {
+    "repository": "RedGnad/Mordant",
+    "branch": "agent/n2-isolation-proof",
+    "baseCommit": "178140564e8d8f20c26147ea47fae3535f3d4ba0",
+    "commit": "10275eb8292fa281f7215c524064caf8a97e27fc",
+    "tree": "0cb3dfd4fec717020a3dd24429c1d178f5300498",
+    "trackedCheckoutClean": true,
+    "workerEntrypoint": "scripts/mordant-live-worker.mjs",
+    "workerEntrypointDigest": "sha256:e8b9c20c543693d0f55bee71eabac8eb2aa0358d6730732d45500efde5765848",
+    "compiledEngine": ".product-test-dist/src/lib/protection/governed-fhe-product-server.js",
+    "compiledEngineDigest": "sha256:92b5c654c46c28518fc9bcf372841e61038db5c1ba469f307660a78ee159b5ce"
+  },
+  "nativeBuild": {
+    "proofGrade": true,
+    "builtDuringProof": true,
+    "prepopulatedBinaryRootAccepted": false,
+    "auditedSourceCommit": "10275eb8292fa281f7215c524064caf8a97e27fc",
+    "auditedSourceTree": "0cb3dfd4fec717020a3dd24429c1d178f5300498",
+    "sourceRoot": "fhe-lab/lattigo",
+    "outputRootId": "proof-native-binaries",
+    "buildStartedAt": "2026-08-08T19:46:36.678Z",
+    "buildCompletedAt": "2026-08-08T19:47:23.448Z",
+    "goVersion": "go1.24.0",
+    "goToolchain": "auto",
+    "host": {
+      "goos": "darwin",
+      "goarch": "arm64",
+      "hostKernel": "Darwin",
+      "hostMachine": "arm64"
+    },
+    "mode": {
+      "command": "go build",
+      "moduleMode": "readonly",
+      "trimpath": true,
+      "cgoEnabled": false,
+      "goos": "darwin",
+      "goarch": "arm64"
+    },
+    "binaries": [
+      {
+        "name": "mordant-fhe-keygen",
+        "package": "./cmd/mordant-fhe-keygen",
+        "startedAt": "2026-08-08T19:46:36.883Z",
+        "completedAt": "2026-08-08T19:47:08.829Z",
+        "bytes": 9915538,
+        "sha256": "sha256:76a3ca1be6148453222c1532021b06a6e98b3de871863bcb2cfd7c4656e17bba"
+      },
+      {
+        "name": "mordant-fhe-client",
+        "package": "./cmd/mordant-fhe-client",
+        "startedAt": "2026-08-08T19:47:08.835Z",
+        "completedAt": "2026-08-08T19:47:13.377Z",
+        "bytes": 9924802,
+        "sha256": "sha256:c68c5638531dc11086b39e8704ada96a207fe577d87561655d4a75c1651ec506"
+      },
+      {
+        "name": "mordant-fhe-evaluator",
+        "package": "./cmd/mordant-fhe-evaluator",
+        "startedAt": "2026-08-08T19:47:13.384Z",
+        "completedAt": "2026-08-08T19:47:15.784Z",
+        "bytes": 10381714,
+        "sha256": "sha256:c7f977fba2f46ffb1a757ca4bd3359079228877d16dd1b90df575fde0820c2b8"
+      },
+      {
+        "name": "mordant-fhe-decryptor",
+        "package": "./cmd/mordant-fhe-decryptor",
+        "startedAt": "2026-08-08T19:47:15.792Z",
+        "completedAt": "2026-08-08T19:47:17.644Z",
+        "bytes": 10486130,
+        "sha256": "sha256:5a94008fb75cdfd5668a4c9d5f9df018155d76177ba5102bdc4f5e38166ea7b6"
+      },
+      {
+        "name": "mordant-fhe-recourse",
+        "package": "./cmd/mordant-fhe-recourse",
+        "startedAt": "2026-08-08T19:47:17.652Z",
+        "completedAt": "2026-08-08T19:47:20.284Z",
+        "bytes": 10278594,
+        "sha256": "sha256:c61c055a60c474c4ff33fa630ce48d0d4ab16b74f59f66b402b86ad8801e590a"
+      },
+      {
+        "name": "mordant-fhe-inspect",
+        "package": "./cmd/mordant-fhe-inspect",
+        "startedAt": "2026-08-08T19:47:20.292Z",
+        "completedAt": "2026-08-08T19:47:22.086Z",
+        "bytes": 9117778,
+        "sha256": "sha256:ce0f63b34207ef9b66cb3c15b8b2934172e59ffb8aa2f6e5b0d5e498e732f837"
+      },
+      {
+        "name": "mordant-fhe-retain",
+        "package": "./cmd/mordant-fhe-retain",
+        "startedAt": "2026-08-08T19:47:22.093Z",
+        "completedAt": "2026-08-08T19:47:23.438Z",
+        "bytes": 5729554,
+        "sha256": "sha256:2e8c17511e3d89fc9522484d2bb22a46f2ea74a49b17d67008dcde81eb9900dc"
+      }
+    ]
+  },
+  "processModel": {
+    "workerCount": 2,
+    "workerRuntime": "node",
+    "workerEntrypoint": "scripts/mordant-live-worker.mjs",
+    "compiledEngine": ".product-test-dist/src/lib/protection/governed-fhe-product-server.js",
+    "intakeProfile": "MANAGED_COMBINED_INTAKE",
+    "maxActiveCasesPerWorker": 1,
+    "separatePorts": true,
+    "separateDurableRoots": true,
+    "sharedFreshNativeBinaryManifest": true
+  },
+  "concurrency": {
+    "acceptanceStartSkewMs": 21,
+    "executionOverlapMs": 31753,
+    "evaluationOperationOverlapMs": 10915,
+    "evaluationOperationMetric": "Overlap of durable evaluatePrivateConflict operation-journal intervals; this is broader than, and is not represented as, native process-runtime duration.",
+    "minimumMaterialExecutionOverlapMs": 1000,
+    "bothWorkersBusyObservedAt": "2026-08-08T19:47:25.794Z",
+    "processSamplingAvailable": true,
+    "nativeEvaluatorsSimultaneous": {
+      "observed": true,
+      "observedAt": "2026-08-08T19:47:32.711Z",
+      "processCount": 2,
+      "slots": [
+        "A",
+        "B"
+      ],
+      "binaryName": "mordant-fhe-evaluator"
+    }
+  },
+  "slots": [
+    {
+      "label": "A",
+      "submittedCase": "overlapping",
+      "process": {
+        "workerId": "slot-a-worker",
+        "portId": "slot-a-port",
+        "durableRootId": "slot-a-root",
+        "startedAt": "2026-08-08T19:47:23.478Z",
+        "readyAt": "2026-08-08T19:47:25.176Z"
+      },
+      "request": {
+        "startedAt": "2026-08-08T19:47:25.176Z",
+        "acceptedAt": "2026-08-08T19:47:25.794Z",
+        "status": 201,
+        "runId": "7f3cab32-3685-4bbc-afea-cb4e36b43847"
+      },
+      "timing": {
+        "executionStartedAt": "2026-08-08T19:47:25.799Z",
+        "evaluationOperationStartedAt": "2026-08-08T19:47:32.568Z",
+        "evaluationOperationTerminalAt": "2026-08-08T19:47:43.500Z",
+        "releaseStartedAt": "2026-08-08T19:47:44.276Z",
+        "releaseTerminalAt": "2026-08-08T19:47:54.428Z",
+        "terminalJournalAt": "2026-08-08T19:47:58.327Z",
+        "terminalReceiptObservedAt": "2026-08-08T19:47:58.526Z",
+        "executionDurationMs": 32528,
+        "timeline": [
+          {
+            "observedAt": "2026-08-08T19:47:25.794Z",
+            "stage": "CASE_CREATED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:29.084Z",
+            "stage": "MATCH_PREPARED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:30.136Z",
+            "stage": "PARTICIPANT_A_SUBMITTED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:31.413Z",
+            "stage": "PARTICIPANT_B_SUBMITTED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:43.543Z",
+            "stage": "EVALUATED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:54.510Z",
+            "stage": "RELEASED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:55.819Z",
+            "stage": "RECOURSE_OPENED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:56.465Z",
+            "stage": "CHRONOLOGY_COMPLETE"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:58.526Z",
+            "stage": "COMPLETE"
+          }
+        ]
+      },
+      "outcome": {
+        "conflict": true,
+        "incidentState": "CONFLICT_CONFIRMED",
+        "recourseOpened": true,
+        "recourseRefusal": null,
+        "governedResultDigest": "sha256:d0c96c7f9dd25af9733def7091b41c5dfebd0550a14c8e3d984b9018638c30a8",
+        "receiptDigest": "sha256:727816aa8e97dfcc41b64ad5219f099e56999702135d2f7aec4d1a6ef168eb9e"
+      },
+      "artifacts": {
+        "evaluatedArtifact": {
+          "artifactId": "a-evaluated-conflict",
+          "name": "evaluated-conflict.json",
+          "observedAt": "2026-08-08T19:47:43.398Z",
+          "bytes": 1347,
+          "digest": "sha256:a8a0569730e16370281ceab8162fc2254f6bc0867fa11d88953dfecdaaecdc4c"
+        },
+        "evaluatedArtifactDigest": "sha256:a8a0569730e16370281ceab8162fc2254f6bc0867fa11d88953dfecdaaecdc4c",
+        "evaluatorProvenance": "sha256:c7f977fba2f46ffb1a757ca4bd3359079228877d16dd1b90df575fde0820c2b8",
+        "decryptorProvenance": "sha256:5a94008fb75cdfd5668a4c9d5f9df018155d76177ba5102bdc4f5e38166ea7b6",
+        "completedJournalOperations": [
+          {
+            "sequence": 1,
+            "operation": "preparePrivateMatch",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:25.799Z",
+            "terminalAt": "2026-08-08T19:47:28.969Z"
+          },
+          {
+            "sequence": 2,
+            "operation": "submitParticipantA",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:29.075Z",
+            "terminalAt": "2026-08-08T19:47:30.145Z"
+          },
+          {
+            "sequence": 3,
+            "operation": "submitParticipantB",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:30.608Z",
+            "terminalAt": "2026-08-08T19:47:31.241Z"
+          },
+          {
+            "sequence": 4,
+            "operation": "finalizeParticipantSubmissions",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:31.271Z",
+            "terminalAt": "2026-08-08T19:47:31.381Z"
+          },
+          {
+            "sequence": 5,
+            "operation": "evaluatePrivateConflict",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:32.568Z",
+            "terminalAt": "2026-08-08T19:47:43.500Z"
+          },
+          {
+            "sequence": 6,
+            "operation": "releaseGovernedResult",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:44.276Z",
+            "terminalAt": "2026-08-08T19:47:54.428Z"
+          },
+          {
+            "sequence": 7,
+            "operation": "openRecourseCase",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:55.202Z",
+            "terminalAt": "2026-08-08T19:47:55.769Z"
+          },
+          {
+            "sequence": 8,
+            "operation": "completeCureChronology",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:56.440Z",
+            "terminalAt": "2026-08-08T19:47:56.476Z"
+          },
+          {
+            "sequence": 9,
+            "operation": "exportProtectionEvidence",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:57.076Z",
+            "terminalAt": "2026-08-08T19:47:58.327Z"
+          }
+        ]
+      },
+      "observations": {
+        "maxWorkerRssBytes": 70893568,
+        "maxNativeChildRssBytes": 704987136,
+        "peakRootBytes": 401953807,
+        "finalRootBytes": 30974
+      }
+    },
+    {
+      "label": "B",
+      "submittedCase": "separated",
+      "process": {
+        "workerId": "slot-b-worker",
+        "portId": "slot-b-port",
+        "durableRootId": "slot-b-root",
+        "startedAt": "2026-08-08T19:47:23.479Z",
+        "readyAt": "2026-08-08T19:47:25.171Z"
+      },
+      "request": {
+        "startedAt": "2026-08-08T19:47:25.197Z",
+        "acceptedAt": "2026-08-08T19:47:25.793Z",
+        "status": 201,
+        "runId": "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1"
+      },
+      "timing": {
+        "executionStartedAt": "2026-08-08T19:47:25.800Z",
+        "evaluationOperationStartedAt": "2026-08-08T19:47:32.566Z",
+        "evaluationOperationTerminalAt": "2026-08-08T19:47:43.483Z",
+        "releaseStartedAt": "2026-08-08T19:47:44.275Z",
+        "releaseTerminalAt": "2026-08-08T19:47:54.433Z",
+        "terminalJournalAt": "2026-08-08T19:47:57.553Z",
+        "terminalReceiptObservedAt": "2026-08-08T19:47:57.579Z",
+        "executionDurationMs": 31753,
+        "timeline": [
+          {
+            "observedAt": "2026-08-08T19:47:25.793Z",
+            "stage": "CASE_CREATED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:29.084Z",
+            "stage": "MATCH_PREPARED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:30.136Z",
+            "stage": "PARTICIPANT_A_SUBMITTED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:31.413Z",
+            "stage": "PARTICIPANT_B_SUBMITTED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:43.543Z",
+            "stage": "EVALUATED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:54.510Z",
+            "stage": "RELEASED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:55.819Z",
+            "stage": "RECOURSE_OPENED"
+          },
+          {
+            "observedAt": "2026-08-08T19:47:57.579Z",
+            "stage": "COMPLETE"
+          }
+        ]
+      },
+      "outcome": {
+        "conflict": false,
+        "incidentState": "CLEARED",
+        "recourseOpened": false,
+        "recourseRefusal": "SIGNED_RESULT_FALSE",
+        "governedResultDigest": "sha256:1a4c1c2f2a295f9bdb2fd7a7b7c8b27d16b7b3375184f5865a189f592dd98bf4",
+        "receiptDigest": "sha256:97b2a74bbc18be87f83b7bb92f0642081c4947ed9c619f122806cffc9fce4384"
+      },
+      "artifacts": {
+        "evaluatedArtifact": {
+          "artifactId": "b-evaluated-conflict",
+          "name": "evaluated-conflict.json",
+          "observedAt": "2026-08-08T19:47:43.415Z",
+          "bytes": 1347,
+          "digest": "sha256:8184210cd3f5b155fa87caccc77641051245153c01a9e518480471bfe8341cbf"
+        },
+        "evaluatedArtifactDigest": "sha256:8184210cd3f5b155fa87caccc77641051245153c01a9e518480471bfe8341cbf",
+        "evaluatorProvenance": "sha256:c7f977fba2f46ffb1a757ca4bd3359079228877d16dd1b90df575fde0820c2b8",
+        "decryptorProvenance": "sha256:5a94008fb75cdfd5668a4c9d5f9df018155d76177ba5102bdc4f5e38166ea7b6",
+        "completedJournalOperations": [
+          {
+            "sequence": 1,
+            "operation": "preparePrivateMatch",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:25.800Z",
+            "terminalAt": "2026-08-08T19:47:28.981Z"
+          },
+          {
+            "sequence": 2,
+            "operation": "submitParticipantA",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:29.079Z",
+            "terminalAt": "2026-08-08T19:47:30.149Z"
+          },
+          {
+            "sequence": 3,
+            "operation": "submitParticipantB",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:30.611Z",
+            "terminalAt": "2026-08-08T19:47:31.249Z"
+          },
+          {
+            "sequence": 4,
+            "operation": "finalizeParticipantSubmissions",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:31.259Z",
+            "terminalAt": "2026-08-08T19:47:31.378Z"
+          },
+          {
+            "sequence": 5,
+            "operation": "evaluatePrivateConflict",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:32.566Z",
+            "terminalAt": "2026-08-08T19:47:43.483Z"
+          },
+          {
+            "sequence": 6,
+            "operation": "releaseGovernedResult",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:44.275Z",
+            "terminalAt": "2026-08-08T19:47:54.433Z"
+          },
+          {
+            "sequence": 7,
+            "operation": "openRecourseCase",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:55.199Z",
+            "terminalAt": "2026-08-08T19:47:55.734Z"
+          },
+          {
+            "sequence": 8,
+            "operation": "exportProtectionEvidence",
+            "outcome": "COMPLETED",
+            "createdAt": "2026-08-08T19:47:56.435Z",
+            "terminalAt": "2026-08-08T19:47:57.553Z"
+          }
+        ]
+      },
+      "observations": {
+        "maxWorkerRssBytes": 69517312,
+        "maxNativeChildRssBytes": 689782784,
+        "peakRootBytes": 401940081,
+        "finalRootBytes": 27660
+      }
+    }
+  ],
+  "isolation": {
+    "foreignReads": {
+      "workerAReadingRunB": {
+        "status": 404,
+        "code": "UNKNOWN_CASE"
+      },
+      "workerBReadingRunA": {
+        "status": 404,
+        "code": "UNKNOWN_CASE"
+      }
+    },
+    "roots": {
+      "slotA": {
+        "rootId": "slot-a-root",
+        "runIds": [
+          "7f3cab32-3685-4bbc-afea-cb4e36b43847"
+        ],
+        "foreignRunMatches": 0
+      },
+      "slotB": {
+        "rootId": "slot-b-root",
+        "runIds": [
+          "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1"
+        ],
+        "foreignRunMatches": 0
+      }
+    },
+    "journals": {
+      "slotA": {
+        "journalId": "slot-a-journal",
+        "foreignRunReferenced": false
+      },
+      "slotB": {
+        "journalId": "slot-b-journal",
+        "foreignRunReferenced": false
+      }
+    },
+    "receipts": {
+      "slotA": {
+        "runId": "7f3cab32-3685-4bbc-afea-cb4e36b43847",
+        "receiptDigest": "sha256:727816aa8e97dfcc41b64ad5219f099e56999702135d2f7aec4d1a6ef168eb9e",
+        "observedAt": "2026-08-08T19:47:58.526Z"
+      },
+      "slotB": {
+        "runId": "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1",
+        "receiptDigest": "sha256:97b2a74bbc18be87f83b7bb92f0642081c4947ed9c619f122806cffc9fce4384",
+        "observedAt": "2026-08-08T19:47:57.579Z"
+      }
+    }
+  },
+  "assertions": [
+    {
+      "id": "1",
+      "description": "both worker slots become READY independently",
+      "pass": true,
+      "evidence": [
+        {
+          "label": "A",
+          "workerId": "slot-a-worker",
+          "readyAt": "2026-08-08T19:47:25.176Z"
+        },
+        {
+          "label": "B",
+          "workerId": "slot-b-worker",
+          "readyAt": "2026-08-08T19:47:25.171Z"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "description": "durable roots are distinct",
+      "pass": true,
+      "evidence": {
+        "rootIds": [
+          "slot-a-root",
+          "slot-b-root"
+        ],
+        "distinct": true
+      }
+    },
+    {
+      "id": "3",
+      "description": "requests are independently accepted",
+      "pass": true,
+      "evidence": [
+        {
+          "label": "A",
+          "status": 201,
+          "acceptedAt": "2026-08-08T19:47:25.794Z"
+        },
+        {
+          "label": "B",
+          "status": 201,
+          "acceptedAt": "2026-08-08T19:47:25.793Z"
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "description": "generated run IDs differ",
+      "pass": true,
+      "evidence": {
+        "runIds": [
+          "7f3cab32-3685-4bbc-afea-cb4e36b43847",
+          "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1"
+        ]
+      }
+    },
+    {
+      "id": "5",
+      "description": "both runs materially overlap in wall-clock execution",
+      "pass": true,
+      "evidence": {
+        "executionOverlapMs": 31753,
+        "minimumMs": 1000,
+        "bothWorkersBusyObservedAt": "2026-08-08T19:47:25.794Z",
+        "acceptanceStartSkewMs": 21
+      }
+    },
+    {
+      "id": "6",
+      "description": "both reach the genuine evaluation path",
+      "pass": true,
+      "evidence": {
+        "operationsA": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult",
+          "openRecourseCase",
+          "completeCureChronology",
+          "exportProtectionEvidence"
+        ],
+        "operationsB": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult",
+          "openRecourseCase",
+          "exportProtectionEvidence"
+        ],
+        "evaluatorBinary": "sha256:c7f977fba2f46ffb1a757ca4bd3359079228877d16dd1b90df575fde0820c2b8",
+        "decryptorBinary": "sha256:5a94008fb75cdfd5668a4c9d5f9df018155d76177ba5102bdc4f5e38166ea7b6",
+        "evaluationOperationOverlapMs": 10915
+      }
+    },
+    {
+      "id": "7",
+      "description": "evaluated artifacts exist independently",
+      "pass": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "label": "A",
+            "artifactId": "a-evaluated-conflict",
+            "digest": "sha256:a8a0569730e16370281ceab8162fc2254f6bc0867fa11d88953dfecdaaecdc4c"
+          },
+          {
+            "label": "B",
+            "artifactId": "b-evaluated-conflict",
+            "digest": "sha256:8184210cd3f5b155fa87caccc77641051245153c01a9e518480471bfe8341cbf"
+          }
+        ]
+      }
+    },
+    {
+      "id": "8",
+      "description": "governed result A is correct",
+      "pass": true,
+      "evidence": {
+        "conflict": true,
+        "incidentState": "CONFLICT_CONFIRMED",
+        "recourseOpened": true
+      }
+    },
+    {
+      "id": "9",
+      "description": "governed result B is correct",
+      "pass": true,
+      "evidence": {
+        "conflict": false,
+        "incidentState": "CLEARED",
+        "recourseOpened": false,
+        "recourseRefusal": "SIGNED_RESULT_FALSE"
+      }
+    },
+    {
+      "id": "10",
+      "description": "root A contains no run or journal state belonging to B",
+      "pass": true,
+      "evidence": {
+        "rootId": "slot-a-root",
+        "runIds": [
+          "7f3cab32-3685-4bbc-afea-cb4e36b43847"
+        ],
+        "foreignRunMatches": 0
+      }
+    },
+    {
+      "id": "11",
+      "description": "root B contains no run or journal state belonging to A",
+      "pass": true,
+      "evidence": {
+        "rootId": "slot-b-root",
+        "runIds": [
+          "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1"
+        ],
+        "foreignRunMatches": 0
+      }
+    },
+    {
+      "id": "12",
+      "description": "worker A cannot retrieve run B with the canonical unknown-case response",
+      "pass": true,
+      "evidence": {
+        "status": 404,
+        "code": "UNKNOWN_CASE"
+      }
+    },
+    {
+      "id": "13",
+      "description": "worker B cannot retrieve run A with the canonical unknown-case response",
+      "pass": true,
+      "evidence": {
+        "status": 404,
+        "code": "UNKNOWN_CASE"
+      }
+    },
+    {
+      "id": "14",
+      "description": "both obtain their own terminal receipt",
+      "pass": true,
+      "evidence": [
+        {
+          "label": "A",
+          "runId": "7f3cab32-3685-4bbc-afea-cb4e36b43847",
+          "receiptRunId": "7f3cab32-3685-4bbc-afea-cb4e36b43847",
+          "terminalReceiptObservedAt": "2026-08-08T19:47:58.526Z"
+        },
+        {
+          "label": "B",
+          "runId": "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1",
+          "receiptRunId": "cb1ab53b-6e6c-4510-9311-7a7e7e69ddc1",
+          "terminalReceiptObservedAt": "2026-08-08T19:47:57.579Z"
+        }
+      ]
+    },
+    {
+      "id": "15",
+      "description": "neither journal references the foreign run",
+      "pass": true,
+      "evidence": {
+        "journals": [
+          {
+            "journalId": "slot-a-journal",
+            "foreignRunReferenced": false
+          },
+          {
+            "journalId": "slot-b-journal",
+            "foreignRunReferenced": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "native-evaluator-concurrency",
+      "description": "one native evaluator child from each slot is observed alive in the same process snapshot",
+      "pass": true,
+      "evidence": {
+        "observed": true,
+        "observedAt": "2026-08-08T19:47:32.711Z",
+        "processCount": 2,
+        "slots": [
+          "A",
+          "B"
+        ]
+      }
+    },
+    {
+      "id": "source-build-link",
+      "description": "both workers use binaries freshly built from the same audited checkout",
+      "pass": true,
+      "evidence": {
+        "sourceCommit": "10275eb8292fa281f7215c524064caf8a97e27fc",
+        "sourceTree": "0cb3dfd4fec717020a3dd24429c1d178f5300498",
+        "nativeBinaryCount": 7,
+        "workerScriptDigest": "sha256:e8b9c20c543693d0f55bee71eabac8eb2aa0358d6730732d45500efde5765848",
+        "compiledEngineDigest": "sha256:92b5c654c46c28518fc9bcf372841e61038db5c1ba469f307660a78ee159b5ce"
+      }
+    },
+    {
+      "id": "process-model",
+      "description": "exactly two authentic worker processes use separate ports and one-case semantics",
+      "pass": true,
+      "evidence": [
+        {
+          "label": "A",
+          "workerId": "slot-a-worker",
+          "portId": "slot-a-port",
+          "maxActiveCases": 1
+        },
+        {
+          "label": "B",
+          "workerId": "slot-b-worker",
+          "portId": "slot-b-port",
+          "maxActiveCases": 1
+        }
+      ]
+    },
+    {
+      "id": "retained-evidence-sanitation",
+      "description": "retained evidence contains no absolute paths, raw private windows, tokens, secrets, or private material",
+      "pass": true,
+      "evidence": {
+        "violationCount": 0
+      }
+    }
+  ],
+  "exactClaimSupported": "Multiple isolated execution slots can run concurrently.",
+  "claimsNotSupported": [
+    "Production routing or pooling is implemented.",
+    "Execution capacity scales linearly.",
+    "Any production throughput level is established.",
+    "N>2 execution isolation is established.",
+    "Autoscaling, load balancing, or high availability is implemented.",
+    "Settlement scalability is established.",
+    "Horizontal execution is production-ready.",
+    "The public deployment exposes more than its intentional one worker slot."
+  ],
+  "evidenceDigest": "sha256:bc48a0b831a0622d8d19aee67c236c332c6e9eefa5047fa5dc6375d47fd0f031"
+}
