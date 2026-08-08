@@ -109,7 +109,8 @@ function receipt(conflict: boolean, runId: string): Readonly<Record<string, unkn
       "Supervised local single-host execution; not production authorized.",
       "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
       "Designated trusted decryptor; no threshold release and no native Monad FHE.",
-      "The governed signed Boolean is the sole authority for the terminal outcome.",
+      "The governed signed Boolean is the sole authority for the conflict/no-conflict result.",
+      "Configured demo policy determines the recourse path; the Boolean does not assign legal responsibility, action ownership, deadline or payout amount.",
     ],
   });
 }

@@ -27,6 +27,9 @@ import {
   type EligibilityView,
   type WalletView,
 } from "./live-product-view-model";
+import {
+  classifyCustomReceiptDisclosures,
+} from "../../lib/custom-supervised-receipt-disclosures";
 
 export type ManagedWorkerStage =
   | "CASE_CREATED"
@@ -94,15 +97,6 @@ const FHE_CIRCUIT = "mordant.identity-full-fhe-256" as const;
 const FHE_PARAMETER_PROFILE = "mordant.bgv.identity-full-fhe-256.n15/v1" as const;
 const SOURCE_COMMIT = /^(?!0{40}$)[0-9a-f]{40}$/u;
 const RECEIPT_CLOCK_CLASSES = Object.freeze(["SIMULATED_PROTOCOL_CLOCK", "REAL_OBSERVED_CLOCK"] as const);
-const PARTICIPANT_DISCLOSURE =
-  "Participant-admitted pledge windows under verified durable wallet authorizations; synthetic lender fixtures and no real funds.";
-const OPERATOR_DISCLOSURE = "Operator-entered pledge windows; synthetic lender fixtures and no real funds.";
-const FIXED_RECEIPT_DISCLOSURES = Object.freeze([
-  "Supervised local single-host execution; not production authorized.",
-  "Designated trusted decryptor; no threshold release and no native Monad FHE.",
-  "The governed signed Boolean is the sole authority for the terminal outcome.",
-] as const);
-
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     && Object.getPrototypeOf(value) === Object.prototype;
@@ -224,11 +218,7 @@ function parseCustomSupervisedReceipt(
       || !receiptEvent(events[7], 8, finalKind, "positive")) return null;
   } else if (events.length !== 7 || !receiptEvent(events[6], 7, "RECOURSE_REFUSED_BY_SIGNED_FALSE", "positive")) return null;
 
-  if (!Array.isArray(value.disclosures) || value.disclosures.length !== 4
-    || value.disclosures[0] !== FIXED_RECEIPT_DISCLOSURES[0]
-    || (value.disclosures[1] !== PARTICIPANT_DISCLOSURE && value.disclosures[1] !== OPERATOR_DISCLOSURE)
-    || value.disclosures[2] !== FIXED_RECEIPT_DISCLOSURES[1]
-    || value.disclosures[3] !== FIXED_RECEIPT_DISCLOSURES[2]) return null;
+  if (classifyCustomReceiptDisclosures(value.disclosures) === null) return null;
 
   return value;
 }
@@ -443,6 +433,7 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
   const governed = nested(receipt, "governedResult");
   const terminal = nested(receipt, "terminal");
   const artifacts = Array.isArray(execution.participantArtifactDigests) ? execution.participantArtifactDigests : [];
+  const disclosureVersion = classifyCustomReceiptDisclosures(receipt.disclosures);
 
   const summary = [
     { label: "Decision", value: release === null ? "Not released" : release.conflict ? "Conflict confirmed" : "No conflict" },
@@ -451,6 +442,14 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
       value: text(terminal.recourseRecordDigest) === null
         ? "Configured policy did not open recourse."
         : "Configured recourse policy opened a cure window.",
+    },
+    {
+      label: "Result authority",
+      value: "Governed signed Boolean · conflict/no-conflict between the submitted windows only",
+    },
+    {
+      label: "Recourse authority",
+      value: "Configured demo policy determines the path; approved policy or human review determine action owner, deadline and escalation.",
     },
     { label: "Asset", value: ASSET_LABEL },
     { label: "Participants", value: "Participant A and Participant B" },
@@ -474,7 +473,16 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
     { label: "Receipt digest", value: text(receipt.receiptDigest) ?? "not present" },
   ];
 
-  return Object.freeze({ summary: Object.freeze(summary), technical: Object.freeze(technical), raw: receipt });
+  const rawContext = disclosureVersion === "LEGACY"
+    ? "Immutable legacy receipt: its digest covers the original wording shown below. That wording is not the current product boundary; the governed signed Boolean is authoritative only for conflict/no-conflict. Configured demo policy determines recourse, while approved policy or human review determine action ownership, deadlines and escalation."
+    : "The raw projection is preserved exactly as covered by its receipt digest. The governed signed Boolean is authoritative only for conflict/no-conflict; configured demo policy determines recourse, while approved policy or human review determine action ownership, deadlines and escalation.";
+
+  return Object.freeze({
+    summary: Object.freeze(summary),
+    technical: Object.freeze(technical),
+    rawContext,
+    raw: receipt,
+  });
 }
 
 function claim(

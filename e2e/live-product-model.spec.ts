@@ -21,6 +21,11 @@ import {
   stageOrderFor,
   type EligibilityView,
 } from "../src/components/live-product/live-product-view-model";
+import {
+  CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
+  LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  currentCustomReceiptDisclosures,
+} from "../src/lib/custom-supervised-receipt-disclosures";
 
 const IDLE: EligibilityView = {
   state: "IDLE", holderAddress: null, chainId: null, gateAddress: null, observedBlock: null, problem: null,
@@ -47,6 +52,47 @@ function adapt(view: ManagedWorkerView | null, eligibility = VERIFIED) {
     notice: null,
     noticeState: null,
   });
+}
+
+function withReceiptDisclosures(
+  view: ManagedWorkerView,
+  disclosures: readonly string[],
+): unknown {
+  const clone = structuredClone(view) as unknown as Record<string, unknown>;
+  // Presentation fixtures deliberately use memorable non-hex digest seeds.
+  // This helper exercises the network parser, so normalize those seeds while
+  // preserving every equality/cross-reference the parser checks.
+  const replacements: Readonly<Record<string, string>> = {
+    g: "1", p: "2", r: "3", v: "4", x: "5", z: "6",
+  };
+  const normalize = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        const entry = value[index];
+        if (typeof entry === "string" && /^sha256:([gprvxz])\1{63}$/u.test(entry)) {
+          value[index] = `sha256:${replacements[entry[7]].repeat(64)}`;
+        } else normalize(entry);
+      }
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, entry] of Object.entries(value)) {
+      if (typeof entry === "string" && /^sha256:([gprvxz])\1{63}$/u.test(entry)) {
+        (value as Record<string, unknown>)[key] = `sha256:${replacements[entry[7]].repeat(64)}`;
+      } else normalize(entry);
+    }
+  };
+  normalize(clone);
+  const receipt = clone.receipt as Record<string, unknown>;
+  receipt.disclosures = [...disclosures];
+  return clone;
+}
+
+function legacyDisclosures(): readonly string[] {
+  return [
+    ...currentCustomReceiptDisclosures("OPERATOR").slice(0, 3),
+    LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  ];
 }
 
 test.describe("live product presentation model", () => {
@@ -139,6 +185,37 @@ test.describe("live product presentation model", () => {
     expect(model.receipt?.raw).not.toBeNull();
     // Level one is for a person: it carries no digest.
     for (const row of model.receipt!.summary) expect(row.value).not.toMatch(/^sha256:/u);
+  });
+
+  test("the browser receipt parser accepts only exact current or exact legacy disclosures", () => {
+    const current = currentCustomReceiptDisclosures("OPERATOR");
+    expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), current))).not.toBeNull();
+    expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), legacyDisclosures()))).not.toBeNull();
+
+    const malformed = [
+      [...current.slice(0, 3), "The Boolean decides the terminal outcome."],
+      current.slice(0, 4),
+      [...legacyDisclosures(), CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE],
+      [...current.slice(0, 3), LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE, CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE],
+      [...current, "extra"],
+    ];
+    for (const disclosures of malformed) {
+      expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), disclosures))).toBeNull();
+    }
+  });
+
+  test("legacy raw evidence is preserved but presented under the current authority boundary", () => {
+    const parsed = parseManagedWorkerView(withReceiptDisclosures(conflictView(), legacyDisclosures()));
+    expect(parsed).not.toBeNull();
+    const model = adapt(parsed);
+    expect(model.receipt?.summary.find((row) => row.label === "Result authority")?.value)
+      .toContain("conflict/no-conflict between the submitted windows only");
+    expect(model.receipt?.summary.find((row) => row.label === "Recourse authority")?.value)
+      .toContain("Configured demo policy");
+    expect(model.receipt?.rawContext).toContain("Immutable legacy receipt");
+    expect(model.receipt?.rawContext).toContain("not the current product boundary");
+    expect(model.receipt?.rawContext).not.toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
+    expect(JSON.stringify(model.receipt?.raw)).toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
   });
 
   test("aUSDC renders with its real decimals and keeps atomic units separate", () => {

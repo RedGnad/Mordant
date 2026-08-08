@@ -445,6 +445,8 @@ export type LayeredReceipt = Readonly<{
   summary: readonly ReceiptRow[];
   /** Level two: the identifiers a reviewer checks. */
   technical: readonly ReceiptRow[];
+  /** Current semantic boundary and, where needed, immutable-legacy context. */
+  rawContext: string;
   /** Level three: the raw verified projection. */
   raw: Readonly<Record<string, unknown>> | null;
 }>;

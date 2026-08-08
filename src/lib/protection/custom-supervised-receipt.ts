@@ -7,12 +7,14 @@
  * weaken the published V1 evidence contract, a custom run produces this
  * separate receipt.
  *
- * The receipt is retained only under the run-specific custom directory. It is
- * never served publicly and never enters the imported-evidence parser.
+ * The receipt is retained only under the run-specific custom directory. The
+ * managed worker may project it for that run's receipt drawer, but it never
+ * enters the imported-evidence parser or the hardened V1 evidence contract.
  */
 
 import { createHash } from "node:crypto";
 
+import { classifyCustomReceiptDisclosures } from "../custom-supervised-receipt-disclosures";
 import { canonicalJson, type Sha256Digest } from "./cleanverse-asset";
 import { CUSTOM_SUPERVISED_EXECUTION_VARIANT } from "./custom-supervised-v2";
 
@@ -100,17 +102,22 @@ export function assertCustomSupervisedReceipt(receipt: CustomSupervisedProtectio
   if (receipt.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
     throw new CustomSupervisedReceiptError("EXECUTION_VARIANT", "A custom receipt must declare CUSTOM_SUPERVISED");
   }
+  if (classifyCustomReceiptDisclosures(receipt.disclosures) === null) {
+    throw new CustomSupervisedReceiptError("DISCLOSURES", "Custom receipt disclosures do not match an exact supported contract");
+  }
   const { receiptDigest, ...body } = receipt;
   if (receiptDigest !== customSupervisedReceiptDigest(body)) {
     throw new CustomSupervisedReceiptError("RECEIPT_DIGEST", "Custom receipt digest mismatch");
   }
-  // The terminal state must follow the governed Boolean, never the reverse.
+  // The conflict/no-conflict state follows the governed Boolean, never the
+  // reverse. The configured demo policy is separately responsible for the
+  // recourse fields recorded below.
   const conflict = receipt.governedResult.conflict;
   if (receipt.terminal.incidentState !== (conflict ? "CONFLICT_CONFIRMED" : "CLEARED")) {
     throw new CustomSupervisedReceiptError("TERMINAL_INCIDENT", "Terminal incident state does not follow the governed Boolean");
   }
   if (receipt.terminal.recourseOpened !== conflict) {
-    throw new CustomSupervisedReceiptError("TERMINAL_RECOURSE", "Recourse outcome does not follow the governed Boolean");
+    throw new CustomSupervisedReceiptError("TERMINAL_RECOURSE", "Recourse fields do not match the configured demo policy outcome");
   }
   if (!conflict && receipt.terminal.recourseRefusal !== "SIGNED_RESULT_FALSE") {
     throw new CustomSupervisedReceiptError("TERMINAL_REFUSAL", "A false governed Boolean must record a signed refusal");

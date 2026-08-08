@@ -129,6 +129,7 @@ export function ReceiptDrawer({
 
         <section className={styles.layer} aria-labelledby={`${titleId}-raw`}>
           <p className={styles.eyebrow} id={`${titleId}-raw`}>Layer 3 · Raw evidence</p>
+          <p className={styles.rawContext} data-testid="raw-receipt-context">{receipt.rawContext}</p>
           <button
             type="button"
             className={styles.disclose}

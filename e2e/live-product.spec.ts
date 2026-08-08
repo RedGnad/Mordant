@@ -184,6 +184,11 @@ test.describe("receipt drawer", () => {
     await expect(drawer).toContainText("Layer 1 · Decision");
     await expect(drawer).toContainText("Layer 2 · Verification");
     await expect(drawer).toContainText("Layer 3 · Raw evidence");
+    await expect(drawer).toContainText("conflict/no-conflict between the submitted windows only");
+    await expect(drawer).toContainText("Configured demo policy determines the path");
+    await expect(drawer.getByTestId("raw-receipt-context"))
+      .toContainText("approved policy or human review determine action ownership, deadlines and escalation");
+    await expect(drawer).not.toContainText("sole authority for the terminal outcome");
 
     // Opaque: the previous drawer resolved to a transparent background and the
     // page showed through it on a phone.
