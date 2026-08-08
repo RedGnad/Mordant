@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "mordant.governed-recourse-policy/1",
+  "policyVersion": 1,
+  "scope": {
+    "programId": "mordant.governed-recourse-policy-experiment-v1",
+    "assetClass": "TOKENIZED_PRIVATE_CREDIT",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c"
+  },
+  "acceptedGovernedResult": {
+    "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+    "schemaVersion": "mordant.governed-conflict-result/1",
+    "serviceId": "mordant.private-pledge-matching",
+    "serviceVersion": 1,
+    "releaseMode": "governed-decryptor-v1"
+  },
+  "effectiveFromUnix": 1785542400,
+  "effectiveUntilUnix": 1817078400,
+  "noConflictBranch": {
+    "governedOutcome": "NO_CONFLICT",
+    "evaluationActionType": "RECORD_AND_CLOSE",
+    "authorizedActionType": "RECORD_AND_CLOSE",
+    "accountableInstitutionalRole": "RECORDS_OPERATIONS",
+    "authorizationMode": "AUTOMATIC_PERMITTED",
+    "allowedApproverRoles": [],
+    "approvalWindowSeconds": null,
+    "deadlineRule": null,
+    "escalationRule": null,
+    "actionConfigurationDigest": "sha256:490777df9cfa54f79c0f6f25032a68ebdd111f75a7cef23491a99938d2fa75db"
+  },
+  "settlement": {
+    "permission": "PROHIBITED",
+    "configurationDigest": null
+  },
+  "policyId": "mordant.experimental.facility-protection",
+  "conflictBranch": {
+    "governedOutcome": "CONFLICT",
+    "evaluationActionType": "REVIEW_REQUIRED",
+    "authorizedActionType": "OPEN_CURE_PATH",
+    "accountableInstitutionalRole": "CREDIT_OPERATIONS",
+    "authorizationMode": "HUMAN_APPROVAL_REQUIRED",
+    "allowedApproverRoles": [
+      "CREDIT_OPS_APPROVER"
+    ],
+    "approvalWindowSeconds": 86400,
+    "deadlineRule": {
+      "kind": "RELATIVE_TO_RESULT_EXPOSURE",
+      "seconds": 604800
+    },
+    "escalationRule": {
+      "trigger": "DEADLINE_UNRESOLVED",
+      "actionType": "MANUAL_ESCALATION"
+    },
+    "actionConfigurationDigest": "sha256:4a6df474441f38d5eee29fc55f66be2bc24dee5b76b9e6970ee6fbbe4c0c7cd8"
+  },
+  "policyAuthority": {
+    "authorityId": "sha256:75c80b220834167f263d60cc30ce15a492d6c562e1407fbd21a37e6de4b923d0",
+    "purpose": "POLICY_AUTHORITY",
+    "label": "Mordant design lab policy authority — prototype only",
+    "prototypeAuthority": true,
+    "algorithm": "Ed25519",
+    "publicKey": "5hL8ZNrE1tjmxxd863yZAsDtcIZgEai9G8eNGBrszCA="
+  },
+  "digest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d",
+  "signature": "P48wRDSkAvOm3h4CYxorOO1radmc5fBut7HmZ1S2LC4ojT4TcjOM/+IWzhhgifJVxAD9xFg4RqD9uQZk4gNXDg=="
+}
