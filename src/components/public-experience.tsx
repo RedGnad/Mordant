@@ -97,7 +97,7 @@ export function PublicExperience({ liveCheckHolder }: {
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
       hero.style.setProperty("--symbol-scroll-y", `${progress * -64}px`);
-      hero.style.setProperty("--symbol-scroll-rotation", `${progress * 6}deg`);
+      hero.style.setProperty("--symbol-scroll-rotation", `${progress * 12}deg`);
     };
 
     const onHeroScroll = () => {

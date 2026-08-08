@@ -53,6 +53,16 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     const matrix = new DOMMatrix(getComputedStyle(node).transform);
     return Math.atan2(matrix.b, matrix.a) * (180 / Math.PI);
   })).toBeGreaterThanOrEqual(0.5);
+  const heroGeometry = await page.getByRole("heading", { name: "Conflict became recourse." })
+    .locator("xpath=ancestor::section")
+    .evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      return { height: bounds.height, top: bounds.top + window.scrollY };
+    });
+  await page.evaluate(({ height, top }) => window.scrollTo({ top: top + height, behavior: "instant" }), heroGeometry);
+  await expect.poll(() => symbolField.evaluate((node) => (
+    Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-rotation"))
+  ))).toBeGreaterThanOrEqual(11.5);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   // On the landing, both primary entry points move to its one real experiment.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
@@ -72,16 +82,24 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     const style = getComputedStyle(node);
     const standardBackdrop = style.backdropFilter;
     const prefixedBackdrop = style.getPropertyValue("-webkit-backdrop-filter");
+    const background = style.backgroundColor;
+    const modernAlpha = background.match(/\/\s*([0-9.]+)\s*\)$/u);
+    const legacyAlpha = background.match(/rgba\([^)]*,\s*([0-9.]+)\s*\)$/u);
     return {
       backdrop: standardBackdrop !== "none" ? standardBackdrop : prefixedBackdrop,
-      background: style.backgroundColor,
+      background,
+      backgroundAlpha: Number(modernAlpha?.[1] ?? legacyAlpha?.[1] ?? "1"),
       supportsBackdrop: CSS.supports("backdrop-filter", "blur(1px)")
         || CSS.supports("-webkit-backdrop-filter", "blur(1px)"),
       reducesTransparency: window.matchMedia("(prefers-reduced-transparency: reduce)").matches,
     };
   });
   if (panelOptics.supportsBackdrop && !panelOptics.reducesTransparency) {
-    expect(panelOptics.backdrop).toContain("blur(20px)");
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    const expectedBlur = viewportWidth <= 640 ? 10 : viewportWidth <= 900 ? 16 : 24;
+    expect(panelOptics.backdrop).toContain(`blur(${expectedBlur}px)`);
+    const maximumAlpha = viewportWidth <= 640 ? 0.65 : viewportWidth <= 900 ? 0.57 : 0.43;
+    expect(panelOptics.backgroundAlpha).toBeLessThanOrEqual(maximumAlpha);
   }
   expect(panelOptics.background).not.toBe("rgba(0, 0, 0, 0)");
 
@@ -90,8 +108,12 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect.poll(() => symbolField.evaluate((node) => (
     Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-x"))
   ))).toBeLessThanOrEqual(-6);
-  if (testInfo.project.name === "1280x800") {
-    await page.screenshot({ path: testInfo.outputPath("mini-run-liquid-glass.png") });
+  if (testInfo.project.name === "1280x800" || testInfo.project.name === "390x844") {
+    await page.screenshot({
+      path: testInfo.outputPath(testInfo.project.name === "1280x800"
+        ? "mini-run-liquid-glass.png"
+        : "mini-run-liquid-glass-mobile.png"),
+    });
   }
   await expect(page.getByRole("region", { name: "One path. Four bounded responsibilities." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
@@ -286,21 +308,31 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
     const how = navigation.getByRole("link", { name: "How it works" });
     const label = how.locator("[class*='tabLabel']");
     const beforeBox = await how.boundingBox();
+    const headerHeight = await page.getByRole("banner").evaluate((node) => node.getBoundingClientRect().height);
     const restingTongue = await how.evaluate((node) => {
       const style = getComputedStyle(node, "::before");
       return {
+        bottom: Number.parseFloat(style.bottom),
+        height: Number.parseFloat(style.height),
         opacity: Number(style.opacity),
-        translateY: new DOMMatrix(style.transform).m42,
+        top: Number.parseFloat(style.top),
       };
     });
     expect(restingTongue.opacity).toBeGreaterThanOrEqual(0.99);
-    expect(Math.abs(restingTongue.translateY)).toBeLessThanOrEqual(0.1);
+    const restingReferenceHeight = (page.viewportSize()?.width ?? 0) > 1023
+      ? headerHeight
+      : (beforeBox?.height ?? headerHeight);
+    expect(restingTongue.height).toBeGreaterThanOrEqual(restingReferenceHeight);
+    expect(restingTongue.top).toBeLessThanOrEqual(-0.9);
+    expect(restingTongue.bottom).toBeLessThanOrEqual(-0.9);
 
     await how.hover();
     await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
       .toBeGreaterThanOrEqual(11.5);
-    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node, "::before").transform).m42))
-      .toBeGreaterThanOrEqual(11.5);
+    await expect.poll(() => how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").height)))
+      .toBeGreaterThanOrEqual(restingTongue.height + 11.5);
+    expect(await how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").top)))
+      .toBeCloseTo(restingTongue.top, 1);
     expect(await how.boundingBox()).toEqual(beforeBox);
     if (testInfo.project.name === "1280x800") {
       await page.screenshot({ path: testInfo.outputPath("header-tongue-hover.png") });
@@ -309,8 +341,9 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
     await page.getByRole("link", { name: "Mordant home" }).hover();
     await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
       .toBeLessThanOrEqual(0.1);
+    await expect.poll(() => how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").height)))
+      .toBeLessThanOrEqual(restingTongue.height + 0.1);
 
-    const headerHeight = await page.getByRole("banner").evaluate((node) => node.getBoundingClientRect().height);
     if ((page.viewportSize()?.width ?? 0) > 1023) expect(headerHeight).toBeLessThanOrEqual(57);
     else expect(headerHeight).toBeLessThanOrEqual(110);
   }

@@ -44,19 +44,22 @@
 }
 
 .panel {
+  --mini-glass-background: color-mix(in srgb, var(--ground) 42%, transparent);
+  --mini-glass-blur: 24px;
+  --mini-glass-overlay-opacity: 0.56;
   position: relative;
   z-index: 5;
   display: grid;
   overflow: hidden;
   padding: clamp(20px, 2.4vw, 32px);
   border: 1px solid color-mix(in srgb, var(--rule) 72%, white 28%);
-  background: color-mix(in srgb, var(--ground) 68%, transparent);
+  background: var(--mini-glass-background);
   box-shadow:
     inset 1px 1px 0 rgb(255 255 255 / 58%),
     inset -1px -1px 0 color-mix(in srgb, var(--ink) 12%, transparent),
     0 18px 52px color-mix(in srgb, var(--ink) 8%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(1.18) contrast(1.04);
-  backdrop-filter: blur(20px) saturate(1.18) contrast(1.04);
+  -webkit-backdrop-filter: blur(var(--mini-glass-blur)) saturate(1.25) contrast(1.06);
+  backdrop-filter: blur(var(--mini-glass-blur)) saturate(1.25) contrast(1.06);
   gap: 16px;
   align-content: start;
   isolation: isolate;
@@ -70,7 +73,7 @@
     radial-gradient(110% 58% at 8% -8%, rgb(255 255 255 / 52%), transparent 48%),
     linear-gradient(118deg, transparent 22%, rgb(255 255 255 / 18%) 43%, transparent 62%);
   content: "";
-  opacity: 0.72;
+  opacity: var(--mini-glass-overlay-opacity);
   pointer-events: none;
 }
 
@@ -645,11 +648,31 @@
   .mini {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .panel {
+    --mini-glass-background: color-mix(in srgb, var(--ground) 56%, transparent);
+    --mini-glass-blur: 16px;
+    --mini-glass-overlay-opacity: 0.48;
+    box-shadow:
+      inset 1px 1px 0 rgb(255 255 255 / 52%),
+      inset -1px -1px 0 color-mix(in srgb, var(--ink) 10%, transparent),
+      0 14px 38px color-mix(in srgb, var(--ink) 7%, transparent);
+  }
 }
 
 @media (max-width: 640px) {
   .mini {
     padding-inline: 20px;
+  }
+
+  .panel {
+    --mini-glass-background: color-mix(in srgb, var(--ground) 64%, transparent);
+    --mini-glass-blur: 10px;
+    --mini-glass-overlay-opacity: 0.4;
+    box-shadow:
+      inset 1px 1px 0 rgb(255 255 255 / 46%),
+      inset -1px -1px 0 color-mix(in srgb, var(--ink) 8%, transparent),
+      0 10px 28px color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .actions {
