@@ -48,12 +48,6 @@ const PRESETS = [
   },
 ] as const;
 
-const EXPERIMENT_FACTS = [
-  { name: "Input", body: "Cleanverse-provenance MINV01 identity plus two visitor-set private financing-claim windows." },
-  { name: "Evaluation", body: "One fixed BGV circuit over ciphertexts; the evaluator sees no window." },
-  { name: "Release", body: "One governed signed result. No browser prediction and no earlier verdict." },
-] as const;
-
 const EXECUTION_PHASES = [
   "Eligibility confirmed",
   "Encrypted artifacts prepared",
@@ -77,10 +71,7 @@ type ParsedDraft = Readonly<{
 type CompletedRun = Readonly<{
   draft: WindowDraft;
   runId: string;
-  observedBlock: number;
-  elapsed: number;
   verdict: "conflict" | "no-conflict";
-  governedDigest: string;
 }>;
 
 /** Each claim is validated independently. Cross-claim geometry is never read. */
@@ -192,17 +183,12 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
       !terminal
       || submittedDraft === null
       || runId === null
-      || eligibility === null
-      || governedDigest === null
       || verdict === null
     ) return;
     setPreviousRun(Object.freeze({
       draft: submittedDraft,
       runId,
-      observedBlock: eligibility.observedBlock,
-      elapsed,
       verdict,
-      governedDigest,
     }));
     setDraft(submittedDraft);
     setSubmittedDraft(null);
@@ -326,29 +312,27 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
         <p className={styles.eyebrow}>Run it now</p>
         <h2 id="mini-title">One receivable. Two private claims. One encrypted answer.</h2>
         <p className={styles.lede}>
-          Choose two synthetic financing-claim windows. Mordant will evaluate the private geometry;
-          this page will not predict it.
+          Choose two synthetic financing-claim windows. Mordant runs a real encrypted evaluation;
+          this page never predicts the result.
         </p>
-
-        <dl className={styles.boundaries} aria-label="Experiment facts">
-          {EXPERIMENT_FACTS.map((item) => (
-            <div key={item.name}>
-              <dt>{item.name}</dt>
-              <dd>{item.body}</dd>
-            </div>
-          ))}
-        </dl>
       </div>
 
       <div className={styles.panel}>
         <form onSubmit={submit} noValidate>
-          <MiniClaimTimeline
-            claimA={{ from: displayedDraft.aFrom, until: displayedDraft.aUntil }}
-            claimB={{ from: displayedDraft.bFrom, until: displayedDraft.bUntil }}
-            disabled={inputsLocked}
-            onChangeA={(edge, value) => updateField(edge === "from" ? "aFrom" : "aUntil", value)}
-            onChangeB={(edge, value) => updateField(edge === "from" ? "bFrom" : "bUntil", value)}
-          />
+          {terminal && submittedDraft !== null ? (
+            <dl className={styles.submittedGeometry} aria-label="Submitted claim geometry" data-testid="mini-submitted-geometry">
+              <div><dt>Claim A</dt><dd>{submittedDraft.aFrom}–{submittedDraft.aUntil}</dd></div>
+              <div><dt>Claim B</dt><dd>{submittedDraft.bFrom}–{submittedDraft.bUntil}</dd></div>
+            </dl>
+          ) : (
+            <MiniClaimTimeline
+              claimA={{ from: displayedDraft.aFrom, until: displayedDraft.aUntil }}
+              claimB={{ from: displayedDraft.bFrom, until: displayedDraft.bUntil }}
+              disabled={inputsLocked}
+              onChangeA={(edge, value) => updateField(edge === "from" ? "aFrom" : "aUntil", value)}
+              onChangeB={(edge, value) => updateField(edge === "from" ? "bFrom" : "bUntil", value)}
+            />
+          )}
 
           {inputsLocked ? null : (
             <div className={styles.presets} aria-label="Example claim arrangements">
@@ -366,48 +350,47 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
             </div>
           )}
 
-          <div className={styles.windows} aria-label="Synthetic financing claim windows">
-            {([
-              ["A", "aFrom", "aUntil"],
-              ["B", "bFrom", "bUntil"],
-            ] as const).map(([label, fromKey, untilKey]) => (
-              <fieldset key={label}>
-                <legend>Financing claim {label}</legend>
-                <label>
-                  <span>Active from</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={displayedDraft[fromKey]}
-                    disabled={inputsLocked}
-                    aria-invalid={invalid.includes(fromKey)}
-                    onChange={(event) => updateField(fromKey, event.currentTarget.value)}
-                    data-testid={`claim-${label.toLowerCase()}-from`}
-                  />
-                </label>
-                <label>
-                  <span>Active until</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={displayedDraft[untilKey]}
-                    disabled={inputsLocked}
-                    aria-invalid={invalid.includes(untilKey)}
-                    onChange={(event) => updateField(untilKey, event.currentTarget.value)}
-                    data-testid={`claim-${label.toLowerCase()}-until`}
-                  />
-                </label>
-              </fieldset>
-            ))}
-          </div>
+          {terminal ? null : (
+            <div className={styles.windows} aria-label="Synthetic financing claim windows">
+              {([
+                ["A", "aFrom", "aUntil"],
+                ["B", "bFrom", "bUntil"],
+              ] as const).map(([label, fromKey, untilKey]) => (
+                <fieldset key={label}>
+                  <legend>Financing claim {label}</legend>
+                  <label>
+                    <span>Active from</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={displayedDraft[fromKey]}
+                      disabled={inputsLocked}
+                      aria-invalid={invalid.includes(fromKey)}
+                      onChange={(event) => updateField(fromKey, event.currentTarget.value)}
+                      data-testid={`claim-${label.toLowerCase()}-from`}
+                    />
+                  </label>
+                  <label>
+                    <span>Active until</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={displayedDraft[untilKey]}
+                      disabled={inputsLocked}
+                      aria-invalid={invalid.includes(untilKey)}
+                      onChange={(event) => updateField(untilKey, event.currentTarget.value)}
+                      data-testid={`claim-${label.toLowerCase()}-until`}
+                    />
+                  </label>
+                </fieldset>
+              ))}
+            </div>
+          )}
 
           {formError === null ? null : <p className={styles.formError} role="alert">{formError}</p>}
-          <p className={styles.windowNote}>
-            Synthetic managed test. Both claims are prepared under one eligible test context; the
-            visitor owns neither claim. The evaluator never sees these plaintext windows.
-          </p>
+          {terminal ? null : <p className={styles.windowNote}>The evaluator never sees these plaintext values.</p>}
 
           {terminal ? null : (
             <button
@@ -440,8 +423,8 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
                 </strong>
                 <p>
                   {verdict === "conflict"
-                    ? "The governed result establishes only that the submitted windows conflict. Approved policy and human review determine action owner, deadline, escalation and responsibility."
-                    : "The governed result establishes only that the submitted windows do not conflict. It does not approve credit or establish legal validity; policy and human review determine any next action."}
+                    ? "The governed result establishes that these windows conflict. Policy and human review determine what happens next."
+                    : "The governed result establishes that these windows do not conflict. Policy and human review determine what happens next."}
                 </p>
               </>
             ) : (
@@ -454,14 +437,14 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           </div>
         )}
 
-        {runId === null || eligibility === null ? null : (
+        {terminal || runId === null || eligibility === null ? null : (
           <div className={styles.runIdentity} data-testid="mini-run-identity">
             <span>A-Pass checked · observed at block {eligibility.observedBlock}</span>
             <span>Fresh run · {shortRunId(runId)}</span>
           </div>
         )}
 
-        {phaseIndex === null ? null : (
+        {terminal || phaseIndex === null ? null : (
           <ol className={styles.executionPhases} aria-label="Execution phases">
             {EXECUTION_PHASES.map((label, index) => (
               <li key={label} data-state={index < phaseIndex ? "complete" : index === phaseIndex ? "current" : "pending"}>
@@ -473,18 +456,20 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
 
         {terminal && runId !== null && eligibility !== null && evaluationCompleted && governedDigest !== null ? (
           <div className={styles.resultArea}>
-            <dl className={styles.proofStrip} aria-label="Proof of this managed run" data-testid="mini-proof-strip">
-              <div><dt>Fresh run</dt><dd>{shortRunId(runId)}</dd></div>
-              <div><dt>A-Pass checked</dt><dd>Block {eligibility.observedBlock}</dd></div>
-              <div><dt>BGV evaluation</dt><dd>Completed</dd></div>
-              <div><dt>Governed release</dt><dd>Verified</dd></div>
-              <div><dt>Elapsed</dt><dd>{elapsed}s</dd></div>
-              <div><dt>Result digest</dt><dd><code>{shortDigest(governedDigest)}</code></dd></div>
-            </dl>
+            <details className={styles.proofDetails} data-testid="mini-proof-details">
+              <summary>
+                <span>Execution proof</span>
+                <code>{shortRunId(runId)} · {elapsed}s</code>
+              </summary>
+              <dl aria-label="Proof of this managed run">
+                <div><dt>A-Pass</dt><dd>Block {eligibility.observedBlock}</dd></div>
+                <div><dt>BGV evaluation</dt><dd>Completed</dd></div>
+                <div><dt>Result digest</dt><dd><code>{shortDigest(governedDigest)}</code></dd></div>
+              </dl>
+            </details>
             <p className={styles.separateRun}>
-              The fresh managed result above did not execute Monad or aUSDC settlement. The proof
-              below is a separate hardened two-wallet run: its preconfigured demo policy opened the
-              cure path, and deployment configuration—not the Boolean—determined holders and payouts.
+              This experiment ends at governed result. The proof below is a separate completed
+              two-wallet Monad testnet recourse run.
             </p>
             <div className={styles.actions}>
               <Link className={styles.primary} href="/protection/verified-run" data-testid="mini-to-verified-run">
@@ -507,26 +492,13 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
 
         {previousRun === null ? null : (
           <aside className={styles.previousRun} data-testid="mini-previous-run">
-            <div>
-              <span>Previous completed run</span>
-              <strong>{previousRun.verdict === "conflict" ? "Conflict confirmed" : "No conflict"}</strong>
-            </div>
-            <dl>
-              <div><dt>Run</dt><dd>{shortRunId(previousRun.runId)}</dd></div>
-              <div><dt>Claim A</dt><dd>{previousRun.draft.aFrom}–{previousRun.draft.aUntil}</dd></div>
-              <div><dt>Claim B</dt><dd>{previousRun.draft.bFrom}–{previousRun.draft.bUntil}</dd></div>
-              <div><dt>Observed</dt><dd>Block {previousRun.observedBlock}</dd></div>
-              <div><dt>Elapsed</dt><dd>{previousRun.elapsed}s</dd></div>
-              <div><dt>Digest</dt><dd><code>{shortDigest(previousRun.governedDigest)}</code></dd></div>
-            </dl>
-            <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect previous run</Link>
+            <span>Previous</span>
+            <strong>{previousRun.verdict === "conflict" ? "Conflict" : "No conflict"}</strong>
+            <code>{shortRunId(previousRun.runId)}</code>
+            <span>A {previousRun.draft.aFrom}–{previousRun.draft.aUntil} · B {previousRun.draft.bFrom}–{previousRun.draft.bUntil}</span>
+            <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect</Link>
           </aside>
         )}
-
-        <p className={styles.honesty}>
-          Real BGV, managed preparation, one eligible synthetic test context. This is not two
-          independent wallets and does not claim a fresh Monad settlement.
-        </p>
       </div>
     </section>
   );

@@ -39,21 +39,6 @@ const INTEGRATION_STEPS = [
   },
 ] as const;
 
-const BOUNDARIES = [
-  {
-    title: "Input / managed-preparation boundary",
-    body: "MINV01 Cleanverse provenance and identity plus A-Pass eligibility are checked against real evidence; this does not establish invoice authenticity, legal validity or enforceability. The financing-claim windows are synthetic; Mordant's managed service prepares their encryption, not a participant device.",
-  },
-  {
-    title: "Evaluation / governed-release boundary",
-    body: "The fixed BGV circuit receives ciphertexts and the evaluator holds no decryption key. A designated decryptor governs release; this is not native Monad FHE, threshold release or trustless decryption. The result establishes only conflict status; approved policy and human review determine action owner, deadline, escalation and responsibility.",
-  },
-  {
-    title: "Testnet / operational boundary",
-    body: "This fresh managed check does not settle aUSDC. A separate hardened two-wallet run completed the real cure window and deliberately small aUSDC claims on Monad testnet. Managed execution is supervised single-host, limited to one slot and not production authorized.",
-  },
-] as const;
-
 function Symbol({ className }: { readonly className: string }) {
   return (
     <svg className={className} viewBox="0 0 100 100" aria-hidden="true">
@@ -248,16 +233,15 @@ export function PublicExperience({ liveCheckHolder }: {
               <Symbol className={styles.heroSymbol} />
             </div>
           </div>
-          <p className={styles.heroPromise}>When private claims collide, Mordant keeps tokenized credit moving.</p>
+          <p className={styles.heroPromise}>When private claims collide, keep tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            Mordant privately detects conflicting pledges on receivables with verified Cleanverse provenance and turns confirmed
-            conflicts into governed, auditable recourse, without exposing lender records to the evaluator.
+            Mordant privately checks whether financing claims conflict, then turns a confirmed conflict into governed recourse.
+            Cleanverse verifies the receivable’s provenance and participant eligibility.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
             <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
           </div>
-          <p className={styles.heroNote}>A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.</p>
         </section>
 
         {/* 2. The real check, immediately. The economic problem this replaced
@@ -327,21 +311,6 @@ export function PublicExperience({ liveCheckHolder }: {
           </Link>
         </section>
 
-        {/* 5. Three compressed truth boundaries. */}
-        <section className={styles.boundaries} id="boundaries" aria-labelledby="boundaries-title" data-reveal>
-          <header>
-            <p className={styles.eyebrow}>Boundaries</p>
-            <h2 id="boundaries-title">What this is, and what it is not.</h2>
-          </header>
-          <dl className={styles.boundaryList}>
-            {BOUNDARIES.map((item) => (
-              <div key={item.title}>
-                <dt>{item.title}</dt>
-                <dd>{item.body}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
       </main>
 
       <PublicFooter />

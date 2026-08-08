@@ -18,18 +18,27 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
 
   await expect(page.getByRole("heading", { name: "Conflict became recourse." })).toBeVisible();
   await expect(page.getByText(
-    "When private claims collide, Mordant keeps tokenized credit moving.",
+    "When private claims collide, keep tokenized credit moving.",
     { exact: true },
   )).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) > 760) {
+    const promiseGeometry = await page.getByText(
+      "When private claims collide, keep tokenized credit moving.",
+      { exact: true },
+    ).evaluate((node) => ({
+      height: node.getBoundingClientRect().height,
+      lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight),
+    }));
+    expect(promiseGeometry.height).toBeLessThanOrEqual(promiseGeometry.lineHeight * 1.1);
+  }
   await expect(page.getByText(
-    "Mordant privately detects conflicting pledges on receivables with verified Cleanverse provenance and turns confirmed conflicts into governed, auditable recourse, without exposing lender records to the evaluator.",
+    "Mordant privately checks whether financing claims conflict, then turns a confirmed conflict into governed recourse. Cleanverse verifies the receivable’s provenance and participant eligibility.",
     { exact: true },
   )).toBeVisible();
   await expect(page.getByText(
     "A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.",
     { exact: true },
-  )).toBeVisible();
-
+  )).toHaveCount(0);
   // On the landing, both primary entry points move to its one real experiment.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
   await expect(page.getByRole("main").getByRole("link", { name: "Run the live check" }).first())
@@ -40,6 +49,8 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     .toHaveAttribute("href", "/protection?scenario=conflict");
 
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
+  await expect(page.getByTestId("mini-live-check")).toContainText("synthetic financing-claim windows");
+  await expect(page.getByTestId("mini-live-check")).toContainText("real encrypted evaluation");
   await expect(page.getByRole("region", { name: "One path. Four bounded responsibilities." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
   await expect(page.getByTestId("landing-to-verified-run"))
@@ -56,18 +67,22 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     { exact: true },
   )).toBeVisible();
 
-  // Every material limitation remains, compressed into three boundaries.
-  const boundaries = page.locator("#boundaries");
-  await expect(boundaries).toContainText("managed service prepares their encryption");
-  await expect(boundaries).toContainText("evaluator holds no decryption key");
-  await expect(boundaries).toContainText("not native Monad FHE, threshold release or trustless decryption");
-  await expect(boundaries).toContainText("Cleanverse provenance and identity");
-  await expect(boundaries).toContainText("does not establish invoice authenticity, legal validity or enforceability");
-  await expect(boundaries).toContainText("financing-claim windows are synthetic");
-  await expect(boundaries).toContainText("separate hardened two-wallet run");
-  await expect(boundaries).toContainText("does not settle aUSDC");
-  await expect(boundaries).toContainText("not production authorized");
-  await expect(boundaries).toContainText("result establishes only conflict status");
+  // The standalone caveat section is gone. The main narrative now ends at the
+  // separate completed proof without replacing it with another disclaimer.
+  await expect(page.locator("#boundaries")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "What this is, and what it is not." })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "What this is and is not" })).toHaveCount(0);
+  await expect(page.locator("main > section").last()).toContainText("Completed hardened proof");
+  for (const technicalCaveat of [
+    "native Monad FHE",
+    "threshold release",
+    "single-host",
+    "one slot",
+    "production authorized",
+    "participant device",
+  ]) {
+    await expect(page.getByRole("main")).not.toContainText(technicalCaveat);
+  }
 
   // The accepted scrollytelling is preserved in source but intentionally absent
   // from this first compressed render.
@@ -208,7 +223,7 @@ test("the shadow pilot route asks only for pilot-fit information and never fakes
   });
 });
 
-test("the public shell exposes one hierarchy and one primary action", async ({ page }) => {
+test("the public shell exposes one hierarchy and one primary action", async ({ page }, testInfo) => {
   await page.goto("/");
 
   const navigation = page.getByRole("navigation", { name: "Product navigation" });
@@ -217,12 +232,22 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   const hrefs = await navigation.getByRole("link").evaluateAll(
     (links) => links.map((link) => link.getAttribute("href")),
   );
-  expect(hrefs).toEqual(["/#product", "/#how", "/protection?scenario=conflict", "/pilot"]);
+  expect(hrefs).toEqual(["/#how", "/protection?scenario=conflict", "/pilot"]);
 
   // Every destination must still announce a name at this viewport, so a short
   // label can never become an empty one.
   for (const name of await navigation.getByRole("link").allInnerTexts()) {
     expect(name.trim().length).toBeGreaterThan(0);
+  }
+
+  if (!testInfo.project.use.hasTouch) {
+    const how = navigation.getByRole("link", { name: "How it works" });
+    await how.hover();
+    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
+      .toBeGreaterThanOrEqual(6);
+    await page.getByRole("link", { name: "Mordant home" }).hover();
+    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
+      .toBeLessThanOrEqual(0.1);
   }
 
   // The live product is the only primary action, and it is never duplicated as a

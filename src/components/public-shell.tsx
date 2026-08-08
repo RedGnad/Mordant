@@ -14,7 +14,6 @@ import styles from "./public-shell.module.css";
 export type PublicSurface = "landing" | "live" | "evidence" | "demo" | "pilot";
 
 const NAVIGATION = [
-  { id: "product", href: "/#product", label: "Product", short: "Product" },
   { id: "how", href: "/#how", label: "How it works", short: "How" },
   { id: "evidence", href: "/protection?scenario=conflict", label: "Evidence", short: "Evidence" },
   { id: "pilot", href: "/pilot", label: "Pilot", short: "Pilot" },
@@ -98,7 +97,6 @@ export function PublicFooter() {
         <Link href="/protection/verified-run">Verify completed recourse</Link>
         <Link href={LIVE_PRODUCT_HREF}>Advanced live product</Link>
         <Link href="/protection?scenario=conflict">Verified evidence</Link>
-        <Link href="/#boundaries">What this is and is not</Link>
       </nav>
     </footer>
   );

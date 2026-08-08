@@ -326,7 +326,7 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect(page.getByRole("list", { name: "Execution phases" }))
     .toContainText("BGV evaluation completed");
   await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
-  await expect(page.getByTestId("mini-proof-strip")).toHaveCount(0);
+  await expect(page.getByTestId("mini-proof-details")).toHaveCount(0);
   await expect(page.getByTestId("claim-a-from")).toBeDisabled();
   await expect(page.getByTestId("claim-a-from")).toHaveValue("120");
   await expect(page.getByTestId("claim-a-until")).toHaveValue("420");
@@ -335,30 +335,40 @@ test("real worker evidence appears, and no verdict exists before governed releas
 
   await expect(page.getByTestId("mini-verdict")).toHaveAttribute("data-verdict", "conflict", { timeout: 5_000 });
   await expect(page.getByTestId("mini-verdict")).toHaveText("Conflict confirmed");
-  const proof = page.getByTestId("mini-proof-strip");
-  await expect(proof).toContainText("A-Pass checked");
+  await expect(page.getByTestId("mini-claim-timeline")).toHaveCount(0);
+  await expect(page.getByTestId("claim-a-from")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Execution phases" })).toHaveCount(0);
+  await expect(page.getByTestId("mini-run-identity")).toHaveCount(0);
+  const submitted = page.getByTestId("mini-submitted-geometry");
+  await expect(submitted).toContainText("Claim A120–420");
+  await expect(submitted).toContainText("Claim B220–520");
+
+  const proof = page.getByTestId("mini-proof-details");
+  await expect(proof.getByText("Execution proof")).toBeVisible();
+  await expect(proof.getByText(/a1b2c3d4 · \d+s/u)).toBeVisible();
+  await expect(proof).not.toHaveAttribute("open", "");
+  await proof.locator("summary").click();
+  await expect(proof).toHaveAttribute("open", "");
+  await expect(proof).toContainText("A-Pass");
   await expect(proof).toContainText(`Block ${OBSERVED_BLOCK}`);
   await expect(proof).toContainText("BGV evaluation");
   await expect(proof).toContainText("Completed");
-  await expect(proof).toContainText("Governed release");
-  await expect(proof).toContainText("Elapsed");
   await expect(proof).toContainText("sha256:66666666");
 
-  await expect(page.getByTestId("mini-status")).toContainText("establishes only that the submitted windows conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("policy and human review determine action owner, deadline");
+  await expect(page.getByTestId("mini-status")).toContainText("establishes that these windows conflict");
+  await expect(page.getByTestId("mini-status")).toContainText("Policy and human review determine what happens next");
   await expect(page.getByTestId("mini-status")).not.toContainText("names who is responsible");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveText("Verify the completed on-chain recourse");
   await expect(page.getByTestId("mini-try-another")).toHaveText("Try another case");
   await expect(page.getByRole("link", { name: "Inspect this managed run" }))
     .toHaveAttribute("href", `/protection/live?runId=${RUN_ID}`);
-  await expect(page.getByTestId("mini-live-check")).toContainText("did not execute Monad or aUSDC settlement");
-  await expect(page.getByTestId("mini-live-check")).toContainText("separate hardened two-wallet run");
+  await expect(page.getByTestId("mini-live-check")).toContainText("experiment ends at governed result");
+  await expect(page.getByTestId("mini-live-check")).toContainText("separate completed two-wallet Monad testnet recourse run");
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     for (const section of [
       page.locator("#how"),
       page.getByRole("region", { name: "Verify the consequence, not a claim about it." }),
-      page.locator("#boundaries"),
     ]) {
       await section.scrollIntoViewIfNeeded();
       await expect(section).toHaveAttribute("data-visible", "true");
@@ -384,8 +394,8 @@ test("Try another case starts a fresh draft while retaining exactly one complete
   await expect(page.getByTestId("claim-a-from")).toBeEnabled();
   const previous = page.getByTestId("mini-previous-run");
   await expect(previous).toHaveCount(1);
-  await expect(previous).toContainText("Previous completed run");
-  await expect(previous).toContainText("Conflict confirmed");
+  await expect(previous).toContainText("Previous");
+  await expect(previous).toContainText("Conflict");
   await expect(previous).toContainText("a1b2c3d4");
   await expect(previous).toContainText("120–420");
   await expect(previous).toContainText("220–520");
@@ -401,7 +411,7 @@ test("Try another case starts a fresh draft while retaining exactly one complete
     participantB: { activeFrom: 320, activeUntil: 520 },
   });
   await expect(previous).toHaveCount(1);
-  await expect(previous).toContainText("Conflict confirmed");
+  await expect(previous).toContainText("Conflict");
   await expect(previous).not.toContainText("No conflict");
 
   await page.getByTestId("mini-try-another").click();
@@ -421,7 +431,8 @@ test("the cleared wording also comes only from governedResult.conflict", async (
   await page.getByTestId("mini-run").click();
   await expect(page.getByTestId("mini-verdict")).toHaveAttribute("data-verdict", "no-conflict");
   await expect(page.getByTestId("mini-verdict")).toHaveText("No conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("establishes only that the submitted windows do not conflict");
+  await expect(page.getByTestId("mini-status")).toContainText("establishes that these windows do not conflict");
+  await expect(page.getByTestId("mini-status")).toContainText("Policy and human review determine what happens next");
   await expect(page.getByTestId("mini-status")).not.toContainText("assigns");
 });
 
@@ -508,6 +519,10 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
     expect(motion.animation).toBe("none");
     expect(motion.transitionSeconds).toBeLessThanOrEqual(0.001);
   }
+
+  const headerLink = page.getByRole("navigation", { name: "Product navigation" }).getByRole("link").first();
+  await headerLink.focus();
+  expect(await headerLink.evaluate((node) => getComputedStyle(node).transform)).toBe("none");
 
   const integration = page.locator('[aria-label="Integration stages"]');
   const governed = integration.getByRole("button", { name: /Governed result/ });

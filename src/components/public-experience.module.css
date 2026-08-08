@@ -163,14 +163,16 @@
 .heroPromise {
   position: relative;
   z-index: 3;
-  max-width: 19em;
+  width: max-content;
+  max-width: 100%;
   margin: clamp(26px, 3.4vh, 42px) 0 0;
   color: var(--ink);
   font-size: clamp(20px, 1.85vw, 27px);
   font-weight: 500;
   letter-spacing: -0.022em;
   line-height: 1.18;
-  text-wrap: balance;
+  text-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .heroSupport {
@@ -190,16 +192,6 @@
   flex-wrap: wrap;
   gap: 10px;
   margin: 26px 0 0;
-}
-
-.heroNote {
-  position: relative;
-  z-index: 3;
-  margin: 14px 0 0;
-  color: var(--muted);
-  font: 11px var(--font-proof), monospace;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .primary,
@@ -1075,6 +1067,13 @@
     font-size: 17px;
   }
 
+  .heroPromise {
+    width: 100%;
+    max-width: 330px;
+    text-wrap: balance;
+    white-space: normal;
+  }
+
   .actions {
     display: grid;
     width: 100%;
@@ -1248,16 +1247,15 @@
 }
 
 /* ================================================================ narrative sections
-   The compressed landing keeps one responsibility path, one hardened proof
-   handoff and three truth boundaries. Rules and rails keep it reading as one
-   editorial document rather than a dashboard.
+   The compressed landing keeps one responsibility path and ends on one
+   hardened proof handoff. Rules and rails keep it reading as one editorial
+   document rather than a dashboard.
    ================================================================ */
 
 .problem,
 .product,
 .invitation,
 .consequence,
-.boundaries,
 .pilot {
   padding-inline: clamp(22px, 5vw, 76px);
   padding-block: clamp(56px, 8vw, 128px);
@@ -1282,7 +1280,6 @@
 .product h2,
 .invitation h2,
 .consequence h2,
-.boundaries h2,
 .pilot h2 {
   max-width: 20ch;
   margin: 0;
@@ -1808,45 +1805,6 @@
   border-color: var(--ground);
 }
 
-/* ---------------------------------------------------------------- 8. boundaries */
-
-.boundaryList {
-  display: grid;
-  margin: clamp(32px, 4vw, 56px) 0 0;
-  gap: 0 40px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.boundaryList > div {
-  padding: 18px 0;
-  border-top: 1px solid var(--rule);
-}
-
-.boundaryList dt {
-  margin-bottom: 5px;
-  font-family: var(--font-proof), monospace;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.boundaryList dd {
-  max-width: 46ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.boundaryNote {
-  max-width: 62ch;
-  margin: 28px 0 0;
-  padding-left: 18px;
-  border-left: 3px solid var(--action);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
 /* ---------------------------------------------------------------- 9. pilot */
 
 .pilot {
@@ -1891,8 +1849,7 @@
     }
   }
 
-  .problemBody,
-  .boundaryList {
+  .problemBody {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1925,7 +1882,6 @@
   .product,
   .invitation,
   .consequence,
-  .boundaries,
   .pilot {
     padding-inline: 20px;
     padding-block: clamp(44px, 11vw, 64px);
@@ -1935,7 +1891,6 @@
   .product h2,
   .invitation h2,
   .consequence h2,
-  .boundaries h2,
   .pilot h2 {
     max-width: none;
     font-size: clamp(30px, 8.4vw, 40px);
