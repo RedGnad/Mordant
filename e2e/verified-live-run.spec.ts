@@ -29,6 +29,13 @@ test.describe("verified live run", () => {
     await expect(run).not.toContainText("governed result opened recourse");
   });
 
+  test("the transition back to live names the managed public profile", async ({ page }) => {
+    await page.goto("/protection/verified-run");
+    const transition = page.getByText(/The live check starts a new managed case/iu);
+    await expect(transition).toContainText("under the published eligible test context");
+    await expect(transition).not.toContainText("two eligible wallets");
+  });
+
   test("badges itself as a verified live run and never as a demo or fixture", async ({ page }) => {
     await page.goto(PATH);
     const run = page.getByTestId("verified-live-run");

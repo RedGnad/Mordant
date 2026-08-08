@@ -302,8 +302,8 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       <div className={styles.transition}>
         <h2 className={styles.transitionTitle}>Run the check yourself</h2>
         <p className={styles.transitionBody}>
-          This page is a completed run. The live check starts a new case with two eligible wallets and
-          produces a new governed result.
+          This page is a completed run. The live check starts a new managed case under the published
+          eligible test context and produces a new governed result.
         </p>
         <Link className={styles.cta} href="/protection/live" data-testid="verified-run-to-live">
           Run live check

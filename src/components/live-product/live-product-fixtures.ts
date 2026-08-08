@@ -26,7 +26,7 @@ const CASE = Object.freeze({
   fheCaseId: digest("2abc308b1a7e29f5436df95070d068cf8dd1113b74e9a2f72eb4204e24694441"),
 });
 
-/** Mid-flight: the evaluator is running and no result exists. */
+/** BGV evaluation is complete; governed verification is pending and no result exists. */
 export const RUNNING_VIEW: ManagedWorkerView = Object.freeze({
   schemaVersion: "mordant.custom-supervised-protection-view/1",
   runId: "00000000-0000-4000-8000-000000000001",

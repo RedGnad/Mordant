@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   adaptManagedIntake,
   managedProductState,
+  parseManagedWorkerView,
   type ManagedWorkerView,
 } from "../src/components/live-product/managed-intake-adapter";
 import {
@@ -156,13 +157,28 @@ test.describe("live product presentation model", () => {
     expect(stageOrderFor("MANAGED_COMBINED")).not.toContain("CLAIM_INPUTS_ADMITTED");
   });
 
-  test("stage progress is derived, never invented", () => {
+  test("EVALUATED means BGV complete with governed release still pending", () => {
     const model = adapt(RUNNING_VIEW);
     const active = model.stages.filter((stage) => stage.progress === "active");
     expect(active).toHaveLength(1);
-    expect(active[0].id).toBe("EVALUATION_RUNNING");
-    expect(model.stages.filter((stage) => stage.progress === "done")).toHaveLength(4);
+    expect(active[0].id).toBe("GOVERNED_VERIFICATION");
+    expect(active[0].label).toBe("Governed result pending");
+    expect(active[0].detail).toContain("Encrypted evaluation is complete");
+    expect(model.stages.map((stage) => String(stage.id))).not.toContain("EVALUATION_RUNNING");
+    expect(model.stages.find((stage) => stage.id === "EVALUATION_COMPLETE")).toMatchObject({
+      label: "Encrypted evaluation complete",
+      progress: "done",
+    });
+    expect(model.stages.filter((stage) => stage.progress === "done")).toHaveLength(5);
     // Only the active stage carries a sentence.
     expect(model.stages.filter((stage) => stage.detail !== null)).toHaveLength(1);
+  });
+
+  test("the public projection rejects private claim windows", () => {
+    expect(parseManagedWorkerView({ ...RUNNING_VIEW, activeFrom: 120 })).toBeNull();
+    expect(parseManagedWorkerView({
+      ...RUNNING_VIEW,
+      claim: { participantA: { activeFrom: 120, activeUntil: 420 } },
+    })).toBeNull();
   });
 });

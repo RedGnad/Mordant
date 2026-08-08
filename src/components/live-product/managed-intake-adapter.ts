@@ -346,7 +346,9 @@ const STAGE_INDEX: Readonly<Record<string, number>> = Object.freeze({
   PARTICIPANT_A_SUBMITTED: 2,
   PARTICIPANT_B_PUBLISHED: 3,
   PARTICIPANT_B_SUBMITTED: 3,
-  EVALUATED: 4,
+  // EVALUATED proves the BGV artifact exists. The next visible phase is
+  // governed verification; it is never presented as an evaluation still running.
+  EVALUATED: 5,
   RELEASED: 5,
   RECOURSE_OPENED: 6,
   CHRONOLOGY_COMPLETE: 6,

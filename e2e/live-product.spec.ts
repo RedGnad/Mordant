@@ -51,6 +51,7 @@ test.describe("the judge acceptance path", () => {
     await expect(body).toContainText("Participant B");
     await expect(body).toContainText("does not require either lender to disclose its pledge window to the counterparty");
     await expect(body).toContainText("does not transfer funds");
+    await expect(page.getByTestId("claim-timeline")).toBeVisible();
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {
@@ -69,6 +70,11 @@ test.describe("private decision", () => {
     await expect(page.locator("body")).toContainText("No result exists until the governed decryptor releases");
     await expect(page.getByTestId("reveal")).toHaveCount(0);
     await expect(page.getByTestId("decision-rail")).toHaveCount(0);
+    await expect(page.getByTestId("claim-timeline")).toHaveCount(0);
+    await expect(page.getByTestId("managed-private-inputs-unavailable"))
+      .toContainText("not retained in this public projection");
+    await expect(page.locator("body")).toContainText("Encrypted evaluation is complete");
+    await expect(page.locator("body")).not.toContainText("Encrypted evaluation running");
   });
 
   test("the detailed trace is disclosed, not displayed by default", async ({ page }) => {
@@ -88,6 +94,9 @@ test.describe("conflict reveal", () => {
     await expect(reveal).toContainText("Conflict confirmed");
     await expect(reveal).toContainText("establishes only that the private claim windows conflict");
     await expect(reveal).toContainText("remains outstanding and intact");
+    await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
+    await expect(reveal.getByTestId("managed-private-inputs-unavailable"))
+      .toContainText("not retained in this public projection");
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("Apply approved cure policy after conflict review");
@@ -112,6 +121,7 @@ test.describe("no-conflict reveal", () => {
     await expect(reveal).toContainText("No conflict");
     await expect(reveal).toContainText("configured policy assigned no reserve");
     await expect(reveal).toContainText("This is not a credit approval");
+    await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("No recourse action is available");

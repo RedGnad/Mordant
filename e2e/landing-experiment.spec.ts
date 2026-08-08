@@ -281,6 +281,19 @@ test("the cleared wording also comes only from governedResult.conflict", async (
   await expect(page.getByTestId("mini-status")).not.toContainText("assigns");
 });
 
+test("a restored managed run never reconstructs private geometry from defaults", async ({ page }) => {
+  const { tokenHolders } = await installManagedHarness(page, { read: () => envelope(true) });
+  await page.goto(`/protection/live?runId=${RUN_ID}`);
+
+  const reveal = page.getByTestId("reveal");
+  await expect(reveal).toContainText("Conflict confirmed");
+  await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
+  await expect(reveal.getByTestId("managed-private-inputs-unavailable"))
+    .toContainText("Private claim windows are not retained in this public projection.");
+  await expect(page.locator("#live-aFrom, #live-aUntil, #live-bFrom, #live-bUntil")).toHaveCount(0);
+  expect(tokenHolders).toEqual([]);
+});
+
 test("busy, eligibility refusal and malformed projections fail closed", async ({ page }) => {
   await installManagedHarness(page, { create: () => ({ status: 409 }) });
   await page.goto("/");

@@ -284,7 +284,7 @@ export type ExecutionStageId =
   | "ENCRYPTION_PREPARED"
   | "PARTICIPANT_A_ENCRYPTED"
   | "PARTICIPANT_B_ENCRYPTED"
-  | "EVALUATION_RUNNING"
+  | "EVALUATION_COMPLETE"
   | "GOVERNED_VERIFICATION"
   | "RECOURSE_APPLICATION"
   | "RECEIPT_SEALED";
@@ -305,16 +305,15 @@ const STAGE_LABEL: Readonly<Record<ExecutionStageId, string>> = Object.freeze({
   ENCRYPTION_PREPARED: "Private encryption prepared",
   PARTICIPANT_A_ENCRYPTED: "Participant A encrypted",
   PARTICIPANT_B_ENCRYPTED: "Participant B encrypted",
-  EVALUATION_RUNNING: "Encrypted evaluation running",
-  GOVERNED_VERIFICATION: "Governed result verification",
+  EVALUATION_COMPLETE: "Encrypted evaluation complete",
+  GOVERNED_VERIFICATION: "Governed result pending",
   RECOURSE_APPLICATION: "Recourse application",
   RECEIPT_SEALED: "Receipt sealed",
 });
 
 const STAGE_DETAIL: Readonly<Partial<Record<ExecutionStageId, string>>> = Object.freeze({
   ENCRYPTION_PREPARED: "Mordant's managed execution service is preparing the encryption for this case.",
-  EVALUATION_RUNNING: "The evaluator is running the fixed circuit. It receives ciphertexts and holds no decryption key.",
-  GOVERNED_VERIFICATION: "The designated decryptor is recomputing the circuit and signing one Boolean.",
+  GOVERNED_VERIFICATION: "Encrypted evaluation is complete. The designated decryptor is recomputing the circuit before any Boolean is released.",
   RECOURSE_APPLICATION: "The governed conflict result is being applied under the configured recourse policy.",
 });
 
@@ -323,7 +322,7 @@ export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
   "ENCRYPTION_PREPARED",
   "PARTICIPANT_A_ENCRYPTED",
   "PARTICIPANT_B_ENCRYPTED",
-  "EVALUATION_RUNNING",
+  "EVALUATION_COMPLETE",
   "GOVERNED_VERIFICATION",
   "RECOURSE_APPLICATION",
   "RECEIPT_SEALED",
@@ -336,7 +335,7 @@ export const ADMISSION_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze(
   "ENCRYPTION_PREPARED",
   "PARTICIPANT_A_ENCRYPTED",
   "PARTICIPANT_B_ENCRYPTED",
-  "EVALUATION_RUNNING",
+  "EVALUATION_COMPLETE",
   "GOVERNED_VERIFICATION",
   "RECOURSE_APPLICATION",
   "RECEIPT_SEALED",
