@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
+import {
+  MINI_TIMELINE_MAX,
+  MINI_TIMELINE_MIN,
+  MiniClaimTimeline,
+} from "./mini-claim-timeline";
 import type { ManagedWorkerView } from "./managed-intake-adapter";
 import {
   ManagedResponseRejected,
@@ -35,6 +40,14 @@ const DEFAULT_DRAFT: WindowDraft = Object.freeze({
   bUntil: "520",
 });
 
+const PRESETS = [
+  { label: "Arrangement 01", draft: DEFAULT_DRAFT },
+  {
+    label: "Arrangement 02",
+    draft: Object.freeze({ aFrom: "120", aUntil: "220", bFrom: "320", bUntil: "520" }),
+  },
+] as const;
+
 const EXPERIMENT_FACTS = [
   { name: "Input", body: "Cleanverse-provenance MINV01 identity plus two visitor-set private financing-claim windows." },
   { name: "Evaluation", body: "One fixed BGV circuit over ciphertexts; the evaluator sees no window." },
@@ -61,6 +74,15 @@ type ParsedDraft = Readonly<{
   message: string | null;
 }>;
 
+type CompletedRun = Readonly<{
+  draft: WindowDraft;
+  runId: string;
+  observedBlock: number;
+  elapsed: number;
+  verdict: "conflict" | "no-conflict";
+  governedDigest: string;
+}>;
+
 /** Each claim is validated independently. Cross-claim geometry is never read. */
 function parseDraft(draft: WindowDraft): ParsedDraft {
   const invalid: FieldKey[] = [];
@@ -68,14 +90,14 @@ function parseDraft(draft: WindowDraft): ParsedDraft {
   for (const key of FIELD_KEYS) {
     const raw = draft[key].trim();
     const value = /^\d+$/u.test(raw) ? Number(raw) : Number.NaN;
-    if (!Number.isSafeInteger(value) || value < 0) invalid.push(key);
+    if (!Number.isSafeInteger(value) || value < MINI_TIMELINE_MIN || value > MINI_TIMELINE_MAX) invalid.push(key);
     else parsed[key] = value;
   }
   if (invalid.length > 0) {
     return Object.freeze({
       windows: null,
       invalid: Object.freeze(invalid),
-      message: "Each bound must be a decimal whole number, zero or greater.",
+      message: `Each bound must be a decimal whole number from ${MINI_TIMELINE_MIN} to ${MINI_TIMELINE_MAX}.`,
     });
   }
   if (parsed.aFrom! >= parsed.aUntil!) {
@@ -134,6 +156,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
   const [view, setView] = useState<ManagedWorkerView | null>(null);
   const [eligibility, setEligibility] = useState<ManagedEligibilityObservation | null>(null);
   const [workerOrigin, setWorkerOrigin] = useState<string | null>(null);
+  const [previousRun, setPreviousRun] = useState<CompletedRun | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef<number | null>(null);
   const polls = useRef(0);
@@ -155,6 +178,44 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
     setDraft((current) => Object.freeze({ ...current, [key]: value }));
     setInvalid((current) => current.filter((candidate) => candidate !== key));
     setFormError(null);
+  };
+
+  const applyPreset = (preset: WindowDraft) => {
+    if (inputsLocked) return;
+    setDraft(preset);
+    setInvalid([]);
+    setFormError(null);
+  };
+
+  const tryAnotherCase = () => {
+    if (
+      !terminal
+      || submittedDraft === null
+      || runId === null
+      || eligibility === null
+      || governedDigest === null
+      || verdict === null
+    ) return;
+    setPreviousRun(Object.freeze({
+      draft: submittedDraft,
+      runId,
+      observedBlock: eligibility.observedBlock,
+      elapsed,
+      verdict,
+      governedDigest,
+    }));
+    setDraft(submittedDraft);
+    setSubmittedDraft(null);
+    setInvalid([]);
+    setFormError(null);
+    setPhase({ kind: "IDLE" });
+    setView(null);
+    setEligibility(null);
+    setWorkerOrigin(null);
+    setElapsed(0);
+    startedAt.current = null;
+    polls.current = 0;
+    failures.current = 0;
   };
 
   const run = useCallback(async () => {
@@ -281,6 +342,30 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
 
       <div className={styles.panel}>
         <form onSubmit={submit} noValidate>
+          <MiniClaimTimeline
+            claimA={{ from: displayedDraft.aFrom, until: displayedDraft.aUntil }}
+            claimB={{ from: displayedDraft.bFrom, until: displayedDraft.bUntil }}
+            disabled={inputsLocked}
+            onChangeA={(edge, value) => updateField(edge === "from" ? "aFrom" : "aUntil", value)}
+            onChangeB={(edge, value) => updateField(edge === "from" ? "bFrom" : "bUntil", value)}
+          />
+
+          {inputsLocked ? null : (
+            <div className={styles.presets} aria-label="Example claim arrangements">
+              <span>Start from</span>
+              {PRESETS.map((preset) => (
+                <button
+                  type="button"
+                  key={preset.label}
+                  onClick={() => applyPreset(preset.draft)}
+                  data-testid={`mini-preset-${preset.label.endsWith("01") ? "one" : "two"}`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className={styles.windows} aria-label="Synthetic financing claim windows">
             {([
               ["A", "aFrom", "aUntil"],
@@ -405,12 +490,38 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
               <Link className={styles.primary} href="/protection/verified-run" data-testid="mini-to-verified-run">
                 Verify the completed on-chain recourse
               </Link>
-              <Link className={styles.secondary} href={`/protection/live?runId=${runId}`}>
+              <button
+                className={styles.secondary}
+                type="button"
+                onClick={tryAnotherCase}
+                data-testid="mini-try-another"
+              >
+                Try another case
+              </button>
+              <Link className={styles.tertiary} href={`/protection/live?runId=${runId}`}>
                 Inspect this managed run
               </Link>
             </div>
           </div>
         ) : null}
+
+        {previousRun === null ? null : (
+          <aside className={styles.previousRun} data-testid="mini-previous-run">
+            <div>
+              <span>Previous completed run</span>
+              <strong>{previousRun.verdict === "conflict" ? "Conflict confirmed" : "No conflict"}</strong>
+            </div>
+            <dl>
+              <div><dt>Run</dt><dd>{shortRunId(previousRun.runId)}</dd></div>
+              <div><dt>Claim A</dt><dd>{previousRun.draft.aFrom}–{previousRun.draft.aUntil}</dd></div>
+              <div><dt>Claim B</dt><dd>{previousRun.draft.bFrom}–{previousRun.draft.bUntil}</dd></div>
+              <div><dt>Observed</dt><dd>Block {previousRun.observedBlock}</dd></div>
+              <div><dt>Elapsed</dt><dd>{previousRun.elapsed}s</dd></div>
+              <div><dt>Digest</dt><dd><code>{shortDigest(previousRun.governedDigest)}</code></dd></div>
+            </dl>
+            <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect previous run</Link>
+          </aside>
+        )}
 
         <p className={styles.honesty}>
           Real BGV, managed preparation, one eligible synthetic test context. This is not two

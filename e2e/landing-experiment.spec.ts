@@ -5,6 +5,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const WORKER_ORIGIN = "https://mordant-worker.test";
 const HOLDER = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
 const RUN_ID = "a1b2c3d4-1234-4abc-8def-1234567890ab";
+const SECOND_RUN_ID = "e5f6a7b8-5678-4def-8abc-0987654321fe";
 const OBSERVED_BLOCK = 51_500_321;
 const DIGESTS = Object.freeze({
   asset: `sha256:${"1".repeat(64)}`,
@@ -20,10 +21,10 @@ type ClaimWindows = Readonly<{
   participantB: Readonly<{ activeFrom: number; activeUntil: number }>;
 }>;
 
-function workerView(conflict: boolean | null): Record<string, unknown> {
+function workerView(conflict: boolean | null, runId = RUN_ID): Record<string, unknown> {
   return {
     schemaVersion: "mordant.custom-supervised-protection-view/1",
-    runId: RUN_ID,
+    runId,
     executionVariant: "CUSTOM_SUPERVISED",
     stage: conflict === null ? "EVALUATED" : "RELEASED",
     nextOperation: conflict === null ? "releaseGovernedResult" : null,
@@ -52,10 +53,10 @@ function workerView(conflict: boolean | null): Record<string, unknown> {
   };
 }
 
-function envelope(conflict: boolean | null): Record<string, unknown> {
+function envelope(conflict: boolean | null, runId = RUN_ID): Record<string, unknown> {
   return {
     schemaVersion: "mordant.live-worker/1",
-    view: workerView(conflict),
+    view: workerView(conflict, runId),
     progress: conflict === null ? "Evaluation completed" : "Governed result released",
   };
 }
@@ -78,7 +79,7 @@ async function fulfillWorker(route: Route, body: unknown, status = 200): Promise
 
 type HarnessOptions = Readonly<{
   create?: (windows: ClaimWindows, ordinal: number) => Readonly<{ status?: number; body?: unknown }>;
-  read?: () => unknown;
+  read?: (runId: string) => unknown;
   tokenStatus?: number;
   tokenBody?: unknown;
 }>;
@@ -132,8 +133,9 @@ async function installManagedHarness(page: Page, options: HarnessOptions = {}) {
       await fulfillWorker(route, response.body ?? { error: "busy" }, response.status ?? 200);
       return;
     }
-    if (route.request().method() === "GET" && url.pathname === `/v1/custom-cases/${RUN_ID}`) {
-      await fulfillWorker(route, options.read?.() ?? envelope(true));
+    if (route.request().method() === "GET" && url.pathname.startsWith("/v1/custom-cases/")) {
+      const requestedRunId = url.pathname.slice("/v1/custom-cases/".length);
+      await fulfillWorker(route, options.read?.(requestedRunId) ?? envelope(true, requestedRunId));
       return;
     }
     await fulfillWorker(route, { error: "unexpected deterministic route" }, 404);
@@ -185,9 +187,95 @@ test("editable claims accept both geometries without a browser-side judgement", 
   await expect(mini).not.toContainText("Conflict confirmed");
   await expect(mini).not.toContainText("No conflict");
   await expect(mini).not.toContainText("overlap");
+  await expect(mini.locator("[data-overlap], [data-conflict], [data-result]")).toHaveCount(0);
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     await page.screenshot({ path: testInfo.outputPath("landing-editable.png"), fullPage: true });
   }
+});
+
+test("the neutral timeline and exact fields stay synchronized without interpreting geometry", async ({ page }, testInfo) => {
+  const { submissions } = await installManagedHarness(page, {
+    create: () => ({ status: 409, body: { error: "busy" } }),
+  });
+  await page.goto("/");
+
+  const timeline = page.getByTestId("mini-claim-timeline");
+  await expect(timeline).toContainText("0–600 synthetic units");
+  await expect(timeline).toContainText("never interprets the relationship");
+  await expect(page.getByRole("slider")).toHaveCount(4);
+
+  const aFrom = page.getByRole("slider", { name: "Financing claim A active from" });
+  await expect(aFrom).toHaveAttribute("aria-valuenow", "120");
+  await aFrom.press("ArrowRight");
+  await expect(page.getByTestId("claim-a-from")).toHaveValue("140");
+  await expect(aFrom).toHaveAttribute("aria-valuenow", "140");
+  await aFrom.press("PageUp");
+  await expect(page.getByTestId("claim-a-from")).toHaveValue("240");
+
+  await aFrom.scrollIntoViewIfNeeded();
+  const handleBounds = await aFrom.boundingBox();
+  expect(handleBounds).not.toBeNull();
+  if (handleBounds !== null) {
+    const center = {
+      x: handleBounds.x + handleBounds.width / 2,
+      y: handleBounds.y + handleBounds.height / 2,
+    };
+    if (testInfo.project.use.hasTouch) {
+      await aFrom.evaluate((handle, point) => {
+        handle.dispatchEvent(new PointerEvent("pointerdown", {
+          bubbles: true,
+          buttons: 1,
+          clientX: point.x,
+          clientY: point.y,
+          pointerId: 7,
+          pointerType: "touch",
+        }));
+        window.dispatchEvent(new PointerEvent("pointermove", {
+          bubbles: true,
+          buttons: 1,
+          clientX: point.x + 55,
+          clientY: point.y,
+          pointerId: 7,
+          pointerType: "touch",
+        }));
+        window.dispatchEvent(new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: point.x + 55,
+          clientY: point.y,
+          pointerId: 7,
+          pointerType: "touch",
+        }));
+      }, center);
+    } else {
+      await page.mouse.move(center.x, center.y);
+      await page.mouse.down();
+      await page.mouse.move(center.x + 55, center.y);
+      await page.mouse.up();
+    }
+  }
+  await expect(page.getByTestId("claim-a-from")).not.toHaveValue("240");
+  await aFrom.press("Home");
+  await expect(page.getByTestId("claim-a-from")).toHaveValue("0");
+
+  await page.getByTestId("claim-b-until").fill("580");
+  await expect(page.getByRole("slider", { name: "Financing claim B active until" }))
+    .toHaveAttribute("aria-valuenow", "580");
+
+  const bandStyles = await page.locator("[class*='timelineBand']").evaluateAll((bands) => bands.map((band) => ({
+    background: getComputedStyle(band).backgroundColor,
+    height: getComputedStyle(band).height,
+  })));
+  expect(bandStyles).toHaveLength(2);
+  expect(bandStyles[0]).toEqual(bandStyles[1]);
+
+  await page.getByTestId("mini-preset-two").click();
+  await expect(page.getByTestId("claim-a-from")).toHaveValue("120");
+  await expect(page.getByTestId("claim-a-until")).toHaveValue("220");
+  await expect(page.getByTestId("claim-b-from")).toHaveValue("320");
+  await expect(page.getByTestId("claim-b-until")).toHaveValue("520");
+  expect(submissions).toHaveLength(0);
+  await expect(page.getByTestId("mini-live-check")).not.toContainText("Conflict confirmed");
+  await expect(page.getByTestId("mini-live-check")).not.toContainText("No conflict");
 });
 
 test("each claim is validated independently with the managed-product semantics", async ({ page }) => {
@@ -197,7 +285,7 @@ test("each claim is validated independently with the managed-product semantics",
   await setWindows(page, ["-1", "420", "220", "520"]);
   await page.getByTestId("mini-run").click();
   await expect(page.getByTestId("mini-live-check").getByRole("alert"))
-    .toHaveText("Each bound must be a decimal whole number, zero or greater.");
+    .toHaveText("Each bound must be a decimal whole number from 0 to 600.");
   await expect(page.getByTestId("claim-a-from")).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByTestId("claim-b-from")).toHaveAttribute("aria-invalid", "false");
 
@@ -216,6 +304,12 @@ test("each claim is validated independently with the managed-product semantics",
   await expect(page.getByTestId("claim-a-from")).toHaveAttribute("aria-invalid", "false");
   await expect(page.getByTestId("claim-b-from")).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByTestId("claim-b-until")).toHaveAttribute("aria-invalid", "true");
+
+  await setWindows(page, ["120", "601", "220", "520"]);
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-live-check").getByRole("alert"))
+    .toHaveText("Each bound must be a decimal whole number from 0 to 600.");
+  await expect(page.getByTestId("claim-a-until")).toHaveAttribute("aria-invalid", "true");
 });
 
 test("real worker evidence appears, and no verdict exists before governed release", async ({ page }, testInfo) => {
@@ -255,6 +349,9 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect(page.getByTestId("mini-status")).not.toContainText("names who is responsible");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveText("Verify the completed on-chain recourse");
+  await expect(page.getByTestId("mini-try-another")).toHaveText("Try another case");
+  await expect(page.getByRole("link", { name: "Inspect this managed run" }))
+    .toHaveAttribute("href", `/protection/live?runId=${RUN_ID}`);
   await expect(page.getByTestId("mini-live-check")).toContainText("did not execute Monad or aUSDC settlement");
   await expect(page.getByTestId("mini-live-check")).toContainText("separate hardened two-wallet run");
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
@@ -269,6 +366,53 @@ test("real worker evidence appears, and no verdict exists before governed releas
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.screenshot({ path: testInfo.outputPath("landing-governed-result.png"), fullPage: true });
   }
+});
+
+test("Try another case starts a fresh draft while retaining exactly one completed run in memory", async ({ page }) => {
+  const { submissions } = await installManagedHarness(page, {
+    create: (_windows, ordinal) => ordinal === 1
+      ? { body: envelope(true, RUN_ID) }
+      : { body: envelope(false, SECOND_RUN_ID) },
+  });
+  await page.goto("/");
+
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-verdict")).toHaveText("Conflict confirmed");
+  await page.getByTestId("mini-try-another").click();
+
+  await expect(page.getByTestId("mini-run")).toHaveText("Run live check");
+  await expect(page.getByTestId("claim-a-from")).toBeEnabled();
+  const previous = page.getByTestId("mini-previous-run");
+  await expect(previous).toHaveCount(1);
+  await expect(previous).toContainText("Previous completed run");
+  await expect(previous).toContainText("Conflict confirmed");
+  await expect(previous).toContainText("a1b2c3d4");
+  await expect(previous).toContainText("120–420");
+  await expect(previous).toContainText("220–520");
+
+  await page.getByTestId("mini-preset-two").click();
+  await expect(previous).toContainText("120–420");
+  await expect(previous).toContainText("220–520");
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-verdict")).toHaveText("No conflict");
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1]).toEqual({
+    participantA: { activeFrom: 120, activeUntil: 220 },
+    participantB: { activeFrom: 320, activeUntil: 520 },
+  });
+  await expect(previous).toHaveCount(1);
+  await expect(previous).toContainText("Conflict confirmed");
+  await expect(previous).not.toContainText("No conflict");
+
+  await page.getByTestId("mini-try-another").click();
+  await expect(page.getByTestId("mini-previous-run")).toHaveCount(1);
+  await expect(page.getByTestId("mini-previous-run")).toContainText("No conflict");
+  await expect(page.getByTestId("mini-previous-run")).toContainText("e5f6a7b8");
+  await expect(page.getByTestId("mini-previous-run")).not.toContainText("a1b2c3d4");
+
+  await page.reload();
+  await expect(page.getByTestId("mini-previous-run")).toHaveCount(0);
+  await expect(page.getByTestId("claim-a-from")).toHaveValue("120");
 });
 
 test("the cleared wording also comes only from governedResult.conflict", async ({ page }) => {
@@ -348,6 +492,21 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
   for (const id of ["claim-a-from", "claim-a-until", "claim-b-from", "claim-b-until"] as const) {
     const bounds = await page.getByTestId(id).boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(44);
+  }
+  for (const slider of await page.getByRole("slider").all()) {
+    const bounds = await slider.boundingBox();
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(page.getByRole("slider", { name: "Financing claim A active from" }))
+    .toHaveAttribute("aria-valuetext", "120 synthetic units");
+  for (const slider of await page.getByRole("slider").all()) {
+    const motion = await slider.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { animation: style.animationName, transitionSeconds: Number.parseFloat(style.transitionDuration) };
+    });
+    expect(motion.animation).toBe("none");
+    expect(motion.transitionSeconds).toBeLessThanOrEqual(0.001);
   }
 
   const integration = page.locator('[aria-label="Integration stages"]');
