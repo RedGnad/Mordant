@@ -56,6 +56,7 @@
     "protection:adapter": "node scripts/protection-local-adapter.mjs",
     "protection:smoke:conflict": "tsc -p tsconfig.product-tests.json && NODE_PATH=./test/stubs node .product-test-dist/src/lib/protection/product-smoke-cli.js conflict",
     "protection:smoke:no-conflict": "tsc -p tsconfig.product-tests.json && NODE_PATH=./test/stubs node .product-test-dist/src/lib/protection/product-smoke-cli.js no-conflict",
+    "proof:n2-isolation": "tsc -p tsconfig.product-tests.json && node scripts/n2-isolated-execution-proof.mjs",
     "fhe:contracts:test": "forge test --root contracts",
     "fhe:priv8:run": "node --env-file=.env fhe-lab/monad-testnet/run-priv8.mjs",
     "verify:frozen": "node scripts/verify-frozen-sources.mjs",
