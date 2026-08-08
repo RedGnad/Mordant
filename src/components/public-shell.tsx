@@ -45,6 +45,7 @@ function BrandMark() {
 export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
   const activeNav = SURFACE_NAV[surface];
   const onLive = surface === "live";
+  const primaryHref = surface === "landing" ? "/#product" : LIVE_PRODUCT_HREF;
 
   return (
     <header className={styles.header}>
@@ -73,7 +74,7 @@ export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
           <span className={styles.narrow}>Live</span>
         </p>
       ) : (
-        <Link className={styles.cta} href={LIVE_PRODUCT_HREF} data-testid="shell-live-cta">
+        <Link className={styles.cta} href={primaryHref} data-testid="shell-live-cta">
           <span className={styles.wide}>{LIVE_PRODUCT_CTA}</span>
           <span className={styles.narrow}>Run check</span>
         </Link>
@@ -93,10 +94,10 @@ export function PublicFooter() {
         <span className={styles.footerLine}>Recourse infrastructure for tokenized receivables.</span>
       </div>
       <nav className={styles.footerNav} aria-label="Footer navigation">
-        <Link href={LIVE_PRODUCT_HREF}>Run the live check</Link>
+        <Link href="/#product">Run the landing experiment</Link>
+        <Link href="/protection/verified-run">Verify completed recourse</Link>
+        <Link href={LIVE_PRODUCT_HREF}>Advanced live product</Link>
         <Link href="/protection?scenario=conflict">Verified evidence</Link>
-        <Link href="/demo">Lifecycle demonstration</Link>
-        <Link href="/pilot">Shadow pilot</Link>
         <Link href="/#boundaries">What this is and is not</Link>
       </nav>
     </footer>
