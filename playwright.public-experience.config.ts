@@ -24,7 +24,7 @@ const VIEWPORTS = [
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /(public-product|public-experience|live-product|live-product-model|verified-live-run|wallet-modal)\.spec\.ts/,
+  testMatch: /(public-product|public-experience|landing-experiment|live-product|live-product-model|verified-live-run|wallet-modal)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
@@ -43,6 +43,11 @@ export default defineConfig({
   webServer: {
     command: `next dev --hostname 127.0.0.1 --port ${PORT}`,
     url: baseURL,
+    env: {
+      ...process.env,
+      MORDANT_WORKER_TOKEN_SECRET: "public-e2e-token-secret-is-deterministic-only",
+      NEXT_PUBLIC_MORDANT_WORKER_ORIGIN: "https://mordant-worker.test",
+    },
     // Never reuse a server this run did not start. A dev server left behind by
     // another checkout answers on the same port and the whole suite then grades a
     // foreign tree, which is a false green rather than a slow one.
