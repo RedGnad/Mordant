@@ -178,11 +178,37 @@
 .heroSupport {
   position: relative;
   z-index: 3;
-  max-width: 40em;
-  margin: 16px 0 0;
+  max-width: 48em;
+  margin: 18px 0 0;
   color: var(--muted);
-  font-size: clamp(14px, 1.05vw, 16px);
-  line-height: 1.5;
+  font-size: clamp(15px, 1.05vw, 17px);
+  letter-spacing: -0.008em;
+  line-height: 1.48;
+  text-wrap: pretty;
+}
+
+.heroSupport > span {
+  display: block;
+}
+
+.heroSupport > span + span {
+  margin-top: 5px;
+}
+
+.supportBreak {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .supportBreak {
+    display: block;
+  }
+
+  .heroSupport > span:last-child {
+    width: max-content;
+    max-width: 100%;
+    white-space: nowrap;
+  }
 }
 
 .actions {
@@ -1065,6 +1091,11 @@
     max-width: 330px;
     margin: 0;
     font-size: 17px;
+  }
+
+  .heroSupport > span:last-child {
+    width: auto;
+    white-space: normal;
   }
 
   .heroPromise {

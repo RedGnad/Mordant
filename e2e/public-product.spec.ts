@@ -242,12 +242,41 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
 
   if (!testInfo.project.use.hasTouch) {
     const how = navigation.getByRole("link", { name: "How it works" });
+    const label = how.locator("[class*='tabLabel']");
+    const beforeBox = await how.boundingBox();
+    const restingTongue = await how.evaluate((node) => {
+      const style = getComputedStyle(node, "::before");
+      return {
+        opacity: Number(style.opacity),
+        translateY: new DOMMatrix(style.transform).m42,
+      };
+    });
+    expect(restingTongue.opacity).toBeLessThanOrEqual(0.01);
+    expect(restingTongue.translateY).toBeLessThanOrEqual(-15);
+
     await how.hover();
-    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
-      .toBeGreaterThanOrEqual(6);
+    await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
+      .toBeGreaterThanOrEqual(5.5);
+    await expect.poll(() => how.evaluate((node) => Number(getComputedStyle(node, "::before").opacity)))
+      .toBeGreaterThanOrEqual(0.99);
+    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node, "::before").transform).m42))
+      .toBeGreaterThanOrEqual(-0.1);
+    expect(await how.boundingBox()).toEqual(beforeBox);
+    if (testInfo.project.name === "1280x800") {
+      await page.screenshot({ path: testInfo.outputPath("header-tongue-hover.png") });
+    }
+
     await page.getByRole("link", { name: "Mordant home" }).hover();
-    await expect.poll(() => how.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
+    await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
       .toBeLessThanOrEqual(0.1);
+
+    const headerHeight = await page.getByRole("banner").evaluate((node) => node.getBoundingClientRect().height);
+    if ((page.viewportSize()?.width ?? 0) > 1023) expect(headerHeight).toBeLessThanOrEqual(57);
+    else expect(headerHeight).toBeLessThanOrEqual(110);
+  }
+
+  if (testInfo.project.name === "390x844") {
+    await page.screenshot({ path: testInfo.outputPath("public-header-hero-mobile.png") });
   }
 
   // The live product is the only primary action, and it is never duplicated as a

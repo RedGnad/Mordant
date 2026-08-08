@@ -235,8 +235,11 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
           <p className={styles.heroPromise}>When private claims collide, keep tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            Mordant privately checks whether financing claims conflict, then turns a confirmed conflict into governed recourse.
-            Cleanverse verifies the receivable’s provenance and participant eligibility.
+            <span>
+              Mordant privately checks whether financing claims conflict,<br className={styles.supportBreak} /> then turns a
+              confirmed conflict into governed recourse.{" "}
+            </span>
+            <span>Cleanverse verifies the receivable’s provenance and participant eligibility.</span>
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>

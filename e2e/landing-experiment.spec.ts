@@ -522,7 +522,12 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
 
   const headerLink = page.getByRole("navigation", { name: "Product navigation" }).getByRole("link").first();
   await headerLink.focus();
-  expect(await headerLink.evaluate((node) => getComputedStyle(node).transform)).toBe("none");
+  const headerTab = headerLink.locator("[class*='tabLabel']");
+  expect(await headerTab.evaluate((node) => getComputedStyle(node).transform)).toBe("none");
+  const tabTransitionSeconds = await headerLink.evaluate((node) => (
+    Number.parseFloat(getComputedStyle(node, "::before").transitionDuration)
+  ));
+  expect(tabTransitionSeconds).toBeLessThanOrEqual(0.001);
 
   const integration = page.locator('[aria-label="Integration stages"]');
   const governed = integration.getByRole("button", { name: /Governed result/ });

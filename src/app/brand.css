@@ -44,7 +44,7 @@
   --on-proof: #fffef9;
 
   /* Geometry */
-  --shell-height: 64px;
+  --shell-height: 56px;
   --shell-gutter: clamp(22px, 5vw, 76px);
   --target: 44px;
 }

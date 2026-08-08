@@ -61,8 +61,10 @@ export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
             href={item.href}
             aria-current={activeNav === item.id ? "page" : undefined}
           >
-            <span className={styles.wide}>{item.label}</span>
-            <span className={styles.narrow}>{item.short}</span>
+            <span className={styles.tabLabel}>
+              <span className={styles.wide}>{item.label}</span>
+              <span className={styles.narrow}>{item.short}</span>
+            </span>
           </Link>
         ))}
       </nav>
