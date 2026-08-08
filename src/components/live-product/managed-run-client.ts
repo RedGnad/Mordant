@@ -20,6 +20,13 @@ export type ManagedWindows = Readonly<{
   participantB: Readonly<{ activeFrom: number; activeUntil: number }>;
 }>;
 
+/** Safe subset of the eligibility result already returned by token issuance. */
+export type ManagedEligibilityObservation = Readonly<{
+  eligible: true;
+  chainId: number;
+  observedBlock: number;
+}>;
+
 /**
  * Why a start did not produce a run.
  *
@@ -29,7 +36,12 @@ export type ManagedWindows = Readonly<{
  * degrade into a rendered result.
  */
 export type ManagedStartOutcome =
-  | Readonly<{ kind: "STARTED"; view: ManagedWorkerView; workerOrigin: string }>
+  | Readonly<{
+      kind: "STARTED";
+      view: ManagedWorkerView;
+      workerOrigin: string;
+      eligibility: ManagedEligibilityObservation;
+    }>
   | Readonly<{ kind: "BUSY" }>
   | Readonly<{ kind: "REJECTED" }>
   | Readonly<{ kind: "INELIGIBLE" }>
@@ -37,13 +49,38 @@ export type ManagedStartOutcome =
 
 export class ManagedResponseRejected extends Error {}
 
+const MANAGED_CHAIN_ID = 10_143;
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/u;
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function eligibilityObservation(value: unknown, expectedHolder: string): ManagedEligibilityObservation | null {
+  if (!record(value)) return null;
+  if (value.schemaVersion !== "mordant.ccp-eligibility/1"
+    || value.eligible !== true
+    || value.chainId !== MANAGED_CHAIN_ID
+    || typeof value.holderAddress !== "string"
+    || !ADDRESS.test(value.holderAddress)
+    || value.holderAddress.toLowerCase() !== expectedHolder.toLowerCase()
+    || typeof value.observedBlock !== "number"
+    || !Number.isSafeInteger(value.observedBlock)
+    || value.observedBlock < 0) return null;
+  return Object.freeze({ eligible: true, chainId: MANAGED_CHAIN_ID, observedBlock: value.observedBlock });
+}
+
 /**
  * Mints a launch token for this holder.
  *
  * Minted at submit time on purpose: the server re-checks A-Pass eligibility
  * against the chain rather than trusting an answer the page obtained earlier.
  */
-async function issueLaunchToken(holderAddress: string): Promise<Readonly<{ token: string; workerOrigin: string }> | null> {
+async function issueLaunchToken(holderAddress: string): Promise<Readonly<{
+  token: string;
+  workerOrigin: string;
+  eligibility: ManagedEligibilityObservation;
+}> | null> {
   const response = await fetch("/api/live-protection/token", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -51,9 +88,15 @@ async function issueLaunchToken(holderAddress: string): Promise<Readonly<{ token
     cache: "no-store",
   });
   if (!response.ok) return null;
-  const issued = await response.json() as { token?: unknown; workerOrigin?: unknown };
-  if (typeof issued.token !== "string" || typeof issued.workerOrigin !== "string") return null;
-  return Object.freeze({ token: issued.token, workerOrigin: issued.workerOrigin });
+  const issued = await response.json() as unknown;
+  if (!record(issued)
+    || issued.schemaVersion !== "mordant.live-launch-token/1"
+    || typeof issued.token !== "string"
+    || issued.token === ""
+    || typeof issued.workerOrigin !== "string") return null;
+  const eligibility = eligibilityObservation(issued.eligibility, holderAddress);
+  if (eligibility === null) return null;
+  return Object.freeze({ token: issued.token, workerOrigin: issued.workerOrigin, eligibility });
 }
 
 /** Starts one managed run. The windows go straight to the worker; Vercel never sees them. */
@@ -61,7 +104,11 @@ export async function startManagedRun(
   holderAddress: string,
   windows: ManagedWindows,
 ): Promise<ManagedStartOutcome> {
-  let issued: Readonly<{ token: string; workerOrigin: string }> | null;
+  let issued: Readonly<{
+    token: string;
+    workerOrigin: string;
+    eligibility: ManagedEligibilityObservation;
+  }> | null;
   try {
     issued = await issueLaunchToken(holderAddress);
   } catch {
@@ -88,7 +135,12 @@ export async function startManagedRun(
     }
     const view = parseManagedCaseEnvelope(raw);
     if (view === null) return Object.freeze({ kind: "REJECTED" as const });
-    return Object.freeze({ kind: "STARTED" as const, view, workerOrigin: issued.workerOrigin });
+    return Object.freeze({
+      kind: "STARTED" as const,
+      view,
+      workerOrigin: issued.workerOrigin,
+      eligibility: issued.eligibility,
+    });
   } catch {
     return Object.freeze({ kind: "FAILED" as const, message: "The confidential check could not be started." });
   }

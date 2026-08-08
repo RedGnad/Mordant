@@ -80,9 +80,10 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
         </span>
         <h1 className={styles.title}>A conflicting pledge, decided privately and settled on Monad</h1>
         <p className={styles.standfirst}>
-          Two eligible wallets each claimed the same tokenized receivable. Mordant decided privately
-          whether those claims conflicted, and the governed result opened recourse in aUSDC. Every
-          transaction below happened on {receipt.network.name} and is linked to the public explorer.
+          Two eligible wallets submitted claims against the same tokenized receivable identity. The
+          governed result established that their windows conflicted; preconfigured demo recourse policy
+          then applied, and the deployment configuration—not the Boolean—determined holders and payout
+          amounts. Every transaction below happened on {receipt.network.name} and is linked publicly.
         </p>
         <p className={styles.meta}>
           <span>Run {receipt.runId}</span>
@@ -97,8 +98,9 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           <h2 className={styles.chapterTitle} id="chapter-verify">Verify</h2>
         </div>
         <p className={styles.answer}>
-          The protected asset is MINV01, a tokenized receivable whose identity Cleanverse verifies.
-          The original receivable was never moved or altered by this case.
+          The protected asset is MINV01, whose Cleanverse provenance and identity are verified. That
+          evidence does not establish invoice authenticity, legal validity or enforceability. The
+          original receivable was never moved or altered by this case.
         </p>
         <div className={styles.facts}>
           <Fact label="Asset">{receipt.verify.assetLabel}</Fact>
@@ -153,9 +155,10 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           <h2 className={styles.chapterTitle} id="chapter-decide">Decide privately</h2>
         </div>
         <p className={styles.answer}>
-          Neither claim was published. A fixed BGV circuit evaluated them under encryption, and the
-          designated decryptor recomputed the circuit and signed exactly one Boolean:{" "}
-          <strong>{receipt.decidePrivately.conflict ? "a conflict was confirmed" : "no conflict"}</strong>.
+          The counterparty-facing workflow did not disclose either pledge window. A fixed BGV circuit
+          evaluated them under encryption, and the designated decryptor recomputed the circuit and signed
+          exactly one Boolean: <strong>{receipt.decidePrivately.conflict ? "a conflict was confirmed" : "no conflict"}</strong>.
+          That Boolean established no legal responsibility, priority, ownership, deadline or payout amount.
         </p>
         <div className={styles.facts}>
           <Fact label="Circuit">{receipt.decidePrivately.circuitId}</Fact>
@@ -184,9 +187,9 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           <h2 className={styles.chapterTitle} id="chapter-act">Act</h2>
         </div>
         <p className={styles.answer}>
-          The signed result was relayed to an Adapter V2 deployed for this case, which opened a
-          recourse case on chain and started a real {receipt.act.cureWindowSeconds}-second cure
-          window. Nobody cured it, so anyone was then able to finalize it.
+          After the governed result established conflict, the preconfigured demo recourse policy applied.
+          Adapter V2 opened the configured case and real {receipt.act.cureWindowSeconds}-second cure
+          path. Nobody cured it, so anyone was then able to finalize it.
         </p>
         <div className={styles.facts}>
           <Fact label="Case adapter">
@@ -227,8 +230,9 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           <h2 className={styles.chapterTitle} id="chapter-prove">Prove</h2>
         </div>
         <p className={styles.answer}>
-          Both holders were paid the exact amounts the signed result carried. The adapter&rsquo;s
-          reserve went to zero, it holds no remaining liability, and MINV01 was never touched.
+          Deployment configuration determined the two holders and their payout amounts; the Boolean
+          carried neither. Both holders claimed those configured amounts on chain. The adapter&rsquo;s reserve
+          went to zero, it holds no remaining liability, and MINV01 was never touched.
         </p>
         <div className={styles.ledgerScroll}>
           <table className={styles.ledger}>

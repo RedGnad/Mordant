@@ -414,13 +414,13 @@ function decisionRailFor(
   if (release === null) return null;
   if (release.conflict) {
     return Object.freeze({
-      nextDecision: "Cure the conflict before the deadline",
-      responsibleNow: recourse?.responsible ?? "The conflicting pledge holder",
+      nextDecision: "Apply approved cure policy after conflict review",
+      responsibleNow: recourse?.responsible ?? "Policy / human review required",
       deadlineIso: recourse?.cureDeadlineIso ?? null,
       deadlineNote: recourse?.cureDeadlineIso === null || recourse?.cureDeadlineIso === undefined
-        ? "The signed recourse record carries the deadline."
+        ? "Approved policy or human review must set any deadline."
         : null,
-      consequence: "If the cure window closes unresolved, the reserved protection becomes claimable.",
+      consequence: "If approved policy opens a cure window, its configured consequence applies when that window closes unresolved.",
       receiptAvailable: true,
     });
   }
@@ -428,8 +428,8 @@ function decisionRailFor(
     nextDecision: "No recourse action is available",
     responsibleNow: null,
     deadlineIso: null,
-    deadlineNote: "No cure window opens for a cleared case.",
-    consequence: "The signed result cleared the case, so no protection is claimable and the receivable is unchanged.",
+    deadlineNote: "Configured policy opens no cure window when the submitted windows do not conflict.",
+    consequence: "The governed result established no conflict between the submitted windows, so this demo recourse policy does not open a cure path.",
     receiptAvailable: true,
   });
 }
@@ -447,8 +447,8 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
     {
       label: "Consequence",
       value: text(terminal.recourseRecordDigest) === null
-        ? "Recourse refused. Nothing is claimable."
-        : "Recourse opened. A cure window applies.",
+        ? "Configured policy did not open recourse."
+        : "Configured recourse policy opened a cure window.",
     },
     { label: "Asset", value: ASSET_LABEL },
     { label: "Participants", value: "Participant A and Participant B" },
@@ -468,7 +468,7 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
     { label: "Result ciphertext digest", value: text(governed.resultCiphertextDigest) ?? "not present" },
     { label: "Evaluator provenance", value: text(execution.evaluatorProvenance) ?? "not present" },
     { label: "Decryptor provenance", value: text(execution.decryptorProvenance) ?? "not present" },
-    { label: "Recourse record digest", value: text(terminal.recourseRecordDigest) ?? "Signed result cleared the case" },
+    { label: "Recourse record digest", value: text(terminal.recourseRecordDigest) ?? "Governed result established no window conflict" },
     { label: "Receipt digest", value: text(receipt.receiptDigest) ?? "not present" },
   ];
 
@@ -510,11 +510,12 @@ export function adaptManagedIntake(input: Readonly<{
   const recourse: RecourseDecision | null = view?.recourse == null ? null : Object.freeze({
     opened: view.recourse.opened,
     reason: view.recourse.reason,
-    responsible: view.recourse.opened ? "The conflicting pledge holder" : null,
+    // The public worker projection does not carry an approved action owner.
+    responsible: null,
     cureDeadlineIso: text(view.protectionCase.cureDeadline ?? null),
     consequence: view.recourse.opened
-      ? "If the cure window closes unresolved, the reserved protection becomes claimable."
-      : "The signed result cleared the case.",
+      ? "The configured recourse policy opened a cure window; its consequence applies if that window closes unresolved."
+      : "The governed result established no conflict between the submitted windows.",
   });
 
   const state = managedProductState(view, {

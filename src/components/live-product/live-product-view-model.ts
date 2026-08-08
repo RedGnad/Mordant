@@ -315,7 +315,7 @@ const STAGE_DETAIL: Readonly<Partial<Record<ExecutionStageId, string>>> = Object
   ENCRYPTION_PREPARED: "Mordant's managed execution service is preparing the encryption for this case.",
   EVALUATION_RUNNING: "The evaluator is running the fixed circuit. It receives ciphertexts and holds no decryption key.",
   GOVERNED_VERIFICATION: "The designated decryptor is recomputing the circuit and signing one Boolean.",
-  RECOURSE_APPLICATION: "The signed result is being applied to the protection case.",
+  RECOURSE_APPLICATION: "The governed conflict result is being applied under the configured recourse policy.",
 });
 
 export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
@@ -567,8 +567,9 @@ export function chapterIndex(id: LiveChapterId): number {
  * the top of the product, not in a separate technology section.
  */
 export const CLEANVERSE_LINE =
-  "Cleanverse verifies the asset and who may participate. Mordant privately decides whether the "
-  + "claims conflict. The governed result opens or refuses recourse in aUSDC.";
+  "Cleanverse verifies asset provenance and identity plus participant eligibility—not legal validity or enforceability. "
+  + "Mordant privately evaluates whether claim windows conflict. The governed result establishes only that conflict "
+  + "status; approved policy and human review determine recourse actions.";
 
 /** A deadline is always rendered from an instant, never from a stored string. */
 export function formatDeadline(iso: string | null, now: Date = new Date()): Readonly<{
