@@ -228,9 +228,11 @@ explicitly not a Mordant settlement: no vault, adapter, pledge or invoice A-Toke
 `docs/evidence/monad-contract-apass-2026-07-28.json`:
 
     CONTRACT APASS ISSUANCE: PROVEN
-    CONTRACT APASS POLICY — RECEIVE: PASSED
-    CONTRACT APASS POLICY — SEND: PASSED
+    CONTRACT APASS POLICY - RECEIVE: PASSED
+    CONTRACT APASS POLICY - SEND: PASSED
     CONTRACT AUSDC LIVE ROUND-TRIP: NOT PROVEN
+    [SUPERSEDED by M-10 below: the contract custody round-trip was proven the same
+     day, artifact docs/evidence/monad-contract-custody-roundtrip-2026-07-28.json.]
 
 **The issuance route tested did not reject the address for being a contract.** That is the whole of
 the observation, and it is not generalised: one route, one call shape, one address, one moment. It
