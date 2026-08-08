@@ -2,6 +2,22 @@
 
 This is a prebuild engineering review, not an external audit and not a production-safety claim.
 
+> ## Current status, 8 August 2026
+>
+> Two findings below were written before the Cleanverse write path and the Monad
+> settlement were executed, and are now **superseded**. They are annotated in place
+> rather than deleted, because the reasoning that produced them is still the record
+> of how the boundary was probed.
+>
+> - `/atoken/launch` **has** since been executed: MINV01 was issued with readback.
+> - A **compliant A-Pass profile was identified** (tier 50), and the settlement path
+>   completed: recourse claims in aUSDC were paid and reconciled on Monad testnet.
+>
+> Everything else in this document still stands, including the production gaps:
+> no `MINTER_ROLE` grant, address-level rather than legal-subject-level role
+> separation, revocable external A-Token administration, and the governance,
+> timelock and monitoring controls production would require.
+
 ## Findings closed in the prototype
 
 - A buyer-supplied malicious adapter or settlement token is rejected unless the factory owner has
@@ -71,12 +87,15 @@ This is a prebuild engineering review, not an external audit and not a productio
   the affected activation, cash or CVA path pauses until the issuer renews the identity.
 - No backend/factory selector skew was observable at block 48667706: the factory implementation
   carries the ten-argument launch selector. This is a read-only bytecode fact. Whether a
-  /atoken/launch application now succeeds is NOT PROVEN — WRITE ACTION REQUIRED, so a fresh invoice
-  CVA still may not be treated as live.
+  /atoken/launch application now succeeds was NOT PROVEN, WRITE ACTION REQUIRED, when this was
+  written. **Superseded 8 August 2026:** the launch was executed and MINV01 reached `ISSUED` with
+  readback, so a fresh invoice CVA is live.
 - The probed `canTransfer` tuples were rejected with `ComplianceFailed(address)`, consistent with a
   compliance rule that is not satisfied. Mordant fails closed correctly. No settlement path can
-  complete for those participants until a compliant A-Pass profile is identified with Cleanverse:
-  BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED.
+  complete for those participants until a compliant A-Pass profile is identified with Cleanverse.
+  **Superseded 8 August 2026:** a compliant tier 50 profile was identified, `isAssetTransferAllowed`
+  returns true for the adapter to each holder, and the settlement path completed with both aUSDC
+  claims paid and reconciled.
 - One global pending commitment can be used by an allowlisted facility for bounded griefing or to
   delay another reveal. Production needs quotas, a caution or parallel per-facility commitments.
 - Factory ownership can change facility membership and thereby censor future reveals or freeze a

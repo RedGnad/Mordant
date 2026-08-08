@@ -1,8 +1,40 @@
 # Cleanverse v5.6 integration record
 
-Status: the protected documentation, official public Cleanverse code, the UAT API and the deployed
-Monad testnet contracts have been inspected. The REST client covers the confirmed building blocks.
-No state-changing sponsor call or judged deployment is claimed yet.
+> ## Current status, 8 August 2026
+>
+> **This document is a chronological record.** It was written before any sponsor
+> write call was made, and its intermediate status blocks are preserved in the
+> order they were established. Several of them are **superseded**. Read this box
+> for the current position, and treat every dated block below as history.
+>
+> **Now proven on Monad testnet:**
+>
+> | | |
+> | --- | --- |
+> | `POST /atoken/launch` | Called. MINV01 issued at `0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b`, `ISSUED` with readback |
+> | `POST /generate_apass` | Called repeatedly. A-Passes issued for both holders, the facility and each case adapter |
+> | Compliant A-Pass profile | **Identified.** Tier 50; `isAssetTransferAllowed` returns true for adapter to holder A and to holder B |
+> | Adapter V2 on Monad testnet | Deployed, case-specific, masked bytecode equal to the reviewed artifact |
+> | **Recourse settlement in aUSDC** | **Executed.** `ReleaseConsumed`, a real 600-second cure window expired uncured, permissionless finalize, and both claims paid and reconciled |
+>
+> **Still not proven, and deliberately out of scope:**
+>
+> - `MINTER_ROLE` has **not** been granted to anyone.
+> - No mint or burn of MINV01 has gone through a Mordant adapter.
+> - **Settlement of the receivable itself** has not been attempted. The hardened run
+>   leaves MINV01 untouched by design (`minv01.touched: false`), because recourse pays
+>   from a funded aUSDC reserve and never moves the underlying note.
+>
+> That last distinction matters when reading the blocks below. Where an older block
+> says `MORDANT SETTLEMENT: NOT PROVEN`, it meant settlement of the receivable via
+> mint/burn, which remains true. It does **not** mean the recourse payout, which has
+> since been executed and is publicly verifiable at
+> [`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run).
+
+Original status, retained: the protected documentation, official public Cleanverse code, the UAT API
+and the deployed Monad testnet contracts have been inspected. The REST client covers the confirmed
+building blocks. No state-changing sponsor call or judged deployment was claimed **at the time this
+line was written**; see the box above for what has since been executed.
 
 ## What is now confirmed
 
@@ -82,7 +114,8 @@ contains **both** `0xeff21872` and `0xef84b94a`. **No backend/factory selector s
 at block 48667706.** The ABI-skew explanation above therefore no longer describes the deployment,
 and this document must not be cited as evidence that the Monad launcher is on an older ABI. It is
 equally not evidence that Monad issuance is fixed: that would require a `/atoken/launch`
-application, which stays `NOT PROVEN — WRITE ACTION REQUIRED`.
+application, which stayed `NOT PROVEN - WRITE ACTION REQUIRED` when written. **Superseded 8 August
+2026:** the launch was executed and MINV01 reached `ISSUED`.
 
 A dispatch-table selector scan proves the selector is routable, not that an end-to-end issuance
 succeeds. Whether the observed `ISSUE_FAILED` applications are cleared by this upgrade is untested:
@@ -147,7 +180,9 @@ of the aUSDC token, so we do not assert which attribute is unsatisfied, that the
 every participant, that the policy is faulty, or that holding a valid A-Pass is sufficient. The
 finding is bounded to the three tuples actually probed:
 
-    BLOCKED — COMPLIANT APASS PROFILE NOT IDENTIFIED
+    BLOCKED - COMPLIANT APASS PROFILE NOT IDENTIFIED
+    [SUPERSEDED 8 Aug 2026: a compliant tier 50 profile was identified and the
+     settlement path completed. See the current-status box at the top.]
 
 **Resolved on 28 July 2026, on the Cleanverse side.** Confirmation from a Cleanverse internal
 developer in the community channel that Monad aUSDC now works prompted an immediate replay of the
@@ -175,8 +210,10 @@ rule set implies refusal remains invalid.
 The status is therefore:
 
     AUSDC READ-ONLY COMPATIBILITY: RESTORED
-    AUSDC SETTLEMENT TRANSFER: NOT PROVEN — NO TRANSACTION SENT
+    AUSDC SETTLEMENT TRANSFER: NOT PROVEN - NO TRANSACTION SENT
     CLEANVERSE SETTLEMENT RAIL: NOT PROVEN
+    [SUPERSEDED 8 Aug 2026: aUSDC recourse claims have since been paid and
+     reconciled on Monad testnet. See the current-status box at the top.]
 
 Passing a precheck is not settling. The rail has since been exercised for real, twice.
 
@@ -215,13 +252,19 @@ M-01C.
 
 ## Where the integration stands
 
+> **Superseded in part, 8 August 2026.** `MINTER ROLE` and `MINT/BURN VIA MORDANT
+> ADAPTER` are still accurate. `MORDANT SETTLEMENT` meant settlement of the
+> receivable via mint/burn, which remains out of scope; the **recourse** payout in
+> aUSDC has since been executed on Monad testnet. See the box at the top.
+
     AUSDC LIVE TRANSFER: PROVEN
     CONTRACT APASS: PROVEN
     CONTRACT AUSDC CUSTODY ROUND-TRIP: PROVEN
     INVOICE A-TOKEN LAUNCH: ISSUED / READBACK PROVEN
     MINTER ROLE: NOT GRANTED
     MINT/BURN VIA MORDANT ADAPTER: NOT PROVEN
-    MORDANT SETTLEMENT: NOT PROVEN
+    MORDANT SETTLEMENT (receivable mint/burn): NOT PROVEN, out of scope
+    RECOURSE SETTLEMENT IN aUSDC: PROVEN, see the current-status box
 
 The rail moves real value and a contract can take custody of it and return it. What remains unproven
 is precisely the part that makes it Mordant: no minter role granted, no mint or burn through a
