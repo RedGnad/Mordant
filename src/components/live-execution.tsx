@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DirectParticipantExecution } from "./live-product/direct-participant-execution";
 import { LiveProduct, type ClaimDraft } from "./live-product/live-product";
-import { adaptManagedIntake, parseManagedCaseEnvelope, type ManagedWorkerView } from "./live-product/managed-intake-adapter";
+import { adaptManagedIntake, type ManagedWorkerView } from "./live-product/managed-intake-adapter";
+import {
+  ManagedResponseRejected,
+  readManagedRun,
+  startManagedRun,
+  type ManagedWindows,
+} from "./live-product/managed-run-client";
 import {
   capabilities,
   intakeMode,
@@ -59,12 +65,6 @@ type LiveExecutionProps = Readonly<{
   readonly walletConnectProjectId?: string | null;
 }>;
 
-class ManagedResponseRejected extends Error {
-  constructor() {
-    super("The execution response could not be verified.");
-    this.name = "ManagedResponseRejected";
-  }
-}
 
 function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, capabilitySet }: Required<Pick<LiveExecutionProps, "workerOrigin" | "initialRunId" | "publicTestHolder">> & Readonly<{ capabilitySet: CapabilitySet }>) {
   const [holder, setHolder] = useState("");
@@ -88,7 +88,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
 
   const terminal = view?.stage === "ABORTED" || (view?.stage === "COMPLETE" && view.receipt !== null);
 
-  const parse = useCallback((): { windows: unknown | null; bad: string[]; message: string | null } => {
+  const parse = useCallback((): { windows: ManagedWindows | null; bad: string[]; message: string | null } => {
     const bad: string[] = [];
     const parsed: Partial<Record<FieldKey, number>> = {};
     for (const key of FIELD_KEYS) {
@@ -150,24 +150,8 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
     if (windows === null) return;
     setStarting(true);
     try {
-      // A fresh token is minted at submit time, so the server re-checks
-      // eligibility against the chain rather than trusting the earlier answer.
-      const tokenResponse = await fetch("/api/live-protection/token", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ holderAddress: eligibility.holderAddress }),
-        cache: "no-store",
-      });
-      if (!tokenResponse.ok) throw new Error("This holder is no longer eligible under the active policy.");
-      const issued = await tokenResponse.json() as { token: string; workerOrigin: string };
-      // The windows go straight to the worker. Vercel never sees them.
-      const created = await fetch(`${issued.workerOrigin}/v1/custom-cases`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${issued.token}` },
-        body: JSON.stringify(windows),
-        cache: "no-store",
-      });
-      if (created.status === 409) {
+      const outcome = await startManagedRun(eligibility.holderAddress ?? "", windows);
+      if (outcome.kind === "BUSY") {
         setNoticeState("BUSY");
         setNotice({
           title: "A private check is already running.",
@@ -177,48 +161,33 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
         });
         return;
       }
-      if (!created.ok) throw new Error("The execution service refused the request.");
-      let raw: unknown;
-      try {
-        raw = await created.json();
-      } catch {
-        throw new ManagedResponseRejected();
-      }
-      const next = parseManagedCaseEnvelope(raw);
-      if (next === null) throw new ManagedResponseRejected();
-      setRunId(next.runId);
-      setView(next);
-      startedAt.current = Date.now();
-      window.history.pushState(null, "", `/protection/live?runId=${next.runId}`);
-    } catch (error) {
-      if (error instanceof ManagedResponseRejected) {
+      if (outcome.kind === "REJECTED") {
         setNoticeState("SERVICE_UNAVAILABLE");
         setNotice({
           title: "The execution response was rejected.",
           body: "No result is shown because the worker projection could not be verified. You may retry the request.",
           retryable: true,
         });
-      } else {
-        setFormError(error instanceof Error ? error.message : "The confidential check could not be started.");
+        return;
       }
+      if (outcome.kind === "INELIGIBLE") {
+        setFormError("This holder is no longer eligible under the active policy.");
+        return;
+      }
+      if (outcome.kind === "FAILED") {
+        setFormError(outcome.message);
+        return;
+      }
+      setRunId(outcome.view.runId);
+      setView(outcome.view);
+      startedAt.current = Date.now();
+      window.history.pushState(null, "", `/protection/live?runId=${outcome.view.runId}`);
     } finally {
       setStarting(false);
     }
   }, [parse, eligibility.holderAddress]);
 
-  const readRun = useCallback(async (id: string) => {
-    const response = await fetch(`${workerOrigin}/v1/custom-cases/${id}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("unreadable");
-    let raw: unknown;
-    try {
-      raw = await response.json();
-    } catch {
-      throw new ManagedResponseRejected();
-    }
-    const next = parseManagedCaseEnvelope(raw);
-    if (next === null || next.runId !== id) throw new ManagedResponseRejected();
-    return next;
-  }, [workerOrigin]);
+  const readRun = useCallback((id: string) => readManagedRun(workerOrigin, id), [workerOrigin]);
 
   /**
    * A durable run is read once immediately. Without this a completed run

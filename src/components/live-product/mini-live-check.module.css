@@ -1,0 +1,248 @@
+/*
+ * The mini live check.
+ *
+ * Sits directly under the hero, so it borrows the landing's rules rather than
+ * introducing a second visual language: the same rule colour, the same proof
+ * monospace for labels, the same left-border list idiom used elsewhere.
+ */
+
+.mini {
+  display: grid;
+  padding-inline: clamp(22px, 5vw, 76px);
+  padding-block: clamp(48px, 7vw, 96px);
+  border-top: 1px solid var(--rule);
+  gap: clamp(28px, 4vw, 72px);
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+  align-items: start;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.mini h2 {
+  max-width: 18ch;
+  margin: 0;
+  font-size: clamp(30px, 3.9vw, 56px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 48ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: clamp(14px, 1.15vw, 17px);
+  line-height: 1.5;
+}
+
+/* Who provides what. Four rows, one line each, no paragraph to read. */
+.boundaries {
+  display: grid;
+  margin: clamp(24px, 3vw, 38px) 0 0;
+  gap: 0;
+}
+
+.boundaries > div {
+  display: grid;
+  padding: 12px 0 12px 16px;
+  border-top: 1px solid var(--rule);
+  gap: 2px 20px;
+  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.boundaries > div[data-by="Cleanverse"] { border-left: 3px solid var(--receivable); }
+.boundaries > div[data-by="Mordant"] { border-left: 3px solid var(--protection); }
+.boundaries > div[data-by="Monad"] { border-left: 3px solid var(--action); }
+
+.boundaries dt {
+  color: var(--ink);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.boundaries dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.panel {
+  display: grid;
+  padding: clamp(20px, 2.4vw, 32px);
+  border: 1px solid var(--rule);
+  gap: 16px;
+  align-content: start;
+}
+
+.windows {
+  display: grid;
+  gap: 0;
+}
+
+.windows > div {
+  display: flex;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.windows span {
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.windows strong {
+  font-family: var(--font-proof), monospace;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.windowNote,
+.honesty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.honesty {
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/*
+ * The running state.
+ *
+ * A named stage and a second counter, never a percentage: the worker reports
+ * which stage it reached, not how far through one it is, and a bar would be
+ * inventing the part it cannot know.
+ */
+.status {
+  display: flex;
+  min-height: 58px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--protection);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+}
+
+.status strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.status p {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.elapsed {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 12px;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mini-spin 720ms linear infinite;
+}
+
+@keyframes mini-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mini[data-phase="BUSY"] .status { border-left-color: var(--action); }
+.mini[data-phase="REFUSED"] .status { border-left-color: var(--muted); }
+
+/* Scoped to a local class: CSS modules refuse a bare attribute selector. */
+.status strong[data-verdict="conflict"] { color: var(--protection); }
+.status strong[data-verdict="no-conflict"] { color: var(--ink); }
+
+.primaryAction,
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 12px 20px;
+  border: 1px solid var(--ink);
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.primaryAction,
+.primary {
+  border-color: var(--action);
+  background: var(--action-fill, var(--action));
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.primaryAction[disabled] {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.secondary {
+  background: transparent;
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
+@media (max-width: 900px) {
+  .mini {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .mini {
+    padding-inline: 20px;
+  }
+
+  .boundaries > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    display: grid;
+  }
+}
