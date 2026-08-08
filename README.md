@@ -20,8 +20,9 @@ overlapping financing claims against the same receivable, when neither will disc
 | **What is genuinely live** | Real BGV homomorphic evaluation, a governed Ed25519 signed result, and a real bounded settlement on Monad testnet: a 600-second cure window that expired uncured, permissionless finalization, and both aUSDC claims paid and reconciled. |
 | **Where to verify it** | Run the check yourself on the [live product](https://mordant-two.vercel.app), then inspect the [completed on-chain recourse](https://mordant-two.vercel.app/protection/verified-run). |
 
-**Cleanverse verifies the asset and who may participate. Mordant privately decides whether the
-claims conflict. The governed result opens or refuses recourse in aUSDC.**
+**Cleanverse verifies asset provenance and identity plus participant eligibility, not legal validity
+or enforceability. Mordant privately evaluates whether claim windows conflict. The governed result
+establishes only that conflict status; approved policy and human review determine recourse actions.**
 
 This is a bounded hackathon MVP built for Cleanverse Build: Trusted Assets, on Monad testnet. It is
 not production authorized. See [What is real, and what is bounded](#what-is-real-and-what-is-bounded).
@@ -29,18 +30,19 @@ not production authorized. See [What is real, and what is bounded](#what-is-real
 ## What Mordant does
 
 A tokenized receivable can be public while the financing commitments against it stay private, held
-separately by each lender. The token says who owns the note. It does not say who else was already
-promised the same cash flow.
+separately by each lender. The token records the on-chain receivable position. It does not establish
+legal ownership or say who else was already promised the same cash flow.
 
-That gap is expensive. An institution cannot hand its lender book to a counterparty just to find out
-whether two claims overlap, and the counterparty cannot either. So the question that matters most,
-*is this receivable already pledged elsewhere*, is the one nobody can ask directly. While it stays
-unanswered the position is stuck, because acting on a suspected conflict without proof is as risky
-as ignoring it.
+That gap is expensive. The workflow does not require either lender to disclose its pledge window to
+the counterparty to determine whether two claims overlap. So the question that matters most, *is this
+receivable already pledged elsewhere*, can be evaluated without that counterparty disclosure. While
+it stays unanswered the position is stuck, because acting on a suspected conflict without proof is
+as risky as ignoring it.
 
 Mordant builds a confidential path from those private records to an auditable decision, and then
-keeps going. A confirmed exception does not just produce an alert: it opens a governed recourse
-outcome, with a named responsible party, a deadline, and a priced consequence that settles on chain.
+keeps going. A confirmed exception does not just produce an alert: approved policy and human review
+determine the action owner, deadline and escalation, while deployment configuration determines
+settlement terms.
 
 ### First workflow: Conflicting Pledge Protection
 
@@ -50,10 +52,10 @@ An originator finances the same invoice twice. Lender A already holds a pledge o
 about to lend against it. Each holds a private window during which its claim is active. If those
 windows overlap, the same cash flow is promised twice, and one of them will not be repaid.
 
-Neither lender will publish its window to find out. Mordant evaluates whether the two windows
-intersect while both remain encrypted, and releases a single signed Boolean. If the answer is yes, a
-cure window opens against a funded reserve; if it is no, recourse is explicitly refused rather than
-left silent.
+The workflow does not require either lender to disclose its pledge window to the counterparty.
+Mordant evaluates whether the two windows intersect while both remain encrypted, and releases a
+single signed Boolean. Under the demo's preconfigured recourse policy, conflict maps to a cure window
+against a funded reserve; no conflict maps to recourse refusal rather than silence.
 
 The circuit is fixed and pinned (`mordant.identity-full-fhe-256` v5, profile
 `mordant.bgv.identity-full-fhe-256.n15/v1`), so neither party chooses what gets computed.
@@ -103,16 +105,16 @@ there is nothing to be private *about*.
 
 | Primitive | What it establishes | Whose responsibility |
 | --- | --- | --- |
-| **MINV01** | The verified receivable. This is the RWA in this case. | Cleanverse |
+| **MINV01** | Receivable identity with verified Cleanverse provenance. This is the RWA identity used in this case. | Cleanverse |
 | **A-Pass** | Participant eligibility: which wallets may hold a claim against it. | Cleanverse |
 | **aUSDC** | The compliant settlement rail the consequence is paid on. A rail, not the receivable. | Cleanverse / Monad |
 | **Conflict decision** | Whether the private claims collide, and the governed signature over that answer. | **Mordant** |
 
 These are not interchangeable branding around a generic application. The A-Pass is what makes
 "eligible participant" a checkable on-chain fact rather than an assertion, and the compliance
-verifier refuses a transfer to an ineligible address at the token level, which is what makes a
-recourse payout enforceable rather than merely computed. Remove the A-Pass and the participants are
-anonymous addresses; remove the compliant rail and the consequence is a number in a database.
+verifier refuses a transfer to an ineligible address at the token level, which makes payout
+eligibility token-policy-enforced rather than merely computed. Remove the A-Pass and the participants
+are anonymous addresses; remove the compliant rail and the consequence is a number in a database.
 
 Cleanverse never sees a pledge window, and does not perform the conflict evaluation. Mordant never
 issues an A-Pass or mints the receivable.
@@ -120,7 +122,7 @@ issues an A-Pass or mints the receivable.
 ## How it works
 
 ```text
-Verified receivable            MINV01, established by Cleanverse
+Receivable identity            MINV01, with verified Cleanverse provenance
   ↓
 Eligible participant context   A-Pass checked live on Monad at submit time
   ↓
@@ -130,7 +132,8 @@ BGV encrypted evaluation       fixed circuit over ciphertexts; the evaluator hol
   ↓
 Governed signed result         a designated decryptor recomputes, must match, then signs one Boolean
   ↓
-Recourse                       cure window, permissionless finalize, aUSDC claims on Adapter V2
+Recourse policy application    configured demo policy: cure window, permissionless finalize,
+                               aUSDC claims on Adapter V2
   ↓
 Verifiable evidence            a receipt binding every digest, publicly served and re-verified
 ```
@@ -207,14 +210,15 @@ and decryptor as separate binaries. The evaluator never receives a decryption ke
 must independently recompute the circuit and land on the same ciphertext digest before anything is
 released.
 
-**Governed release.** A single signed Boolean is the sole authority for the terminal outcome. The
+**Governed release.** A single signed Boolean is the sole authority for the conflict/no-conflict result. The
 release authority identity is derived from the signing key rather than asserted alongside it, so a
 forger cannot supply a matching pair.
 
-**Settlement.** `MordantRecourseAdapter` V2 on Monad testnet holds a pre-funded reserve, opens a
-cure window on a confirmed conflict, and pays entitled holders in aUSDC through the Cleanverse
-compliance verifier. Finalize and claim are permissionless by design; `claim` takes no recipient,
-so the adapter can only pay the holder recorded in the signed case.
+**Settlement.** The signed Boolean supplies the confirmed-conflict result. The configured demo
+recourse policy supplies the cure path, and deployment configuration determines holders and payout
+amounts. `MordantRecourseAdapter` V2 on Monad testnet holds the pre-funded reserve and pays entitled
+holders in aUSDC through the Cleanverse compliance verifier. Finalize and claim are permissionless
+by design; `claim` takes no recipient, so the adapter can only pay its configured holder.
 
 **Evidence.** Every run seals a receipt binding the authorization, the participant artifacts, the
 evaluated artifact, the governed result and the recourse outcome. The public surface re-verifies each

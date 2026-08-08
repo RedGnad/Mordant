@@ -22,7 +22,11 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     { exact: true },
   )).toBeVisible();
   await expect(page.getByText(
-    "Mordant privately detects conflicting pledges on verified receivables and turns confirmed conflicts into governed, auditable recourse, without exposing lender records to the evaluator.",
+    "Mordant privately detects conflicting pledges on receivables with verified Cleanverse provenance and turns confirmed conflicts into governed, auditable recourse, without exposing lender records to the evaluator.",
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.getByText(
+    "A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.",
     { exact: true },
   )).toBeVisible();
 

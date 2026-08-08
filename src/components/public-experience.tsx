@@ -250,14 +250,14 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
           <p className={styles.heroPromise}>When private claims collide, Mordant keeps tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            Mordant privately detects conflicting pledges on verified receivables and turns confirmed
+            Mordant privately detects conflicting pledges on receivables with verified Cleanverse provenance and turns confirmed
             conflicts into governed, auditable recourse, without exposing lender records to the evaluator.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
             <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
           </div>
-          <p className={styles.heroNote}>A real encrypted check on a verified receivable. About 30 seconds.</p>
+          <p className={styles.heroNote}>A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.</p>
         </section>
 
         {/* 2. The real check, immediately. The economic problem this replaced
