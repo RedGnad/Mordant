@@ -26,7 +26,7 @@ const CASE = Object.freeze({
   fheCaseId: digest("2abc308b1a7e29f5436df95070d068cf8dd1113b74e9a2f72eb4204e24694441"),
 });
 
-/** Mid-flight: the evaluator is running and no result exists. */
+/** BGV evaluation is complete; governed verification is pending and no result exists. */
 export const RUNNING_VIEW: ManagedWorkerView = Object.freeze({
   schemaVersion: "mordant.custom-supervised-protection-view/1",
   runId: "00000000-0000-4000-8000-000000000001",
@@ -109,7 +109,8 @@ function receipt(conflict: boolean, runId: string): Readonly<Record<string, unkn
       "Supervised local single-host execution; not production authorized.",
       "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
       "Designated trusted decryptor; no threshold release and no native Monad FHE.",
-      "The governed signed Boolean is the sole authority for the terminal outcome.",
+      "The governed signed Boolean is the sole authority for the conflict/no-conflict result.",
+      "Configured demo policy determines the recourse path; the Boolean does not assign legal responsibility, action ownership, deadline or payout amount.",
     ],
   });
 }

@@ -18,6 +18,24 @@ const ADAPTER = "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1";
 const EXPLORER = "https://testnet.monadexplorer.com";
 
 test.describe("verified live run", () => {
+  test("attributes conflict, policy, cure and payouts to their real sources", async ({ page }) => {
+    await page.goto("/protection/verified-run");
+    const run = page.getByTestId("verified-live-run");
+    await expect(run).toContainText("governed result established that their windows conflicted");
+    await expect(run).toContainText("preconfigured demo recourse policy");
+    await expect(run).toContainText("deployment configuration—not the Boolean—determined holders and payout amounts");
+    await expect(run).toContainText("Boolean established no legal responsibility, priority, ownership, deadline or payout amount");
+    await expect(run).not.toContainText("amounts the signed result carried");
+    await expect(run).not.toContainText("governed result opened recourse");
+  });
+
+  test("the transition back to live names the managed public profile", async ({ page }) => {
+    await page.goto("/protection/verified-run");
+    const transition = page.getByText(/The live check starts a new managed case/iu);
+    await expect(transition).toContainText("under the published eligible test context");
+    await expect(transition).not.toContainText("two eligible wallets");
+  });
+
   test("badges itself as a verified live run and never as a demo or fixture", async ({ page }) => {
     await page.goto(PATH);
     const run = page.getByTestId("verified-live-run");

@@ -126,7 +126,11 @@ export function LiveProduct({
   };
 
   const notice = model.notice;
-  const managedDraft = model.intake === "MANAGED_COMBINED" ? draft : null;
+  // Once the worker has created a run, its public projection deliberately does
+  // not carry the private windows. Local defaults or a stale authoring draft
+  // must never be used to reconstruct geometry for that durable run.
+  const managedDraft = model.intake === "MANAGED_COMBINED" && model.runId === null ? draft : null;
+  const managedRunKeepsInputsPrivate = model.intake === "MANAGED_COMBINED" && model.runId !== null;
 
   return (
     <div className={styles.product} data-state={model.state} data-chapter={chapter}>
@@ -135,7 +139,7 @@ export function LiveProduct({
           before anything else. */}
       <header className={styles.caseBar}>
         <div className={styles.caseAsset}>
-          <p className={styles.eyebrow}>Verified receivable</p>
+          <p className={styles.eyebrow}>Cleanverse provenance</p>
           <h1>{model.assetLabel}</h1>
         </div>
         <dl className={styles.caseFacts}>
@@ -257,8 +261,8 @@ export function LiveProduct({
             Two private claims on the same receivable.
           </h2>
           <p className={styles.lede}>
-            Each participant holds a pledge with its own active interval. Neither will publish its book,
-            so the overlap cannot be checked in the open.
+            Each participant holds a pledge with its own active interval. The workflow does not require
+            either lender to disclose its pledge window to the counterparty.
           </p>
 
           {managedDraft === null ? null : (
@@ -283,6 +287,12 @@ export function LiveProduct({
                 onDisconnect: actions.onDisconnect,
               }}
             />
+          )}
+
+          {!managedRunKeepsInputsPrivate ? null : (
+            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
+              Private claim windows are not retained in this public projection.
+            </p>
           )}
 
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
@@ -342,7 +352,7 @@ export function LiveProduct({
             Authorizing a claim does not transfer funds and does not move the receivable.
           </p>
 
-          {model.intake !== "MANAGED_COMBINED" ? null : (
+          {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
             <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
               {busy ? "Starting the confidential check" : "Run the confidential check"}
             </button>
@@ -365,6 +375,12 @@ export function LiveProduct({
           {model.elapsedSeconds === null ? null : (
             <p className={styles.elapsed} data-testid="elapsed">
               {model.elapsedSeconds}s elapsed
+            </p>
+          )}
+
+          {!managedRunKeepsInputsPrivate ? null : (
+            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
+              Private claim windows are not retained in this public projection.
             </p>
           )}
 
@@ -400,16 +416,14 @@ export function LiveProduct({
           </h2>
           <p className={styles.revealLede}>
             {conflict
-              ? "The private claims overlap. The original receivable remains outstanding and intact."
-              : "The private check cleared. No reserve was assigned to this case."}
+              ? "The governed result establishes only that the private claim windows conflict. The original receivable remains outstanding and intact."
+              : "The governed result establishes only that the private claim windows do not conflict. The configured policy assigned no reserve."}
           </p>
 
-          {managedDraft === null ? null : (
-            <ClaimTimeline
-              a={claimRange(managedDraft.aFrom, managedDraft.aUntil)}
-              b={claimRange(managedDraft.bFrom, managedDraft.bUntil)}
-              reveal={conflict ? "conflict" : "cleared"}
-            />
+          {!managedRunKeepsInputsPrivate ? null : (
+            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
+              Private claim windows are not retained in this public projection.
+            </p>
           )}
 
           {model.decisionRail === null ? null : (
@@ -419,11 +433,11 @@ export function LiveProduct({
                 <dd>{model.decisionRail.nextDecision}</dd>
               </div>
               <div>
-                <dt>Responsible now</dt>
-                <dd>{model.decisionRail.responsibleNow ?? "Nobody. The case is closed."}</dd>
+                <dt>Action owner</dt>
+                <dd>{model.decisionRail.responsibleNow ?? "No action owner required."}</dd>
               </div>
               <div>
-                <dt>Deadline</dt>
+                <dt>Policy deadline</dt>
                 <dd data-testid="deadline">
                   {deadline === null
                     ? model.decisionRail.deadlineNote ?? "No deadline applies."

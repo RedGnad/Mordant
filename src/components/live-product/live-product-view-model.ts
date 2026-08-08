@@ -284,7 +284,7 @@ export type ExecutionStageId =
   | "ENCRYPTION_PREPARED"
   | "PARTICIPANT_A_ENCRYPTED"
   | "PARTICIPANT_B_ENCRYPTED"
-  | "EVALUATION_RUNNING"
+  | "EVALUATION_COMPLETE"
   | "GOVERNED_VERIFICATION"
   | "RECOURSE_APPLICATION"
   | "RECEIPT_SEALED";
@@ -305,17 +305,16 @@ const STAGE_LABEL: Readonly<Record<ExecutionStageId, string>> = Object.freeze({
   ENCRYPTION_PREPARED: "Private encryption prepared",
   PARTICIPANT_A_ENCRYPTED: "Participant A encrypted",
   PARTICIPANT_B_ENCRYPTED: "Participant B encrypted",
-  EVALUATION_RUNNING: "Encrypted evaluation running",
-  GOVERNED_VERIFICATION: "Governed result verification",
+  EVALUATION_COMPLETE: "Encrypted evaluation complete",
+  GOVERNED_VERIFICATION: "Governed result pending",
   RECOURSE_APPLICATION: "Recourse application",
   RECEIPT_SEALED: "Receipt sealed",
 });
 
 const STAGE_DETAIL: Readonly<Partial<Record<ExecutionStageId, string>>> = Object.freeze({
   ENCRYPTION_PREPARED: "Mordant's managed execution service is preparing the encryption for this case.",
-  EVALUATION_RUNNING: "The evaluator is running the fixed circuit. It receives ciphertexts and holds no decryption key.",
-  GOVERNED_VERIFICATION: "The designated decryptor is recomputing the circuit and signing one Boolean.",
-  RECOURSE_APPLICATION: "The signed result is being applied to the protection case.",
+  GOVERNED_VERIFICATION: "Encrypted evaluation is complete. The designated decryptor is recomputing the circuit before any Boolean is released.",
+  RECOURSE_APPLICATION: "The governed conflict result is being applied under the configured recourse policy.",
 });
 
 export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
@@ -323,7 +322,7 @@ export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
   "ENCRYPTION_PREPARED",
   "PARTICIPANT_A_ENCRYPTED",
   "PARTICIPANT_B_ENCRYPTED",
-  "EVALUATION_RUNNING",
+  "EVALUATION_COMPLETE",
   "GOVERNED_VERIFICATION",
   "RECOURSE_APPLICATION",
   "RECEIPT_SEALED",
@@ -336,7 +335,7 @@ export const ADMISSION_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze(
   "ENCRYPTION_PREPARED",
   "PARTICIPANT_A_ENCRYPTED",
   "PARTICIPANT_B_ENCRYPTED",
-  "EVALUATION_RUNNING",
+  "EVALUATION_COMPLETE",
   "GOVERNED_VERIFICATION",
   "RECOURSE_APPLICATION",
   "RECEIPT_SEALED",
@@ -446,6 +445,8 @@ export type LayeredReceipt = Readonly<{
   summary: readonly ReceiptRow[];
   /** Level two: the identifiers a reviewer checks. */
   technical: readonly ReceiptRow[];
+  /** Current semantic boundary and, where needed, immutable-legacy context. */
+  rawContext: string;
   /** Level three: the raw verified projection. */
   raw: Readonly<Record<string, unknown>> | null;
 }>;
@@ -567,8 +568,9 @@ export function chapterIndex(id: LiveChapterId): number {
  * the top of the product, not in a separate technology section.
  */
 export const CLEANVERSE_LINE =
-  "Cleanverse verifies the asset and who may participate. Mordant privately decides whether the "
-  + "claims conflict. The governed result opens or refuses recourse in aUSDC.";
+  "Cleanverse verifies asset provenance and identity plus participant eligibility—not legal validity or enforceability. "
+  + "Mordant privately evaluates whether claim windows conflict. The governed result establishes only that conflict "
+  + "status; approved policy and human review determine recourse actions.";
 
 /** A deadline is always rendered from an instant, never from a stored string. */
 export function formatDeadline(iso: string | null, now: Date = new Date()): Readonly<{

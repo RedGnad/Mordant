@@ -30,6 +30,7 @@ import {
   CANONICAL_CLEANVERSE_ASSET_DIGEST,
   type Sha256Digest,
 } from "./cleanverse-asset";
+import { currentCustomReceiptDisclosures } from "../custom-supervised-receipt-disclosures";
 import {
   appendProtectionEvent,
   assertProtectionAssetBinding,
@@ -498,6 +499,10 @@ function loadStateRaw(runtime: ProtectionRuntime, runId: string): InternalState 
     throw new ProtectionProductError("Protection execution record rejected", 500);
   }
   assertProtectionAssetBinding(state.protectionCase, CANONICAL_CLEANVERSE_ASSET_DIGEST);
+  // A retained terminal receipt is restored as immutable evidence. Validate
+  // its original digest and exact disclosure contract; the narrow legacy
+  // disclosure layout remains accepted without rewriting its covered bytes.
+  if (state.customReceipt !== undefined) assertCustomSupervisedReceipt(state.customReceipt);
   return state;
 }
 
@@ -1171,14 +1176,9 @@ function buildCustomSupervisedReceipt(
       signedAtUnix: chronology.signedAtUnix,
       events: chronology.events.map((event) => ({ ordinal: event.ordinal, kind: event.kind, atUnix: event.atUnix })),
     },
-    disclosures: [
-      "Supervised local single-host execution; not production authorized.",
-      state.supervisedPledgeWindows === undefined
-        ? "Participant-admitted pledge windows under verified durable wallet authorizations; synthetic lender fixtures and no real funds."
-        : "Operator-entered pledge windows; synthetic lender fixtures and no real funds.",
-      "Designated trusted decryptor; no threshold release and no native Monad FHE.",
-      "The governed signed Boolean is the sole authority for the terminal outcome.",
-    ],
+    disclosures: currentCustomReceiptDisclosures(
+      state.supervisedPledgeWindows === undefined ? "PARTICIPANT" : "OPERATOR",
+    ),
   };
   return { ...body, receiptDigest: customSupervisedReceiptDigest(body) };
 }

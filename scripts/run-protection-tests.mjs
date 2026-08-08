@@ -116,6 +116,7 @@ const TEST_FILES = Object.freeze([
   ".product-test-dist/src/lib/protection/protection-reconciliation.test.js",
   ".product-test-dist/src/lib/protection/supervised-pledge-windows.test.js",
   ".product-test-dist/src/lib/protection/custom-supervised-v2.test.js",
+  ".product-test-dist/src/lib/protection/custom-supervised-receipt.test.js",
   ".product-test-dist/src/lib/protection/custom-supervised-view.test.js",
   ".product-test-dist/src/lib/protection/live-launch-token.test.js",
   ".product-test-dist/src/lib/protection/ccp-eligibility.test.js",

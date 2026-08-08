@@ -138,6 +138,13 @@
   border-bottom: 1px solid var(--rule);
 }
 
+.rawContext {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .disclose {
   min-height: var(--target);
   margin-top: 14px;

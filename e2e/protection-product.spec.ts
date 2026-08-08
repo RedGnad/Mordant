@@ -170,22 +170,17 @@ test.describe("public discovery and fixed product viewport", () => {
       await page.setViewportSize(viewport);
       await page.goto("/");
 
-      // The boundary section closes the landing rather than opening it, because
-      // leading with caveats buries the product. What matters is that it is
-      // present, reachable and honest in BOTH directions: it must not overstate
-      // what is real, and it must not understate it either, now that the cure
-      // window and the claims have actually settled on chain.
+      // The compressed boundary section closes the landing and distinguishes
+      // the fresh managed experiment from the separately retained settlement.
       const truthBoundary = page.getByRole("region", { name: "What this is, and what it is not." });
       await expect(truthBoundary).toBeVisible();
-      await expect(truthBoundary).toContainText("asset identity is retained real evidence");
-      await expect(truthBoundary).toContainText("lender pledge intervals are synthetic fixtures");
-      await expect(truthBoundary).toContainText("aUSDC claims are real on Monad testnet");
+      await expect(truthBoundary).toContainText("MINV01 Cleanverse provenance and identity plus A-Pass eligibility");
+      await expect(truthBoundary).toContainText("does not establish invoice authenticity, legal validity or enforceability");
+      await expect(truthBoundary).toContainText("financing-claim windows are synthetic");
+      await expect(truthBoundary).toContainText("separate hardened two-wallet run");
+      await expect(truthBoundary).toContainText("does not settle aUSDC");
       await expect(truthBoundary).toContainText("not production authorized");
-      await expect(truthBoundary).toContainText("designated decryptor recomputes the circuit");
-      // The superseded understatement must never come back: it contradicted the
-      // settled run this product leads with.
-      await expect(truthBoundary).not.toContainText("None of them is represented as live");
-      await expect(truthBoundary).not.toContainText("not live settlement");
+      await expect(truthBoundary).toContainText("designated decryptor governs release");
 
       // A judge must be able to reach the settled run from the landing itself.
       await expect(page.getByTestId("landing-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");

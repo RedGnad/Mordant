@@ -6,15 +6,82 @@ const baseUrl = process.argv.find((argument) => argument.startsWith("--base-url=
   ?? "http://127.0.0.1:3000";
 const outputPath = process.argv.find((argument) => argument.startsWith("--output="))?.split("=")[1];
 
-const views = [
-  { name: "Workspace", path: "/" },
-  { name: "Participant", path: "/participant" },
-  { name: "Protocol", path: "/protocol" },
-];
 const viewports = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "mobile", width: 390, height: 844 },
 ];
+
+const WORKER_ORIGIN = "https://mordant-worker.test";
+const HOLDER = "0x911F99f424D47F08a15fcC771e94dcc2f7252B02";
+const RUN_ID = "a1b2c3d4-1234-4abc-8def-1234567890ab";
+const OBSERVED_BLOCK = 51_500_321;
+const digest = (seed) => `sha256:${seed.repeat(64)}`;
+
+function governedEnvelope() {
+  return {
+    schemaVersion: "mordant.live-worker/1",
+    progress: "Governed result released",
+    view: {
+      schemaVersion: "mordant.custom-supervised-protection-view/1",
+      runId: RUN_ID,
+      executionVariant: "CUSTOM_SUPERVISED",
+      stage: "RELEASED",
+      nextOperation: "openRecourseCase",
+      terminalScenario: "conflict",
+      protectionCase: {
+        cleanverseAssetDigest: digest("1"),
+        fheCaseId: digest("2"),
+        incidentState: "CONFLICT_CONFIRMED",
+        recourseState: "CURE_WINDOW",
+        cureDeadline: "2026-08-08T20:00:00.000Z",
+      },
+      participantArtifactDigests: { participantA: digest("3"), participantB: digest("4") },
+      evaluatedArtifactDigest: digest("5"),
+      governedResult: { conflict: true, digest: digest("6"), releaseMode: "governed-decryptor-v1" },
+      recourse: { opened: true, reason: null },
+      receipt: null,
+    },
+  };
+}
+
+async function installManagedHarness(page) {
+  await page.route("**/api/live-protection/token", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        schemaVersion: "mordant.live-launch-token/1",
+        token: "deterministic-contrast-audit-token",
+        expiresAt: Date.now() + 60_000,
+        workerOrigin: WORKER_ORIGIN,
+        eligibility: {
+          schemaVersion: "mordant.ccp-eligibility/1",
+          chainId: 10_143,
+          validatorAddress: "0xaC7e5179C2C7f03f209136886c172eb34F161792",
+          gateAddress: "0x3ffb28a13fd6dc372ae952f15b55263285d5a280",
+          holderAddress: HOLDER,
+          eligible: true,
+          observedBlock: OBSERVED_BLOCK,
+        },
+      }),
+    });
+  });
+  await page.route(`${WORKER_ORIGIN}/**`, async (route) => {
+    const origin = route.request().headers().origin ?? baseUrl;
+    await route.fulfill({
+      status: route.request().method() === "OPTIONS" ? 204 : 200,
+      body: route.request().method() === "OPTIONS" ? "" : JSON.stringify(governedEnvelope()),
+      headers: {
+        "access-control-allow-origin": origin,
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type",
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=utf-8",
+        vary: "Origin",
+      },
+    });
+  });
+}
 
 function markdown(results) {
   const rows = results.map((result) => (
@@ -37,7 +104,7 @@ ${rows.join("\n")}
 
 ${failures.length === 0 ? "All measured pairs pass their applicable thresholds." : failures.join("\n")}
 
-The audit covers base, hover, keyboard focus, selected checkpoint, disabled proof control, and Proof. Transparent decorative borders are excluded; visible one-pixel separators are included.
+The audit covers the current landing hero, editable and governed experiment states, keyboard focus, Responsibility integration, hardened proof and truth boundaries. Transparent decorative borders are excluded; visible one-pixel separators are included.
 `;
 }
 
@@ -176,28 +243,38 @@ async function audit(page, view, viewport, state) {
 }
 
 for (const viewport of viewports) {
-  for (const view of views) {
-    const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
-    await page.goto(`${baseUrl}${view.path}`, { waitUntil: "networkidle" });
-    await page.waitForSelector("[data-testid=living-conclusion]");
-    await page.evaluate(() => document.fonts.ready);
-    await audit(page, view.name, viewport.name, "base + selected");
+  const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
+  await installManagedHarness(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.waitForSelector("[data-testid=mini-live-check]");
+  await page.evaluate(() => document.fonts.ready);
 
-    const inactiveCheckpoint = page.locator("[data-checkpoint-id=funding]");
-    await inactiveCheckpoint.hover();
-    await audit(page, view.name, viewport.name, "hover");
-    await inactiveCheckpoint.focus();
-    await audit(page, view.name, viewport.name, "keyboard focus");
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await audit(page, "Landing", viewport.name, "hero / main content");
 
-    const proofButton = page.getByRole("button", { name: "Open receipt proof" });
-    await proofButton.evaluate((element) => { element.disabled = true; });
-    await audit(page, view.name, viewport.name, "disabled");
-    await proofButton.evaluate((element) => { element.disabled = false; });
-    await proofButton.click();
-    await page.waitForSelector("[data-testid=living-proof]");
-    await audit(page, "Proof", viewport.name, view.name);
-    await page.close();
-  }
+  const experiment = page.locator("[data-testid=mini-live-check]");
+  await experiment.scrollIntoViewIfNeeded();
+  await audit(page, "Landing", viewport.name, "editable experiment");
+  await page.locator("[data-testid=claim-a-from]").focus();
+  await audit(page, "Landing", viewport.name, "editable experiment · keyboard focus");
+
+  await page.locator("[data-testid=mini-run]").click();
+  await page.waitForSelector("[data-testid=mini-verdict]");
+  await experiment.scrollIntoViewIfNeeded();
+  await audit(page, "Landing", viewport.name, "governed-result state");
+
+  const integration = page.locator("#how");
+  await integration.scrollIntoViewIfNeeded();
+  await audit(page, "Landing", viewport.name, "Responsibility / integration");
+
+  const hardenedProof = page.locator("section:has([data-testid=landing-to-verified-run])");
+  await hardenedProof.scrollIntoViewIfNeeded();
+  await audit(page, "Landing", viewport.name, "hardened proof");
+
+  const boundaries = page.locator("#boundaries");
+  await boundaries.scrollIntoViewIfNeeded();
+  await audit(page, "Landing", viewport.name, "truth boundaries");
+  await page.close();
 }
 
 await browser.close();

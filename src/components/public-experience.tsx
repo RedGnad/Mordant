@@ -4,82 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { MiniLiveCheck } from "./live-product/mini-live-check";
-import { LIVE_PRODUCT_CTA, LIVE_PRODUCT_HREF, PublicFooter, PublicHeader } from "./public-shell";
+import { LIVE_PRODUCT_CTA, PublicFooter, PublicHeader } from "./public-shell";
 import styles from "./public-experience.module.css";
-
-type PublicProof = {
-  actor: string;
-  action: string;
-  before: string;
-  after: string;
-  block: number | string;
-  chain: string;
-};
-
-const TRANSFORMATION = [
-  {
-    id: "stable",
-    label: "Stable",
-    title: "One receivable. One valid position.",
-    protection: "Aligned",
-    consequence: "Financing proceeds. Nothing to decide.",
-  },
-  {
-    id: "conflict",
-    label: "Conflict",
-    title: "Two claims. One obligation.",
-    protection: "Conflict suspected",
-    consequence: "Neither lender will publish its book to prove it.",
-  },
-  {
-    id: "recourse",
-    label: "Recourse",
-    title: "Responsibility becomes explicit.",
-    protection: "Accountable path",
-    consequence: "A named party, a cure window, a priced consequence.",
-  },
-  {
-    id: "proof",
-    label: "Proof",
-    title: "The transition is retained.",
-    protection: "Receipt issued",
-    consequence: "Every step is verifiable after the fact.",
-  },
-] as const;
-
-const TRANSFORMATION_SCROLL_THRESHOLDS = [0, 0.15, 0.4, 0.7] as const;
-
-/**
- * The sticky scroll scene only runs where it has room. Everywhere else the four
- * states are a stepper in normal flow, which is a different composition rather
- * than the same one shrunk. This query must stay in step with the matching
- * fallback block in the stylesheet.
- */
-const STICKY_SCENE = "(min-width: 1280px) and (min-height: 721px)";
-
-const CONSEQUENCES = [
-  {
-    id: "cleared",
-    verdict: "No conflict",
-    title: "Recourse is explicitly refused.",
-    body: "The signed result clears the case. No protection becomes claimable, and financing continues subject to the rest of your workflow.",
-    status: "Live today",
-  },
-  {
-    id: "conflict",
-    verdict: "Conflict confirmed",
-    title: "A cure window opens.",
-    body: "The signed result names who is responsible and fixes the deadline carried by the recourse record. The original receivable stays outstanding and intact.",
-    status: "Live today",
-  },
-  {
-    id: "claimable",
-    verdict: "Conflict uncured",
-    title: "Fixed aUSDC recourse becomes claimable.",
-    body: "When the cure window closes unresolved, the reserved protection is claimable by the affected holder. This has been executed on Monad testnet: a real 600-second window expired uncured, anyone could finalize, and both holders were paid.",
-    status: "Live today",
-  },
-] as const;
 
 /**
  * The integration path, told as the product actually works.
@@ -87,20 +13,14 @@ const CONSEQUENCES = [
  * Four stages rather than three, because the Cleanverse boundary and the private
  * decision are different responsibilities and a judge must not read them as one.
  * Cleanverse says what the asset is and who may participate; Mordant decides,
- * privately, whether the claims collide; the governed signature is what turns
- * that answer into money moving on Monad.
+ * privately, whether the claims collide; the governed result establishes only
+ * that conflict status; policy and human review own every consequence.
  */
-const JUNCTION_MARK_CLASSES = [
-  styles.claimMarkPrimary,
-  styles.claimMarkSatelliteOne,
-  styles.claimMarkSatelliteTwo,
-] as const;
-
 const INTEGRATION_STEPS = [
   {
     label: "Cleanverse verifies",
     detail: "MINV01 + A-Pass",
-    story: "Cleanverse establishes the receivable and which wallets may hold a claim against it.",
+    story: "Cleanverse verifies MINV01 provenance and identity plus participant eligibility, not legal validity or enforceability.",
   },
   {
     label: "Mordant decides privately",
@@ -109,44 +29,28 @@ const INTEGRATION_STEPS = [
   },
   {
     label: "Governed result",
-    detail: "Signed Boolean",
-    story: "A designated decryptor recomputes the circuit and signs the answer. No result exists before that signature.",
+    detail: "Signed conflict status",
+    story: "The governed result establishes only whether the submitted claim windows conflict. Policy and human review determine every next action.",
   },
   {
     label: "Monad recourse",
-    detail: "aUSDC settlement",
-    story: "The signed result opens or refuses recourse, and the aUSDC claims settle on Monad testnet.",
+    detail: "Bounded aUSDC rail",
+    story: "In the separate hardened run, preconfigured demo policy opened the cure path and deployment configuration determined holders and payouts before settlement.",
   },
 ] as const;
 
 const BOUNDARIES = [
   {
-    title: "Observed provenance",
-    body: "The Cleanverse and Monad testnet asset identity is retained real evidence.",
+    title: "Input / managed-preparation boundary",
+    body: "MINV01 Cleanverse provenance and identity plus A-Pass eligibility are checked against real evidence; this does not establish invoice authenticity, legal validity or enforceability. The financing-claim windows are synthetic; Mordant's managed service prepares their encryption, not a participant device.",
   },
   {
-    title: "Managed preparation",
-    body: "Mordant's managed execution service prepares and encrypts the inputs. There is no participant-device encryption.",
+    title: "Evaluation / governed-release boundary",
+    body: "The fixed BGV circuit receives ciphertexts and the evaluator holds no decryption key. A designated decryptor governs release; this is not native Monad FHE, threshold release or trustless decryption. The result establishes only conflict status; approved policy and human review determine action owner, deadline, escalation and responsibility.",
   },
   {
-    title: "Ciphertext-only evaluation",
-    body: "The FHE evaluator receives ciphertexts and holds no decryption key.",
-  },
-  {
-    title: "Trusted release",
-    body: "A designated decryptor recomputes the circuit and signs the result. This is not native Monad FHE, threshold release or trustless decryption.",
-  },
-  {
-    title: "Synthetic pledge book",
-    body: "The lender pledge intervals are synthetic fixtures and the protected notional is illustrative. No real lender book is represented.",
-  },
-  {
-    title: "Real but bounded settlement",
-    body: "The cure window, the permissionless finalization and the aUSDC claims are real on Monad testnet, at deliberately small amounts. Execution is supervised single-host and is not production authorized.",
-  },
-  {
-    title: "Single execution slot",
-    body: "One managed execution slot is available. A second visitor waits rather than running in parallel.",
+    title: "Testnet / operational boundary",
+    body: "This fresh managed check does not settle aUSDC. A separate hardened two-wallet run completed the real cure window and deliberately small aUSDC claims on Monad testnet. Managed execution is supervised single-host, limited to one slot and not production authorized.",
   },
 ] as const;
 
@@ -161,16 +65,12 @@ function Symbol({ className }: { readonly className: string }) {
   );
 }
 
-export function PublicExperience({ proof, liveCheckHolder }: {
-  readonly proof: PublicProof;
+export function PublicExperience({ liveCheckHolder }: {
   /** The eligible managed test context, or null when the worker is unreachable. */
   readonly liveCheckHolder: string | null;
 }) {
-  const [step, setStep] = useState(0);
   const [integrationStep, setIntegrationStep] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
-  const transformationRef = useRef<HTMLElement>(null);
-  const scrollFrame = useRef<number | null>(null);
   const heroRef = useRef<HTMLElement>(null);
   const integrationFlowRef = useRef<HTMLDivElement>(null);
   const integrationPathRef = useRef<SVGPathElement>(null);
@@ -180,7 +80,6 @@ export function PublicExperience({ proof, liveCheckHolder }: {
   const integrationMotionFrame = useRef<number | null>(null);
   const integrationMotionProgress = useRef(0);
   const integrationInteractionLockUntil = useRef(0);
-  const moment = TRANSFORMATION[step];
 
   useEffect(() => {
     const page = pageRef.current;
@@ -227,40 +126,6 @@ export function PublicExperience({ proof, liveCheckHolder }: {
       window.removeEventListener("scroll", onHeroScroll);
       window.removeEventListener("resize", onHeroScroll);
       if (heroScrollFrame.current !== null) window.cancelAnimationFrame(heroScrollFrame.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const section = transformationRef.current;
-    if (section === null) return;
-
-    const updateFromScroll = () => {
-      scrollFrame.current = null;
-      // Below the sticky breakpoint the four states are sequential blocks, so
-      // scroll position must not drive the selection at all.
-      if (!window.matchMedia(STICKY_SCENE).matches) return;
-      const bounds = section.getBoundingClientRect();
-      const range = Math.max(1, section.offsetHeight - window.innerHeight);
-      const progress = Math.min(1, Math.max(0, -bounds.top / range));
-      let nextStep = 0;
-      TRANSFORMATION_SCROLL_THRESHOLDS.forEach((threshold, index) => {
-        if (progress >= threshold) nextStep = index;
-      });
-      setStep((current) => current === nextStep ? current : nextStep);
-    };
-
-    const onScroll = () => {
-      if (scrollFrame.current !== null) return;
-      scrollFrame.current = window.requestAnimationFrame(updateFromScroll);
-    };
-
-    updateFromScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current);
     };
   }, []);
 
@@ -340,18 +205,6 @@ export function PublicExperience({ proof, liveCheckHolder }: {
     };
   }, [integrationStep]);
 
-  const selectStep = (index: number) => {
-    const section = transformationRef.current;
-    if (section === null) return;
-    setStep(index);
-    if (!window.matchMedia(STICKY_SCENE).matches) return;
-    const range = Math.max(0, section.offsetHeight - window.innerHeight);
-    const threshold = TRANSFORMATION_SCROLL_THRESHOLDS[index] ?? 0;
-    const targetProgress = index === 0 ? 0 : Math.min(1, threshold + 0.01);
-    const sectionTop = window.scrollY + section.getBoundingClientRect().top;
-    window.scrollTo({ top: sectionTop + (range * targetProgress), behavior: "instant" });
-  };
-
   const moveHeroSymbol = (event: ReactPointerEvent<HTMLElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 22;
@@ -397,125 +250,25 @@ export function PublicExperience({ proof, liveCheckHolder }: {
           </div>
           <p className={styles.heroPromise}>When private claims collide, Mordant keeps tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            Mordant privately detects conflicting pledges on verified receivables and turns confirmed
+            Mordant privately detects conflicting pledges on receivables with verified Cleanverse provenance and turns confirmed
             conflicts into governed, auditable recourse, without exposing lender records to the evaluator.
           </p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
+            <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
             <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
           </div>
-          <p className={styles.heroNote}>A real encrypted check on a verified receivable. About 30 seconds.</p>
+          <p className={styles.heroNote}>A real encrypted check on a receivable identity with verified Cleanverse provenance. About 30 seconds.</p>
         </section>
 
         {/* 2. The real check, immediately. The economic problem this replaced
             said the same thing in a paragraph; here a visitor can run it. */}
         {liveCheckHolder === null ? null : <MiniLiveCheck publicTestHolder={liveCheckHolder} />}
 
-        {/* 3. The transformation */}
-        <section
-          className={styles.transformation}
-          id="how"
-          aria-labelledby="transformation-title"
-          data-state={moment.id}
-          ref={transformationRef}
-        >
-          <div className={styles.transformationSticky}>
-            <div className={styles.transformationTitle}>
-              <p className={styles.eyebrow}>How it works</p>
-              <h2 id="transformation-title" aria-live="polite">
-                <span key={moment.id}>{moment.title}</span>
-              </h2>
-              <p className={styles.transformationConsequence} aria-live="polite">
-                <span key={`${moment.id}-consequence`}>{moment.consequence}</span>
-              </p>
-            </div>
-
-            <div className={styles.scene} aria-label={`Transformation state: ${moment.label}`}>
-              <div className={styles.receivableLane}>
-                <strong>Receivable</strong>
-              </div>
-
-              <div className={styles.claim} aria-hidden={step === 0}>
-                <span>Second claim</span>
-                {JUNCTION_MARK_CLASSES.map((markClass) => (
-                  <Symbol className={`${styles.claimMark} ${markClass}`} key={markClass} />
-                ))}
-              </div>
-
-              <div className={styles.protectionLane}>
-                <svg className={styles.protectionRail} viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
-                  <path className={styles.protectionRailPath} d="M 0 16 L 100 16" vectorEffect="non-scaling-stroke" />
-                </svg>
-                <strong>Protection</strong>
-                <small key={moment.id}>{moment.protection}</small>
-              </div>
-
-              <div className={styles.recourseLock} aria-hidden={step !== 2}>
-                <div><span>Responsible</span><strong>{proof.actor}</strong></div>
-                <div><span>Deadline</span><strong>Fixed by the signed recourse record</strong></div>
-                <div><span>Consequence</span><strong>Protection becomes claimable</strong></div>
-              </div>
-
-              <div className={styles.receiptNode} aria-hidden={step < 3}>
-                <span>Receipt</span>
-                <strong>{proof.action}</strong>
-                <small>Block {proof.block}</small>
-              </div>
-            </div>
-
-            <nav className={styles.stateControls} aria-label="Transformation states">
-              {TRANSFORMATION.map((state, index) => (
-                <button
-                  type="button"
-                  key={state.id}
-                  aria-pressed={index === step}
-                  onClick={() => selectStep(index)}
-                >
-                  {state.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </section>
-
-        {/* 4. The actual product */}
-        <section className={styles.product} id="product" aria-labelledby="product-title" data-reveal>
-          <header>
-            <p className={styles.eyebrow}>The product</p>
-            <h2 id="product-title">Conflicting Pledge Protection</h2>
-          </header>
-          <div className={styles.productBody}>
-            <p className={styles.productLede}>
-              Mordant&rsquo;s first workflow for keeping tokenized credit moving through private conflict.
-            </p>
-            <dl className={styles.productFacts}>
-              <div>
-                <dt>What enters</dt>
-                <dd>A verified Cleanverse receivable and two private pledge windows.</dd>
-              </div>
-              <div>
-                <dt>What is evaluated</dt>
-                <dd>One fixed circuit over ciphertexts. The evaluator never sees a window.</dd>
-              </div>
-              <div>
-                <dt>What is released</dt>
-                <dd>One signed Boolean from the designated decryptor. Nothing before it.</dd>
-              </div>
-              <div>
-                <dt>What you keep</dt>
-                <dd>A named responsibility, a deadline, a consequence and a verifiable receipt.</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        {/* 5. Who is responsible for what, as one path. The invitation copy and
-            CTA that used to open this section are now the live check above; what
-            remains is the part nothing else says. */}
-        <section className={styles.invitation} aria-labelledby="invitation-title" data-reveal>
+        {/* 3. The one retained responsibility model after the experiment. */}
+        <section className={styles.invitation} id="how" aria-labelledby="invitation-title" data-reveal>
           <div className={styles.invitationText}>
-            <p className={styles.eyebrow}>The path</p>
-            <h2 id="invitation-title">Four responsibilities, and only one of them is ours.</h2>
+            <p className={styles.eyebrow}>Responsibility</p>
+            <h2 id="invitation-title">One path. Four bounded responsibilities.</h2>
           </div>
 
           {/* The old integration flow, verbatim in structure: the same 3fr/9fr
@@ -558,56 +311,23 @@ export function PublicExperience({ proof, liveCheckHolder }: {
           </div>
         </section>
 
-        {/* 6. Economic consequence */}
-        <section className={styles.consequence} aria-labelledby="consequence-title" data-reveal>
-          <header>
-            <p className={styles.eyebrow}>What follows the result</p>
-            <h2 id="consequence-title">The answer is not the product. The consequence is.</h2>
-          </header>
-          <div className={styles.consequenceList}>
-            {CONSEQUENCES.map((item) => (
-              <article key={item.id} data-outcome={item.id}>
-                <p className={styles.consequenceVerdict}>{item.verdict}</p>
-                <strong>{item.title}</strong>
-                <p>{item.body}</p>
-                <span className={styles.consequenceStatus} data-live={item.status === "Live today" ? "true" : "false"}>
-                  {item.status}
-                </span>
-              </article>
-            ))}
+        {/* 4. One completed hardened proof object, explicitly separate. */}
+        <section className={styles.hardenedProof} aria-labelledby="hardened-proof-title" data-reveal>
+          <div>
+            <p className={styles.eyebrowOnProof}>Completed hardened proof</p>
+            <h2 id="hardened-proof-title">Verify the consequence, not a claim about it.</h2>
+            <p>
+              This opens a separate hardened two-wallet run. Its governed result established conflict;
+              preconfigured demo policy applied; Adapter opened the cure path; deployment configuration
+              determined holders and payouts; on-chain aUSDC settlement then completed.
+            </p>
           </div>
+          <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
+            Verify the completed on-chain recourse
+          </Link>
         </section>
 
-        {/* 7. Evidence and receipt */}
-        <section className={styles.proof} aria-labelledby="proof-title" data-reveal>
-          <header>
-            <p className={styles.eyebrowOnProof}>Earned after the result</p>
-            <h2 id="proof-title">One receipt. One verifiable transition.</h2>
-          </header>
-          <dl>
-            <div><dt>Actor</dt><dd>{proof.actor}</dd></div>
-            <div><dt>Action</dt><dd>{proof.action}</dd></div>
-            <div><dt>Before</dt><dd>{proof.before}</dd></div>
-            <div><dt>After</dt><dd>{proof.after}</dd></div>
-            <div><dt>Block</dt><dd>{proof.block}</dd></div>
-            <div><dt>Chain</dt><dd>{proof.chain}</dd></div>
-          </dl>
-          <p className={styles.proofNote}>
-            This receipt comes from the recorded lifecycle run, not from the live encrypted check.
-            A live run seals its own receipt, which you can inspect the moment it exists. One such run
-            has already been settled on Monad testnet, end to end, with every transaction public.
-          </p>
-          <div className={styles.proofActions}>
-            <Link className={styles.proofPrimary} href={LIVE_PRODUCT_HREF}>{LIVE_PRODUCT_CTA}</Link>
-            <Link className={styles.proofSecondary} href="/protection/verified-run" data-testid="landing-to-verified-run">
-              See the settled run
-            </Link>
-            <Link className={styles.proofSecondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
-            <Link className={styles.proofSecondary} href="/demo?checkpoint=reveal">See the full lifecycle</Link>
-          </div>
-        </section>
-
-        {/* 8. Truth boundary */}
+        {/* 5. Three compressed truth boundaries. */}
         <section className={styles.boundaries} id="boundaries" aria-labelledby="boundaries-title" data-reveal>
           <header>
             <p className={styles.eyebrow}>Boundaries</p>
@@ -621,22 +341,6 @@ export function PublicExperience({ proof, liveCheckHolder }: {
               </div>
             ))}
           </dl>
-          <p className={styles.boundaryNote}>
-            Two-wallet participant admission, the on-chain cure window and the aUSDC claims have each run
-            end to end on Monad testnet. The completed run is linked above, with every transaction on the
-            public explorer, so none of it has to be taken on trust.
-          </p>
-        </section>
-
-        {/* 9. Pilot */}
-        <section className={styles.pilot} aria-labelledby="pilot-title" data-reveal>
-          <div>
-            <p className={styles.eyebrow}>Pilot</p>
-            <h2 id="pilot-title">Test accountable recourse beside the process you already trust.</h2>
-          </div>
-          <div className={styles.actions}>
-            <Link className={styles.secondary} href="/pilot">Apply for a shadow pilot</Link>
-          </div>
         </section>
       </main>
 

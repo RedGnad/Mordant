@@ -59,9 +59,9 @@
   align-items: baseline;
 }
 
-.boundaries > div[data-by="Cleanverse"] { border-left: 3px solid var(--receivable); }
-.boundaries > div[data-by="Mordant"] { border-left: 3px solid var(--protection); }
-.boundaries > div[data-by="Monad"] { border-left: 3px solid var(--action); }
+.boundaries > div:nth-child(1) { border-left: 3px solid var(--receivable); }
+.boundaries > div:nth-child(2) { border-left: 3px solid var(--protection); }
+.boundaries > div:nth-child(3) { border-left: 3px solid var(--action); }
 
 .boundaries dt {
   color: var(--ink);
@@ -85,21 +85,28 @@
   align-content: start;
 }
 
+.panel form,
+.resultArea {
+  display: grid;
+  gap: 16px;
+}
+
 .windows {
   display: grid;
-  gap: 0;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.windows > div {
-  display: flex;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--rule);
-  gap: 16px;
-  align-items: baseline;
-  justify-content: space-between;
+.windows fieldset {
+  display: grid;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  gap: 12px;
 }
 
-.windows span {
+.windows legend,
+.windows label span {
   color: var(--muted);
   font-family: var(--font-proof), monospace;
   font-size: 11px;
@@ -107,10 +114,50 @@
   text-transform: uppercase;
 }
 
-.windows strong {
+.windows legend {
+  padding-inline: 5px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.windows label {
+  display: grid;
+  gap: 6px;
+}
+
+.windows input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ground) 82%, white);
+  color: var(--ink);
   font-family: var(--font-proof), monospace;
   font-size: 16px;
   font-weight: 500;
+}
+
+.windows input:focus-visible {
+  border-color: var(--action);
+  outline: 2px solid color-mix(in srgb, var(--action) 34%, transparent);
+  outline-offset: 1px;
+}
+
+.windows input[aria-invalid="true"] {
+  border-color: var(--protection);
+}
+
+.windows input:disabled {
+  opacity: 1;
+  -webkit-text-fill-color: var(--ink);
+}
+
+.formError {
+  margin: 0;
+  color: var(--protection);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .windowNote,
@@ -185,6 +232,86 @@
 .status strong[data-verdict="conflict"] { color: var(--protection); }
 .status strong[data-verdict="no-conflict"] { color: var(--ink); }
 
+.runIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: var(--muted);
+  font: 11px var(--font-proof), monospace;
+  letter-spacing: 0.035em;
+}
+
+.executionPhases {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+}
+
+.executionPhases li {
+  padding: 9px 0 9px 14px;
+  border-bottom: 1px solid var(--rule);
+  border-left: 3px solid transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.executionPhases li[data-state="complete"] {
+  border-left-color: var(--receivable);
+  color: var(--ink);
+}
+
+.executionPhases li[data-state="current"] {
+  border-left-color: var(--action);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.proofStrip {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--rule);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.proofStrip > div {
+  display: grid;
+  min-width: 0;
+  padding: 12px 10px 12px 0;
+  border-bottom: 1px solid var(--rule);
+  gap: 4px;
+}
+
+.proofStrip dt {
+  color: var(--muted);
+  font: 10px var(--font-proof), monospace;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.proofStrip dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.proofStrip code {
+  font-family: var(--font-proof), monospace;
+  font-size: 11px;
+}
+
+.separateRun {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--action);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .primaryAction,
 .primary,
 .secondary {
@@ -224,12 +351,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner { animation-duration: 2.4s; }
+  .spinner { animation: none; }
 }
 
 @media (max-width: 900px) {
   .mini {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .proofStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -245,4 +376,10 @@
   .actions {
     display: grid;
   }
+
+  .windows,
+  .proofStrip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
 }

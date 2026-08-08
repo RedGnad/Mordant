@@ -10,7 +10,7 @@ import { readLiveTokenConfiguration } from "@/lib/protection/live-launch-token";
 
 export const metadata: Metadata = {
   title: "Live encrypted execution",
-  description: "Start a governed BGV conflict check on a verified Cleanverse receivable.",
+  description: "Start a governed BGV conflict check on a receivable identity with verified Cleanverse provenance.",
 };
 
 export const dynamic = "force-dynamic";

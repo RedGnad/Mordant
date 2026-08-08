@@ -28,8 +28,8 @@
 ## What a judge should do today
 
 1. Open <https://mordant-two.vercel.app>.
-2. Run the live check on the landing page. It is a real BGV run on a verified
-   Cleanverse receivable, and it usually takes about a minute. One slot exists,
+2. Run the live check on the landing page. It is a real BGV run on a receivable
+   identity with verified Cleanverse provenance, and it usually takes about a minute. One slot exists,
    so if someone else is mid-run the page says so explicitly.
 3. Follow **See the completed on-chain recourse** to
    [`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run)

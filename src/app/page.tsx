@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 
 import { PublicExperience } from "@/components/public-experience";
-import { PROTECTION_STATES } from "@/lib/dealroom/living-demo";
-import { getLivingDemoReviewRun } from "@/lib/dealroom/living-demo-review-server";
 import { CCP_PUBLIC_TEST_HOLDER } from "@/lib/protection/ccp-eligibility";
 import { readLiveTokenConfiguration } from "@/lib/protection/live-launch-token";
 
@@ -27,27 +25,9 @@ function liveCheckAvailable(): boolean {
 }
 
 export default function Home() {
-  const run = getLivingDemoReviewRun();
-  const action = run.actions.find((candidate) => candidate.id === "reveal");
-
-  if (action === undefined || action.after == null || action.receipt === undefined) {
-    throw new Error("The public proof checkpoint is missing from the retained run.");
-  }
-
   return (
     <PublicExperience
       liveCheckHolder={liveCheckAvailable() ? CCP_PUBLIC_TEST_HOLDER : null}
-      proof={{
-      actor: action.actorLabel,
-      action: action.title,
-      before: PROTECTION_STATES[action.before.protectionState],
-      after: PROTECTION_STATES[action.after.protectionState],
-      block: action.receipt.blockNumber,
-      // The receipt is labelled with the chain that produced it. It comes from
-      // the recorded lifecycle run, not from the live encrypted check, and the
-      // landing must not let one stand in for the other.
-      chain: `${run.source.network} · chain ${run.source.chainId}`,
-    }}
     />
   );
 }

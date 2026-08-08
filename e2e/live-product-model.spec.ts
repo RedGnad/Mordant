@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   adaptManagedIntake,
   managedProductState,
+  parseManagedWorkerView,
   type ManagedWorkerView,
 } from "../src/components/live-product/managed-intake-adapter";
 import {
@@ -20,6 +21,11 @@ import {
   stageOrderFor,
   type EligibilityView,
 } from "../src/components/live-product/live-product-view-model";
+import {
+  CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
+  LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  currentCustomReceiptDisclosures,
+} from "../src/lib/custom-supervised-receipt-disclosures";
 
 const IDLE: EligibilityView = {
   state: "IDLE", holderAddress: null, chainId: null, gateAddress: null, observedBlock: null, problem: null,
@@ -46,6 +52,47 @@ function adapt(view: ManagedWorkerView | null, eligibility = VERIFIED) {
     notice: null,
     noticeState: null,
   });
+}
+
+function withReceiptDisclosures(
+  view: ManagedWorkerView,
+  disclosures: readonly string[],
+): unknown {
+  const clone = structuredClone(view) as unknown as Record<string, unknown>;
+  // Presentation fixtures deliberately use memorable non-hex digest seeds.
+  // This helper exercises the network parser, so normalize those seeds while
+  // preserving every equality/cross-reference the parser checks.
+  const replacements: Readonly<Record<string, string>> = {
+    g: "1", p: "2", r: "3", v: "4", x: "5", z: "6",
+  };
+  const normalize = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        const entry = value[index];
+        if (typeof entry === "string" && /^sha256:([gprvxz])\1{63}$/u.test(entry)) {
+          value[index] = `sha256:${replacements[entry[7]].repeat(64)}`;
+        } else normalize(entry);
+      }
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, entry] of Object.entries(value)) {
+      if (typeof entry === "string" && /^sha256:([gprvxz])\1{63}$/u.test(entry)) {
+        (value as Record<string, unknown>)[key] = `sha256:${replacements[entry[7]].repeat(64)}`;
+      } else normalize(entry);
+    }
+  };
+  normalize(clone);
+  const receipt = clone.receipt as Record<string, unknown>;
+  receipt.disclosures = [...disclosures];
+  return clone;
+}
+
+function legacyDisclosures(): readonly string[] {
+  return [
+    ...currentCustomReceiptDisclosures("OPERATOR").slice(0, 3),
+    LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  ];
 }
 
 test.describe("live product presentation model", () => {
@@ -91,8 +138,8 @@ test.describe("live product presentation model", () => {
     const model = adapt(conflictView());
     expect(model.state).toBe("RECEIPT_SEALED");
     expect(model.release?.conflict).toBe(true);
-    expect(model.decisionRail?.nextDecision).toBe("Cure the conflict before the deadline");
-    expect(model.decisionRail?.responsibleNow).not.toBeNull();
+    expect(model.decisionRail?.nextDecision).toBe("Apply approved cure policy after conflict review");
+    expect(model.decisionRail?.responsibleNow).toBe("Policy / human review required");
 
     const deadline = model.decisionRail?.deadlineIso;
     expect(typeof deadline).toBe("string");
@@ -106,7 +153,7 @@ test.describe("live product presentation model", () => {
     expect(model.release?.conflict).toBe(false);
     expect(model.decisionRail?.nextDecision).toBe("No recourse action is available");
     expect(model.decisionRail?.deadlineIso).toBeNull();
-    expect(model.decisionRail?.consequence).toContain("cleared the case");
+    expect(model.decisionRail?.consequence).toContain("established no conflict between the submitted windows");
     const railText = JSON.stringify(model.decisionRail);
     for (const forbidden of ["approved", "approval", "creditworthy"]) {
       expect(railText.toLowerCase()).not.toContain(forbidden);
@@ -140,6 +187,37 @@ test.describe("live product presentation model", () => {
     for (const row of model.receipt!.summary) expect(row.value).not.toMatch(/^sha256:/u);
   });
 
+  test("the browser receipt parser accepts only exact current or exact legacy disclosures", () => {
+    const current = currentCustomReceiptDisclosures("OPERATOR");
+    expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), current))).not.toBeNull();
+    expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), legacyDisclosures()))).not.toBeNull();
+
+    const malformed = [
+      [...current.slice(0, 3), "The Boolean decides the terminal outcome."],
+      current.slice(0, 4),
+      [...legacyDisclosures(), CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE],
+      [...current.slice(0, 3), LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE, CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE],
+      [...current, "extra"],
+    ];
+    for (const disclosures of malformed) {
+      expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), disclosures))).toBeNull();
+    }
+  });
+
+  test("legacy raw evidence is preserved but presented under the current authority boundary", () => {
+    const parsed = parseManagedWorkerView(withReceiptDisclosures(conflictView(), legacyDisclosures()));
+    expect(parsed).not.toBeNull();
+    const model = adapt(parsed);
+    expect(model.receipt?.summary.find((row) => row.label === "Result authority")?.value)
+      .toContain("conflict/no-conflict between the submitted windows only");
+    expect(model.receipt?.summary.find((row) => row.label === "Recourse authority")?.value)
+      .toContain("Configured demo policy");
+    expect(model.receipt?.rawContext).toContain("Immutable legacy receipt");
+    expect(model.receipt?.rawContext).toContain("not the current product boundary");
+    expect(model.receipt?.rawContext).not.toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
+    expect(JSON.stringify(model.receipt?.raw)).toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
+  });
+
   test("aUSDC renders with its real decimals and keeps atomic units separate", () => {
     const amount = ausdcFromAtomic("9999");
     expect(amount.formatted).toBe("0.00");
@@ -156,13 +234,28 @@ test.describe("live product presentation model", () => {
     expect(stageOrderFor("MANAGED_COMBINED")).not.toContain("CLAIM_INPUTS_ADMITTED");
   });
 
-  test("stage progress is derived, never invented", () => {
+  test("EVALUATED means BGV complete with governed release still pending", () => {
     const model = adapt(RUNNING_VIEW);
     const active = model.stages.filter((stage) => stage.progress === "active");
     expect(active).toHaveLength(1);
-    expect(active[0].id).toBe("EVALUATION_RUNNING");
-    expect(model.stages.filter((stage) => stage.progress === "done")).toHaveLength(4);
+    expect(active[0].id).toBe("GOVERNED_VERIFICATION");
+    expect(active[0].label).toBe("Governed result pending");
+    expect(active[0].detail).toContain("Encrypted evaluation is complete");
+    expect(model.stages.map((stage) => String(stage.id))).not.toContain("EVALUATION_RUNNING");
+    expect(model.stages.find((stage) => stage.id === "EVALUATION_COMPLETE")).toMatchObject({
+      label: "Encrypted evaluation complete",
+      progress: "done",
+    });
+    expect(model.stages.filter((stage) => stage.progress === "done")).toHaveLength(5);
     // Only the active stage carries a sentence.
     expect(model.stages.filter((stage) => stage.detail !== null)).toHaveLength(1);
+  });
+
+  test("the public projection rejects private claim windows", () => {
+    expect(parseManagedWorkerView({ ...RUNNING_VIEW, activeFrom: 120 })).toBeNull();
+    expect(parseManagedWorkerView({
+      ...RUNNING_VIEW,
+      claim: { participantA: { activeFrom: 120, activeUntil: 420 } },
+    })).toBeNull();
   });
 });
