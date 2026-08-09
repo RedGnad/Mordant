@@ -196,11 +196,15 @@ function validateRegisteredTemporaryRoot(record) {
   }
 }
 
+function cleanupRegisteredTemporaryRoot(record) {
+  validateRegisteredTemporaryRoot(record);
+  if (existsSync(record.path)) rmSync(record.path, { recursive: true, force: false });
+  if (existsSync(record.path)) throw new Error(`Temporary cleanup failed for ${record.rootClass}`);
+}
+
 function cleanupAllTemporaryRoots() {
   for (const record of [...temporaryRoots].reverse()) {
-    validateRegisteredTemporaryRoot(record);
-    if (existsSync(record.path)) rmSync(record.path, { recursive: true, force: false });
-    if (existsSync(record.path)) throw new Error(`Temporary cleanup failed for ${record.rootClass}`);
+    cleanupRegisteredTemporaryRoot(record);
   }
   return temporaryRoots.every((record) => !existsSync(record.path));
 }
@@ -433,6 +437,14 @@ async function buildFreshNativeBinaries(sourceCommit, sourceTree) {
       sha256: sha256File(output),
     }));
   }
+  const goCacheRecord = temporaryRoots.find((record) => (
+    record.rootClass === "GO_BUILD_CACHE" && record.path === goCache
+  ));
+  if (goCacheRecord === undefined) throw new Error("Fresh Go build cache lost its validated temporary-root identity");
+  // The cache is not execution evidence and is unnecessary once every output
+  // binary has been hashed. Releasing it here preserves disk headroom for each
+  // sequential N15 case without reusing or weakening any built executable.
+  cleanupRegisteredTemporaryRoot(goCacheRecord);
   return {
     binRoot,
     hashes: Object.freeze(Object.fromEntries(binaries.map((binary) => [binary.id, binary.sha256]))),
