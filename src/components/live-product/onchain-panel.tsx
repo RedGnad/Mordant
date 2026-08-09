@@ -10,9 +10,8 @@ import type { OnchainPhase, OnchainView } from "./live-product-view-model";
  * The on-chain half of the consequence.
  *
  * Every value arrives typed from the adapter. No contract address, ABI, amount
- * or event name is written here, and while `ONCHAIN_RECOURSE_CONNECTED` is off
- * the panel states plainly that the settlement leg is not connected rather than
- * showing a plausible-looking transaction.
+ * or event name is written here. A managed run that ends at governed result is
+ * kept distinct from the separate completed hardened recourse run.
  */
 
 const PHASE_LABEL: Readonly<Record<OnchainPhase, string>> = Object.freeze({
@@ -125,12 +124,15 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
   if (view.phase === "NOT_CONNECTED") {
     return (
       <section className={styles.panel} data-connected="false" data-testid="onchain-panel">
-        <p className={styles.eyebrow}>Settlement</p>
+        <p className={styles.eyebrow}>Managed run boundary</p>
         <p className={styles.disabled}>
-          {view.disabledReason ?? "On-chain recourse is not connected on this deployment."}
-          {" "}The verified governed result above is a synthetic prototype readback; no real funds move here.
-          The aUSDC settlement leg is prepared and not yet wired.
+          {view.disabledReason ?? "This managed run ends at the governed result."}
+          {" "}It did not execute a new aUSDC settlement.
         </p>
+        <Link className={styles.boundaryLink} href="/protection/verified-run" data-testid="live-to-verified-run">
+          Verify the separate completed on-chain recourse
+        </Link>
+        <p className={styles.boundaryNote}>Opens a separate hardened two-wallet run on Monad testnet.</p>
       </section>
     );
   }

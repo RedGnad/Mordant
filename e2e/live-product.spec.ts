@@ -78,9 +78,9 @@ test.describe("private decision", () => {
     await expect(page.locator("body")).toContainText("No result exists until the governed decryptor releases");
     await expect(page.getByTestId("reveal")).toHaveCount(0);
     await expect(page.getByTestId("decision-rail")).toHaveCount(0);
-    await expect(page.getByTestId("claim-timeline")).toHaveCount(0);
-    await expect(page.getByTestId("managed-private-inputs-unavailable"))
-      .toContainText("not retained in this public projection");
+    await expect(page.getByTestId("claim-timeline")).toBeVisible();
+    await expect(page.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
+    await expect(page.getByTestId("managed-private-inputs-unavailable")).toHaveCount(0);
     await expect(page.locator("body")).toContainText("Encrypted evaluation is complete");
     await expect(page.locator("body")).not.toContainText("Encrypted evaluation running");
     await expect(page.getByTestId("live-status")).toHaveAttribute("data-status", "active");
@@ -104,9 +104,9 @@ test.describe("conflict reveal", () => {
     await expect(reveal).toContainText("Conflict confirmed");
     await expect(reveal).toContainText("establishes only that the private claim windows conflict");
     await expect(reveal).toContainText("remains outstanding and intact");
-    await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
-    await expect(reveal.getByTestId("managed-private-inputs-unavailable"))
-      .toContainText("not retained in this public projection");
+    await expect(reveal.getByTestId("claim-timeline")).toBeVisible();
+    await expect(reveal.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
+    await expect(page.getByTestId("managed-private-inputs-unavailable")).toHaveCount(0);
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("Apply approved cure policy after conflict review");
@@ -131,7 +131,8 @@ test.describe("no-conflict reveal", () => {
     await expect(reveal).toContainText("No conflict");
     await expect(reveal).toContainText("configured policy assigned no reserve");
     await expect(reveal).toContainText("This is not a credit approval");
-    await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
+    await expect(reveal.getByTestId("claim-timeline")).toBeVisible();
+    await expect(reveal.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("No recourse action is available");
@@ -148,12 +149,17 @@ test.describe("no-conflict reveal", () => {
 });
 
 test.describe("settlement", () => {
-  test("stays honestly disconnected under the production capability", async ({ page }) => {
+  test("states the managed boundary and points to the separate completed recourse", async ({ page }) => {
     await open(page, "conflict");
     const panel = page.getByTestId("onchain-panel").first();
     await expect(panel).toHaveAttribute("data-connected", "false");
-    await expect(panel).toContainText("not connected on this deployment");
-    await expect(panel).toContainText("prepared and not yet wired");
+    await expect(panel).toContainText("This managed run ends at the governed result");
+    await expect(panel).toContainText("It did not execute a new aUSDC settlement");
+    await expect(panel.getByRole("link", { name: "Verify the separate completed on-chain recourse" }))
+      .toHaveAttribute("href", "/protection/verified-run");
+    await expect(panel).not.toContainText("synthetic prototype readback");
+    await expect(panel).not.toContainText("prepared and not yet wired");
+    await expect(page.getByTestId("adapter-compatibility")).toHaveCount(0);
   });
 
   test("the prepared entitlement surface renders real decimals when a capability supplies it", async ({ page }) => {

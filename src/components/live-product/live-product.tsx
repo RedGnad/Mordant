@@ -92,6 +92,7 @@ function ChapterRail({ current }: { readonly current: number }) {
 export function LiveProduct({
   model,
   draft,
+  submittedDraft,
   invalidFields,
   formError,
   holderDraft,
@@ -102,6 +103,8 @@ export function LiveProduct({
   readonly model: LiveProductViewModel;
   /** The two-claim draft belongs solely to the managed combined intake. */
   readonly draft: ClaimDraft | null;
+  /** Exact local geometry retained only by the browser that launched the run. */
+  readonly submittedDraft: ClaimDraft | null;
   readonly invalidFields: readonly string[];
   readonly formError: string | null;
   readonly holderDraft: string;
@@ -164,11 +167,14 @@ export function LiveProduct({
   };
 
   const notice = model.notice;
-  // Once the worker has created a run, its public projection deliberately does
-  // not carry the private windows. Local defaults or a stale authoring draft
-  // must never be used to reconstruct geometry for that durable run.
-  const managedDraft = model.intake === "MANAGED_COMBINED" && model.runId === null ? draft : null;
-  const managedRunKeepsInputsPrivate = model.intake === "MANAGED_COMBINED" && model.runId !== null;
+  // A freshly authored run may preserve its exact geometry in this browser.
+  // A restored/shared run has no submittedDraft and must never reconstruct it
+  // from defaults because the public worker projection does not carry it.
+  const managedDraft = model.intake !== "MANAGED_COMBINED"
+    ? null
+    : model.runId === null
+      ? draft
+      : submittedDraft;
 
   return (
     <div className={styles.product} data-state={model.state} data-chapter={chapter}>
@@ -353,12 +359,6 @@ export function LiveProduct({
             />
           )}
 
-          {!managedRunKeepsInputsPrivate ? null : (
-            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
-              Private claim windows are not retained in this public projection.
-            </p>
-          )}
-
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
           <div className={styles.claims}>
             {(["A", "B"] as const).map((role) => {
@@ -441,6 +441,14 @@ export function LiveProduct({
             {model.expectation === null ? "" : ` ${model.expectation}`}
           </p>
 
+          {managedDraft === null ? null : (
+            <ClaimTimeline
+              a={claimRange(managedDraft.aFrom, managedDraft.aUntil)}
+              b={claimRange(managedDraft.bFrom, managedDraft.bUntil)}
+              reveal="none"
+            />
+          )}
+
           <div className={styles.executionProgress} data-testid="execution-progress">
             <div className={styles.executionTrack} aria-hidden="true">
               {model.stages.map((stage) => <span key={stage.id} data-progress={stage.progress} />)}
@@ -450,12 +458,6 @@ export function LiveProduct({
               <span>{activeStage?.label ?? "Waiting for governed release"}</span>
             </p>
           </div>
-
-          {!managedRunKeepsInputsPrivate ? null : (
-            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
-              Private claim windows are not retained in this public projection.
-            </p>
-          )}
 
           <button
             type="button"
@@ -493,10 +495,12 @@ export function LiveProduct({
               : "The governed result establishes only that the private claim windows do not conflict. The configured policy assigned no reserve."}
           </p>
 
-          {!managedRunKeepsInputsPrivate ? null : (
-            <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
-              Private claim windows are not retained in this public projection.
-            </p>
+          {managedDraft === null ? null : (
+            <ClaimTimeline
+              a={claimRange(managedDraft.aFrom, managedDraft.aUntil)}
+              b={claimRange(managedDraft.bFrom, managedDraft.bUntil)}
+              reveal="none"
+            />
           )}
 
           {model.decisionRail === null ? null : (
@@ -531,7 +535,9 @@ export function LiveProduct({
           )}
 
           <OnchainPanel view={model.onchain} />
-          <AdapterCompatibilityPanel load={adapterCompatibility} placement="ACT" />
+          {chapter === "ACT" ? (
+            <AdapterCompatibilityPanel load={adapterCompatibility} placement="ACT" />
+          ) : null}
 
           {model.receipt === null || chapter === "PROVE" ? null : (
             <button type="button" className={styles.primary} onClick={() => setReceiptOpen(true)}>

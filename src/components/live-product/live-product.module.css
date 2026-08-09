@@ -269,7 +269,7 @@
 }
 
 .chapterFrame {
-  min-height: clamp(580px, 62vh, 720px);
+  min-height: clamp(440px, 54vh, 620px);
   margin-top: clamp(24px, 3vw, 38px);
   scroll-margin-top: 96px;
 }
@@ -278,6 +278,19 @@
 .reveal,
 .notice {
   margin-top: 0;
+  animation: liveChapterEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes liveChapterEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .chapterHeading {
@@ -836,7 +849,7 @@
   }
 
   .chapterFrame {
-    min-height: 640px;
+    min-height: 500px;
   }
 
   .chapterHeading,

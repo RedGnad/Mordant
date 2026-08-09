@@ -8,13 +8,31 @@
   border-left-color: var(--receivable);
 }
 
-.eyebrow {
-  margin: 0 0 7px;
+.panel summary {
+  display: flex;
+  min-height: 44px;
   color: var(--muted);
+  cursor: pointer;
   font-family: var(--font-proof), monospace;
   font-size: 10px;
   letter-spacing: 0.08em;
+  align-items: center;
+  list-style: none;
   text-transform: uppercase;
+}
+
+.panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel summary::before {
+  width: 20px;
+  content: "+";
+  font-size: 15px;
+}
+
+.panel[open] summary::before {
+  content: "−";
 }
 
 .status {

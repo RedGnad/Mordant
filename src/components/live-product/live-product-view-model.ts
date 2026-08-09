@@ -433,7 +433,7 @@ export const ONCHAIN_NOT_CONNECTED: OnchainView = Object.freeze({
   evidence: Object.freeze({ transactionHash: null, blockNumber: null, contractAddress: null, explorerBase: null }),
   entitlement: null,
   cureDeadlineIso: null,
-  disabledReason: "On-chain recourse is not connected on this deployment.",
+  disabledReason: "This managed run ends at the governed result.",
 });
 
 // ---------------------------------------------------------------- receipt

@@ -536,6 +536,7 @@ export function DirectParticipantExecution({
       <LiveProduct
         model={model}
         draft={null}
+        submittedDraft={null}
         invalidFields={[]}
         formError={formError}
         holderDraft=""

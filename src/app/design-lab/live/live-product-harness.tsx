@@ -220,6 +220,7 @@ export function LiveProductHarness({ scenario }: { readonly scenario: string }) 
       <LiveProduct
         model={model}
         draft={draft}
+        submittedDraft={model.runId === null ? null : draft}
         invalidFields={[]}
         formError={null}
         holderDraft={model.eligibility.holderAddress ?? ""}

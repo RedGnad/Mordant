@@ -70,6 +70,9 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
   const [holder, setHolder] = useState("");
   const [eligibility, setEligibility] = useState<EligibilityView>(IDLE_ELIGIBILITY);
   const [draft, setDraft] = useState<ClaimDraft>({ aFrom: "120", aUntil: "420", bFrom: "220", bUntil: "520" });
+  // Kept only by the browser that authored this run. The public worker
+  // projection intentionally remains free of plaintext claim windows.
+  const [submittedDraft, setSubmittedDraft] = useState<ClaimDraft | null>(null);
   const [invalid, setInvalid] = useState<readonly string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(initialRunId);
@@ -178,6 +181,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
         setFormError(outcome.message);
         return;
       }
+      setSubmittedDraft(draft);
       setRunId(outcome.view.runId);
       setView(outcome.view);
       startedAt.current = Date.now();
@@ -185,7 +189,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
     } finally {
       setStarting(false);
     }
-  }, [parse, eligibility.holderAddress]);
+  }, [parse, eligibility.holderAddress, draft]);
 
   const readRun = useCallback((id: string) => readManagedRun(workerOrigin, id), [workerOrigin]);
 
@@ -295,6 +299,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
     <LiveProduct
       model={model}
       draft={draft}
+      submittedDraft={submittedDraft}
       invalidFields={invalid}
       formError={formError}
       holderDraft={holder}

@@ -25,6 +25,24 @@
   line-height: 1.5;
 }
 
+.boundaryLink {
+  display: inline-flex;
+  min-height: 44px;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  align-items: center;
+  text-underline-offset: 3px;
+}
+
+.boundaryNote {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .phase {
   margin: 0 0 14px;
   font-size: clamp(17px, 1.7vw, 21px);

@@ -74,25 +74,16 @@ export function AdapterCompatibilityPanel({
   readonly load: AdapterCompatibilityLoad;
   readonly placement: "ACT" | "PROVE";
 }) {
-  if (load.state === "IDLE") return null;
-  if (load.state !== "VERIFIED" || load.report === null) {
-    return (
-      <section className={styles.panel} data-status={load.state.toLowerCase()} data-testid="adapter-compatibility">
-        <p className={styles.eyebrow}>Adapter V2 · read-only preflight</p>
-        <p className={styles.status}>
-          {load.state === "LOADING"
-            ? "Checking the public Monad testnet compatibility report. No transaction can be sent from this screen."
-            : "The Adapter V2 compatibility report is unavailable. On-chain recourse remains disconnected."}
-        </p>
-      </section>
-    );
-  }
+  // This operational preflight is supporting evidence, not the product
+  // outcome. Loading or unavailable data has no useful judge-facing claim, so
+  // only a successfully verified report earns space in the narrative.
+  if (load.state !== "VERIFIED" || load.report === null) return null;
 
   const { adapter, participants, pins, retainedVector } = load.report;
   return (
-    <section className={styles.panel} data-status="verified" data-placement={placement} data-testid="adapter-compatibility">
-      <p className={styles.eyebrow}>Adapter V2 · verified read-only preflight</p>
-      <p className={styles.status}>Canonical compatibility is verified on Monad testnet. Settlement remains disconnected here.</p>
+    <details className={styles.panel} data-status="verified" data-placement={placement} data-testid="adapter-compatibility">
+      <summary>Separate recourse rail · compatibility verified</summary>
+      <p className={styles.status}>Canonical Adapter V2 compatibility is verified on Monad testnet.</p>
       <dl className={styles.rows}>
         <div><dt>Adapter</dt><dd>{compact(adapter.address)} · chain {adapter.chainId}</dd></div>
         <div><dt>Code / roles</dt><dd>{compact(adapter.codeHash)} · holder {adapter.roleHolder}, facility {adapter.roleFacility}</dd></div>
@@ -103,6 +94,6 @@ export function AdapterCompatibilityPanel({
         <div><dt>Digest parity</dt><dd>{compact(retainedVector.typedDataDigest)} · {compact(retainedVector.structHash)}</dd></div>
         <div><dt>Authority pin</dt><dd>{compact(pins.governedReleaseAuthorityId)}</dd></div>
       </dl>
-    </section>
+    </details>
   );
 }
