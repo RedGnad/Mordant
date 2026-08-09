@@ -740,7 +740,7 @@ export function createLiveWorker(options) {
   async function admitCase(windows, nowMs) {
     const orchestrator = createOrchestrator();
     const runId = randomUUID();
-    const created = await orchestrator.createProtectionCase("conflict", runId, windows);
+    const created = await orchestrator.createManagedGovernedPolicyCase(runId, windows);
     if (created.runId !== runId) throw new WorkerError(500, "RUN_ID", "Case creation did not bind the generated run identifier");
     const view = await orchestrator.readCustomSupervisedCase(runId);
     await persistStage(runId, view);

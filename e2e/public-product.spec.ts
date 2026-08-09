@@ -82,6 +82,8 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     .toHaveAttribute("href", "/protection/verified-run");
 
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
+  await expect(page.getByTestId("mini-live-check"))
+    .toContainText("First implemented workflow · Conflicting Pledge Protection");
   const miniTitle = page.getByRole("heading", {
     name: "One receivable. Two private claims. One encrypted answer.",
   });

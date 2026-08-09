@@ -40,6 +40,7 @@ export const RUNNING_VIEW: ManagedWorkerView = Object.freeze({
   governedResult: null,
   recourse: null,
   receipt: null,
+  governedPolicy: null,
 });
 
 function receipt(conflict: boolean, runId: string): Readonly<Record<string, unknown>> {

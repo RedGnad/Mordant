@@ -88,8 +88,18 @@ import {
 } from "./adapter-compatibility";
 import {
   CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
   type CustomSupervisedProtectionView,
 } from "./custom-supervised-view";
+import {
+  evaluateManagedDemoGovernedRecoursePolicy,
+  referenceGovernedActionEvidence,
+  selectManagedDemoGovernedRecoursePolicy,
+  verifyManagedDemoGovernedActionPlan,
+  verifyManagedDemoGovernedRecoursePolicySelection,
+  type GovernedActionPlan,
+  type GovernedRecoursePolicySelection,
+} from "./governed-recourse-policy";
 import {
   CUSTOM_SUPERVISED_RECEIPT_SCHEMA,
   assertCustomSupervisedReceipt,
@@ -319,6 +329,10 @@ type InternalState = Readonly<{
    * the entered windows, selects the V2 authorization path.
    */
   executionVariant?: typeof CUSTOM_SUPERVISED_EXECUTION_VARIANT;
+  /** Policy committed when the managed case is created, before any result exists. */
+  governedRecoursePolicySelection?: GovernedRecoursePolicySelection;
+  /** Derived only from a verified signed result and the committed selection. */
+  governedActionPlan?: GovernedActionPlan;
   /** Terminal artifact of a custom V2 run, in place of V4 evidence. */
   customReceipt?: CustomSupervisedProtectionReceipt;
 }>;
@@ -499,6 +513,25 @@ function loadStateRaw(runtime: ProtectionRuntime, runId: string): InternalState 
     throw new ProtectionProductError("Protection execution record rejected", 500);
   }
   assertProtectionAssetBinding(state.protectionCase, CANONICAL_CLEANVERSE_ASSET_DIGEST);
+  if (state.governedRecoursePolicySelection !== undefined) {
+    verifyManagedDemoGovernedRecoursePolicySelection(state.governedRecoursePolicySelection);
+    if (state.governedRecoursePolicySelection.caseId !== state.protectionCase.fheCaseId) {
+      throw new ProtectionProductError("Governed recourse policy case binding rejected", 500);
+    }
+  }
+  if (state.governedActionPlan !== undefined) {
+    verifyManagedDemoGovernedActionPlan(state.governedActionPlan);
+    if (state.governedRecoursePolicySelection === undefined
+      || state.governedActionPlan.policySelectionHash !== state.governedRecoursePolicySelection.selectionHash
+      || state.release === undefined || state.governedActionPlan.resultDigest !== state.release.resultDigest
+      || state.governedActionPlan.resultOutcome !== (state.release.conflict ? "CONFLICT" : "NO_CONFLICT")) {
+      throw new ProtectionProductError("Governed action plan binding rejected", 500);
+    }
+  }
+  if (state.governedRecoursePolicySelection !== undefined
+    && state.release !== undefined && state.governedActionPlan === undefined) {
+    throw new ProtectionProductError("Governed action plan is missing after release", 500);
+  }
   // A retained terminal receipt is restored as immutable evidence. Validate
   // its original digest and exact disclosure contract; the narrow legacy
   // disclosure layout remains accepted without rewriting its covered bytes.
@@ -554,8 +587,10 @@ function customSupervisedView(state: InternalState): CustomSupervisedProtectionV
     digest: state.release.resultDigest,
     releaseMode: "governed-decryptor-v1" as const,
   };
-  return {
-    schemaVersion: CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  const terminalScenario: ProductScenario | null = governedResult === null
+    ? null
+    : governedResult.conflict ? "conflict" : "no-conflict";
+  const common = {
     runId: state.runId,
     executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
     stage: state.stage,
@@ -564,7 +599,7 @@ function customSupervisedView(state: InternalState): CustomSupervisedProtectionV
     nextOperation: state.release === undefined
       ? nextOperationBeforeRelease(state.stage)
       : nextOperation(state.stage, terminalScenarioAfterRelease(state)),
-    terminalScenario: governedResult === null ? null : (governedResult.conflict ? "conflict" : "no-conflict"),
+    terminalScenario,
     protectionCase: {
       cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
       fheCaseId: state.protectionCase.fheCaseId,
@@ -583,6 +618,22 @@ function customSupervisedView(state: InternalState): CustomSupervisedProtectionV
       reason: state.recourse.reason ?? null,
     },
     receipt: state.customReceipt ?? null,
+  };
+  if (state.governedRecoursePolicySelection === undefined) {
+    return { schemaVersion: CUSTOM_SUPERVISED_VIEW_SCHEMA, ...common };
+  }
+  const actionPlan = state.governedActionPlan ?? null;
+  const actionEvidence = state.customReceipt === undefined || actionPlan === null
+    ? null
+    : referenceGovernedActionEvidence({ plan: actionPlan, evidenceDigest: state.customReceipt.receiptDigest });
+  return {
+    schemaVersion: GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
+    ...common,
+    governedPolicy: {
+      selection: state.governedRecoursePolicySelection,
+      actionPlan,
+      actionEvidence,
+    },
   };
 }
 
@@ -776,7 +827,24 @@ function reconcileProtectionProjection(
         classification: "LOCAL_EXECUTION",
         evidenceRef: release.resultDigest,
       }, { incidentState: release.conflict ? "CONFLICT_CONFIRMED" : "CLEARED" });
-      return { ...state, stage: "RELEASED", protectionCase, release };
+      let governedActionPlan: GovernedActionPlan | undefined;
+      if (state.governedRecoursePolicySelection !== undefined) {
+        const result = readJson<GovernedSignedResult>(join(state.paths.publicRoot, "governed-conflict-result.json"));
+        if (governedResultDigest(result) !== release.resultDigest || result.conflict !== release.conflict) {
+          throw new ProtectionProductError("Reconciled governed result does not match the release", 500);
+        }
+        governedActionPlan = evaluateManagedDemoGovernedRecoursePolicy({
+          selection: state.governedRecoursePolicySelection,
+          governedResult: result,
+        });
+      }
+      return {
+        ...state,
+        stage: "RELEASED",
+        protectionCase,
+        release,
+        ...(governedActionPlan === undefined ? {} : { governedActionPlan }),
+      };
     }
     case "OPENING_RECOURSE": {
       const outcomePath = join(state.paths.root, "recourse-outcome.json");
@@ -1199,6 +1267,9 @@ async function createProtectionCaseRuntime(
   // A participant-admitted case is neutral and carries no private input at all
   // at creation: each window arrives later, with its own wallet authorization.
   participantAdmission = false,
+  // Enabled only by the managed public worker. Existing operator and direct-
+  // participant creation semantics remain byte-for-byte compatible.
+  governedRecoursePolicy = false,
 ): Promise<ProtectionCaseView> {
   const windows = supervisedPledgeWindows === undefined
     ? undefined
@@ -1223,6 +1294,7 @@ async function createProtectionCaseRuntime(
       // scenario, so replaying a lost create compares the variant instead.
       const sameShape = custom
         ? existing.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
+          && (existing.governedRecoursePolicySelection !== undefined) === governedRecoursePolicy
         : existing.executionVariant === undefined && existing.protectionCase.productScenario === scenario;
       if (!sameShape) throw new ProtectionProductError("Creation request scenario mismatch", 409);
       return publicView(existing, runtime);
@@ -1245,6 +1317,14 @@ async function createProtectionCaseRuntime(
       stage: "CASE_CREATED",
       protectionCase,
       ...(custom ? { executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT } : {}),
+      ...(governedRecoursePolicy ? {
+        governedRecoursePolicySelection: selectManagedDemoGovernedRecoursePolicy({
+          caseId: protectionCase.fheCaseId,
+          resultPolicyId: protectionCase.policyId,
+          resultPolicyVersion: protectionCase.policyVersion,
+          selectedAtUnix: unix(createdAt),
+        }),
+      } : {}),
       ...(windows === undefined ? {} : { supervisedPledgeWindows: windows }),
       paths: {
         root,
@@ -1765,6 +1845,8 @@ async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: s
     if (
       result.assetIdentity !== state.protectionCase.cleanverseAssetDigest
       || result.caseId !== state.protectionCase.fheCaseId
+      || result.policyId !== state.protectionCase.policyId
+      || result.policyVersion !== state.protectionCase.policyVersion
       || result.releaseMode !== state.protectionCase.releaseMode
       || governedResultDigest(result) !== output.resultDigest
       || result.conflict !== output.conflict
@@ -1792,7 +1874,19 @@ async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: s
       classification: "LOCAL_EXECUTION",
       evidenceRef: output.resultDigest,
     }, { incidentState: output.conflict ? "CONFLICT_CONFIRMED" : "CLEARED" });
-    state = saveState(runtime, { ...state, stage: "RELEASED", protectionCase, release: output });
+    const governedActionPlan = state.governedRecoursePolicySelection === undefined
+      ? undefined
+      : evaluateManagedDemoGovernedRecoursePolicy({
+        selection: state.governedRecoursePolicySelection,
+        governedResult: result,
+      });
+    state = saveState(runtime, {
+      ...state,
+      stage: "RELEASED",
+      protectionCase,
+      release: output,
+      ...(governedActionPlan === undefined ? {} : { governedActionPlan }),
+    });
     finishOperation(runtime.runRoot, runId, operation.operationId, output.exactRetry ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
     return publicView(state, runtime);
   });
@@ -2411,6 +2505,18 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
       supervisedPledgeWindows?: SupervisedPledgeWindows,
     ) => (
       createProtectionCaseRuntime(runtime, scenario, creationRequestId, supervisedPledgeWindows)
+    ),
+    /** Managed public check with a policy committed before any governed result. */
+    createManagedGovernedPolicyCase: (
+      creationRequestId: string,
+      supervisedPledgeWindows: SupervisedPledgeWindows,
+    ) => createProtectionCaseRuntime(
+      runtime,
+      "conflict",
+      creationRequestId,
+      supervisedPledgeWindows,
+      false,
+      true,
     ),
     /**
      * A neutral case that admits two participants. It carries no scenario and no

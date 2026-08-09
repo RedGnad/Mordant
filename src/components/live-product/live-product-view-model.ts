@@ -381,6 +381,25 @@ export type DecisionRail = Readonly<{
   receiptAvailable: boolean;
 }>;
 
+export type GovernedRecoursePolicyView = Readonly<{
+  policyId: string;
+  policyVersion: number;
+  policyHash: string;
+  selectionHash: string;
+  selectedAtUnix: number;
+  actionPlan: null | Readonly<{
+    selectedGovernedAction: "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE";
+    actionOwner: "MORDANT_MANAGED_EXECUTION";
+    cureWindowSeconds: 600 | null;
+    escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE";
+    requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE";
+    actionClass: "LOCAL_PROTOCOL_DOUBLE" | "EVIDENCE_ONLY";
+    settlementAuthorization: "NOT_AUTHORIZED";
+    planHash: string;
+  }>;
+  actionEvidenceDigest: string | null;
+}>;
+
 // ---------------------------------------------------------------- on-chain
 
 export type OnchainPhase =
@@ -482,6 +501,7 @@ export type LiveProductViewModel = Readonly<{
 
   release: GovernedRelease | null;
   recourse: RecourseDecision | null;
+  governedPolicy: GovernedRecoursePolicyView | null;
   decisionRail: DecisionRail | null;
 
   onchain: OnchainView;
@@ -498,6 +518,10 @@ export function assertNoPrematureOutcome(model: LiveProductViewModel): void {
   }
   if (PRE_RELEASE_STATES.has(model.state) && model.decisionRail !== null) {
     throw new Error(`A pre-release state (${model.state}) must not carry a decision rail`);
+  }
+  if (PRE_RELEASE_STATES.has(model.state) && model.governedPolicy?.actionPlan !== null
+    && model.governedPolicy !== null) {
+    throw new Error(`A pre-release state (${model.state}) must not carry a governed action plan`);
   }
 }
 

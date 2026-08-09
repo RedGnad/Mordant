@@ -59,6 +59,9 @@ function withReceiptDisclosures(
   disclosures: readonly string[],
 ): unknown {
   const clone = structuredClone(view) as unknown as Record<string, unknown>;
+  // `ManagedWorkerView` normalizes legacy wire V1 with `governedPolicy: null`;
+  // the exact V1 wire schema itself predates that normalized client member.
+  if (clone.schemaVersion === "mordant.custom-supervised-protection-view/1") delete clone.governedPolicy;
   // Presentation fixtures deliberately use memorable non-hex digest seeds.
   // This helper exercises the network parser, so normalize those seeds while
   // preserving every equality/cross-reference the parser checks.
@@ -93,6 +96,65 @@ function legacyDisclosures(): readonly string[] {
     ...currentCustomReceiptDisclosures("OPERATOR").slice(0, 3),
     LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
   ];
+}
+
+function governedPolicyTerminalView(): unknown {
+  const value = withReceiptDisclosures(
+    conflictView(),
+    currentCustomReceiptDisclosures("OPERATOR"),
+  ) as Record<string, unknown>;
+  const protectionCase = value.protectionCase as Record<string, unknown>;
+  const governedResult = value.governedResult as Record<string, unknown>;
+  const receipt = value.receipt as Record<string, unknown>;
+  const policyHash = "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09";
+  const selectionHash = `sha256:${"9".repeat(64)}`;
+  const planHash = `sha256:${"a".repeat(64)}`;
+  value.schemaVersion = "mordant.custom-supervised-protection-view/2";
+  value.governedPolicy = {
+    selection: {
+      schemaVersion: "mordant.governed-recourse-policy-selection/1",
+      policyId: "mordant.managed-demo.facility-protection",
+      policyVersion: 1,
+      policyHash,
+      caseId: protectionCase.fheCaseId,
+      resultPolicyId: "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+      resultPolicyVersion: 1,
+      selectedAtUnix: 1_699_999_999,
+      selectionHash,
+    },
+    actionPlan: {
+      schemaVersion: "mordant.governed-action-plan/1",
+      policyId: "mordant.managed-demo.facility-protection",
+      policyVersion: 1,
+      policyHash,
+      policySelectionHash: selectionHash,
+      resultDigest: governedResult.digest,
+      resultOutcome: "CONFLICT",
+      resultSemantic: "CONFLICT_STATUS_ONLY",
+      selectedGovernedAction: "OPEN_LOCAL_CURE_PATH",
+      actionOwner: "MORDANT_MANAGED_EXECUTION",
+      cureWindowSeconds: 600,
+      deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS",
+      escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN",
+      requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",
+      actionClass: "LOCAL_PROTOCOL_DOUBLE",
+      settlementAuthorization: "NOT_AUTHORIZED",
+      planHash,
+    },
+    actionEvidence: {
+      schemaVersion: "mordant.governed-action-evidence-reference/1",
+      policySelectionHash: selectionHash,
+      resultDigest: governedResult.digest,
+      actionPlanHash: planHash,
+      selectedGovernedAction: "OPEN_LOCAL_CURE_PATH",
+      actionOwner: "MORDANT_MANAGED_EXECUTION",
+      evidenceDigest: receipt.receiptDigest,
+      evidenceClass: "CUSTOM_SUPERVISED_RECEIPT",
+      settlementAuthorization: "NOT_AUTHORIZED",
+      referenceHash: `sha256:${"b".repeat(64)}`,
+    },
+  };
+  return value;
 }
 
 test.describe("live product presentation model", () => {
@@ -216,6 +278,24 @@ test.describe("live product presentation model", () => {
     expect(model.receipt?.rawContext).toContain("not the current product boundary");
     expect(model.receipt?.rawContext).not.toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
     expect(JSON.stringify(model.receipt?.raw)).toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
+  });
+
+  test("a terminal governed-policy view binds its selected action to existing evidence only", () => {
+    const parsed = parseManagedWorkerView(governedPolicyTerminalView());
+    expect(parsed).not.toBeNull();
+    const model = adapt(parsed);
+    expect(model.governedPolicy?.policyId).toBe("mordant.managed-demo.facility-protection");
+    expect(model.governedPolicy?.actionPlan?.selectedGovernedAction).toBe("OPEN_LOCAL_CURE_PATH");
+    expect(model.governedPolicy?.actionPlan?.settlementAuthorization).toBe("NOT_AUTHORIZED");
+    expect(model.governedPolicy?.actionEvidenceDigest).toBe(model.receipt?.raw?.receiptDigest);
+    expect(model.decisionRail?.responsibleNow).toContain("local protocol double");
+    expect(model.decisionRail?.consequence).toContain("Settlement is not authorized");
+
+    const tampered = governedPolicyTerminalView() as Record<string, unknown>;
+    const policy = tampered.governedPolicy as Record<string, unknown>;
+    const evidence = policy.actionEvidence as Record<string, unknown>;
+    evidence.evidenceDigest = `sha256:${"f".repeat(64)}`;
+    expect(parseManagedWorkerView(tampered)).toBeNull();
   });
 
   test("aUSDC renders with its real decimals and keeps atomic units separate", () => {

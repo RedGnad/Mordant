@@ -159,6 +159,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
   const terminal = verdict !== null;
   const runId = view?.runId ?? null;
   const governedDigest = view?.governedResult?.digest ?? null;
+  const governedPolicyPlan = view?.governedPolicy?.actionPlan ?? null;
   const evaluationCompleted = view?.evaluatedArtifactDigest !== null
     && view?.evaluatedArtifactDigest !== undefined;
   const phaseIndex = executionPhase(view, eligibility);
@@ -322,7 +323,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
       data-phase={phase.kind}
     >
       <div className={styles.intro}>
-        <p className={styles.eyebrow}>Run it now</p>
+        <p className={styles.eyebrow}>First implemented workflow · Conflicting Pledge Protection</p>
         <h2 id="mini-title">
           <span>One receivable.</span>{" "}
           <span>Two private claims.</span>{" "}
@@ -449,9 +450,13 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
                   {verdict === "conflict" ? "Conflict confirmed" : "No conflict"}
                 </strong>
                 <p>
-                  {verdict === "conflict"
-                    ? "The governed result establishes that these windows conflict. Policy and human review determine what happens next."
-                    : "The governed result establishes that these windows do not conflict. Policy and human review determine what happens next."}
+                  {governedPolicyPlan === null
+                    ? verdict === "conflict"
+                      ? "The governed result establishes only that these windows conflict. Policy and human review determine what happens next."
+                      : "The governed result establishes only that these windows do not conflict. Policy and human review determine what happens next."
+                    : verdict === "conflict"
+                      ? "The governed result establishes only that these windows conflict. The precommitted policy selects the local demo path; it does not authorize legal judgment or settlement."
+                      : "The governed result establishes only that these windows do not conflict. The precommitted policy selects record-and-close; it does not authorize legal judgment or settlement."}
                 </p>
               </>
             ) : (

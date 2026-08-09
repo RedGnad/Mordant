@@ -188,6 +188,7 @@ function mockEngineOrchestrator(behaviour) {
   return {
     stages,
     createProtectionCase: async (_s, runId) => { behaviour.runId = runId; stages.push("create"); return { runId }; },
+    createManagedGovernedPolicyCase: async (runId) => { behaviour.runId = runId; stages.push("create"); return { runId }; },
     readCustomSupervisedCase: async () => view("CASE_CREATED"),
     preparePrivateMatch: async () => { stages.push("prepare"); return view("MATCH_PREPARED"); },
     submitParticipantPledge: async () => { stages.push("submit"); return view("PARTICIPANT_A_SUBMITTED"); },
