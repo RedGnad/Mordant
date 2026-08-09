@@ -30,6 +30,8 @@ type TimelineProps = Readonly<{
   claimA: ClaimBounds;
   claimB: ClaimBounds;
   disabled: boolean;
+  compact?: boolean;
+  privateCheckActive?: boolean;
   onChangeA: ClaimLaneProps["onChange"];
   onChangeB: ClaimLaneProps["onChange"];
 }>;
@@ -168,29 +170,45 @@ export function MiniClaimTimeline({
   claimA,
   claimB,
   disabled,
+  compact = false,
+  privateCheckActive = false,
   onChangeA,
   onChangeB,
 }: TimelineProps) {
   return (
-    <div className={styles.timeline} data-testid="mini-claim-timeline">
-      <div className={styles.timelineHeading}>
-        <strong>Shared synthetic timeline · 0–600</strong>
-      </div>
-      <p className={styles.timelineExplanation}>
-        Place both financing claims on the same timeline. These are synthetic time units for the demo—not dates or block numbers.
-      </p>
-      <div className={styles.timelinePlot}>
-        <ClaimLane claim="A" bounds={claimA} disabled={disabled} onChange={onChangeA} />
-        <ClaimLane claim="B" bounds={claimB} disabled={disabled} onChange={onChangeB} />
-        <div className={styles.timelineTicks} aria-hidden="true">
-          {[0, 100, 200, 300, 400, 500, 600].map((tick) => (
-            <span key={tick} data-mobile-tick={tick % 200 === 0 ? "true" : "false"}>{tick}</span>
-          ))}
+    <div
+      className={styles.timeline}
+      data-testid="mini-claim-timeline"
+      data-compact={compact ? "true" : "false"}
+      data-private-check={privateCheckActive ? "true" : "false"}
+    >
+      <div className={styles.timelineContent}>
+        <div className={styles.timelineHeading}>
+          <strong>Shared demo timeline · 0–600</strong>
+        </div>
+        <p className={styles.timelineExplanation}>
+          Each bar shows when a financing claim starts and ends.
+        </p>
+        <div className={styles.timelinePlot}>
+          <ClaimLane claim="A" bounds={claimA} disabled={disabled} onChange={onChangeA} />
+          <ClaimLane claim="B" bounds={claimB} disabled={disabled} onChange={onChangeB} />
+          <div className={styles.timelineTicks} aria-hidden="true">
+            {[0, 100, 200, 300, 400, 500, 600].map((tick) => (
+              <span key={tick} data-mobile-tick={tick % 200 === 0 ? "true" : "false"}>{tick}</span>
+            ))}
+          </div>
         </div>
       </div>
-      <p className={styles.timelineBoundary}>
-        Placement only. The browser never interprets the relationship between these claims.
-      </p>
+      {privateCheckActive ? (
+        <div className={styles.timelinePrivacy} data-testid="mini-timeline-privacy" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M3 3 21 21" />
+            <path d="M10.6 10.7a2 2 0 0 0 2.7 2.7" />
+            <path d="M9.9 4.3A10.5 10.5 0 0 1 12 4c5.3 0 9 5 9 5a15.7 15.7 0 0 1-2.4 2.7M6.6 6.6C4.4 8 3 10 3 10s3.7 5 9 5a10 10 0 0 0 3-.5" />
+          </svg>
+          <span>Encrypted check in progress</span>
+        </div>
+      ) : null}
     </div>
   );
 }

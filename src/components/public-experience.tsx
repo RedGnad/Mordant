@@ -25,7 +25,7 @@ const INTEGRATION_STEPS = [
   {
     label: "Mordant decides privately",
     detail: "BGV over ciphertexts",
-    story: "The evaluator runs the fixed circuit over ciphertexts and holds no decryption key.",
+    story: "Mordant checks the encrypted claim windows without holding the decryption key.",
   },
   {
     label: "Governed result",
@@ -40,18 +40,26 @@ const INTEGRATION_STEPS = [
 ] as const;
 
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
-const INTEGRATION_ROUTE = "M150 120H380L470 40H660L750 120H1050";
-const INTEGRATION_DIAGONAL_LENGTH = Math.hypot(90, 80);
-const INTEGRATION_ROUTE_LENGTH = 230 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + 300;
+// The decision colour owns a short horizontal runway on both junctions.
+// Those few pixels keep a colour change and a direction change from collapsing
+// into the same sharp, visually broken corner.
+const INTEGRATION_RUNWAY = 10;
+const INTEGRATION_ROUTE = "M150 120H390L470 40H660L740 120H1050";
+const INTEGRATION_DIAGONAL_LENGTH = Math.hypot(80, 80);
+const INTEGRATION_ROUTE_LENGTH = 240 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + 310;
 const INTEGRATION_REVEAL_INSET = 12;
 // Exact distances to the four authored junctions. Rounded progress values put
 // the travelling square a few pixels beyond a corner at some viewport scales.
 const INTEGRATION_TARGETS = [
   230 / INTEGRATION_ROUTE_LENGTH,
-  (230 + INTEGRATION_DIAGONAL_LENGTH) / INTEGRATION_ROUTE_LENGTH,
-  (230 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH) / INTEGRATION_ROUTE_LENGTH,
+  (240 + INTEGRATION_DIAGONAL_LENGTH) / INTEGRATION_ROUTE_LENGTH,
+  (240 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + INTEGRATION_RUNWAY) / INTEGRATION_ROUTE_LENGTH,
   1,
 ] as const;
+const INTEGRATION_INITIAL_REVEAL = Math.max(
+  0,
+  INTEGRATION_TARGETS[0] - (INTEGRATION_REVEAL_INSET / INTEGRATION_ROUTE_LENGTH),
+);
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -190,8 +198,17 @@ export function PublicExperience({ liveCheckHolder }: {
       // the next coloured segment from peeking beyond a junction; the tether
       // below overlaps this inset and keeps the route visibly continuous.
       const revealProgress = Math.max(0, (distance - INTEGRATION_REVEAL_INSET) / length);
+      // The route is causal: it ends beneath the travelling signal in either
+      // direction. Reverse playback therefore retracts in exact lockstep and
+      // can never expose a responsibility the signal has not reached.
       reveal.setAttribute("stroke-dashoffset", `${1 - revealProgress}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      const signalColour = progress <= INTEGRATION_TARGETS[0]
+        ? "var(--receivable)"
+        : progress <= INTEGRATION_TARGETS[2]
+          ? "var(--protection)"
+          : "var(--action)";
+      signal.style.setProperty("--integration-signal-colour", signalColour);
       // A short, co-moving incoming segment removes sub-pixel gaps caused by
       // SVG mask rasterisation. It sits behind the square and follows the real
       // path tangent, so it cannot reveal any future part of the route.
@@ -213,7 +230,10 @@ export function PublicExperience({ liveCheckHolder }: {
     const startedAt = performance.now();
     const duration = 280 + Math.abs(to - from) * 360;
     const animate = (now: number) => {
-      const elapsed = Math.min(1, (now - startedAt) / duration);
+      // A first rAF timestamp can be a fraction earlier than performance.now().
+      // Clamping both ends prevents reverse motion from briefly overshooting
+      // beyond the completed route and leaving a permanent mask fragment.
+      const elapsed = Math.min(1, Math.max(0, (now - startedAt) / duration));
       const eased = 1 - Math.pow(1 - elapsed, 3);
       placeSignal(from + ((to - from) * eased));
       if (elapsed < 1) integrationMotionFrame.current = window.requestAnimationFrame(animate);
@@ -295,7 +315,10 @@ export function PublicExperience({ liveCheckHolder }: {
         <section className={styles.invitation} id="how" aria-labelledby="invitation-title" data-reveal>
           <div className={styles.invitationText}>
             <p className={styles.eyebrow}>Responsibility</p>
-            <h2 id="invitation-title">One path. Four bounded responsibilities.</h2>
+            <h2 id="invitation-title">
+              <span>One path.</span>{" "}
+              <span>Four bounded responsibilities.</span>
+            </h2>
           </div>
 
           {/* The four institutional boundaries remain distinct, but the compact
@@ -312,14 +335,14 @@ export function PublicExperience({ liveCheckHolder }: {
                       d={INTEGRATION_ROUTE}
                       pathLength="1"
                       strokeDasharray="1"
-                      strokeDashoffset={1 - INTEGRATION_TARGETS[0] + (INTEGRATION_REVEAL_INSET / INTEGRATION_ROUTE_LENGTH)}
+                      strokeDashoffset={1 - INTEGRATION_INITIAL_REVEAL}
                     />
                   </mask>
                 </defs>
                 <path ref={integrationPathRef} className={styles.flowMotionPath} d={INTEGRATION_ROUTE} />
                 <g mask="url(#integration-route-reveal)">
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} d="M150 120H380" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M380 120L470 40H660L750 120" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M380 120H390L470 40H660L740 120H750" />
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M750 120H1050" />
                 </g>
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">

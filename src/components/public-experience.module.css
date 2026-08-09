@@ -151,7 +151,12 @@
 .heroSymbol {
   display: block;
   width: 100%;
-  fill: #fff;
+  /*
+   * Difference blending against the warm-black headline turns pure white
+   * visibly green. This slightly magenta source compensates the inversion so
+   * the overlap reads as the same quiet violet-white as the selection accent.
+   */
+  fill: #fdf0ff;
   transform-origin: center;
   will-change: transform, opacity;
 }
@@ -1490,7 +1495,17 @@
 }
 
 .invitationText h2 {
-  max-width: 17ch;
+  max-width: none;
+}
+
+.invitationText h2 > span {
+  display: block;
+}
+
+@media (min-width: 761px) {
+  .invitationText h2 > span {
+    white-space: nowrap;
+  }
 }
 
 /* One wide route. The four boundaries sit directly under their own position,
@@ -1552,39 +1567,21 @@
 }
 
 .integrationSignal {
-  fill: var(--receivable);
+  --integration-signal-colour: var(--receivable);
+  fill: var(--integration-signal-colour);
   stroke: transparent;
   stroke-width: 0;
   transition:
-    fill 160ms ease-out,
     stroke 160ms ease-out,
     stroke-width 160ms ease-out;
 }
 
 .integrationTether {
   fill: none;
-  stroke: var(--receivable);
+  stroke: var(--integration-signal-colour);
   stroke-linecap: butt;
   stroke-width: 8;
   vector-effect: non-scaling-stroke;
-}
-
-.flow[data-step="1"] .integrationSignal,
-.flow[data-step="2"] .integrationSignal {
-  fill: var(--protection);
-}
-
-.flow[data-step="1"] .integrationTether,
-.flow[data-step="2"] .integrationTether {
-  stroke: var(--protection);
-}
-
-.flow[data-step="3"] .integrationSignal {
-  fill: var(--action);
-}
-
-.flow[data-step="3"] .integrationTether {
-  stroke: var(--action);
 }
 
 .flow[data-step="3"] .integrationSignal[data-arrived="true"] {

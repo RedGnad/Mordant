@@ -82,6 +82,7 @@ type HarnessOptions = Readonly<{
   read?: (runId: string) => unknown;
   tokenStatus?: number;
   tokenBody?: unknown;
+  subsequentTokenGate?: Promise<void>;
 }>;
 
 async function installManagedHarness(page: Page, options: HarnessOptions = {}) {
@@ -91,6 +92,9 @@ async function installManagedHarness(page: Page, options: HarnessOptions = {}) {
   await page.route("**/api/live-protection/token", async (route) => {
     const tokenRequest = route.request().postDataJSON() as { holderAddress?: string };
     if (typeof tokenRequest.holderAddress === "string") tokenHolders.push(tokenRequest.holderAddress);
+    if (tokenHolders.length > 1 && options.subsequentTokenGate !== undefined) {
+      await options.subsequentTokenGate;
+    }
     if (options.tokenStatus !== undefined && options.tokenStatus !== 200) {
       await route.fulfill({
         status: options.tokenStatus,
@@ -200,9 +204,10 @@ test("the neutral timeline and exact fields stay synchronized without interpreti
   await page.goto("/");
 
   const timeline = page.getByTestId("mini-claim-timeline");
-  await expect(timeline).toContainText("Shared synthetic timeline · 0–600");
-  await expect(timeline).toContainText("synthetic time units for the demo—not dates or block numbers");
-  await expect(timeline).toContainText("browser never interprets the relationship");
+  await expect(timeline).toContainText("Shared demo timeline · 0–600");
+  await expect(timeline).toContainText("Each bar shows when a financing claim starts and ends.");
+  await expect(timeline).not.toContainText("Placement only.");
+  await expect(timeline).not.toContainText("browser never interprets the relationship");
   await expect(page.getByRole("slider")).toHaveCount(4);
 
   const aFrom = page.getByRole("slider", { name: "Financing claim A active from" });
@@ -339,21 +344,31 @@ test("real worker evidence appears, and no verdict exists before governed releas
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     await miniPanel.screenshot({ path: testInfo.outputPath("mini-panel-running.png") });
   }
-  await expect(page.getByTestId("mini-claim-timeline")).toHaveCount(0);
+  const runningTimeline = page.getByTestId("mini-claim-timeline");
+  await expect(runningTimeline).toBeVisible();
+  await expect(runningTimeline).toHaveAttribute("data-private-check", "true");
+  await expect(page.getByTestId("mini-timeline-privacy")).toContainText("Encrypted check in progress");
+  await expect.poll(() => runningTimeline.locator("[class*='timelineContent']").evaluate((node) => (
+    getComputedStyle(node).filter
+  ))).toContain("blur(1.6px)");
+  await expect(runningTimeline).toContainText("Claim A");
+  await expect(runningTimeline).toContainText("120–420");
+  await expect(runningTimeline).toContainText("Claim B");
+  await expect(runningTimeline).toContainText("220–520");
+  await expect(runningTimeline.getByRole("slider")).toHaveCount(4);
+  await expect(runningTimeline.getByRole("slider").first()).toHaveAttribute("aria-disabled", "true");
   await expect(page.getByTestId("claim-a-from")).toHaveCount(0);
-  const runningGeometry = page.getByTestId("mini-submitted-geometry");
-  await expect(runningGeometry).toContainText("Claim A120–420");
-  await expect(runningGeometry).toContainText("Claim B220–520");
 
   await expect(page.getByTestId("mini-verdict")).toHaveAttribute("data-verdict", "conflict", { timeout: 5_000 });
   await expect(page.getByTestId("mini-verdict")).toHaveText("Conflict confirmed");
-  await expect(page.getByTestId("mini-claim-timeline")).toHaveCount(0);
+  await expect(page.getByTestId("mini-claim-timeline")).toBeVisible();
+  await expect(page.getByTestId("mini-claim-timeline")).toHaveAttribute("data-private-check", "false");
+  await expect(page.getByTestId("mini-timeline-privacy")).toHaveCount(0);
+  await expect(page.getByTestId("mini-claim-timeline").getByRole("slider").first())
+    .toHaveAttribute("aria-disabled", "true");
   await expect(page.getByTestId("claim-a-from")).toHaveCount(0);
   await expect(page.getByRole("list", { name: "Execution phases" })).toHaveCount(0);
   await expect(page.getByTestId("mini-run-identity")).toHaveCount(0);
-  const submitted = page.getByTestId("mini-submitted-geometry");
-  await expect(submitted).toContainText("Claim A120–420");
-  await expect(submitted).toContainText("Claim B220–520");
   const terminalPanelHeight = await miniPanel.evaluate((node) => node.getBoundingClientRect().height);
   expect(await miniPanel.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
   expect(Math.max(idlePanelHeight, runningPanelHeight, terminalPanelHeight)
@@ -468,10 +483,43 @@ test("a restored managed run never reconstructs private geometry from defaults",
   const reveal = page.getByTestId("reveal");
   await expect(reveal).toContainText("Conflict confirmed");
   await expect(reveal.getByTestId("claim-timeline")).toHaveCount(0);
-  await expect(reveal.getByTestId("managed-private-inputs-unavailable"))
-    .toContainText("Private claim windows are not retained in this public projection.");
+  await expect(page.getByTestId("managed-private-inputs-unavailable")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Private claim windows are not retained in this public projection.");
   await expect(page.locator("#live-aFrom, #live-aUntil, #live-bFrom, #live-bUntil")).toHaveCount(0);
   expect(tokenHolders).toEqual([]);
+});
+
+test("the full managed run gives immediate start feedback and preserves its local geometry", async ({ page }, testInfo) => {
+  const tokenGate: { release?: () => void } = {};
+  const subsequentTokenGate = new Promise<void>((resolve) => { tokenGate.release = resolve; });
+  await installManagedHarness(page, {
+    create: () => ({ body: envelope(null) }),
+    read: () => envelope(true),
+    subsequentTokenGate,
+  });
+  await page.goto("/protection/live");
+
+  await page.getByRole("button", { name: "Use the public test holder" }).click();
+  await expect(page.getByRole("heading", { name: "Two private claims on the same receivable." })).toBeVisible();
+  await page.getByRole("button", { name: "Run the confidential check" }).click();
+
+  await expect(page.getByTestId("live-status")).toHaveAttribute("data-status", "active");
+  await expect(page.getByTestId("live-status"))
+    .toContainText("Creating the case and preparing the secure execution");
+  await expect(page.locator("[class*='chapterFrame']")).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByTestId("claim-timeline")).toBeVisible();
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await page.screenshot({ path: testInfo.outputPath("full-live-starting.png") });
+  }
+
+  tokenGate.release?.();
+  await expect(page.getByRole("heading", { name: "Deciding privately." })).toBeVisible();
+  await expect(page.getByTestId("claim-timeline")).toBeVisible();
+  await expect(page.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
+  await expect(page.locator("body")).not.toContainText("Private claim windows are not retained");
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await page.screenshot({ path: testInfo.outputPath("full-live-deciding.png") });
+  }
 });
 
 test("busy, eligibility refusal and malformed projections fail closed", async ({ page }) => {
@@ -519,7 +567,10 @@ test("the accepted scrollytelling is preserved, compiled and not mounted", async
 
 test("mobile, desktop, reduced motion and keyboard semantics remain usable", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await installManagedHarness(page, { create: () => ({ body: envelope(null) }) });
+  await installManagedHarness(page, {
+    create: () => ({ body: envelope(null) }),
+    read: () => envelope(null),
+  });
   await page.goto("/");
 
   const reducedMotionSymbol = page.locator("[class*='heroSymbolField']");
@@ -567,7 +618,16 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
   await expect(governed).toHaveAttribute("aria-pressed", "true");
 
   await page.getByTestId("mini-run").click();
-  await expect(page.locator("[class*='spinner']")).toBeVisible();
-  expect(await page.locator("[class*='spinner']").evaluate((node) => getComputedStyle(node).animationName)).toBe("none");
+  const spinner = page.locator("[class*='spinner']");
+  await expect(spinner).toBeVisible();
+  const spinnerMotion = await spinner.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      name: style.animationName,
+      duration: Number.parseFloat(style.animationDuration) || 0,
+    };
+  });
+  expect(["", "none"]).toContain(spinnerMotion.name);
+  expect(spinnerMotion.duration).toBeLessThanOrEqual(0.001);
   await expectNoHorizontalOverflow(page);
 });

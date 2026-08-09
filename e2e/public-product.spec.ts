@@ -45,6 +45,11 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   )).toHaveCount(0);
 
   const symbolField = page.locator("[class*='heroSymbolField']");
+  await expect.poll(() => symbolField.locator("svg").evaluate((node) => getComputedStyle(node).fill))
+    .toBe("rgb(253, 240, 255)");
+  if (testInfo.project.name === "1280x800") {
+    await page.screenshot({ path: testInfo.outputPath("hero-overlap-violet-white.png") });
+  }
   await page.evaluate(() => window.scrollTo({ top: 240, behavior: "instant" }));
   await expect.poll(() => symbolField.evaluate((node) => (
     Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-rotation"))
@@ -77,17 +82,29 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     .toHaveAttribute("href", "/protection/verified-run");
 
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
+  const miniTitle = page.getByRole("heading", {
+    name: "One receivable. Two private claims. One encrypted answer.",
+  });
+  await expect(miniTitle.locator(":scope > span")).toHaveText([
+    "One receivable.",
+    "Two private claims.",
+    "One encrypted answer.",
+  ]);
   await expect(page.getByTestId("mini-live-check")).toContainText("synthetic financing-claim windows");
   await expect(page.getByTestId("mini-live-check")).toContainText("real encrypted evaluation");
-  await expect(page.getByTestId("mini-claim-timeline")).toContainText("Shared synthetic timeline · 0–600");
+  await expect(page.getByTestId("mini-claim-timeline")).toContainText("Shared demo timeline · 0–600");
   await expect(page.getByTestId("mini-claim-timeline")).toContainText(
-    "These are synthetic time units for the demo—not dates or block numbers.",
+    "Each bar shows when a financing claim starts and ends.",
+  );
+  await expect(page.getByTestId("mini-claim-timeline")).not.toContainText("Placement only.");
+  await expect(page.getByTestId("mini-live-check")).toContainText(
+    "Only encrypted values enter the private check.",
   );
   await expect(page.getByTestId("mini-claim-timeline").locator("[class*='timelineTicks'] span")).toHaveCount(7);
   await expect(page.getByTestId("mini-live-check").getByText("Example 1", { exact: true })).toBeVisible();
   await expect(page.getByTestId("mini-live-check").getByText("Example 2", { exact: true })).toBeVisible();
   await expect(page.getByTestId("mini-live-check").getByText("Arrangement 01", { exact: true })).toHaveCount(0);
-  const miniPanel = page.getByTestId("mini-live-check").locator("[class*='panel']");
+  const miniPanel = page.getByTestId("mini-panel");
   await miniPanel.scrollIntoViewIfNeeded();
   const panelOptics = await miniPanel.evaluate((node) => {
     const style = getComputedStyle(node);
@@ -127,13 +144,17 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     });
   }
   await expect(page.getByRole("region", { name: "One path. Four bounded responsibilities." })).toBeVisible();
+  await expect(page.locator("#invitation-title > span")).toHaveText([
+    "One path.",
+    "Four bounded responsibilities.",
+  ]);
   await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
-    .toHaveAttribute("d", "M150 120H380L470 40H660L750 120H1050");
+    .toHaveAttribute("d", "M150 120H390L470 40H660L740 120H1050");
   await expect(page.locator("[class*='flowRouteDecision']"))
-    .toHaveAttribute("d", "M380 120L470 40H660L750 120");
+    .toHaveAttribute("d", "M380 120H390L470 40H660L740 120H750");
   await expect(page.locator("[class*='flowRouteAction']"))
     .toHaveAttribute("d", "M750 120H1050");
   await expect(page.locator("[class*='flowNodes']")).toHaveCount(0);
@@ -155,52 +176,6 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     return { height: bounds.height, width: bounds.width, x: bounds.x, y: bounds.y };
   }));
   expect(stageBoxes).toHaveLength(4);
-  if (testInfo.project.name === "1280x800") {
-    const reveal = page.locator("[class*='flowRouteReveal']");
-    const expectedOffsets = [0.773, 0.648, 0.325, 0.012];
-    for (let index = 0; index < expectedOffsets.length; index += 1) {
-      const stage = integration.getByRole("button").nth(index);
-      await stage.click();
-      await expect(stage).toHaveAttribute("aria-pressed", "true");
-      await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
-        .toBeCloseTo(expectedOffsets[index], 2);
-      await expect(page.locator("[class*='integrationSignal']")).toHaveAttribute("data-arrived", "true");
-      const connection = await page.locator("[class*='integrationSignal']").evaluate((signal) => {
-        const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-        const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
-        const tether = signal.querySelector<SVGLineElement>("[class*='integrationTether']");
-        const signalMatrix = (signal as SVGGElement).getScreenCTM();
-        const pathMatrix = path?.getScreenCTM();
-        const tetherMatrix = tether?.getScreenCTM();
-        if (path === null || reveal === null || tether === null
-          || signalMatrix === null || pathMatrix === null || tetherMatrix === null) return null;
-        const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
-        const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
-        const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
-        const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
-        const tetherEnd = new DOMPoint(Number(tether.getAttribute("x2")), 0).matrixTransform(tetherMatrix);
-        return {
-          routeToSignal: Math.hypot(
-            routeScreenPoint.x - signalScreenPoint.x,
-            routeScreenPoint.y - signalScreenPoint.y,
-          ),
-          tetherToSignal: Math.hypot(
-            tetherEnd.x - signalScreenPoint.x,
-            tetherEnd.y - signalScreenPoint.y,
-          ),
-        };
-      });
-      expect(connection).not.toBeNull();
-      // The revealed multi-colour route ends beneath the marker while the
-      // same-colour tether overlaps it. This guards both visible gaps and a
-      // premature sliver from the following segment.
-      expect(connection?.routeToSignal).toBeGreaterThanOrEqual(9);
-      expect(connection?.routeToSignal).toBeLessThanOrEqual(13);
-      expect(connection?.tetherToSignal).toBeLessThanOrEqual(3);
-      await page.locator('[aria-label="Interactive integration path"]')
-        .screenshot({ path: testInfo.outputPath(`responsibility-stage-${index + 1}.png`) });
-    }
-  }
   if ((viewport?.width ?? 0) > 900) {
     expect(Math.max(...stageBoxes.map(({ y }) => y)) - Math.min(...stageBoxes.map(({ y }) => y)))
       .toBeLessThanOrEqual(1);
@@ -271,6 +246,97 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   expect(renderedText).not.toContain("Continue");
 
   await expectNoHorizontalOverflow(page);
+});
+
+test("the responsibility route stays attached to its signal in both directions", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "1280x800", "One deterministic desktop motion qualification is sufficient.");
+  await page.goto("/");
+
+  const integration = page.locator('[aria-label="Integration stages"]');
+  const reveal = page.locator("[class*='flowRouteReveal']");
+  const signal = page.locator("[class*='integrationSignal']");
+  const expectedOffsets = [0.773, 0.648, 0.325, 0.012];
+  const expectedColours = [
+    "var(--receivable)",
+    "var(--protection)",
+    "var(--protection)",
+    "var(--action)",
+  ];
+
+  for (let index = 0; index < expectedOffsets.length; index += 1) {
+    const stage = integration.getByRole("button").nth(index);
+    await stage.evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
+    await expect(stage).toHaveAttribute("aria-pressed", "true");
+    await expect(signal).toHaveAttribute("data-arrived", "true");
+    await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
+      .toBeCloseTo(expectedOffsets[index], 2);
+    await expect.poll(() => signal.evaluate((node) => (
+      (node as SVGElement).style.getPropertyValue("--integration-signal-colour")
+    ))).toBe(expectedColours[index]);
+
+    const connection = await signal.evaluate((node) => {
+      const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
+      const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+      const tether = node.querySelector<SVGLineElement>("[class*='integrationTether']");
+      const signalMatrix = (node as SVGGElement).getScreenCTM();
+      const pathMatrix = path?.getScreenCTM();
+      const tetherMatrix = tether?.getScreenCTM();
+      if (path === null || reveal === null || tether === null
+        || signalMatrix === null || pathMatrix === null || tetherMatrix === null) return null;
+      const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
+      const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
+      const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
+      const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
+      const tetherEnd = new DOMPoint(Number(tether.getAttribute("x2")), 0).matrixTransform(tetherMatrix);
+      return {
+        routeToSignal: Math.hypot(
+          routeScreenPoint.x - signalScreenPoint.x,
+          routeScreenPoint.y - signalScreenPoint.y,
+        ),
+        tetherToSignal: Math.hypot(
+          tetherEnd.x - signalScreenPoint.x,
+          tetherEnd.y - signalScreenPoint.y,
+        ),
+      };
+    });
+    expect(connection).not.toBeNull();
+    expect(connection?.routeToSignal).toBeGreaterThanOrEqual(9);
+    expect(connection?.routeToSignal).toBeLessThanOrEqual(13);
+    expect(connection?.tetherToSignal).toBeLessThanOrEqual(3);
+  }
+
+  const earlierStage = integration.getByRole("button").nth(1);
+  await earlierStage.evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
+  await expect(earlierStage).toHaveAttribute("aria-pressed", "true");
+  await expect(signal).toHaveAttribute("data-arrived", "true");
+  // Reverse playback retracts in exact lockstep: the line may never reveal a
+  // responsibility ahead of the travelling marker.
+  await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
+    .toBeCloseTo(expectedOffsets[1], 2);
+  await expect.poll(() => signal.evaluate((node) => (
+    (node as SVGElement).style.getPropertyValue("--integration-signal-colour")
+  ))).toBe("var(--protection)");
+  const reverseRouteToSignal = await signal.evaluate((node) => {
+    const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
+    const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+    const signalMatrix = (node as SVGGElement).getScreenCTM();
+    const pathMatrix = path?.getScreenCTM();
+    if (path === null || reveal === null || signalMatrix === null || pathMatrix === null) return null;
+    const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
+    const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
+    const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
+    const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
+    return Math.hypot(
+      routeScreenPoint.x - signalScreenPoint.x,
+      routeScreenPoint.y - signalScreenPoint.y,
+    );
+  });
+  expect(reverseRouteToSignal).not.toBeNull();
+  expect(reverseRouteToSignal).toBeGreaterThanOrEqual(9);
+  expect(reverseRouteToSignal).toBeLessThanOrEqual(13);
+  await page.locator("#how").evaluate((section) => { section.dataset.visible = "true"; });
+  await page.locator('[aria-label="Interactive integration path"]')
+    .screenshot({ path: testInfo.outputPath("responsibility-reverse-stable.png") });
 });
 
 test("one recorded checkpoint keeps its facts across three distinct perspectives and Proof", async ({ page }) => {

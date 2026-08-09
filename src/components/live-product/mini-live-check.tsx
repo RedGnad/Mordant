@@ -323,37 +323,37 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
     >
       <div className={styles.intro}>
         <p className={styles.eyebrow}>Run it now</p>
-        <h2 id="mini-title">One receivable. Two private claims. One encrypted answer.</h2>
+        <h2 id="mini-title">
+          <span>One receivable.</span>{" "}
+          <span>Two private claims.</span>{" "}
+          <span>One encrypted answer.</span>
+        </h2>
         <p className={styles.lede}>
           Choose two synthetic financing-claim windows. Mordant runs a real encrypted evaluation;
           this page never predicts the result.
         </p>
       </div>
 
-      <div
-        ref={panelRef}
-        className={styles.panel}
-        data-testid="mini-panel"
-        data-size-locked={stablePanelHeight === null ? "false" : "true"}
-        data-view={terminal ? "RESULT" : busy ? "RUNNING" : "DRAFT"}
-        aria-busy={busy}
-        style={stablePanelHeight === null ? undefined : { height: `${stablePanelHeight}px` }}
-      >
-        <form onSubmit={submit} noValidate>
-          {inputsLocked && submittedDraft !== null ? (
-            <dl className={styles.submittedGeometry} aria-label="Submitted claim geometry" data-testid="mini-submitted-geometry">
-              <div><dt>Claim A</dt><dd>{submittedDraft.aFrom}–{submittedDraft.aUntil}</dd></div>
-              <div><dt>Claim B</dt><dd>{submittedDraft.bFrom}–{submittedDraft.bUntil}</dd></div>
-            </dl>
-          ) : (
+      <div className={styles.panelColumn}>
+        <div
+          ref={panelRef}
+          className={styles.panel}
+          data-testid="mini-panel"
+          data-size-locked={stablePanelHeight === null ? "false" : "true"}
+          data-view={terminal ? "RESULT" : busy ? "RUNNING" : "DRAFT"}
+          aria-busy={busy}
+          style={stablePanelHeight === null ? undefined : { height: `${stablePanelHeight}px` }}
+        >
+          <form onSubmit={submit} noValidate>
             <MiniClaimTimeline
               claimA={{ from: displayedDraft.aFrom, until: displayedDraft.aUntil }}
               claimB={{ from: displayedDraft.bFrom, until: displayedDraft.bUntil }}
               disabled={inputsLocked}
+              compact={inputsLocked}
+              privateCheckActive={busy && !terminal}
               onChangeA={(edge, value) => updateField(edge === "from" ? "aFrom" : "aUntil", value)}
               onChangeB={(edge, value) => updateField(edge === "from" ? "bFrom" : "bUntil", value)}
             />
-          )}
 
           {inputsLocked ? null : (
             <div className={styles.presets} aria-label="Example claim arrangements">
@@ -411,7 +411,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           )}
 
           {formError === null ? null : <p className={styles.formError} role="alert">{formError}</p>}
-          {inputsLocked ? null : <p className={styles.windowNote}>The evaluator never sees these plaintext values.</p>}
+          {inputsLocked ? null : <p className={styles.windowNote}>Only encrypted values enter the private check.</p>}
 
           {inputsLocked ? null : (
             <button
@@ -423,7 +423,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
               Run live check
             </button>
           )}
-        </form>
+          </form>
 
         {phase.kind === "IDLE" ? null : (
           <div
@@ -517,17 +517,17 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           </div>
         ) : null}
 
-        <div className={styles.previousRunSlot}>
-          {previousRun === null ? null : (
-            <aside className={styles.previousRun} data-testid="mini-previous-run">
-              <span>Previous</span>
-              <strong>{previousRun.verdict === "conflict" ? "Conflict" : "No conflict"}</strong>
-              <code>{shortRunId(previousRun.runId)}</code>
-              <span>A {previousRun.draft.aFrom}–{previousRun.draft.aUntil} · B {previousRun.draft.bFrom}–{previousRun.draft.bUntil}</span>
-              <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect</Link>
-            </aside>
-          )}
         </div>
+
+        {previousRun === null ? null : (
+          <aside className={styles.previousRun} data-testid="mini-previous-run">
+            <span>Previous</span>
+            <strong>{previousRun.verdict === "conflict" ? "Conflict" : "No conflict"}</strong>
+            <code>{shortRunId(previousRun.runId)}</code>
+            <span>A {previousRun.draft.aFrom}–{previousRun.draft.aUntil} · B {previousRun.draft.bFrom}–{previousRun.draft.bUntil}</span>
+            <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect</Link>
+          </aside>
+        )}
       </div>
     </section>
   );
