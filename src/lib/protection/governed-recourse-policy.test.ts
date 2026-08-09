@@ -8,10 +8,14 @@ import {
   GOVERNED_RECOURSE_POLICY_ID,
   MANAGED_DEMO_GOVERNED_RECOURSE_POLICY,
   GovernedRecoursePolicyError,
+  authorizeManagedDemoGovernedRecourseOperation,
   evaluateManagedDemoGovernedRecoursePolicy,
   governedRecoursePolicyHash,
+  recordManagedDemoGovernedRecourseOperation,
   referenceGovernedActionEvidence,
   selectManagedDemoGovernedRecoursePolicy,
+  verifyManagedDemoGovernedRecourseOperationAuthorization,
+  verifyManagedDemoGovernedRecourseOperationRecord,
   verifyManagedDemoGovernedRecoursePolicySelection,
 } from "./governed-recourse-policy";
 import { type GovernedSignedResult } from "./protection-evidence";
@@ -47,7 +51,7 @@ test("the promoted policy is one bounded, versioned first workflow", () => {
   assert.equal(policy.conflict.settlementAuthorization, "NOT_AUTHORIZED");
   assert.equal(policy.noConflict.settlementAuthorization, "NOT_AUTHORIZED");
   assert.equal(governedRecoursePolicyHash(), policy.policyHash);
-  assert.equal(policy.policyHash, "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09");
+  assert.equal(policy.policyHash, "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e");
 });
 
 test("policy selection is committed and verifiable before governed-result exposure", () => {
@@ -85,7 +89,7 @@ test("conflict selects only the configured local cure path", () => {
   assert.equal(plan.resultSemantic, "CONFLICT_STATUS_ONLY");
   assert.equal(plan.selectedGovernedAction, "OPEN_LOCAL_CURE_PATH");
   assert.equal(plan.actionOwner, "MORDANT_MANAGED_EXECUTION");
-  assert.equal(plan.cureWindowSeconds, 600);
+  assert.equal(plan.cureWindowSeconds, 86_400);
   assert.equal(plan.deadlineRule, "STARTS_WHEN_LOCAL_CURE_PATH_OPENS");
   assert.equal(plan.escalation, "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN");
   assert.equal(plan.requiredApproval, "NONE_FOR_LOCAL_PROTOCOL_DOUBLE");
@@ -124,23 +128,89 @@ test("the policy refuses another case and any altered signed result", () => {
   }));
 });
 
-test("action evidence references existing receipt bytes without authorizing settlement", () => {
+test("the selected action authorizes and binds the exact local operation outcome", () => {
   const result = retainedResult("conflict");
+  const selection = selectionFor(result);
   const plan = evaluateManagedDemoGovernedRecoursePolicy({
-    selection: selectionFor(result),
+    selection,
     governedResult: result,
   });
+  const authorization = authorizeManagedDemoGovernedRecourseOperation({ selection, plan });
+  assert.equal(authorization.policySelectionHash, selection.selectionHash);
+  assert.equal(authorization.planHash, plan.planHash);
+  assert.equal(authorization.selectedGovernedAction, "OPEN_LOCAL_CURE_PATH");
+  assert.doesNotThrow(() => verifyManagedDemoGovernedRecourseOperationAuthorization(
+    authorization,
+    selection,
+    plan,
+  ));
+  const operation = recordManagedDemoGovernedRecourseOperation({
+    authorization,
+    operationId: "99999999-9999-4999-8999-999999999999",
+    operationParametersDigest: `sha256:${"b".repeat(64)}`,
+    recourse: {
+      opened: true,
+      record: {
+        caseId: selection.caseId,
+        resultDigest: plan.resultDigest,
+        boundAtUnix: result.releasedAtUnix + 1,
+        cureDeadlineUnix: result.releasedAtUnix + 1 + 86_400,
+        open: true,
+      },
+    },
+  });
+  assert.equal(operation.operationAuthorizationHash, authorization.authorizationHash);
+  assert.equal(operation.cureWindowSeconds, 86_400);
+  assert.doesNotThrow(() => verifyManagedDemoGovernedRecourseOperationRecord(operation));
+
   const evidenceDigest = `sha256:${"a".repeat(64)}` as const;
-  const reference = referenceGovernedActionEvidence({ plan, evidenceDigest });
+  const reference = referenceGovernedActionEvidence({ plan, operation, evidenceDigest });
   assert.equal(reference.actionPlanHash, plan.planHash);
   assert.equal(reference.resultDigest, plan.resultDigest);
+  assert.equal(reference.operationAuthorizationHash, authorization.authorizationHash);
+  assert.equal(reference.operationParametersDigest, operation.operationParametersDigest);
+  assert.equal(reference.operationOutcomeDigest, operation.recourseOutcomeDigest);
+  assert.equal(reference.operationRecordHash, operation.operationRecordHash);
   assert.equal(reference.evidenceDigest, evidenceDigest);
   assert.equal(reference.evidenceClass, "CUSTOM_SUPERVISED_RECEIPT");
   assert.equal(reference.settlementAuthorization, "NOT_AUTHORIZED");
   assert.throws(() => referenceGovernedActionEvidence({
     plan: { ...plan, actionOwner: "LEGAL_COUNSEL" } as unknown as typeof plan,
+    operation,
     evidenceDigest,
   }));
+});
+
+test("operation authorization fails closed on altered bindings and cure-window disagreement", () => {
+  const result = retainedResult("conflict");
+  const selection = selectionFor(result);
+  const plan = evaluateManagedDemoGovernedRecoursePolicy({ selection, governedResult: result });
+  const authorization = authorizeManagedDemoGovernedRecourseOperation({ selection, plan });
+  assert.throws(() => verifyManagedDemoGovernedRecourseOperationAuthorization(
+    { ...authorization, planHash: `sha256:${"f".repeat(64)}` },
+    selection,
+    plan,
+  ));
+  assert.throws(() => verifyManagedDemoGovernedRecourseOperationAuthorization(
+    { ...authorization, policySelectionHash: `sha256:${"e".repeat(64)}` },
+    selection,
+    plan,
+  ));
+  assert.throws(() => recordManagedDemoGovernedRecourseOperation({
+    authorization,
+    operationId: "99999999-9999-4999-8999-999999999999",
+    operationParametersDigest: `sha256:${"b".repeat(64)}`,
+    recourse: {
+      opened: true,
+      record: {
+        caseId: selection.caseId,
+        resultDigest: plan.resultDigest,
+        boundAtUnix: result.releasedAtUnix + 1,
+        cureDeadlineUnix: result.releasedAtUnix + 1 + 600,
+        open: true,
+      },
+    },
+  }), (error) => error instanceof GovernedRecoursePolicyError && error.code === "CURE_WINDOW");
 });
 
 test("the policy module has no settlement, wallet, contract or workflow-engine capability", () => {

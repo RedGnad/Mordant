@@ -80,7 +80,7 @@ export type ManagedGovernedPolicy = Readonly<{
     resultSemantic: "CONFLICT_STATUS_ONLY";
     selectedGovernedAction: "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE";
     actionOwner: "MORDANT_MANAGED_EXECUTION";
-    cureWindowSeconds: 600 | null;
+    cureWindowSeconds: 86_400 | null;
     deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" | "NOT_APPLICABLE";
     escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE";
     requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE";
@@ -89,6 +89,11 @@ export type ManagedGovernedPolicy = Readonly<{
     planHash: string;
   }>;
   actionEvidence: null | Readonly<{
+    operationId: string;
+    operationAuthorizationHash: string;
+    operationParametersDigest: string;
+    operationOutcomeDigest: string;
+    operationRecordHash: string;
     evidenceDigest: string;
     referenceHash: string;
     settlementAuthorization: "NOT_AUTHORIZED";
@@ -100,7 +105,7 @@ const CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/1";
 const GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/2";
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
-const MANAGED_POLICY_HASH = "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09";
+const MANAGED_POLICY_HASH = "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e";
 const RESULT_POLICY_ID = "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65";
 const MANAGED_STAGES: readonly ManagedWorkerStage[] = Object.freeze([
   "CASE_CREATED",
@@ -306,7 +311,7 @@ function parseManagedGovernedPolicy(
     || plan.requiredApproval !== "NONE_FOR_LOCAL_PROTOCOL_DOUBLE"
     || plan.settlementAuthorization !== "NOT_AUTHORIZED" || !digest(plan.planHash)) return null;
   if (expected.governedResult.conflict) {
-    if (plan.selectedGovernedAction !== "OPEN_LOCAL_CURE_PATH" || plan.cureWindowSeconds !== 600
+    if (plan.selectedGovernedAction !== "OPEN_LOCAL_CURE_PATH" || plan.cureWindowSeconds !== 86_400
       || plan.deadlineRule !== "STARTS_WHEN_LOCAL_CURE_PATH_OPENS"
       || plan.escalation !== "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" || plan.actionClass !== "LOCAL_PROTOCOL_DOUBLE") return null;
   } else if (plan.selectedGovernedAction !== "RECORD_AND_CLOSE" || plan.cureWindowSeconds !== null
@@ -317,15 +322,25 @@ function parseManagedGovernedPolicy(
     const evidence = value.actionEvidence;
     if (!exactRecord(evidence, [
       "schemaVersion", "policySelectionHash", "resultDigest", "actionPlanHash", "selectedGovernedAction",
-      "actionOwner", "evidenceDigest", "evidenceClass", "settlementAuthorization", "referenceHash",
+      "actionOwner", "operationId", "operationAuthorizationHash", "operationParametersDigest",
+      "operationOutcomeDigest", "operationRecordHash", "evidenceDigest", "evidenceClass",
+      "settlementAuthorization", "referenceHash",
     ])) return null;
     if (evidence.schemaVersion !== "mordant.governed-action-evidence-reference/1"
       || evidence.policySelectionHash !== selection.selectionHash || evidence.resultDigest !== expected.governedResult.digest
       || evidence.actionPlanHash !== plan.planHash || evidence.selectedGovernedAction !== plan.selectedGovernedAction
-      || evidence.actionOwner !== plan.actionOwner || !digest(evidence.evidenceDigest)
+      || evidence.actionOwner !== plan.actionOwner || typeof evidence.operationId !== "string"
+      || !RUN_ID.test(evidence.operationId) || !digest(evidence.operationAuthorizationHash)
+      || !digest(evidence.operationParametersDigest) || !digest(evidence.operationOutcomeDigest)
+      || !digest(evidence.operationRecordHash) || !digest(evidence.evidenceDigest)
       || evidence.evidenceClass !== "CUSTOM_SUPERVISED_RECEIPT" || evidence.settlementAuthorization !== "NOT_AUTHORIZED"
       || !digest(evidence.referenceHash) || expected.receipt?.receiptDigest !== evidence.evidenceDigest) return null;
     actionEvidence = Object.freeze({
+      operationId: evidence.operationId,
+      operationAuthorizationHash: evidence.operationAuthorizationHash,
+      operationParametersDigest: evidence.operationParametersDigest,
+      operationOutcomeDigest: evidence.operationOutcomeDigest,
+      operationRecordHash: evidence.operationRecordHash,
       evidenceDigest: evidence.evidenceDigest,
       referenceHash: evidence.referenceHash,
       settlementAuthorization: evidence.settlementAuthorization,
@@ -346,7 +361,7 @@ function parseManagedGovernedPolicy(
       resultSemantic: plan.resultSemantic as "CONFLICT_STATUS_ONLY",
       selectedGovernedAction: plan.selectedGovernedAction as "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE",
       actionOwner: plan.actionOwner as "MORDANT_MANAGED_EXECUTION",
-      cureWindowSeconds: plan.cureWindowSeconds as 600 | null,
+      cureWindowSeconds: plan.cureWindowSeconds as 86_400 | null,
       deadlineRule: plan.deadlineRule as "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" | "NOT_APPLICABLE",
       escalation: plan.escalation as "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE",
       requiredApproval: plan.requiredApproval as "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",

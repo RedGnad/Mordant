@@ -92,13 +92,20 @@ import {
   type CustomSupervisedProtectionView,
 } from "./custom-supervised-view";
 import {
+  authorizeManagedDemoGovernedRecourseOperation,
   evaluateManagedDemoGovernedRecoursePolicy,
+  recordManagedDemoGovernedRecourseOperation,
   referenceGovernedActionEvidence,
   selectManagedDemoGovernedRecoursePolicy,
   verifyManagedDemoGovernedActionPlan,
   verifyManagedDemoGovernedRecoursePolicySelection,
+  verifyManagedDemoGovernedRecourseOperationAuthorization,
+  verifyManagedDemoGovernedRecourseOperationRecord,
   type GovernedActionPlan,
+  type GovernedRecourseOperationAuthorization,
+  type GovernedRecourseOperationRecord,
   type GovernedRecoursePolicySelection,
+  type ManagedGovernedRecourseOutcome,
 } from "./governed-recourse-policy";
 import {
   CUSTOM_SUPERVISED_RECEIPT_SCHEMA,
@@ -333,6 +340,8 @@ type InternalState = Readonly<{
   governedRecoursePolicySelection?: GovernedRecoursePolicySelection;
   /** Derived only from a verified signed result and the committed selection. */
   governedActionPlan?: GovernedActionPlan;
+  /** The exact plan-authorized managed operation and its verified local outcome. */
+  governedRecourseOperation?: GovernedRecourseOperationRecord;
   /** Terminal artifact of a custom V2 run, in place of V4 evidence. */
   customReceipt?: CustomSupervisedProtectionReceipt;
 }>;
@@ -505,6 +514,50 @@ function statePath(runtime: ProtectionRuntime, runId: string): string {
   return join(runtime.runRoot, runId, "execution.json");
 }
 
+function governedOperationAuthorizationForState(
+  state: InternalState,
+): GovernedRecourseOperationAuthorization | undefined {
+  if (state.governedRecoursePolicySelection === undefined) return undefined;
+  if (state.governedActionPlan === undefined) return undefined;
+  return authorizeManagedDemoGovernedRecourseOperation({
+    selection: state.governedRecoursePolicySelection,
+    plan: state.governedActionPlan,
+  });
+}
+
+function governedOutcome(
+  recourse: NonNullable<InternalState["recourse"]>,
+): ManagedGovernedRecourseOutcome {
+  return recourse as ManagedGovernedRecourseOutcome;
+}
+
+function assertGovernedOperationJournalBinding(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  operationRecord: GovernedRecourseOperationRecord,
+  authorization: GovernedRecourseOperationAuthorization,
+): void {
+  const journalOperation = readOperationJournal(runtime.runRoot, state.runId).records.find(
+    (record) => record.operationId === operationRecord.operationId,
+  );
+  const retainedAuthorization = journalOperation?.immutableParameters.governedActionAuthorization;
+  if (journalOperation === undefined || journalOperation.operation !== "openRecourseCase"
+    || journalOperation.phase !== "OPENING_RECOURSE" || journalOperation.outcome === "ABORTED"
+    || journalOperation.immutableParametersDigest !== operationRecord.operationParametersDigest
+    || retainedAuthorization === null || typeof retainedAuthorization !== "object" || Array.isArray(retainedAuthorization)) {
+    throw new ProtectionProductError("Governed recourse operation journal binding rejected", 500);
+  }
+  verifyManagedDemoGovernedRecourseOperationAuthorization(
+    retainedAuthorization as GovernedRecourseOperationAuthorization,
+    state.governedRecoursePolicySelection!,
+    state.governedActionPlan!,
+  );
+  if ((retainedAuthorization as GovernedRecourseOperationAuthorization).authorizationHash !== authorization.authorizationHash
+    || operationRecord.operationAuthorizationHash !== authorization.authorizationHash) {
+    throw new ProtectionProductError("Governed recourse operation authorization binding rejected", 500);
+  }
+}
+
 function loadStateRaw(runtime: ProtectionRuntime, runId: string): InternalState {
   const path = statePath(runtime, runId);
   if (!existsSync(path)) throw new ProtectionProductError("Protection case not found", 404);
@@ -531,6 +584,27 @@ function loadStateRaw(runtime: ProtectionRuntime, runId: string): InternalState 
   if (state.governedRecoursePolicySelection !== undefined
     && state.release !== undefined && state.governedActionPlan === undefined) {
     throw new ProtectionProductError("Governed action plan is missing after release", 500);
+  }
+  const governedOperationAuthorization = governedOperationAuthorizationForState(state);
+  if (state.governedRecourseOperation !== undefined) {
+    if (governedOperationAuthorization === undefined || state.recourse === undefined) {
+      throw new ProtectionProductError("Governed recourse operation context rejected", 500);
+    }
+    verifyManagedDemoGovernedRecourseOperationRecord(state.governedRecourseOperation);
+    const expectedOperation = recordManagedDemoGovernedRecourseOperation({
+      authorization: governedOperationAuthorization,
+      operationId: state.governedRecourseOperation.operationId,
+      operationParametersDigest: state.governedRecourseOperation.operationParametersDigest,
+      recourse: governedOutcome(state.recourse),
+    });
+    if (state.governedRecourseOperation.operationRecordHash !== expectedOperation.operationRecordHash) {
+      throw new ProtectionProductError("Governed recourse operation outcome binding rejected", 500);
+    }
+    assertGovernedOperationJournalBinding(runtime, state, state.governedRecourseOperation, governedOperationAuthorization);
+  }
+  if (state.governedRecoursePolicySelection !== undefined && state.recourse !== undefined
+    && state.governedRecourseOperation === undefined) {
+    throw new ProtectionProductError("Governed recourse operation authorization record is missing", 500);
   }
   // A retained terminal receipt is restored as immutable evidence. Validate
   // its original digest and exact disclosure contract; the narrow legacy
@@ -624,8 +698,13 @@ function customSupervisedView(state: InternalState): CustomSupervisedProtectionV
   }
   const actionPlan = state.governedActionPlan ?? null;
   const actionEvidence = state.customReceipt === undefined || actionPlan === null
+    || state.governedRecourseOperation === undefined
     ? null
-    : referenceGovernedActionEvidence({ plan: actionPlan, evidenceDigest: state.customReceipt.receiptDigest });
+    : referenceGovernedActionEvidence({
+      plan: actionPlan,
+      operation: state.governedRecourseOperation,
+      evidenceDigest: state.customReceipt.receiptDigest,
+    });
   return {
     schemaVersion: GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
     ...common,
@@ -745,6 +824,58 @@ function recourseFromRecord(record: PublicRecourseRecord): NonNullable<InternalS
   return { opened: true, record };
 }
 
+function retainedGovernedOperationAuthorization(
+  state: InternalState,
+  operation: ProductOperationRecord,
+): GovernedRecourseOperationAuthorization | undefined {
+  const expected = governedOperationAuthorizationForState(state);
+  if (expected === undefined) return undefined;
+  const retained = operation.immutableParameters.governedActionAuthorization;
+  if (retained === null || typeof retained !== "object" || Array.isArray(retained)) {
+    throw new ProtectionProductError("Governed recourse operation authorization is missing", 500);
+  }
+  verifyManagedDemoGovernedRecourseOperationAuthorization(
+    retained as GovernedRecourseOperationAuthorization,
+    state.governedRecoursePolicySelection!,
+    state.governedActionPlan!,
+  );
+  if ((retained as GovernedRecourseOperationAuthorization).authorizationHash !== expected.authorizationHash) {
+    throw new ProtectionProductError("Governed recourse operation authorization disagrees with the action plan", 500);
+  }
+  return expected;
+}
+
+function protectionCaseAfterRecourse(
+  state: InternalState,
+  recourse: NonNullable<InternalState["recourse"]>,
+  at: string,
+  authorization?: GovernedRecourseOperationAuthorization,
+): MordantProtectionCase {
+  const selectedAction = authorization?.selectedGovernedAction;
+  if (selectedAction === "OPEN_LOCAL_CURE_PATH" || (authorization === undefined && recourse.opened)) {
+    return appendEventOnce(state.protectionCase, {
+      kind: "CURE_WINDOW_OPENED",
+      at,
+      label: "Record-date holders remain fixed while the cure / dispute window runs",
+      classification: "PROTOCOL_DOUBLE",
+      evidenceRef: state.protectionCase.holderAllocationDigest,
+    }, {
+      cureDeadline: new Date(Number(recourse.record?.cureDeadlineUnix) * 1000).toISOString(),
+      recourseState: "CURE_WINDOW",
+    });
+  }
+  if (selectedAction === "RECORD_AND_CLOSE" || authorization === undefined) {
+    return appendEventOnce(state.protectionCase, {
+      kind: "RECOURSE_REFUSED",
+      at,
+      label: "A signed false result cannot open conflicting-pledge recourse",
+      classification: "PROTOCOL_DOUBLE",
+      evidenceRef: state.release!.resultDigest,
+    }, { recourseState: "REFUSED" });
+  }
+  throw new ProtectionProductError("Unsupported governed recourse operation authorization", 500);
+}
+
 function reconcileProtectionProjection(
   runtime: ProtectionRuntime,
   state: InternalState,
@@ -852,26 +983,25 @@ function reconcileProtectionProjection(
       const recourse = inspection.recourse === undefined
         ? readJson<NonNullable<InternalState["recourse"]>>(outcomePath)
         : recourseFromRecord(inspection.recourse);
-      if (state.release === undefined || recourse.opened !== state.release.conflict) return null;
-      let protectionCase = state.protectionCase;
-      if (recourse.opened && recourse.record !== undefined) {
-        protectionCase = appendEventOnce(protectionCase, {
-          kind: "CURE_WINDOW_OPENED",
-          at,
-          label: "Record-date holders remain fixed while the cure / dispute window runs",
-          classification: "PROTOCOL_DOUBLE",
-          evidenceRef: state.protectionCase.holderAllocationDigest,
-        }, {
-          cureDeadline: new Date(Number(recourse.record.cureDeadlineUnix) * 1000).toISOString(),
-          recourseState: "CURE_WINDOW",
+      if (state.release === undefined) return null;
+      const authorization = retainedGovernedOperationAuthorization(state, pending);
+      if (authorization === undefined && recourse.opened !== state.release.conflict) return null;
+      const governedRecourseOperation = authorization === undefined
+        ? undefined
+        : recordManagedDemoGovernedRecourseOperation({
+          authorization,
+          operationId: pending.operationId,
+          operationParametersDigest: pending.immutableParametersDigest,
+          recourse: governedOutcome(recourse),
         });
-      } else {
-        protectionCase = appendEventOnce(protectionCase, {
-          kind: "RECOURSE_REFUSED", at, label: "A signed false result cannot open conflicting-pledge recourse",
-          classification: "PROTOCOL_DOUBLE", evidenceRef: state.release.resultDigest,
-        }, { recourseState: "REFUSED" });
-      }
-      return { ...state, stage: "RECOURSE_OPENED", protectionCase, recourse };
+      const protectionCase = protectionCaseAfterRecourse(state, recourse, at, authorization);
+      return {
+        ...state,
+        stage: "RECOURSE_OPENED",
+        protectionCase,
+        recourse,
+        ...(governedRecourseOperation === undefined ? {} : { governedRecourseOperation }),
+      };
     }
     case "ADVANCING_CURE":
       return state.stage === "CHRONOLOGY_COMPLETE" ? state : null;
@@ -1909,6 +2039,13 @@ async function openRecourseCaseRuntime(
     if (state.stage !== "RELEASED" || state.release === undefined) {
       throw new ProtectionProductError("A signed governed result is required");
     }
+    const governedActionAuthorization = governedOperationAuthorizationForState(state);
+    if (state.governedRecoursePolicySelection !== undefined && governedActionAuthorization === undefined) {
+      throw new ProtectionProductError("Governed action plan is required to authorize recourse", 500);
+    }
+    const expectsLocalCurePath = governedActionAuthorization === undefined
+      ? state.release.conflict
+      : governedActionAuthorization.selectedGovernedAction === "OPEN_LOCAL_CURE_PATH";
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "openRecourseCase",
       phase: "OPENING_RECOURSE",
@@ -1916,10 +2053,13 @@ async function openRecourseCaseRuntime(
         assetIdentity: state.protectionCase.cleanverseAssetDigest,
         caseId: state.protectionCase.fheCaseId,
         expectedPins: state.release.trustedRecoursePins,
+        ...(governedActionAuthorization === undefined
+          ? {}
+          : { governedActionAuthorization }),
       },
       expectedCurrentStage: "RELEASED",
       expectedTargetStage: "RECOURSE_OPENED",
-      expectedArtifacts: state.release.conflict
+      expectedArtifacts: expectsLocalCurePath
         ? ["recourse-clock-binding.json", "recourse-record.json", "recourse-outcome.json"]
         : ["recourse-outcome.json"],
       createdAt: runtime.now().toISOString(),
@@ -1930,38 +2070,52 @@ async function openRecourseCaseRuntime(
       caseId: state.protectionCase.fheCaseId,
       expectedPins: state.release.trustedRecoursePins,
     });
-    const recourse = await runJSON<NonNullable<InternalState["recourse"]>>(runtime, "recourse", [
-      "-mode", "recourse",
-      "-public-root", state.paths.publicRoot,
-      "-request", requestPath,
+    const runExistingRecourseOperation = () => runJSON<NonNullable<InternalState["recourse"]>>(runtime, "recourse", [
+      "-mode", "recourse", "-public-root", state.paths.publicRoot, "-request", requestPath,
     ]);
+    let recourse: NonNullable<InternalState["recourse"]>;
+    if (governedActionAuthorization === undefined) {
+      recourse = await runExistingRecourseOperation();
+    } else {
+      // The existing binary remains unchanged. For policy-enabled managed V2,
+      // this switch is the operational dispatch authority: the Boolean is not
+      // consulted here to select or admit the action.
+      switch (governedActionAuthorization.selectedGovernedAction) {
+        case "OPEN_LOCAL_CURE_PATH":
+          recourse = await runExistingRecourseOperation();
+          break;
+        case "RECORD_AND_CLOSE":
+          recourse = await runExistingRecourseOperation();
+          break;
+      }
+    }
     writeJsonAtomic(join(state.paths.root, "recourse-outcome.json"), recourse);
     runtime.failpoint("after-recourse-publication-before-state-save");
     if (existsSync(requestPath)) rmSync(requestPath);
-    if (state.release.conflict !== recourse.opened) {
+    if (governedActionAuthorization === undefined && state.release.conflict !== recourse.opened) {
       throw new ProtectionProductError("Recourse admission does not match the signed Boolean", 500);
     }
-    let protectionCase = state.protectionCase;
-    if (recourse.opened) {
-      const deadlineUnix = Number(recourse.record?.cureDeadlineUnix);
-      const cureDeadline = new Date(deadlineUnix * 1000).toISOString();
-      protectionCase = appendEventOnce(protectionCase, {
-        kind: "CURE_WINDOW_OPENED",
-        at: operation.createdAt,
-        label: "Record-date holders remain fixed while the cure / dispute window runs",
-        classification: "PROTOCOL_DOUBLE",
-        evidenceRef: state.protectionCase.holderAllocationDigest,
-      }, { cureDeadline, recourseState: "CURE_WINDOW" });
-    } else {
-      protectionCase = appendEventOnce(protectionCase, {
-        kind: "RECOURSE_REFUSED",
-        at: operation.createdAt,
-        label: "A signed false result cannot open conflicting-pledge recourse",
-        classification: "PROTOCOL_DOUBLE",
-        evidenceRef: state.release.resultDigest,
-      }, { recourseState: "REFUSED" });
-    }
-    state = saveState(runtime, { ...state, stage: "RECOURSE_OPENED", protectionCase, recourse });
+    const governedRecourseOperation = governedActionAuthorization === undefined
+      ? undefined
+      : recordManagedDemoGovernedRecourseOperation({
+        authorization: governedActionAuthorization,
+        operationId: operation.operationId,
+        operationParametersDigest: operation.immutableParametersDigest,
+        recourse: governedOutcome(recourse),
+      });
+    const protectionCase = protectionCaseAfterRecourse(
+      state,
+      recourse,
+      operation.createdAt,
+      governedActionAuthorization,
+    );
+    state = saveState(runtime, {
+      ...state,
+      stage: "RECOURSE_OPENED",
+      protectionCase,
+      recourse,
+      ...(governedRecourseOperation === undefined ? {} : { governedRecourseOperation }),
+    });
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
     return publicView(state, runtime);
   });

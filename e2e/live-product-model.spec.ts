@@ -106,7 +106,7 @@ function governedPolicyTerminalView(): unknown {
   const protectionCase = value.protectionCase as Record<string, unknown>;
   const governedResult = value.governedResult as Record<string, unknown>;
   const receipt = value.receipt as Record<string, unknown>;
-  const policyHash = "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09";
+  const policyHash = "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e";
   const selectionHash = `sha256:${"9".repeat(64)}`;
   const planHash = `sha256:${"a".repeat(64)}`;
   value.schemaVersion = "mordant.custom-supervised-protection-view/2";
@@ -133,7 +133,7 @@ function governedPolicyTerminalView(): unknown {
       resultSemantic: "CONFLICT_STATUS_ONLY",
       selectedGovernedAction: "OPEN_LOCAL_CURE_PATH",
       actionOwner: "MORDANT_MANAGED_EXECUTION",
-      cureWindowSeconds: 600,
+      cureWindowSeconds: 86_400,
       deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS",
       escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN",
       requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",
@@ -148,6 +148,11 @@ function governedPolicyTerminalView(): unknown {
       actionPlanHash: planHash,
       selectedGovernedAction: "OPEN_LOCAL_CURE_PATH",
       actionOwner: "MORDANT_MANAGED_EXECUTION",
+      operationId: "99999999-9999-4999-8999-999999999999",
+      operationAuthorizationHash: `sha256:${"c".repeat(64)}`,
+      operationParametersDigest: `sha256:${"d".repeat(64)}`,
+      operationOutcomeDigest: `sha256:${"e".repeat(64)}`,
+      operationRecordHash: `sha256:${"f".repeat(64)}`,
       evidenceDigest: receipt.receiptDigest,
       evidenceClass: "CUSTOM_SUPERVISED_RECEIPT",
       settlementAuthorization: "NOT_AUTHORIZED",
@@ -280,7 +285,7 @@ test.describe("live product presentation model", () => {
     expect(JSON.stringify(model.receipt?.raw)).toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
   });
 
-  test("a terminal governed-policy view binds its selected action to existing evidence only", () => {
+  test("a terminal governed-policy view binds its selected action through the authorized operation to evidence", () => {
     const parsed = parseManagedWorkerView(governedPolicyTerminalView());
     expect(parsed).not.toBeNull();
     const model = adapt(parsed);
@@ -288,6 +293,9 @@ test.describe("live product presentation model", () => {
     expect(model.governedPolicy?.actionPlan?.selectedGovernedAction).toBe("OPEN_LOCAL_CURE_PATH");
     expect(model.governedPolicy?.actionPlan?.settlementAuthorization).toBe("NOT_AUTHORIZED");
     expect(model.governedPolicy?.actionEvidenceDigest).toBe(model.receipt?.raw?.receiptDigest);
+    expect(parsed?.governedPolicy?.actionEvidence?.operationAuthorizationHash).toMatch(/^sha256:/);
+    expect(parsed?.governedPolicy?.actionEvidence?.operationParametersDigest).toMatch(/^sha256:/);
+    expect(parsed?.governedPolicy?.actionEvidence?.operationOutcomeDigest).toMatch(/^sha256:/);
     expect(model.decisionRail?.responsibleNow).toContain("local protocol double");
     expect(model.decisionRail?.consequence).toContain("Settlement is not authorized");
 

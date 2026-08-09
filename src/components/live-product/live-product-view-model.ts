@@ -390,7 +390,7 @@ export type GovernedRecoursePolicyView = Readonly<{
   actionPlan: null | Readonly<{
     selectedGovernedAction: "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE";
     actionOwner: "MORDANT_MANAGED_EXECUTION";
-    cureWindowSeconds: 600 | null;
+    cureWindowSeconds: 86_400 | null;
     escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE";
     requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE";
     actionClass: "LOCAL_PROTOCOL_DOUBLE" | "EVIDENCE_ONLY";

@@ -97,7 +97,7 @@ function digest(value: unknown): value is Sha256Digest {
 }
 
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const MANAGED_POLICY_HASH = "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09";
+const MANAGED_POLICY_HASH = "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e";
 const RESULT_POLICY_ID = "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65";
 
 /**
@@ -211,7 +211,7 @@ export function parseCustomSupervisedProtectionView(value: unknown): CustomSuper
         || plan.requiredApproval !== "NONE_FOR_LOCAL_PROTOCOL_DOUBLE"
         || plan.settlementAuthorization !== "NOT_AUTHORIZED" || !digest(plan.planHash)) return null;
       if (governedResult.conflict) {
-        if (plan.selectedGovernedAction !== "OPEN_LOCAL_CURE_PATH" || plan.cureWindowSeconds !== 600
+        if (plan.selectedGovernedAction !== "OPEN_LOCAL_CURE_PATH" || plan.cureWindowSeconds !== 86_400
           || plan.deadlineRule !== "STARTS_WHEN_LOCAL_CURE_PATH_OPENS"
           || plan.escalation !== "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" || plan.actionClass !== "LOCAL_PROTOCOL_DOUBLE") return null;
       } else if (plan.selectedGovernedAction !== "RECORD_AND_CLOSE" || plan.cureWindowSeconds !== null
@@ -221,13 +221,18 @@ export function parseCustomSupervisedProtectionView(value: unknown): CustomSuper
       if (actionEvidence !== null) {
         if (!exactRecord(actionEvidence, [
           "schemaVersion", "policySelectionHash", "resultDigest", "actionPlanHash", "selectedGovernedAction",
-          "actionOwner", "evidenceDigest", "evidenceClass", "settlementAuthorization", "referenceHash",
+          "actionOwner", "operationId", "operationAuthorizationHash", "operationParametersDigest",
+          "operationOutcomeDigest", "operationRecordHash", "evidenceDigest", "evidenceClass",
+          "settlementAuthorization", "referenceHash",
         ])) return null;
         if (actionEvidence.schemaVersion !== "mordant.governed-action-evidence-reference/1"
           || actionEvidence.policySelectionHash !== selection.selectionHash
           || actionEvidence.resultDigest !== governedResult.digest || actionEvidence.actionPlanHash !== plan.planHash
           || actionEvidence.selectedGovernedAction !== plan.selectedGovernedAction
-          || actionEvidence.actionOwner !== plan.actionOwner || !digest(actionEvidence.evidenceDigest)
+          || actionEvidence.actionOwner !== plan.actionOwner || typeof actionEvidence.operationId !== "string"
+          || !RUN_ID.test(actionEvidence.operationId) || !digest(actionEvidence.operationAuthorizationHash)
+          || !digest(actionEvidence.operationParametersDigest) || !digest(actionEvidence.operationOutcomeDigest)
+          || !digest(actionEvidence.operationRecordHash) || !digest(actionEvidence.evidenceDigest)
           || actionEvidence.evidenceClass !== "CUSTOM_SUPERVISED_RECEIPT"
           || actionEvidence.settlementAuthorization !== "NOT_AUTHORIZED" || !digest(actionEvidence.referenceHash)
           || !record(value.receipt) || value.receipt.receiptDigest !== actionEvidence.evidenceDigest) return null;

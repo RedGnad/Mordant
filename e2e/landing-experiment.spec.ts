@@ -15,7 +15,7 @@ const DIGESTS = Object.freeze({
   evaluated: `sha256:${"5".repeat(64)}`,
   governed: `sha256:${"6".repeat(64)}`,
   resultPolicy: "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
-  policy: "sha256:33a5455061a346bd9fe4b5353c5f292d8015dc8f73c63cdf405b5f7f3d14fa09",
+  policy: "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e",
   selection: `sha256:${"9".repeat(64)}`,
   plan: `sha256:${"a".repeat(64)}`,
 });
@@ -77,7 +77,7 @@ function workerView(conflict: boolean | null, runId = RUN_ID): Record<string, un
         resultSemantic: "CONFLICT_STATUS_ONLY",
         selectedGovernedAction: conflict ? "OPEN_LOCAL_CURE_PATH" : "RECORD_AND_CLOSE",
         actionOwner: "MORDANT_MANAGED_EXECUTION",
-        cureWindowSeconds: conflict ? 600 : null,
+        cureWindowSeconds: conflict ? 86_400 : null,
         deadlineRule: conflict ? "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" : "NOT_APPLICABLE",
         escalation: conflict ? "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" : "NONE",
         requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",

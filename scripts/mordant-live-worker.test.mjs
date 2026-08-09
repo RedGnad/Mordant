@@ -18,6 +18,7 @@ import {
   recordCaseStart,
   readWorkerConfiguration,
   reconcileOnStartup,
+  runFixedJourney,
   signLaunchToken,
   verifyLaunchToken,
   WorkerError,
@@ -199,6 +200,31 @@ function mockEngineOrchestrator(behaviour) {
     exportProtectionEvidence: async () => { stages.push("export"); return view("COMPLETE"); },
   };
 }
+
+test("the managed worker advances cure only from the plan-authorized recourse outcome", async () => {
+  for (const opened of [true, false]) {
+    const stages = [];
+    let current = {
+      governedResult: { conflict: true },
+      recourse: null,
+    };
+    const orchestrator = {
+      readCustomSupervisedCase: async () => current,
+      preparePrivateMatch: async () => { stages.push("prepare"); },
+      submitParticipantPledge: async () => { stages.push("submit"); },
+      evaluatePrivateConflict: async () => { stages.push("evaluate"); },
+      releaseGovernedResult: async () => { stages.push("release"); },
+      openRecourseCase: async () => {
+        stages.push("recourse");
+        current = { ...current, recourse: { opened, reason: opened ? null : "SIGNED_RESULT_FALSE" } };
+      },
+      completeCureChronology: async () => { stages.push("chronology"); },
+      exportProtectionEvidence: async () => { stages.push("export"); },
+    };
+    await runFixedJourney(orchestrator, "11111111-1111-4111-8111-111111111111", async () => {});
+    assert.equal(stages.includes("chronology"), opened);
+  }
+});
 
 async function withWorker(config, orchestrator, run) {
   const worker = createLiveWorker({ configuration: config, createOrchestrator: () => orchestrator });

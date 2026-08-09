@@ -21,6 +21,8 @@ import {
 export const GOVERNED_RECOURSE_POLICY_SCHEMA = "mordant.governed-recourse-policy/1" as const;
 export const GOVERNED_RECOURSE_SELECTION_SCHEMA = "mordant.governed-recourse-policy-selection/1" as const;
 export const GOVERNED_ACTION_PLAN_SCHEMA = "mordant.governed-action-plan/1" as const;
+export const GOVERNED_RECOURSE_OPERATION_AUTHORIZATION_SCHEMA = "mordant.governed-recourse-operation-authorization/1" as const;
+export const GOVERNED_RECOURSE_OPERATION_RECORD_SCHEMA = "mordant.governed-recourse-operation-record/1" as const;
 export const GOVERNED_ACTION_EVIDENCE_SCHEMA = "mordant.governed-action-evidence-reference/1" as const;
 
 export const GOVERNED_RECOURSE_POLICY_ID = "mordant.managed-demo.facility-protection" as const;
@@ -64,7 +66,7 @@ export type GovernedRecoursePolicy = Readonly<{
 export type GovernedActionRule = Readonly<{
   selectedGovernedAction: "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE";
   actionOwner: "MORDANT_MANAGED_EXECUTION";
-  cureWindowSeconds: 600 | null;
+  cureWindowSeconds: 86_400 | null;
   deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" | "NOT_APPLICABLE";
   escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE";
   requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE";
@@ -95,7 +97,10 @@ const POLICY_BODY: GovernedRecoursePolicyBody = Object.freeze({
   conflict: Object.freeze({
     selectedGovernedAction: "OPEN_LOCAL_CURE_PATH",
     actionOwner: "MORDANT_MANAGED_EXECUTION",
-    cureWindowSeconds: 600,
+    // The existing managed local protocol double opens a fixed 24-hour cure
+    // window. The policy commits that existing behavior; it does not reuse the
+    // separate Adapter V2/on-chain 600-second configuration.
+    cureWindowSeconds: 86_400,
     deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS",
     escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN",
     requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",
@@ -341,6 +346,236 @@ export function evaluateManagedDemoGovernedRecoursePolicy(input: Readonly<{
   return Object.freeze({ ...body, planHash: planHash(body) });
 }
 
+export type GovernedRecourseOperationAuthorization = Readonly<{
+  schemaVersion: typeof GOVERNED_RECOURSE_OPERATION_AUTHORIZATION_SCHEMA;
+  caseId: Sha256Digest;
+  policySelectionHash: Sha256Digest;
+  planHash: Sha256Digest;
+  resultDigest: Sha256Digest;
+  selectedGovernedAction: GovernedActionRule["selectedGovernedAction"];
+  cureWindowSeconds: GovernedActionRule["cureWindowSeconds"];
+  deadlineRule: GovernedActionRule["deadlineRule"];
+  settlementAuthorization: "NOT_AUTHORIZED";
+  authorizationHash: Sha256Digest;
+}>;
+
+type GovernedRecourseOperationAuthorizationBody = Omit<
+  GovernedRecourseOperationAuthorization,
+  "authorizationHash"
+>;
+
+function operationAuthorizationHash(body: GovernedRecourseOperationAuthorizationBody): Sha256Digest {
+  return sha256Digest("MordantGovernedRecourseOperationAuthorization/v1", body);
+}
+
+/**
+ * Turns the already-verified policy plan into the only authorization consumed
+ * by a policy-enabled managed recourse operation.
+ */
+export function authorizeManagedDemoGovernedRecourseOperation(input: Readonly<{
+  selection: GovernedRecoursePolicySelection;
+  plan: GovernedActionPlan;
+}>): GovernedRecourseOperationAuthorization {
+  verifyManagedDemoGovernedRecoursePolicySelection(input.selection);
+  verifyManagedDemoGovernedActionPlan(input.plan);
+  if (input.plan.policySelectionHash !== input.selection.selectionHash) {
+    throw new GovernedRecoursePolicyError("OPERATION_SELECTION", "Governed operation plan is not bound to the committed selection");
+  }
+  const body: GovernedRecourseOperationAuthorizationBody = {
+    schemaVersion: GOVERNED_RECOURSE_OPERATION_AUTHORIZATION_SCHEMA,
+    caseId: input.selection.caseId,
+    policySelectionHash: input.selection.selectionHash,
+    planHash: input.plan.planHash,
+    resultDigest: input.plan.resultDigest,
+    selectedGovernedAction: input.plan.selectedGovernedAction,
+    cureWindowSeconds: input.plan.cureWindowSeconds,
+    deadlineRule: input.plan.deadlineRule,
+    settlementAuthorization: "NOT_AUTHORIZED",
+  };
+  return Object.freeze({ ...body, authorizationHash: operationAuthorizationHash(body) });
+}
+
+export function verifyManagedDemoGovernedRecourseOperationAuthorization(
+  authorization: GovernedRecourseOperationAuthorization,
+  selection: GovernedRecoursePolicySelection,
+  plan: GovernedActionPlan,
+): void {
+  exactKeys(authorization, [
+    "schemaVersion", "caseId", "policySelectionHash", "planHash", "resultDigest",
+    "selectedGovernedAction", "cureWindowSeconds", "deadlineRule", "settlementAuthorization",
+    "authorizationHash",
+  ], "OPERATION_AUTHORIZATION_FIELDS");
+  const expected = authorizeManagedDemoGovernedRecourseOperation({ selection, plan });
+  if (authorization.authorizationHash !== expected.authorizationHash
+    || authorization.schemaVersion !== expected.schemaVersion
+    || authorization.caseId !== expected.caseId
+    || authorization.policySelectionHash !== expected.policySelectionHash
+    || authorization.planHash !== expected.planHash
+    || authorization.resultDigest !== expected.resultDigest
+    || authorization.selectedGovernedAction !== expected.selectedGovernedAction
+    || authorization.cureWindowSeconds !== expected.cureWindowSeconds
+    || authorization.deadlineRule !== expected.deadlineRule
+    || authorization.settlementAuthorization !== "NOT_AUTHORIZED") {
+    throw new GovernedRecoursePolicyError("OPERATION_AUTHORIZATION", "Governed recourse operation authorization verification failed");
+  }
+}
+
+export type GovernedRecourseOperationRecord = Readonly<{
+  schemaVersion: typeof GOVERNED_RECOURSE_OPERATION_RECORD_SCHEMA;
+  operationId: string;
+  operationParametersDigest: Sha256Digest;
+  operationAuthorizationHash: Sha256Digest;
+  policySelectionHash: Sha256Digest;
+  planHash: Sha256Digest;
+  resultDigest: Sha256Digest;
+  selectedGovernedAction: GovernedActionRule["selectedGovernedAction"];
+  operationOutcome: "LOCAL_CURE_PATH_OPENED" | "NO_CONFLICT_RECORDED_AND_CLOSED";
+  recourseOutcomeDigest: Sha256Digest;
+  cureWindowSeconds: GovernedActionRule["cureWindowSeconds"];
+  cureStartedAtUnix: number | null;
+  cureDeadlineUnix: number | null;
+  settlementAuthorization: "NOT_AUTHORIZED";
+  operationRecordHash: Sha256Digest;
+}>;
+
+type GovernedRecourseOperationRecordBody = Omit<GovernedRecourseOperationRecord, "operationRecordHash">;
+
+export type ManagedGovernedRecourseOutcome = Readonly<
+  | { opened: true; record: Readonly<Record<string, unknown>> }
+  | { opened: false; reason: "SIGNED_RESULT_FALSE" }
+>;
+
+function operationRecordHash(body: GovernedRecourseOperationRecordBody): Sha256Digest {
+  return sha256Digest("MordantGovernedRecourseOperationRecord/v1", body);
+}
+
+function operationId(value: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value)) {
+    throw new GovernedRecoursePolicyError("OPERATION_ID", "Governed operation id must be a UUID");
+  }
+  return value;
+}
+
+function outcomeRecord(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new GovernedRecoursePolicyError("OPERATION_OUTCOME", "Governed recourse outcome record is required");
+  }
+  return value as Readonly<Record<string, unknown>>;
+}
+
+function outcomeUnix(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new GovernedRecoursePolicyError("CURE_WINDOW", `${field} must be a positive Unix timestamp`);
+  }
+  return value;
+}
+
+/**
+ * Verifies the existing operation outcome against the action that authorized
+ * it and retains the exact operation/outcome binding. It never derives the
+ * authorized action from the governed Boolean.
+ */
+export function recordManagedDemoGovernedRecourseOperation(input: Readonly<{
+  authorization: GovernedRecourseOperationAuthorization;
+  operationId: string;
+  operationParametersDigest: Sha256Digest;
+  recourse: ManagedGovernedRecourseOutcome;
+}>): GovernedRecourseOperationRecord {
+  const authorization = input.authorization;
+  digest(input.operationParametersDigest, "operationParametersDigest");
+  let operationOutcome: GovernedRecourseOperationRecord["operationOutcome"];
+  let cureStartedAtUnix: number | null;
+  let cureDeadlineUnix: number | null;
+
+  switch (authorization.selectedGovernedAction) {
+    case "OPEN_LOCAL_CURE_PATH": {
+      exactKeys(input.recourse, ["opened", "record"], "OPEN_LOCAL_CURE_PATH_OUTCOME");
+      if (input.recourse.opened !== true || authorization.cureWindowSeconds !== 86_400
+        || authorization.deadlineRule !== "STARTS_WHEN_LOCAL_CURE_PATH_OPENS") {
+        throw new GovernedRecoursePolicyError("CURE_WINDOW", "Local cure-path authorization semantics rejected");
+      }
+      const record = outcomeRecord(input.recourse.record);
+      if (record.caseId !== authorization.caseId || record.resultDigest !== authorization.resultDigest || record.open !== true) {
+        throw new GovernedRecoursePolicyError("OPERATION_OUTCOME", "Local cure-path outcome binding rejected");
+      }
+      cureStartedAtUnix = outcomeUnix(record.boundAtUnix, "boundAtUnix");
+      cureDeadlineUnix = outcomeUnix(record.cureDeadlineUnix, "cureDeadlineUnix");
+      if (cureDeadlineUnix - cureStartedAtUnix !== authorization.cureWindowSeconds) {
+        throw new GovernedRecoursePolicyError("CURE_WINDOW", "Local cure deadline disagrees with the committed policy");
+      }
+      operationOutcome = "LOCAL_CURE_PATH_OPENED";
+      break;
+    }
+    case "RECORD_AND_CLOSE":
+      exactKeys(input.recourse, ["opened", "reason"], "RECORD_AND_CLOSE_OUTCOME");
+      if (input.recourse.opened !== false || input.recourse.reason !== "SIGNED_RESULT_FALSE"
+        || authorization.cureWindowSeconds !== null || authorization.deadlineRule !== "NOT_APPLICABLE") {
+        throw new GovernedRecoursePolicyError("OPERATION_OUTCOME", "Record-and-close outcome binding rejected");
+      }
+      operationOutcome = "NO_CONFLICT_RECORDED_AND_CLOSED";
+      cureStartedAtUnix = null;
+      cureDeadlineUnix = null;
+      break;
+  }
+
+  const body: GovernedRecourseOperationRecordBody = {
+    schemaVersion: GOVERNED_RECOURSE_OPERATION_RECORD_SCHEMA,
+    operationId: operationId(input.operationId),
+    operationParametersDigest: input.operationParametersDigest,
+    operationAuthorizationHash: authorization.authorizationHash,
+    policySelectionHash: authorization.policySelectionHash,
+    planHash: authorization.planHash,
+    resultDigest: authorization.resultDigest,
+    selectedGovernedAction: authorization.selectedGovernedAction,
+    operationOutcome,
+    recourseOutcomeDigest: sha256Digest("MordantGovernedRecourseOperationOutcome/v1", input.recourse),
+    cureWindowSeconds: authorization.cureWindowSeconds,
+    cureStartedAtUnix,
+    cureDeadlineUnix,
+    settlementAuthorization: "NOT_AUTHORIZED",
+  };
+  return Object.freeze({ ...body, operationRecordHash: operationRecordHash(body) });
+}
+
+export function verifyManagedDemoGovernedRecourseOperationRecord(
+  record: GovernedRecourseOperationRecord,
+): void {
+  exactKeys(record, [
+    "schemaVersion", "operationId", "operationParametersDigest", "operationAuthorizationHash",
+    "policySelectionHash", "planHash", "resultDigest", "selectedGovernedAction", "operationOutcome",
+    "recourseOutcomeDigest", "cureWindowSeconds", "cureStartedAtUnix", "cureDeadlineUnix",
+    "settlementAuthorization", "operationRecordHash",
+  ], "OPERATION_RECORD_FIELDS");
+  const body: GovernedRecourseOperationRecordBody = {
+    schemaVersion: record.schemaVersion,
+    operationId: operationId(record.operationId),
+    operationParametersDigest: digest(record.operationParametersDigest, "operationParametersDigest"),
+    operationAuthorizationHash: digest(record.operationAuthorizationHash, "operationAuthorizationHash"),
+    policySelectionHash: digest(record.policySelectionHash, "policySelectionHash"),
+    planHash: digest(record.planHash, "planHash"),
+    resultDigest: digest(record.resultDigest, "resultDigest"),
+    selectedGovernedAction: record.selectedGovernedAction,
+    operationOutcome: record.operationOutcome,
+    recourseOutcomeDigest: digest(record.recourseOutcomeDigest, "recourseOutcomeDigest"),
+    cureWindowSeconds: record.cureWindowSeconds,
+    cureStartedAtUnix: record.cureStartedAtUnix,
+    cureDeadlineUnix: record.cureDeadlineUnix,
+    settlementAuthorization: record.settlementAuthorization,
+  };
+  const conflict = body.selectedGovernedAction === "OPEN_LOCAL_CURE_PATH"
+    && body.operationOutcome === "LOCAL_CURE_PATH_OPENED" && body.cureWindowSeconds === 86_400
+    && body.cureStartedAtUnix !== null && body.cureDeadlineUnix !== null
+    && outcomeUnix(body.cureDeadlineUnix, "cureDeadlineUnix") - outcomeUnix(body.cureStartedAtUnix, "cureStartedAtUnix") === 86_400;
+  const noConflict = body.selectedGovernedAction === "RECORD_AND_CLOSE"
+    && body.operationOutcome === "NO_CONFLICT_RECORDED_AND_CLOSED" && body.cureWindowSeconds === null
+    && body.cureStartedAtUnix === null && body.cureDeadlineUnix === null;
+  if (body.schemaVersion !== GOVERNED_RECOURSE_OPERATION_RECORD_SCHEMA
+    || (!conflict && !noConflict) || body.settlementAuthorization !== "NOT_AUTHORIZED"
+    || record.operationRecordHash !== operationRecordHash(body)) {
+    throw new GovernedRecoursePolicyError("OPERATION_RECORD", "Governed recourse operation record verification failed");
+  }
+}
+
 export type GovernedActionEvidenceReference = Readonly<{
   schemaVersion: typeof GOVERNED_ACTION_EVIDENCE_SCHEMA;
   policySelectionHash: Sha256Digest;
@@ -348,6 +583,11 @@ export type GovernedActionEvidenceReference = Readonly<{
   actionPlanHash: Sha256Digest;
   selectedGovernedAction: GovernedActionRule["selectedGovernedAction"];
   actionOwner: GovernedActionRule["actionOwner"];
+  operationId: string;
+  operationAuthorizationHash: Sha256Digest;
+  operationParametersDigest: Sha256Digest;
+  operationOutcomeDigest: Sha256Digest;
+  operationRecordHash: Sha256Digest;
   evidenceDigest: Sha256Digest;
   evidenceClass: "CUSTOM_SUPERVISED_RECEIPT";
   settlementAuthorization: "NOT_AUTHORIZED";
@@ -363,9 +603,17 @@ type GovernedActionEvidenceReferenceBody = Omit<GovernedActionEvidenceReference,
  */
 export function referenceGovernedActionEvidence(input: Readonly<{
   plan: GovernedActionPlan;
+  operation: GovernedRecourseOperationRecord;
   evidenceDigest: Sha256Digest;
 }>): GovernedActionEvidenceReference {
   verifyManagedDemoGovernedActionPlan(input.plan);
+  verifyManagedDemoGovernedRecourseOperationRecord(input.operation);
+  if (input.operation.policySelectionHash !== input.plan.policySelectionHash
+    || input.operation.planHash !== input.plan.planHash
+    || input.operation.resultDigest !== input.plan.resultDigest
+    || input.operation.selectedGovernedAction !== input.plan.selectedGovernedAction) {
+    throw new GovernedRecoursePolicyError("EVIDENCE_OPERATION", "Action evidence operation does not match the governed plan");
+  }
   const body: GovernedActionEvidenceReferenceBody = {
     schemaVersion: GOVERNED_ACTION_EVIDENCE_SCHEMA,
     policySelectionHash: input.plan.policySelectionHash,
@@ -373,6 +621,11 @@ export function referenceGovernedActionEvidence(input: Readonly<{
     actionPlanHash: input.plan.planHash,
     selectedGovernedAction: input.plan.selectedGovernedAction,
     actionOwner: input.plan.actionOwner,
+    operationId: input.operation.operationId,
+    operationAuthorizationHash: input.operation.operationAuthorizationHash,
+    operationParametersDigest: input.operation.operationParametersDigest,
+    operationOutcomeDigest: input.operation.recourseOutcomeDigest,
+    operationRecordHash: input.operation.operationRecordHash,
     evidenceDigest: digest(input.evidenceDigest, "evidenceDigest"),
     evidenceClass: "CUSTOM_SUPERVISED_RECEIPT",
     settlementAuthorization: "NOT_AUTHORIZED",
