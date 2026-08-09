@@ -131,7 +131,7 @@ export function LiveProduct({
   const statusMessage = model.notice !== null
     ? model.notice.title
     : busy && chapter === "AUTHORIZE"
-      ? "Creating the case and preparing the secure execution."
+      ? "Request received. Rechecking A-Pass before the secure execution opens."
       : model.eligibility.state === "CHECKING"
         ? "Reading the active A-Pass policy on Monad testnet."
         : chapter === "DECIDE"
@@ -159,17 +159,6 @@ export function LiveProduct({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [chapter]);
-
-  useEffect(() => {
-    if (!busy || chapter !== "AUTHORIZE") return;
-    const frame = window.requestAnimationFrame(() => {
-      statusRef.current?.scrollIntoView({
-        block: "start",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [busy, chapter]);
 
   const claimRange = (from: string, until: string): readonly [number, number] | null => {
     const start = Number(from);
@@ -446,8 +435,13 @@ export function LiveProduct({
               onClick={actions.onStart}
             >
               {busy ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
-              <span>{busy ? "Starting now · preparing the secure execution" : "Run the confidential check"}</span>
+              <span>{busy ? "Starting confidential check" : "Run the confidential check"}</span>
             </button>
+          )}
+          {model.intake !== "MANAGED_COMBINED" || managedDraft === null || !busy ? null : (
+            <p className={styles.launchFeedback} data-testid="managed-launch-feedback" role="status">
+              <strong>Request received.</strong> Rechecking A-Pass, then opening the secure execution.
+            </p>
           )}
         </section>
       )}
@@ -505,7 +499,6 @@ export function LiveProduct({
           aria-labelledby="chapter-act"
           data-testid="reveal"
         >
-          <p className={styles.eyebrow}>Governed result</p>
           <h2 id="chapter-act" className={styles.revealHeading}>
             {conflict ? "Conflict confirmed." : "No conflict."}
           </h2>
@@ -608,7 +601,6 @@ export function LiveProduct({
       {/* ------------------------------------------------------------ 5 PROVE */}
       {chapter !== "PROVE" || notice !== null || model.receipt === null ? null : (
         <section className={styles.chapter} aria-labelledby="chapter-prove" data-testid="prove">
-          <p className={styles.eyebrow}>Receipt sealed</p>
           <h2 id="chapter-prove" className={styles.chapterHeading}>
             Every step of this decision is verifiable.
           </h2>

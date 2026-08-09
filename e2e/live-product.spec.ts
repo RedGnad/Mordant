@@ -67,11 +67,13 @@ test.describe("the judge acceptance path", () => {
     await open(page, "starting");
     const status = page.getByTestId("live-status");
     await expect(status).toHaveAttribute("data-status", "active");
-    await expect(status).toContainText("Creating the case and preparing the secure execution.");
-    const action = page.getByRole("button", { name: "Starting now · preparing the secure execution" });
+    await expect(status).toContainText("Request received. Rechecking A-Pass before the secure execution opens.");
+    const action = page.getByRole("button", { name: "Starting confidential check" });
     await expect(action).toBeDisabled();
     await expect(action).toHaveAttribute("data-loading", "true");
     await expect(action.locator("[class*='buttonLoader']")).toBeVisible();
+    await expect(page.getByTestId("managed-launch-feedback"))
+      .toContainText("Request received. Rechecking A-Pass, then opening the secure execution.");
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {
@@ -119,6 +121,8 @@ test.describe("conflict reveal", () => {
     await expect(reveal.getByTestId("claim-timeline")).toBeVisible();
     await expect(reveal.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
     await expect(page.getByTestId("managed-private-inputs-unavailable")).toHaveCount(0);
+    await expect(page.getByText("Governed result", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Receipt sealed", { exact: true })).toHaveCount(0);
 
     const rail = page.getByTestId("decision-rail").first();
     await expect(rail).toContainText("Apply approved cure policy after conflict review");

@@ -1561,29 +1561,25 @@
   stroke: none;
 }
 
-.flowRouteReveal {
+.flowRoutePaint {
   fill: none;
-  stroke: none;
-}
-
-.flowRouteSegment {
-  fill: none;
+  stroke: url("#integration-route-colours");
   stroke-linecap: butt;
   stroke-linejoin: miter;
   stroke-width: 8;
   vector-effect: non-scaling-stroke;
 }
 
-.flowRouteInput {
-  stroke: var(--receivable);
+.flowStopInput {
+  stop-color: var(--receivable);
 }
 
-.flowRouteDecision {
-  stroke: var(--protection);
+.flowStopDecision {
+  stop-color: var(--protection);
 }
 
-.flowRouteAction {
-  stroke: var(--action);
+.flowStopAction {
+  stop-color: var(--action);
 }
 
 .integrationSignal {

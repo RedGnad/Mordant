@@ -88,6 +88,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
   // Seeded in an effect rather than during render: reading the clock while
   // rendering is impure and would differ between server and client.
   const startedAt = useRef<number | null>(null);
+  const startingRef = useRef(false);
 
   const terminal = view?.stage === "ABORTED" || (view?.stage === "COMPLETE" && view.receipt !== null);
 
@@ -147,11 +148,16 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
   }, []);
 
   const start = useCallback(async () => {
+    if (startingRef.current) return;
     const { windows, bad, message } = parse();
     setInvalid(bad);
     setFormError(message);
     if (windows === null) return;
+    startingRef.current = true;
     setStarting(true);
+    // Commit and paint the local acknowledgement before token issuance or the
+    // worker request can spend several seconds waiting on external services.
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     try {
       const outcome = await startManagedRun(eligibility.holderAddress ?? "", windows);
       if (outcome.kind === "BUSY") {
@@ -187,6 +193,7 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
       startedAt.current = Date.now();
       window.history.pushState(null, "", `/protection/live?runId=${outcome.view.runId}`);
     } finally {
+      startingRef.current = false;
       setStarting(false);
     }
   }, [parse, eligibility.holderAddress, draft]);

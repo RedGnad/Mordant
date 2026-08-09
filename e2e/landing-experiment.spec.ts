@@ -577,12 +577,23 @@ test("the full managed run gives immediate start feedback and preserves its loca
 
   await page.getByRole("button", { name: "Use the public test holder" }).click();
   await expect(page.getByRole("heading", { name: "Two private claims on the same receivable." })).toBeVisible();
-  await page.getByRole("button", { name: "Run the confidential check" }).click();
+  const runButton = page.getByRole("button", { name: "Run the confidential check" });
+  await runButton.scrollIntoViewIfNeeded();
+  const scrollBeforeStart = await page.evaluate(() => window.scrollY);
+  await runButton.click();
 
   await expect(page.getByTestId("live-status")).toHaveAttribute("data-status", "active");
   await expect(page.getByTestId("live-status"))
-    .toContainText("Creating the case and preparing the secure execution");
+    .toContainText("Request received. Rechecking A-Pass before the secure execution opens");
   await expect(page.locator("[class*='chapterFrame']")).toHaveAttribute("aria-busy", "true");
+  const startingButton = page.getByRole("button", { name: "Starting confidential check" });
+  await expect(startingButton).toBeDisabled();
+  await expect(startingButton.locator("[class*='buttonLoader']")).toBeVisible();
+  await expect(page.getByTestId("managed-launch-feedback"))
+    .toContainText("Request received. Rechecking A-Pass, then opening the secure execution.");
+  await page.waitForTimeout(250);
+  const scrollAfterStart = await page.evaluate(() => window.scrollY);
+  expect(Math.abs(scrollAfterStart - scrollBeforeStart)).toBeLessThanOrEqual(2);
   await expect(page.getByTestId("claim-timeline")).toBeVisible();
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     await page.screenshot({ path: testInfo.outputPath("full-live-starting.png") });

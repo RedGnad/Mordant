@@ -779,6 +779,21 @@
   animation: liveStatusSpin 700ms linear infinite;
 }
 
+.launchFeedback {
+  max-width: 62ch;
+  margin: 12px 0 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--action);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.launchFeedback strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .secondary,
 .disclose {
   background: transparent;

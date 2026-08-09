@@ -179,11 +179,10 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
-    .toHaveAttribute("d", "M150 120H390L470 40H660L740 120H1050");
-  await expect(page.locator("[class*='flowRouteDecision']"))
-    .toHaveAttribute("d", "M380 120H390L470 40H660L740 120H750");
-  await expect(page.locator("[class*='flowRouteAction']"))
-    .toHaveAttribute("d", "M750 120H1050");
+    .toHaveAttribute("d", "M150 120H425L505 40H695L775 120H1050");
+  await expect(page.locator("[class*='flowRoutePaint']"))
+    .toHaveAttribute("d", "M150 120H425L505 40H695L775 120H1050");
+  await expect(page.locator("[data-integration-route-segment]")).toHaveCount(0);
   await expect(page.locator("[class*='flowNodes']")).toHaveCount(0);
   for (const section of [
     page.getByTestId("mini-live-check"),
@@ -299,9 +298,9 @@ test("the responsibility route stays attached to its signal in both directions",
   await page.goto("/");
 
   const integration = page.locator('[aria-label="Integration stages"]');
-  const reveal = page.locator("[class*='flowRouteReveal']");
+  const reveal = page.locator("[class*='flowRoutePaint']");
   const signal = page.locator("[class*='integrationSignal']");
-  const expectedOffsets = [0.762, 0.635, 0.31, 0];
+  const expectedOffsets = [0.726, 0.598, 0.274, 0];
   const expectedColours = [
     "var(--receivable)",
     "var(--protection)",
@@ -322,7 +321,7 @@ test("the responsibility route stays attached to its signal in both directions",
 
     const connection = await signal.evaluate((node) => {
       const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-      const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+      const reveal = document.querySelector<SVGPathElement>("[class*='flowRoutePaint']");
       const signalMatrix = (node as SVGGElement).getScreenCTM();
       const pathMatrix = path?.getScreenCTM();
       if (path === null || reveal === null
@@ -340,23 +339,11 @@ test("the responsibility route stays attached to its signal in both directions",
     });
     expect(connection).not.toBeNull();
     expect(connection?.routeToSignal).toBeLessThanOrEqual(1);
-
-    const visibleRoute = await page.locator("[data-integration-route-segment]").evaluateAll((segments) => {
-      const route = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-      const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
-      if (route === null || reveal === null) return null;
-      const visibleLength = segments.reduce((total, segment) => {
-        const dash = Number.parseFloat(segment.getAttribute("stroke-dasharray") ?? "0");
-        return total + (Number.isFinite(dash) ? dash : 0);
-      }, 0);
-      const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
-      return { visibleLength, signalDistance: route.getTotalLength() * progress };
-    });
-    expect(visibleRoute).not.toBeNull();
-    expect(Math.abs((visibleRoute?.visibleLength ?? 0) - (visibleRoute?.signalDistance ?? 0)))
-      .toBeLessThanOrEqual(1);
   }
 
+  // One painted path owns every colour and corner. Separate painted segments
+  // would be able to expose a seam even while their summed lengths look right.
+  await expect(page.locator("[class*='flowRoutePaint']")).toHaveCount(1);
   await expect(page.locator("[class*='integrationTether']")).toHaveCount(0);
 
   const centering = await page.locator("[class*='flowGraphic']").evaluate((svg) => {
@@ -365,14 +352,23 @@ test("the responsibility route stays attached to its signal in both directions",
     if (path === null || matrix === null) return null;
     const start = new DOMPoint(150, 120).matrixTransform(matrix);
     const end = new DOMPoint(1050, 120).matrixTransform(matrix);
+    const plateauStart = new DOMPoint(505, 40).matrixTransform(matrix);
+    const plateauEnd = new DOMPoint(695, 40).matrixTransform(matrix);
     const bounds = svg.getBoundingClientRect();
+    const stages = document.querySelector<HTMLElement>('[aria-label="Integration stages"]')
+      ?.getBoundingClientRect();
     return {
       routeCenter: (start.x + end.x) / 2,
       canvasCenter: bounds.left + (bounds.width / 2),
+      plateauCenter: (plateauStart.x + plateauEnd.x) / 2,
+      stagesCenter: stages === undefined ? null : stages.left + (stages.width / 2),
     };
   });
   expect(centering).not.toBeNull();
   expect(Math.abs((centering?.routeCenter ?? 0) - (centering?.canvasCenter ?? 0))).toBeLessThanOrEqual(1);
+  expect(centering?.stagesCenter).not.toBeNull();
+  expect(Math.abs((centering?.plateauCenter ?? 0) - (centering?.stagesCenter ?? 0)))
+    .toBeLessThanOrEqual(1);
 
   const earlierStage = integration.getByRole("button").nth(1);
   await earlierStage.evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
@@ -387,7 +383,7 @@ test("the responsibility route stays attached to its signal in both directions",
   ))).toBe("var(--protection)");
   const reverseRouteToSignal = await signal.evaluate((node) => {
     const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-    const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+    const reveal = document.querySelector<SVGPathElement>("[class*='flowRoutePaint']");
     const signalMatrix = (node as SVGGElement).getScreenCTM();
     const pathMatrix = path?.getScreenCTM();
     if (path === null || reveal === null || signalMatrix === null || pathMatrix === null) return null;
