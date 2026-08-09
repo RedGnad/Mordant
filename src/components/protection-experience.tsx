@@ -119,8 +119,8 @@ const OPERATION: Readonly<Record<string, Readonly<{ api: string; label: string; 
   },
   openRecourseCase: {
     api: "openRecourseCase",
-    label: "Apply governed result",
-    support: "Verifies trusted pins and either opens the cure record or refuses recourse.",
+    label: "Apply retained local rule",
+    support: "Verifies the historical retained-case pins and records its local protocol-double branch.",
     waiting: "The local recourse protocol double is verifying the signed-result pins.",
   },
   completeCureChronology: {
@@ -1447,7 +1447,7 @@ export function ProtectionExperience({
               </div>
 
               <section className={styles.timeline} aria-labelledby="timeline-heading">
-                <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → recourse</h2></header>
+                <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → retained local rule</h2></header>
                 <ol>
                   {activeEvidence === null ? (
                     <li><time>Provisional</time><i aria-hidden="true" /><div><strong>{provisionalStage?.stageLabel ?? "Canonical chronology pending"}</strong><span>BACKEND STAGE · NOT FINAL SIGNED CHRONOLOGY</span></div></li>
@@ -1496,5 +1496,5 @@ export function ProtectionExperience({
 }
 
 const FHE_PROFILE_LABEL = "BGV · IdentityFullFHE256 · N15";
-const PRODUCT_CLAIM = "Mordant’s fixed local BGV circuit evaluates two synthetic pledge fixtures and releases one governed Boolean into a local recourse protocol double.";
+const PRODUCT_CLAIM = "This historical retained case evaluates two synthetic pledge fixtures, releases governed conflict status, then applies its retained local rule to record a protocol-double recourse artifact. It predates the current managed V2 Governed Recourse Policy authority chain.";
 const PRODUCT_DISCLOSURE = "The Cleanverse / Monad testnet identity is retained real observed provenance. No real lender funds or submissions are used. The designated decryptor is trusted; threshold release, native Monad FHE, live settlement and production custody isolation are not claimed.";

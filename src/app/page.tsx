@@ -5,12 +5,12 @@ import { CCP_PUBLIC_TEST_HOLDER } from "@/lib/protection/ccp-eligibility";
 import { readLiveTokenConfiguration } from "@/lib/protection/live-launch-token";
 
 export const metadata: Metadata = {
-  title: "Recourse for tokenized receivables",
-  description: "Mordant turns confirmed receivables exceptions into governed action and verifiable evidence.",
+  title: "The recourse layer for tokenized private credit",
+  description: "Run Mordant's first workflow from private conflict status through precommitted policy, bounded action and evidence.",
 };
 
 /**
- * The landing renders its live check only when the worker is actually reachable.
+ * The landing renders its live proof only when the worker is actually reachable.
  *
  * Reading the configuration here, server side, means the page never offers a run
  * it cannot start, and no environment value reaches the client. A missing worker

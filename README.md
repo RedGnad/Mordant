@@ -2,322 +2,325 @@
 
 **The recourse layer for tokenized private credit.**
 
-When something goes wrong with a financed asset, the question is rarely "did it happen". It is
-"who is responsible, by when, and what is owed". Mordant turns a confirmed exception on a tokenized
-receivable into a governed, auditable consequence, without requiring anyone to publish the private
-records that revealed it.
-
-Its first workflow is **Conflicting Pledge Protection**: detecting whether two lenders hold
-overlapping financing claims against the same receivable, when neither will disclose its book.
+Mordant turns an authenticated private-credit case state into a policy-governed bounded action and
+verifiable evidence. Its first implemented workflow is **Conflicting Pledge Protection**: two private
+financing claims against one receivable are evaluated under encryption, the signed conflict status
+enters a policy committed before result exposure, and the resulting managed operation is bound to a
+receipt.
 
 > Conflict became recourse.
 
-|  |  |
+| Product level | What is implemented or qualified |
 | --- | --- |
-| **The problem** | One receivable can carry two financing claims. Publishing a pledge book is how a lender loses its book, so the windows stay private, the overlap stays invisible, and the safe decision is to stop lending. |
-| **What Mordant adds** | The private decision, and the consequence that follows it. Mordant detects whether two claims collide **without either lender disclosing its window**, then turns a confirmed collision into recourse that anyone can verify afterwards. |
-| **Why Cleanverse** | Cleanverse establishes what the asset is and who may hold a claim against it. Mordant needs all three of its primitives and provides none of them. |
-| **What is genuinely live** | Real BGV homomorphic evaluation, a governed Ed25519 signed result, and a real bounded settlement on Monad testnet: a 600-second cure window that expired uncured, permissionless finalization, and both aUSDC claims paid and reconciled. |
-| **Where to verify it** | Run the check yourself on the [live product](https://mordant-two.vercel.app), then inspect the [completed on-chain recourse](https://mordant-two.vercel.app/protection/verified-run). |
+| **Mordant** | Recourse infrastructure for tokenized private credit: governed result, precommitted policy, bounded operation and evidence. |
+| **First implemented workflow** | Conflicting Pledge Protection. It establishes whether two submitted claim windows conflict; it is the concrete first workflow, not the entire product category. |
+| **Current live managed proof** | A fresh real BGV evaluation followed by the current Governed Recourse Policy, a bounded local operation and operation-bound evidence. |
+| **Separate verified execution** | A retained hardened two-wallet Adapter V2 run with a real 600-second cure window, finalization, aUSDC claims and reconciliation on Monad testnet. |
+| **Roadmap** | Participant-originated institutional encryption, production execution routing and N=3 private conflict graphs. These are not current capabilities on this branch. |
 
-**Cleanverse verifies asset provenance and identity plus participant eligibility, not legal validity
-or enforceability. Mordant privately evaluates whether claim windows conflict. The governed result
-establishes only that conflict status; approved policy and human review determine recourse actions.**
+The current managed authority chain is:
 
-This is a bounded hackathon MVP built for Cleanverse Build: Trusted Assets, on Monad testnet. It is
-not production authorized. See [What is real, and what is bounded](#what-is-real-and-what-is-bounded).
+```text
+private claims
+  → governed cryptographic result
+  → precommitted Governed Recourse Policy
+  → verified governed action plan
+  → durable plan-derived operation authorization
+  → bounded managed operation
+  → verified action-compatible outcome
+  → operation-bound evidence
+```
+
+**The governed result establishes conflict or no conflict only.** It does not independently
+authorize recourse, operational action, settlement or legal judgment, and it establishes no legal
+priority, responsibility, ownership, fraud, default, payout recipient or payout amount. The
+precommitted policy selects the bounded managed branch. Human and institutional processes remain
+responsible for legal and operational judgment.
+
+This is a bounded hackathon MVP built for Cleanverse Build: Trusted Assets on Monad testnet. It is
+not production authorized.
 
 ## What Mordant does
 
-A tokenized receivable can be public while the financing commitments against it stay private, held
-separately by each lender. The token records the on-chain receivable position. It does not establish
-legal ownership or say who else was already promised the same cash flow.
+Private-credit exceptions are rarely useful as unauthenticated alerts. A usable recourse layer has
+to preserve the private fact boundary, authenticate the case state, apply a policy that was fixed
+before the answer was known, authorize only the operation that policy permits, and retain evidence
+that binds the outcome back to that authority.
 
-That gap is expensive. The workflow does not require either lender to disclose its pledge window to
-the counterparty to determine whether two claims overlap. So the question that matters most, *is this
-receivable already pledged elsewhere*, can be evaluated without that counterparty disclosure. While
-it stays unanswered the position is stuck, because acting on a suspected conflict without proof is
-as risky as ignoring it.
+Mordant implements that chain for one concrete workflow today. The design separates:
 
-Mordant builds a confidential path from those private records to an auditable decision, and then
-keeps going. A confirmed exception does not just produce an alert: approved policy and human review
-determine the action owner, deadline and escalation, while deployment configuration determines
-settlement terms.
+- **result authority** — the signed conflict status;
+- **policy authority** — a closed policy branch committed before result exposure;
+- **operation authority** — a durable authorization derived from that selected plan;
+- **evidence** — the verified operation and outcome bound back to the result and policy.
 
-### First workflow: Conflicting Pledge Protection
+This separation is why a Boolean cannot silently become a cure, payout or legal conclusion.
 
-The wedge is deliberately narrow, because it is the one that can be proved end to end today.
+## First implemented workflow: Conflicting Pledge Protection
 
-An originator finances the same invoice twice. Lender A already holds a pledge over it. Lender B is
-about to lend against it. Each holds a private window during which its claim is active. If those
-windows overlap, the same cash flow is promised twice, and one of them will not be repaid.
+One tokenized receivable can be referenced by two private financing claims. Conflicting Pledge
+Protection evaluates whether their active windows intersect without requiring either counterparty
+to disclose its window to the other.
 
-The workflow does not require either lender to disclose its pledge window to the counterparty.
-Mordant evaluates whether the two windows intersect while both remain encrypted, and releases a
-single signed Boolean. Under the demo's preconfigured recourse policy, conflict maps to a cure window
-against a funded reserve; no conflict maps to recourse refusal rather than silence.
+The implementation is deliberately exact:
 
-The circuit is fixed and pinned (`mordant.identity-full-fhe-256` v5, profile
-`mordant.bgv.identity-full-fhe-256.n15/v1`), so neither party chooses what gets computed.
+1. Cleanverse provenance identifies MINV01 and A-Pass establishes participant eligibility.
+2. A fixed pinned BGV circuit evaluates two claim windows under encryption.
+3. A designated governed decryptor recomputes the circuit and signs the conflict/no-conflict result.
+4. The current managed policy consumes that result and selects one closed branch.
+5. The resulting plan authorizes one existing bounded managed operation.
+6. The terminal receipt binds the operation and its outcome to that authorization.
 
-## Try it live
+The circuit is `mordant.identity-full-fhe-256` v5 under profile
+`mordant.bgv.identity-full-fhe-256.n15/v1`. The evaluator receives ciphertext artifacts and has no
+decryption key. The governed decryptor is a separate, Mordant-controlled designated process; this
+repository therefore does **not** make the global claim that “Mordant holds no decryption key.”
+
+Conflicting Pledge Protection does not prove invoice authenticity, legal validity, enforceability,
+assignment priority, fraud or default. It is also not a universal duplicate-financing detector.
+
+## Try the current live managed proof
 
 **<https://mordant-two.vercel.app>**
 
-The landing page runs a real encrypted check. There is no fixture path behind it.
+The public landing runs the first workflow through the existing managed execution path:
 
-- Two synthetic pledge windows, overlapping by default, are prepared under one eligible test context.
-- Real BGV evaluation runs on the fixed circuit. The evaluator receives ciphertexts and holds no
-  decryption key.
-- A designated decryptor independently recomputes the circuit and signs the result. No outcome is
-  shown before that signature exists.
-- **Typically around 30 seconds** to the governed result. Two runs measured on the current
-  production deployment took 28 and 30 seconds.
-- One execution slot exists by design. A second visitor sees an explicit BUSY state and waits, rather
-  than running in parallel or failing silently.
+- the visitor places two synthetic financing claims on one shared demo timeline;
+- the managed intake validates each claim independently and does not predict their relationship;
+- Mordant managed infrastructure receives the demo values and prepares the encrypted artifacts;
+- the fixed BGV evaluation is real, and the evaluator receives ciphertexts only;
+- no outcome appears until the governed result exists;
+- policy `mordant.managed-demo.facility-protection@1` was selected before result exposure;
+- conflict selects a **24-hour local protocol-double cure path**; no conflict selects record-and-close;
+- settlement authorization is `NOT_AUTHORIZED` in both managed branches;
+- the bounded operation and terminal evidence are bound to the selected action plan.
 
-The check ends at the governed result. What happens next with real money is recorded, not re-run on
-demand: **[see the completed on-chain recourse](https://mordant-two.vercel.app/protection/verified-run)**.
+This live proof is current and reproducible. It is **not** a fresh Monad/aUSDC settlement and it is
+not two independent institutions. The public deployment exposes one BGV slot, so a concurrent
+visitor receives an explicit busy response rather than an invented progress state.
 
-### Two execution profiles
+The completed real on-chain execution is a separate proof surface:
+**[verify the hardened run](https://mordant-two.vercel.app/protection/verified-run)**.
 
-Mordant implements two ways for claims to enter a case, and the worker holds exactly one BGV slot,
-so they are mutually exclusive at deployment time.
+## Governed Recourse Policy
 
-| Profile | What it is | Status |
+The managed policy is a real authority layer, not explanatory copy.
+
+| Field | Current managed V2 value |
+| --- | --- |
+| Policy | `mordant.managed-demo.facility-protection@1` |
+| Hash | `sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e` |
+| Selection | Committed before result exposure |
+| Conflict branch | `OPEN_LOCAL_CURE_PATH` |
+| Managed cure duration | `86,400` seconds — 24 hours |
+| No-conflict branch | `RECORD_AND_CLOSE` |
+| Managed operation class | Local protocol double / evidence only |
+| Settlement authorization | `NOT_AUTHORIZED` |
+
+The policy is code/deployment committed. Mordant does not currently provide an institution-facing
+policy editor or a cryptographic institution-approval attestation. The policy does not determine
+legal truth and does not authorize settlement. See
+[Governed Recourse Policy](docs/governed-recourse-policy.md) for the schemas and binding chain.
+
+## Privacy and intake profiles
+
+Privacy claims are scoped to the component and profile that actually provides them.
+
+| Boundary | Current truth |
+| --- | --- |
+| **Managed combined intake** | Active public profile. Managed infrastructure receives both synthetic demo windows during intake/preparation, then performs real BGV evaluation. |
+| **Direct participant admission** | Implemented and tested. Two distinct wallets separately sign `ParticipantAdmissionV1`; this proves separate authorization, not participant-local encryption. |
+| **Participant-originated native CLI** | **Not integrated in this `origin/main`.** It remains the intended institutional-privacy profile and must be requalified before being promoted as current product truth. |
+| **Evaluator** | Receives ciphertext artifacts only and has no decryption key. |
+| **Governed decryptor** | Designated, trusted and Mordant-controlled; not threshold or independently operated. |
+
+The workflow does not require one lender to disclose its pledge window to the counterparty. That is
+different from claiming that no Mordant infrastructure receives plaintext. Browser/device BGV,
+participant-controlled decryption, threshold release, semantic equality proofs and ERC-1271
+support are not current capabilities.
+
+The participant-originated target is intentionally a profile of the same recourse system, not a
+second product: encrypt in a participant-controlled native environment, authenticate the ciphertext
+artifact, then admit it to Mordant coordination. It is roadmap until merged and requalified.
+
+## Cleanverse responsibility boundary
+
+| Primitive | What it establishes | Responsibility |
 | --- | --- | --- |
-| **Managed combined intake** | One eligible context submits both windows. Universal access, no wallet required. | **Active on the public deployment**, so every judge can run a real check. |
-| **Direct participant admission** | Two separate wallets each sign their own `ParticipantAdmissionV1` claim and never see the other's window. | Implemented, tested and qualified. Proven end to end by the hardened run below. |
+| **MINV01** | Cleanverse provenance and asset identity used by this case; not invoice authenticity or legal enforceability. | Cleanverse |
+| **A-Pass** | Participant eligibility observed from the configured on-chain policy. | Cleanverse |
+| **Private conflict status** | Whether the submitted claim windows conflict. | Mordant governed result |
+| **Bounded action branch** | The managed operation permitted for that result. | Mordant Governed Recourse Policy |
+| **aUSDC rail** | The compliant rail used by the separate historical hardened settlement. | Cleanverse / Monad deployment configuration |
 
-The public deployment selects the managed profile for universal access. The two-wallet rail is not
-removed: it remains in the codebase, runs in CI on every change, and is what produced the
-authoritative settlement recorded below. Re-enabling it is one environment variable and a worker
-redeploy. Details in [reviewer access](docs/reviewer-access.md).
+Cleanverse does not evaluate pledge windows. Mordant does not issue an A-Pass or mint the
+receivable. The original receivable stays intact through both demonstrated outcomes.
 
-The managed check prepares both windows on the visitor's behalf. It is a real encrypted decision,
-and it is **not** two independent wallets.
+## Proof surfaces
 
-## Why Cleanverse
+### Current managed V2 proof
 
-Mordant is a decision and consequence layer. It does not tokenize assets, decide who is allowed to
-hold them, or operate a compliant settlement rail. Cleanverse provides all three, and without them
-there is nothing to be private *about*.
+The fresh public run proves the current result-to-policy chain. Its receipt carries eligibility
+observation, participant/evaluated artifact digests, governed result digest, policy selection,
+selected plan, durable operation authorization and action-compatible evidence. Exact hashes and raw
+records are progressively disclosed for technical verification.
 
-| Primitive | What it establishes | Whose responsibility |
-| --- | --- | --- |
-| **MINV01** | Receivable identity with verified Cleanverse provenance. This is the RWA identity used in this case. | Cleanverse |
-| **A-Pass** | Participant eligibility: which wallets may hold a claim against it. | Cleanverse |
-| **aUSDC** | The compliant settlement rail the consequence is paid on. A rail, not the receivable. | Cleanverse / Monad |
-| **Conflict decision** | Whether the private claims collide, and the governed signature over that answer. | **Mordant** |
-
-These are not interchangeable branding around a generic application. The A-Pass is what makes
-"eligible participant" a checkable on-chain fact rather than an assertion, and the compliance
-verifier refuses a transfer to an ineligible address at the token level, which makes payout
-eligibility token-policy-enforced rather than merely computed. Remove the A-Pass and the participants
-are anonymous addresses; remove the compliant rail and the consequence is a number in a database.
-
-Cleanverse never sees a pledge window, and does not perform the conflict evaluation. Mordant never
-issues an A-Pass or mints the receivable.
-
-## How it works
+For the conflict branch, the local cure deadline must satisfy:
 
 ```text
-Receivable identity            MINV01, with verified Cleanverse provenance
-  ↓
-Eligible participant context   A-Pass checked live on Monad at submit time
-  ↓
-Private claims                 two windows, encrypted before they leave their owner's control
-  ↓
-BGV encrypted evaluation       fixed circuit over ciphertexts; the evaluator holds no decryption key
-  ↓
-Governed signed result         a designated decryptor recomputes, must match, then signs one Boolean
-  ↓
-Recourse policy application    configured demo policy: cure window, permissionless finalize,
-                               aUSDC claims on Adapter V2
-  ↓
-Verifiable evidence            a receipt binding every digest, publicly served and re-verified
+cureDeadlineUnix - boundAtUnix = 86,400 seconds
 ```
 
-The original receivable claim survives either outcome. There is no burn and no transfer of the
-underlying note: the reserve is what moves.
+This local action does not move real funds and is not Adapter V2 settlement authorization.
 
-## Verified live run
+### Separate verified historical on-chain execution
 
-One hardened two-wallet journey, executed end to end on Monad testnet. This is the authoritative
-qualification.
+Run `e618abc2-0ac7-4d79-b201-44959a54b68c` is a hardened two-wallet execution retained exactly as
+it occurred. It predates the current managed V2 policy-authority chain and must not be presented as
+a continuation of a fresh managed run.
 
-| | |
+| Evidence | Verified historical value |
 | --- | --- |
-| Run | `e618abc2-0ac7-4d79-b201-44959a54b68c` |
 | Case adapter | [`0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`](https://testnet.monadexplorer.com/address/0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1) |
-| Participants | two canonical wallets, each A-Pass verified and **separately admitted** under its own signature |
-| Private decision | real BGV on the fixed circuit, governed Ed25519 result, **conflict confirmed** |
-| ReleaseConsumed | [`0x09b9bbfb…3936d651`](https://testnet.monadexplorer.com/tx/0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651) |
-| Cure window | a real 600 seconds, allowed to expire uncured |
-| Finalize | [`0xc74051d8…45e4fc34`](https://testnet.monadexplorer.com/tx/0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34), permissionless |
-| Claims | [`0x4831b0a7…ecbea819`](https://testnet.monadexplorer.com/tx/0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819) 0.002400 aUSDC · [`0x36296bf9…430bfc50`](https://testnet.monadexplorer.com/tx/0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb81430bfc50) 0.001600 aUSDC |
-| Reconciliation | reserve 0.004000 to 0, both holders paid exactly, liabilities cleared, adapter solvent, **MINV01 untouched** |
+| Participants | Two canonical wallets, A-Pass checked and separately admitted |
+| Governed result | Conflict confirmed under the historical architecture |
+| Release consumed | [`0x09b9bbfb…3936d651`](https://testnet.monadexplorer.com/tx/0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651) |
+| Cure window | **600 seconds**, allowed to expire uncured |
+| Finalization | [`0xc74051d8…45e4fc34`](https://testnet.monadexplorer.com/tx/0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34), permissionless |
+| Holder claims | [`0x4831b0a7…ecbea819`](https://testnet.monadexplorer.com/tx/0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819) 0.002400 aUSDC · [`0x36296bf9…430bfc50`](https://testnet.monadexplorer.com/tx/0x36296bf9db21123fcd155ec95c8f7a4db31b5158dd42139b79bb81430bfc50) 0.001600 aUSDC |
+| Reconciliation | Reserve cleared, both configured claims paid, adapter solvent, MINV01 unchanged |
 
-Read it as a product receipt at
-[`/protection/verified-run`](https://mordant-two.vercel.app/protection/verified-run), or as evidence
-in [`docs/direct-participant-bridge-evidence.md`](docs/direct-participant-bridge-evidence.md) and the
-`docs/evidence/hardened-*` artifacts.
+In this historical run, the governed result established conflict, the preconfigured historical demo
+policy applied, Adapter V2 opened the cure path, and deployment configuration determined holders
+and payout amounts. The Boolean carried none of those amounts. Historical receipts and digested
+evidence remain unchanged.
 
-An earlier complete journey, run `76005a0c…` on adapter `0x00efE6AA…`, is retained under
-`docs/evidence/activation-*`. It settled for real, but it predates the settlement-time admission
-proofs, the external source pin and the deployment-proof binding, so it is history rather than the
-current qualification.
+## What is real and what is bounded
 
-## What is real, and what is bounded
+### Real and qualified
 
-### Real
-
-- Cleanverse and Monad testnet asset provenance, captured and pinned by digest.
-- Live A-Pass eligibility checks, made against the chain at submit time rather than trusted from
-  an earlier answer.
-- Real BGV homomorphic evaluation on a fixed, pinned circuit.
-- A governed Ed25519 signature whose authority identity is derived from the signing key.
-- Two separately admitted wallet authorizations, re-verified at settlement.
-- Real Adapter V2 execution on Monad testnet: `ReleaseConsumed`, a real 600-second cure window,
-  permissionless finalization, and real aUSDC claims paid and reconciled.
+- Cleanverse/Monad testnet provenance and live A-Pass observation.
+- Real BGV evaluation on the fixed pinned circuit.
+- Governed Ed25519 conflict status whose authority identity is derived from the signing key.
+- Current managed V2 policy selection, closed branch, plan-derived operation authorization and
+  operation-bound evidence.
+- Direct-participant wallet authorization and exact admission retry semantics.
+- A separate completed Adapter V2 execution with a real 600-second cure, finalization and aUSDC
+  reconciliation.
+- Architectural N=2 evidence that multiple isolated existing worker slots can run concurrently.
 
 ### Bounded
 
-- **Lender pledge windows are synthetic fixtures.** No real lender book is represented, and the
-  protected notional is illustrative.
-- **Managed Mordant infrastructure sees each role's plaintext during preparation.** There is no
-  participant-device encryption today.
-- The evaluator receives ciphertext artifacts only and holds no decryption key.
-- The decryptor is **designated and trusted**, not distributed.
-- Execution is supervised single-host, with **one active BGV slot**.
-- One adapter is deployed per hardened case today.
-- Testnet only, at deliberately small amounts. **Not production authorized.**
+- Claim windows and protected notionals are synthetic fixtures.
+- Managed infrastructure sees demo plaintext during intake/preparation.
+- The designated decryptor is trusted and Mordant-controlled.
+- The public deployment exposes one active BGV slot.
+- The managed 24-hour cure action is a local protocol double and cannot authorize settlement.
+- The verified real settlement is a retained historical hardened run, not replayed by each visitor.
+- Testnet only, at deliberately small amounts; not production authorized.
 
-Mordant does **not** claim: browser or device-side BGV; participant-controlled FHE keys; that no
-Mordant infrastructure sees plaintext; threshold release; trustless or decentralized decryption;
-independent institutional operators; or production readiness.
+## Architecture summary
 
-It is also not a universal duplicate-financing detector, not proof that an invoice is authentic, not
-a registry of assignment priority, not insurance against debtor default, and not a general RWA
-tokenization platform.
+Mordant's current product architecture has four separable authority layers:
 
-## Architecture
+1. **Private evaluation** — fixed BGV binaries separate preparation, evaluator and governed
+   decryptor roles. The evaluator receives no secret key.
+2. **Governed result** — an authenticated conflict/no-conflict status, and nothing more.
+3. **Governed Recourse Policy** — code/deployment committed before result exposure; one closed branch
+   becomes a verified action plan and durable operation authorization.
+4. **Evidence** — the operation outcome is checked for compatibility and bound back to the selection,
+   plan and result.
 
-Four layers, each verifiable on its own.
+The repository also contains the specialised vault/Adapter V2 settlement architecture used by the
+separate hardened on-chain run. It is a qualified execution proof, not the generic definition of
+Mordant and not the managed V2 operation.
 
-**Private evaluation.** A fixed BGV circuit implemented in Lattigo, with keygen, client, evaluator
-and decryptor as separate binaries. The evaluator never receives a decryption key, and the decryptor
-must independently recompute the circuit and land on the same ciphertext digest before anything is
-released.
+Deeper detail: [architecture](docs/architecture.md) ·
+[Governed Recourse Policy](docs/governed-recourse-policy.md) ·
+[reviewer access](docs/reviewer-access.md) ·
+[direct-participant bridge](docs/direct-participant-bridge-evidence.md) ·
+[historical Adapter V2 bridge](docs/governed-recourse-bridge.md).
 
-**Governed release.** A single signed Boolean is the sole authority for the conflict/no-conflict result. The
-release authority identity is derived from the signing key rather than asserted alongside it, so a
-forger cannot supply a matching pair.
+## Scalability and research roadmap
 
-**Settlement.** The signed Boolean supplies the confirmed-conflict result. The configured demo
-recourse policy supplies the cure path, and deployment configuration determines holders and payout
-amounts. `MordantRecourseAdapter` V2 on Monad testnet holds the pre-funded reserve and pays entitled
-holders in aUSDC through the Cleanverse compliance verifier. Finalize and claim are permissionless
-by design; `claim` takes no recipient, so the adapter can only pay its configured holder.
+Three layers must not be collapsed:
 
-**Evidence.** Every run seals a receipt binding the authorization, the participant artifacts, the
-evaluated artifact, the governed result and the recourse outcome. The public surface re-verifies each
-envelope before rendering and refuses anything that disagrees with its pinned source commit.
+- **Public deployment:** one active BGV slot, with fail-closed busy handling.
+- **Qualified architectural proof:** two isolated instances of the existing worker executed opposite
+  real BGV cases concurrently, with simultaneous evaluator processes and isolated durable roots.
+  The supported claim is exactly: **“Multiple isolated execution slots can run concurrently.”**
+- **Production roadmap:** routing, pooling, load balancing, autoscaling, high availability,
+  independent operators and capacity qualification. None is established by the N=2 proof.
 
-Deeper detail: [participant admission and the direct-participant rail](docs/direct-participant-bridge-evidence.md) ·
-[governed recourse bridge](docs/governed-recourse-bridge.md) ·
-[architecture](docs/architecture.md) · [deployment](docs/railway-deployment.md).
+See [N=2 isolated execution evidence](docs/evidence/n2-isolated-execution-proof-2026-08-08.md).
+
+**N=3 Private Conflict Graph is research/roadmap only.** The current first workflow evaluates two
+claims. N=3 and multi-funder graph semantics are not a live capability, current proof or primary
+product claim.
+
+Other future workflows may apply the same result → policy → authorized action → evidence model to
+assignment conflicts, covenant exceptions, eligibility exceptions or document conflicts. They are
+not implemented today.
 
 ## Security and verifiability
 
-What a reviewer can check independently, without trusting this repository:
+A reviewer can independently verify:
 
-- **The settlement happened.** Every transaction in [Verified live run](#verified-live-run) is on the
-  public Monad testnet explorer.
-- **The adapter is the reviewed contract.** Solidity writes immutables into runtime code, so raw code
-  hashes cannot be compared across case deployments. The retained deployment proof records the
-  compiler's immutable-span masked equality against the reviewed artifact, and the executor hashes
-  the live runtime and requires it to be the exact runtime that proof covers.
-- **The result was not asserted by the artifact that carries it.** The expected source commit comes
-  from server configuration, never from the evidence being judged.
-- **Each participant really authorized its own claim.** The signed `ParticipantAdmissionV1` payload
-  and signature are retained durably and re-verified at settlement, rather than accepted by digest.
-- **The evidence is internally consistent.** The public loader refuses any set whose run, adapter,
-  governed result, entitlement or balance arithmetic disagree.
+- the hardened settlement transactions on the public Monad testnet explorer;
+- the reviewed Adapter V2 runtime against its immutable-aware deployment proof;
+- the governed result signature and its derived authority identity;
+- the current managed policy hash, selection, plan and operation authorization chain;
+- exact participant admissions and the same-wallet/nonce/payload refusal controls;
+- receipt cross-references and terminal arithmetic;
+- the retained N=2 isolation evidence with its fail-closed validator.
 
-Detailed findings, controls and residual risk: [threat model](docs/threat-model.md) ·
-[security review](docs/security-review.md) · [production gates](docs/production-gates.md).
-
-## Scalability roadmap
-
-**Every item below is NOT IMPLEMENTED TODAY.** They are the concrete steps between this bounded MVP
-and something that could carry real volume, stated so the current limits are legible rather than
-hidden.
-
-| Current constraint | Production evolution |
-| --- | --- |
-| The governed authority is minted per case and pinned as an adapter immutable, so each case needs its own deployment. | An adapter factory with a governed-authority registry, so one deployment serves many cases without weakening the pin. |
-| One worker runs one case at a time, because the durable journal and the single-active-case guarantee depend on it. | Horizontally isolated execution slots that run in parallel without sharing that journal. |
-| Managed infrastructure prepares and encrypts the inputs, so it sees participant plaintext. | Participant-side encryption, removing that trust entirely. The most valuable item on this list. |
-| Admission verifies an EOA secp256k1 signature. | ERC-1271 contract-signature verification, which is what an institution would actually use. |
-| Evaluator and decryptor run on one supervised host. | Separation across independent operators, making "the evaluator holds no key" an organizational fact rather than a process boundary. |
-| A single designated decryptor signs the result. | Threshold or multi-party governed release, removing one party's ability to refuse or forge an answer. |
-
-Beyond the first workflow, the same private-decision and recourse model extends to other
-private-credit situations where confidential records must produce a governed action: assignment
-priority conflicts, covenant and eligibility exceptions, document conflicts, collateral conflicts.
-**None of these are implemented.** Conflicting Pledge Protection is the only policy in this
-repository.
+Detailed boundaries: [threat model](docs/threat-model.md) ·
+[security review](docs/security-review.md) ·
+[production gates](docs/production-gates.md).
 
 ## Development and verification
 
 ```bash
 pnpm install
-pnpm validate        # lint, typecheck, unit, Foundry, evidence gate, secret scan, integration gates, build
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm protection:test
+pnpm test:e2e:public
 ```
 
-`pnpm validate` is the single command that has to pass. It runs the complete Foundry suite, the
-frozen-source and ABI-selector gates, the reproducible evidence gate and the secret scanner.
+The complete release runner additionally covers the frozen-source, ABI, evidence, secret-scan,
+integration and contract gates. Evidence replay is read-only by default; no real key or live write
+is required for the product/presentation suites.
 
-The focused suites, when you want one area:
+Useful focused commands:
 
 ```bash
-pnpm protection:test   # protection product, admission, bridge executor, adversarial batteries
-pnpm test:e2e:public   # the public experience at all seven qualified viewports
-pnpm test:contracts    # Foundry only
+pnpm recourse-policy:test
+pnpm proof:n2-isolation:validate
+pnpm secret:scan
 ```
 
-The evidence gate re-derives what is true on chain rather than trusting any note in this repository.
-The default run replays a recorded fixture and writes nothing; a live run is strictly read-only,
-refuses every state-changing JSON-RPC method, aborts unless the chain is Monad testnet, and pins one
-block for all readings.
-
-```bash
-pnpm evidence:cleanverse
-```
-
-Never commit Cleanverse credentials. Configure them in `.env.local`, which is git-ignored.
+Never commit Cleanverse credentials. `.env.local` is ignored.
 
 ## Hackathon
 
 Built for **Cleanverse Build: Trusted Assets**, RWA track, on **Monad testnet**.
 
-Stack: Next.js 16, React 19, TypeScript, Foundry, Lattigo BGV, Monad testnet, and the Cleanverse
-primitives (CVI / A-Pass, a dedicated invoice A-Token, aUSDC settlement and Validator Compliance).
+Stack: Next.js 16, React 19, TypeScript, Foundry, Lattigo BGV, Monad testnet, and Cleanverse
+primitives including CVI/A-Pass, MINV01 and aUSDC.
 
 ## Documentation
 
 | Document | Purpose |
 | --- | --- |
-| [Reviewer access](docs/reviewer-access.md) | How to exercise the live product, and the two execution profiles |
-| [Direct-participant bridge evidence](docs/direct-participant-bridge-evidence.md) | The hardened two-wallet run, its evidence schema and verifier |
-| [Governed recourse bridge](docs/governed-recourse-bridge.md) | Adapter V2 pins, the EIP-712 release and the case-specific deployment model |
-| [Conflicting Pledge Protection](docs/conflicting-pledge-protection.md) | Execution boundary, governed release, evidence model |
-| [Architecture](docs/architecture.md) | Recourse kernel, contracts, policy compatibility |
-| [Cleanverse integration](docs/cleanverse-integration.md) | What is documented, observed and still blocked |
-| [Threat model](docs/threat-model.md) | Attacker classes and mitigations |
-| [Security review](docs/security-review.md) | Findings and residual risk |
-| [Production gates](docs/production-gates.md) | Hard gates before real funds |
-| [Railway deployment](docs/railway-deployment.md) | Worker runbook, required variables, resource profile |
-| [Activation blockers](docs/activation-blockers.md) | **Superseded.** The historical record of what was refused before the architecture correction |
-| [Shadow pilot](docs/product/shadow-pilot.md) | Scope, processing and measurements for a permissioned pilot |
+| [Reviewer access](docs/reviewer-access.md) | Current public managed proof, direct-admission boundary and separate hardened run |
+| [Governed Recourse Policy](docs/governed-recourse-policy.md) | Current managed result, policy, plan, authorization and evidence chain |
+| [Conflicting Pledge Protection](docs/conflicting-pledge-protection.md) | First-workflow mechanism and current/historical execution boundaries |
+| [Architecture](docs/architecture.md) | Current product authority layers and specialised historical settlement architecture |
+| [Direct-participant bridge evidence](docs/direct-participant-bridge-evidence.md) | Separate wallet admission and hardened-run evidence |
+| [Governed recourse bridge](docs/governed-recourse-bridge.md) | Historical Adapter V2 bridge and execution pins |
+| [Cleanverse integration](docs/cleanverse-integration.md) | Classified provenance and integration evidence |
+| [N=2 isolation evidence](docs/evidence/n2-isolated-execution-proof-2026-08-08.md) | Exact qualified concurrency claim and exclusions |
+| [Shadow pilot](docs/product/shadow-pilot.md) | Permissioned human-led pilot boundary |
+| [Production gates](docs/production-gates.md) | Hard gates before production or real-fund authorization |

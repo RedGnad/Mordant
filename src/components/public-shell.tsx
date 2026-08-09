@@ -28,7 +28,7 @@ const SURFACE_NAV: Readonly<Record<PublicSurface, string | null>> = {
 };
 
 export const LIVE_PRODUCT_HREF = "/protection/live";
-export const LIVE_PRODUCT_CTA = "Run the live check";
+export const LIVE_PRODUCT_CTA = "Run live proof";
 
 function BrandMark() {
   return (
@@ -72,15 +72,15 @@ export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
       {onLive ? (
         <p className={styles.ctaCurrent} aria-current="page">
           <span className={styles.ctaLabel}>
-            <span className={styles.wide}>Live check</span>
-            <span className={styles.narrow}>Live</span>
+            <span className={styles.wide}>Live proof</span>
+            <span className={styles.narrow}>Proof</span>
           </span>
         </p>
       ) : (
         <Link className={styles.cta} href={primaryHref} data-testid="shell-live-cta">
           <span className={styles.ctaLabel}>
             <span className={styles.wide}>{LIVE_PRODUCT_CTA}</span>
-            <span className={styles.narrow}>Run check</span>
+            <span className={styles.narrow}>Run proof</span>
           </span>
         </Link>
       )}
@@ -96,13 +96,13 @@ export function PublicFooter() {
           <BrandMark />
           <strong>Mordant</strong>
         </span>
-        <span className={styles.footerLine}>Recourse infrastructure for tokenized receivables.</span>
+        <span className={styles.footerLine}>The recourse layer for tokenized private credit.</span>
       </div>
       <nav className={styles.footerNav} aria-label="Footer navigation">
         <Link href="/#product">Run the landing experiment</Link>
-        <Link href="/protection/verified-run">Verify completed recourse</Link>
-        <Link href={LIVE_PRODUCT_HREF}>Advanced live product</Link>
-        <Link href="/protection?scenario=conflict">Retained case evidence</Link>
+        <Link href="/protection/verified-run">Verify historical on-chain execution</Link>
+        <Link href={LIVE_PRODUCT_HREF}>Run the full managed proof</Link>
+        <Link href="/protection?scenario=conflict">Inspect retained historical evidence</Link>
       </nav>
     </footer>
   );

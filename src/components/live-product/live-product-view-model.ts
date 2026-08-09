@@ -313,8 +313,8 @@ const STAGE_LABEL: Readonly<Record<ExecutionStageId, string>> = Object.freeze({
 
 const STAGE_DETAIL: Readonly<Partial<Record<ExecutionStageId, string>>> = Object.freeze({
   ENCRYPTION_PREPARED: "Mordant's managed execution service is preparing the encryption for this case.",
-  GOVERNED_VERIFICATION: "Encrypted evaluation is complete. The designated decryptor is recomputing the circuit before any Boolean is released.",
-  RECOURSE_APPLICATION: "The governed conflict result is being applied under the configured recourse policy.",
+  GOVERNED_VERIFICATION: "Encrypted evaluation is complete. The designated decryptor is recomputing the circuit before any signed conflict status is released.",
+  RECOURSE_APPLICATION: "The signed conflict status is entering the precommitted Governed Recourse Policy.",
 });
 
 export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
@@ -452,7 +452,7 @@ export const ONCHAIN_NOT_CONNECTED: OnchainView = Object.freeze({
   evidence: Object.freeze({ transactionHash: null, blockNumber: null, contractAddress: null, explorerBase: null }),
   entitlement: null,
   cureDeadlineIso: null,
-  disabledReason: "This managed run ends at the governed result.",
+  disabledReason: "This managed run ends after its policy-authorized local operation and sealed evidence.",
 });
 
 // ---------------------------------------------------------------- receipt
@@ -538,7 +538,7 @@ export const LIVE_CHAPTERS: readonly Readonly<{ id: LiveChapterId; ordinal: stri
   { id: "VERIFY", ordinal: "1", title: "Verify" },
   { id: "AUTHORIZE", ordinal: "2", title: "Authorize" },
   { id: "DECIDE", ordinal: "3", title: "Decide privately" },
-  { id: "ACT", ordinal: "4", title: "Act on the result" },
+  { id: "ACT", ordinal: "4", title: "Apply policy" },
   { id: "PROVE", ordinal: "5", title: "Prove" },
 ]);
 
@@ -594,7 +594,7 @@ export function chapterIndex(id: LiveChapterId): number {
 export const CLEANVERSE_LINE =
   "Cleanverse verifies asset provenance and identity plus participant eligibility—not legal validity or enforceability. "
   + "Mordant privately evaluates whether claim windows conflict. The governed result establishes only that conflict "
-  + "status; approved policy and human review determine recourse actions.";
+  + "status; a precommitted policy selects a bounded branch, while human review determines legal and operational responsibility.";
 
 /** A deadline is always rendered from an instant, never from a stored string. */
 export function formatDeadline(iso: string | null, now: Date = new Date()): Readonly<{

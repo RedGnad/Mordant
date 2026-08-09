@@ -12,9 +12,10 @@ import styles from "./public-experience.module.css";
  *
  * Four stages rather than three, because the Cleanverse boundary and the private
  * decision are different responsibilities and a judge must not read them as one.
- * Cleanverse says what the asset is and who may participate; Mordant decides,
- * privately, whether the claims collide; the governed result establishes only
- * that conflict status; policy and human review own every consequence.
+ * Cleanverse says what the asset is and who may participate; Mordant evaluates
+ * privately whether the claims collide; the governed result establishes only
+ * that conflict status; a precommitted policy selects the bounded managed
+ * branch, while human review retains legal and operational responsibility.
  */
 const INTEGRATION_STEPS = [
   {
@@ -24,20 +25,25 @@ const INTEGRATION_STEPS = [
   },
   {
     label: "Mordant decides privately",
-    detail: "BGV over ciphertexts",
-    story: "Mordant checks the encrypted claim windows without holding the decryption key.",
-  },
-  {
-    label: "Governed result",
     detail: "Signed conflict status",
-    story: "The governed result establishes only whether the submitted claim windows conflict. A precommitted governed recourse policy selects the next bounded action; human approval applies where that policy requires it.",
+    story: "A fixed BGV circuit evaluates the encrypted claim windows. The evaluator receives ciphertexts and has no decryption key.",
   },
   {
-    label: "Onchain recourse",
-    detail: "Bounded aUSDC rail",
-    story: "In the separate hardened run, preconfigured demo policy opened the cure path and deployment configuration determined holders and payouts before settlement.",
+    label: "Governed policy",
+    detail: "Closed action branch",
+    story: "The governed result establishes conflict status only. A policy committed before result exposure selects one closed, bounded action branch.",
+  },
+  {
+    label: "Policy-authorized action",
+    detail: "Bounded local operation",
+    story: "The selected plan authorizes the bounded managed operation, and the sealed evidence binds its outcome back to that authorization. Settlement is not authorized in this managed run.",
   },
 ] as const;
+
+// Reserved in the complementary-evidence composition for the participant-originated
+// native CLI. It must remain unmounted until PR #44 is merged and requalified; the
+// public product must never promote an unqualified privacy profile as current.
+const INSTITUTIONAL_PRIVACY_QUALIFIED = false;
 
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
 // The decision colour owns a short horizontal runway on both junctions.
@@ -47,7 +53,6 @@ const INTEGRATION_RUNWAY = 10;
 const INTEGRATION_ROUTE = "M150 120H390L470 40H660L740 120H1050";
 const INTEGRATION_DIAGONAL_LENGTH = Math.hypot(80, 80);
 const INTEGRATION_ROUTE_LENGTH = 240 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + 310;
-const INTEGRATION_REVEAL_INSET = 12;
 // Exact distances to the four authored junctions. Rounded progress values put
 // the travelling square a few pixels beyond a corner at some viewport scales.
 const INTEGRATION_TARGETS = [
@@ -56,10 +61,7 @@ const INTEGRATION_TARGETS = [
   (240 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + INTEGRATION_RUNWAY) / INTEGRATION_ROUTE_LENGTH,
   1,
 ] as const;
-const INTEGRATION_INITIAL_REVEAL = Math.max(
-  0,
-  INTEGRATION_TARGETS[0] - (INTEGRATION_REVEAL_INSET / INTEGRATION_ROUTE_LENGTH),
-);
+const INTEGRATION_INITIAL_REVEAL = INTEGRATION_TARGETS[0];
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -83,7 +85,6 @@ export function PublicExperience({ liveCheckHolder }: {
   const integrationPathRef = useRef<SVGPathElement>(null);
   const integrationRevealRef = useRef<SVGPathElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
-  const integrationTetherRef = useRef<SVGLineElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
   const integrationMotionFrame = useRef<number | null>(null);
@@ -180,8 +181,7 @@ export function PublicExperience({ liveCheckHolder }: {
     const path = integrationPathRef.current;
     const reveal = integrationRevealRef.current;
     const signal = integrationSignalRef.current;
-    const tether = integrationTetherRef.current;
-    if (path === null || reveal === null || signal === null || tether === null) return;
+    if (path === null || reveal === null || signal === null) return;
 
     const from = integrationMotionProgress.current;
     const to = INTEGRATION_TARGETS[integrationStep] ?? INTEGRATION_TARGETS[0];
@@ -189,19 +189,11 @@ export function PublicExperience({ liveCheckHolder }: {
     const placeSignal = (progress: number) => {
       const distance = length * progress;
       const point = path.getPointAtLength(distance);
-      const precedingPoint = path.getPointAtLength(Math.max(0, distance - 2));
-      const incomingAngle = Math.atan2(
-        point.y - precedingPoint.y,
-        point.x - precedingPoint.x,
-      ) * (180 / Math.PI);
-      // Stop the masked route just inside the travelling square. This prevents
-      // the next coloured segment from peeking beyond a junction; the tether
-      // below overlaps this inset and keeps the route visibly continuous.
-      const revealProgress = Math.max(0, (distance - INTEGRATION_REVEAL_INSET) / length);
-      // The route is causal: it ends beneath the travelling signal in either
-      // direction. Reverse playback therefore retracts in exact lockstep and
-      // can never expose a responsibility the signal has not reached.
-      reveal.setAttribute("stroke-dashoffset", `${1 - revealProgress}`);
+      // The route and signal share one exact distance. The revealed line ends
+      // under the opaque square instead of relying on a separate co-moving
+      // segment, so reverse playback cannot expose a pivoting "tether", a gap,
+      // or any responsibility ahead of the signal.
+      reveal.setAttribute("stroke-dashoffset", `${1 - progress}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
       const signalColour = progress <= INTEGRATION_TARGETS[0]
         ? "var(--receivable)"
@@ -209,10 +201,6 @@ export function PublicExperience({ liveCheckHolder }: {
           ? "var(--protection)"
           : "var(--action)";
       signal.style.setProperty("--integration-signal-colour", signalColour);
-      // A short, co-moving incoming segment removes sub-pixel gaps caused by
-      // SVG mask rasterisation. It sits behind the square and follows the real
-      // path tangent, so it cannot reveal any future part of the route.
-      tether.setAttribute("transform", `rotate(${incomingAngle})`);
       integrationMotionProgress.current = progress;
     };
 
@@ -298,8 +286,8 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
           <p className={styles.heroPromise}>When private claims collide, keep tokenized credit moving.</p>
           <p className={styles.heroSupport}>
-            Mordant privately checks whether financing claims conflict,<br className={styles.supportBreak} /> then turns a
-            confirmed conflict into governed recourse.
+            Mordant privately checks whether financing claims conflict,<br className={styles.supportBreak} /> then applies a
+            precommitted policy to the next bounded action.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
@@ -346,7 +334,6 @@ export function PublicExperience({ liveCheckHolder }: {
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M750 120H1050" />
                 </g>
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">
-                  <line ref={integrationTetherRef} className={styles.integrationTether} x1="-42" y1="0" x2="2" y2="0" />
                   <rect x="-18" y="-18" width="36" height="36" />
                 </g>
               </svg>
@@ -375,15 +362,24 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
         </section>
 
-        {/* 4. One completed hardened proof object, explicitly separate. */}
+        {/* 4. Complementary proof surfaces. Participant-originated privacy is
+            deliberately absent until its native CLI has merged and requalified. */}
         <section className={styles.hardenedProof} aria-labelledby="hardened-proof-title" data-reveal>
+          {INSTITUTIONAL_PRIVACY_QUALIFIED ? (
+            <article className={styles.complementaryProof} data-proof="institutional-privacy">
+              <p className={styles.eyebrowOnProof}>Institutional privacy</p>
+              <h2>Prepare private claims at their source.</h2>
+              <p>Participant-originated native CLI preparation, independently requalified.</p>
+            </article>
+          ) : null}
           <div>
-            <p className={styles.eyebrowOnProof}>Completed hardened proof</p>
+            <p className={styles.eyebrowOnProof}>Complementary proof · verified on-chain execution</p>
             <h2 id="hardened-proof-title">Verify the consequence, not a claim about it.</h2>
             <p>
-              This opens a separate hardened two-wallet run. Its governed result established conflict;
-              preconfigured demo policy applied; Adapter opened the cure path; deployment configuration
-              determined holders and payouts; on-chain aUSDC settlement then completed.
+              This opens a separate hardened historical run, not the managed workflow above. Its governed
+              result established conflict; preconfigured demo policy applied; Adapter V2 opened the cure
+              path; deployment configuration determined holders and payouts; on-chain aUSDC settlement
+              then completed.
             </p>
           </div>
           <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">

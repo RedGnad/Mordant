@@ -21,7 +21,7 @@ export const MORDANT_CHAIN_ID = monadTestnet.id;
 
 export const WALLETCONNECT_METADATA = {
   name: "Mordant",
-  description: "Conflicting Pledge Protection for tokenized receivables.",
+  description: "Mordant recourse layer · Conflicting Pledge Protection workflow.",
   url: "https://mordant-two.vercel.app",
   icons: ["https://mordant-two.vercel.app/icon.svg"],
 } as const;

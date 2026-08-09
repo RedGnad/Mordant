@@ -1,7 +1,29 @@
-# Conflicting Pledge Protection — MVP execution boundary
+# Conflicting Pledge Protection — first implemented workflow
 
-This service is a synthetic hackathon prototype. It does not move real funds, establish legal
-priority, provide insurance, or prove production custody.
+Conflicting Pledge Protection is Mordant's first implemented workflow. Mordant is the recourse layer
+for tokenized private credit; the two-claim conflict mechanism below is the current concrete entry
+point, not the definition of the whole category.
+
+The workflow uses synthetic financing-claim windows and a verified Cleanverse/Monad testnet asset
+identity. It does not establish legal priority, legal responsibility, ownership, fraud, default,
+invoice authenticity, legal enforceability, payout recipient or payout amount. It is not production
+authorized.
+
+## Exact workflow
+
+```text
+MINV01 provenance and A-Pass eligibility
+  → two submitted financing-claim windows
+  → fixed BGV encrypted evaluation
+  → governed conflict/no-conflict result
+  → precommitted Governed Recourse Policy
+  → verified governed action plan
+  → durable bounded-operation authorization
+  → operation-bound evidence
+```
+
+The governed Boolean establishes conflict status. It is an authenticated input to the precommitted
+policy, not an authorization for recourse or settlement by itself.
 
 ## Root asset
 
@@ -10,166 +32,128 @@ The product root is the retained Cleanverse M-11 issuance/readback for MINV01 on
 - Cleanverse A-Token `0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b`;
 - request `IA20260729032221850604`;
 - issuance transaction `0xd26ba9b1624a6e10127a48e2acabdbbf94cae97e0be071e243c7ee5b08211b8c`;
-- token deployment block `48901234`, separately retained by the M13A ceremony evidence;
-- preflight pinned block `48901220`, which is not represented as a post-launch readback;
-- retained M11 launch/readback, Cleanverse documentation/aPass and M13A ceremony sources.
+- token deployment block `48901234`;
+- canonical classified asset digest
+  `sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c`.
 
-The record does not invent a legal issuer. Its administrator address is observed, the receivable
-description and amounts are fixtures, and legal issuer identity remains `UNPROVEN`. Cleanverse
-documentation version v5.6 is `DOCUMENTED`, not observed on-chain. The retained timestamp remains
-the timezone-neutral `issuedAtRaw`, and the aUSDC decimals are supported by the retained M11
-readback. A canonical domain-separated SHA-256 digest of the classified record is the sole
-`AssetIdentity` admitted by the protection case. Its current value is
-`sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c`. The signed protection root,
-holder snapshot, FHE case, participant artifacts, evaluated artifact, governed result, signed
-recourse root, public evidence and frontend all read that same digest.
+This establishes the Cleanverse provenance and identity used by the demo. The record does not
+invent a legal issuer, and it does not prove invoice authenticity, legal validity or enforceability.
 
-The exact retained provenance is:
+Retained sources:
 
-- `docs/evidence/monad-invoice-atoken-launch-2026-07-28.json` —
-  SHA-256 `3919f586ba19a901151225e0d9de83d554566db26658fd301a025625ba02a8d9`;
-- `docs/evidence/cleanverse-monad-2026-07-28.json` —
-  SHA-256 `6e8a7c742a032ba82272b0931503aed85470cf3f8b39915f763e47cc1bbaf0df`;
-- `docs/evidence/monad-m13a-ceremony-2026-07-28.json` —
-  SHA-256 `cd0bcc8944796a18dda32efa618bb5a0a2311b0755cd16c6a5ef657e34e18bb3`.
+- `docs/evidence/monad-invoice-atoken-launch-2026-07-28.json`;
+- `docs/evidence/cleanverse-monad-2026-07-28.json`;
+- `docs/evidence/monad-m13a-ceremony-2026-07-28.json`.
+
+## Intake and privacy boundaries
+
+### Managed combined intake
+
+This is the active public profile. One eligible test context submits both synthetic windows.
+Managed Mordant infrastructure receives their plaintext values during intake/preparation and then
+produces real encrypted artifacts for the fixed BGV execution. The evaluator receives ciphertexts
+only and has no decryption key.
+
+### Direct participant admission
+
+Two distinct wallets each accept A-Pass observation and sign an exact role-bound
+`ParticipantAdmissionV1` payload. The same wallet cannot fill both roles. Expired nonces and changed
+payloads fail closed; exact retry reuses the retained signature. This proves separate authorization,
+not participant-local encryption.
+
+### Participant-originated native CLI
+
+This profile is not integrated in the current `origin/main`. It remains the intended
+institutional-privacy path and must be merged and requalified before any current-product claim says
+that Mordant coordination receives ciphertext rather than a raw claim window.
+
+The workflow does not require either counterparty to disclose its claim window to the other. It does
+not claim browser/device BGV, participant-controlled decryption, threshold release or that no Mordant
+infrastructure sees plaintext.
 
 ## Runtime split
 
-- The local backend runs the accepted fixed N15 BGV path in separate keygen, participant,
-  evaluator and governed-decryptor processes.
-- The evaluator receives only the public case root. It receives no secret-key path.
-- The product API accepts only fixed product operations. A caller cannot choose a ciphertext path,
-  evaluation key, output slot, circuit, decryptor path or asset identity.
-- Mutation is disabled in production before request-body parsing. In development, every request to
-  the network-reachable mutation route requires both `MORDANT_LOCAL_EXECUTION_ENABLED=1` and the
-  configured administrator capability. A URL or `Host: localhost` header is never authority.
-- The mounted page remains read-only unless a separate, explicitly local adapter that verifies the
-  actual peer address is provided. No administrator capability is serialized into browser code.
-- The deployed web view reads a completed public `MordantProtectionEvidence`; it does not represent
-  that import as browser-side or newly executed FHE.
-- The recourse adapter and cure clock are `PROTOCOL_DOUBLE`. No live Cleanverse settlement occurs.
+- The accepted N15 BGV path runs key generation, participant preparation, evaluator and governed
+  decryptor as separate processes.
+- The evaluator receives the public case root and ciphertext artifacts. It receives no secret-key
+  path.
+- The designated governed decryptor independently recomputes the circuit, decrypts the final result
+  and signs the conflict status. It is trusted and Mordant-controlled.
+- Product APIs accept only fixed operations; callers cannot choose a ciphertext path, key, circuit,
+  output slot, asset identity or result.
+- Durable state and public-safe projections fail closed on schema, digest or cross-reference mismatch.
 
-### Supervised browser adapter
+## Current managed Governed Recourse Policy
 
-The optional adapter is started with `pnpm protection:adapter` only after its process is explicitly
-configured with `NODE_ENV=development`, `MORDANT_LOCAL_EXECUTION_ENABLED=1`, a server-only
-`MORDANT_LOCAL_ADMIN_CAPABILITY` of at least 32 characters, the exact source pin, exact browser and
-downstream loopback origins, and a pre-created `MORDANT_PROTECTION_RETENTION_ROOT`. The Next
-development server receives the same gate, source pin and immutable roots. The adapter refuses every
-other environment, binds only `127.0.0.1`, and verifies the kernel-supplied
-socket peer before reading a product operation. `Host`, `Forwarded`, `X-Forwarded-For`, URL hostnames
-and caller headers are never peer authority. The configured browser and downstream origins must
-also be exact loopback HTTP origins. The Next development server is expected at the immutable
-`MORDANT_LOCAL_DOWNSTREAM_ORIGIN`; the browser origin is fixed by
-`MORDANT_LOCAL_BROWSER_ORIGIN`. Startup also requires the exact non-zero
-`MORDANT_PROTECTION_SOURCE_COMMIT` build/server pin.
+Policy `mordant.managed-demo.facility-protection@1`, hash
+`sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e`,
+is selected before result exposure.
 
-The browser receives only the non-secret adapter origin. The adapter alone reads
-`MORDANT_LOCAL_ADMIN_CAPABILITY` and attaches it to its private downstream request. Its input is one
-of two exact JSON shapes: fixed scenario creation plus a browser-generated `creationRequestId`, or a run ID plus one enumerated product
-operation. It rejects additional fields and accepts no path, key, ciphertext, circuit, slot,
-timestamp, chronology or attestation. Evidence export automatically invokes the fixed retention
-operation against the pre-existing server-configured `MORDANT_PROTECTION_RETENTION_ROOT` capability
-and compares an independent no-follow durable readback to the exported run. The shipped imported
-evidence root is read-only and distinct from this local retention capability. The creation identifier
-durably maps to exactly one run, so a lost create response is recovered by creation lookup and then
-GET-only run readback; the browser never sends a second create. A hostile process already executing on the same local
-user account or a fully compromised development host remains outside this supervised-MVP boundary.
+| Result | Closed branch | Bounded effect | Settlement |
+| --- | --- | --- | --- |
+| Conflict | `OPEN_LOCAL_CURE_PATH` | Open a 24-hour local protocol-double cure path; manual review stays outside the managed run | `NOT_AUTHORIZED` |
+| No conflict | `RECORD_AND_CLOSE` | Retain evidence and close the managed case | `NOT_AUTHORIZED` |
 
-## Signed product roots
+The conflict operation is valid only when
+`cureDeadlineUnix - cureStartedAtUnix === 86,400`. The selected plan binds the result digest and
+policy selection. The durable operation authorization rebinds the plan, exact parameters and
+operation identity. Terminal evidence must match the selected action and operation outcome.
 
-`MordantProtectionBinding` is the canonical participant-authorized product root. It binds the
-classified Cleanverse asset digest, service and policy versions, controlled fixture scenario,
-protected and reserve amounts, record date, complete ordered holder snapshot, derived allocation
-digest, case nonce, derived FHE CaseID and the fixed `governed-decryptor-v1` release mode. The holder
-digest and CaseID are recomputed from documented domain-separated canonical inputs in both Go and
-TypeScript. Both FHE participant Ed25519 identities sign the exact binding digest before either
-encrypted submission can be admitted.
+The policy is code/deployment committed. No institution-facing policy editor or cryptographic
+institution-approval attestation exists in the current implementation. See
+[Governed Recourse Policy](governed-recourse-policy.md).
 
-`MordantRecourseAttestation` is created only after the governed Boolean and durable recourse record
-exist. The signer reconstructs the only public chronology from the signed protection and FHE
-bindings, digest-bound participant/evaluator artifacts, signed release clock and durable recourse
-clock. No API accepts chronology events, labels, classifications, timestamps or final state. The
-attestation signs `clockClass`, real `signedAtUnix`, optional `simulationAsOfUnix`, incident state,
-recourse state and the complete canonical chronology digest. The retained conflict case is
-explicitly `SIMULATED_PROTOCOL_CLOCK` and `SIMULATED_AVAILABLE`; it is not evidence that wall-clock
-time passed the cure deadline. The public TypeScript verifier authenticates both participant
-signatures, the existing governed-result signature and this release-authority signature, then
-checks every cross-reference.
-The outer `manifestDigest` is only a transport-integrity checksum and is not an authenticity root.
+## Evidence and recovery
 
-## Durable operations and recovery
+Each product mutation is journaled before a subprocess or irreversible filesystem action. The
+journal binds run, sequence, phase, immutable parameters, expected state transition and terminal
+reconciliation. Reconciliation advances from cryptographically verified public artifacts and does
+not repeat a one-shot operation.
 
-Each product mutation is recorded before its subprocess or irreversible filesystem action in an
-atomically persisted `mordant.protection-operation-journal/1`. An operation binds its run ID,
-sequence, phase, immutable parameters and their digest, expected current and target stage, fixed
-timestamps, expected artifacts, creation time and terminal reconciliation outcome. The process
-lock coordinates only the live process; it is not the durable source of truth.
+Before dispatch, the browser retains a no-secret recovery record for creation, fixed mutation or
+evidence retention. Refresh and navigation restore the same run through lookup and GET-only
+readback. Recovery never asks the browser to invent a second create request or terminal outcome.
 
-Every operation reconciles the journal against cryptographically verified terminal artifacts.
-GET/read reconciliation opens only the public object store and never reads `secret-key.bin` or
-`decryptor-signing-key.bin`. Private inspection is available only while the exact durable pending
-phase is `PREPARING` or `RELEASING`; all other phases use public inspection. Completed preparation,
-submissions, finalization, evaluation, release, recourse and evidence publication advance the
-TypeScript state without repeating the one-shot action. An exact published release is reconstructed
-as the accepted `exactRetry`; a different or ambiguous irreversible result aborts the run.
+Current managed receipts can bind:
 
-Creation, inspection and export share one full recourse-record validator. Participant private keys
-are published with create-only temporary files, file flush, hard-link publication and directory
-flush. A truncated key is regenerated only before any public foundation exists; after foundation
-admission it is an explicit terminal error. A narrow Go helper retains evidence through a pinned,
-pre-existing directory capability with create-only same-directory publication, file and directory
-flushes, and exact `O_NOFOLLOW` readback. Root, intermediate and destination symlinks, non-regular
-targets, path-identity replacement and cross-case/cross-scenario writes are rejected.
+- eligibility observation and case authorization;
+- participant and evaluated artifact digests;
+- governed result and result ciphertext digests;
+- policy selection, action plan and operation authorization;
+- action-compatible operation outcome;
+- terminal evidence digest.
 
-Before dispatch, the browser stores one exact, no-secret, 24-hour recovery record in session storage:
-pending creation (`scenario`, `creationRequestId`), pending mutation (`scenario`, `runId`, fixed
-operation), or retention required (`scenario`, `runId`, fixed `retainProtectionEvidence`). Normal
-navigation, unmount, refresh and history transitions do not clear it. Re-entering `/protection`
-prioritizes that record, replaces conflicting URL state and performs only the corresponding passive
-lookup/GET recovery. The record is cleared only after an exact verified response/readback, an exact
-pre-dispatch `NOT_ADMITTED` refusal, or a user-confirmed supervised abandonment. Abandonment clears
-only browser authority; it does not cancel or roll back backend work.
+Hashes are technical verification handles. A user normally follows the layered receipt rather than
+submitting a digest to a separate service.
 
-A passive GET of a run whose export is complete but configured retained envelope is absent returns
-only the public `RETENTION_REQUIRED` status, run ID, scenario and fixed recovery operation. It does
-not evaluate, release, export or retain. The UI exposes only **Finish evidence retention**, which
-invokes the existing fixed idempotent retention operation and then requires a separate GET to reach
-verified `COMPLETE`. An already retained exact envelope returns directly without creating a second
-retention journal result; a pending retention journal is reconciled through its existing operation.
+## Separate historical hardened execution
 
-Ordinary unlink removes only each Mordant-generated transient plaintext pledge JSON file and
-participant signing-key file after the exact signed public submission is verified. This is
-operational cleanup, not secure erasure. Decryptor private artifacts and retained signed results
-remain in a retained local case directory unless that entire generated case directory is later
-removed as an explicit storage-management action.
+The verified run at `/protection/verified-run` is a distinct historical proof surface. It used two
+canonical wallets and the historical Adapter V2 architecture:
 
-## Disk preflight and retention
+```text
+governed conflict result
+  → preconfigured historical demo policy
+  → Adapter V2 opened the case
+  → 600-second cure window
+  → permissionless finalization
+  → configured aUSDC claims
+  → reconciliation
+```
 
-One measured complete case occupies about 393 MB on the August 2026 ARM64 run. The backend
-conservatively budgets 550 MiB per new case and requires a further 1.5 GiB free safety margin before
-key generation. It checks the filesystem containing the configured run root after creating that
-root. A separate 768 MiB bounded check applies to the binary/cache filesystem.
+The 600-second historical cure is not the current managed 24-hour local cure. The historical run
+did not use the new managed V2 policy-selection/action-authorization chain, and the current managed
+proof does not execute or authorize that settlement. Its retained receipts and digested evidence
+remain unchanged.
 
-The preflight runs before key generation and fails with a storage-specific error if the margin is
-not present. It never automatically deletes evidence, terminal markers, signed results,
-user-selected directories, non-Mordant files, or prior case directories. Compiled binaries and Go
-build cache live only under ignored `.mordant/` paths and are regenerable.
+## Exact supported product claim
 
-Generated public product manifests are deliberately absent from the source-only commit. The
-conflict and no-conflict manifests are regenerated independently from clean checkouts of that exact
-source commit with `MORDANT_PROTECTION_SOURCE_COMMIT` fixed to its SHA, fully verified, and added
-only in the direct child artifact commit under
-`docs/evidence/conflicting-pledge-protection/`. Generated case directories and build caches are
-ignored local working data. Removing them after verified manifest retention is ordinary storage
-cleanup, not secure erasure or a production-custody claim.
+“Mordant is the recourse layer for tokenized private credit. Its first implemented workflow,
+Conflicting Pledge Protection, evaluates two financing-claim windows under BGV encryption, releases
+only governed conflict status, applies a policy committed before result exposure, authorizes one
+bounded managed operation from the selected plan, and binds the outcome to evidence.”
 
-## Exact claim
-
-“Mordant protects a tokenized receivable with a private conflict check and governed recourse. The
-parties’ pledge records are evaluated under BGV fully homomorphic encryption. The evaluator cannot
-inspect the inputs or dictate the released result. A designated governed decryptor independently
-recomputes the fixed circuit, decrypts the final Boolean, and signs it into the recourse workflow.”
-
-Disclosure: “The MVP uses a designated trusted decryptor and local single-host execution. Threshold
-output release and production custody isolation remain post-MVP upgrades.”
+Qualification: the managed demo uses synthetic inputs, managed plaintext preparation, a trusted
+designated decryptor, a 24-hour local protocol-double cure branch and no settlement authorization.
+A separate retained hardened run proves historical Adapter V2/aUSDC execution with a 600-second
+cure window.

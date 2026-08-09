@@ -7,6 +7,10 @@ interval each without sending either interval to the other participant. It uses
 the existing neutral custom-supervised runtime and does not alter the Go pledge
 schema, BGV circuit, governed-result schema, or protection binding.
 
+Separate admission proves who authorized each role-bound claim. It does **not** prove that the claim
+was encrypted in a participant-controlled environment before Mordant coordination received it.
+Participant-originated native-CLI encryption is not integrated in the current `origin/main`.
+
 ## Protocol
 
 1. The browser creates a neutral participant case with `POST /v1/participant-cases`
@@ -44,6 +48,10 @@ Verified authorization and claim commitments are bound into the existing Go
 pledge commitment fields. The clear interval is written only to that
 participant's private input artifact. Receipts describe wallet-admitted windows
 without reproducing their endpoints.
+
+Managed Mordant preparation handles that private input artifact before BGV evaluation. The
+evaluator receives ciphertext artifacts and has no decryption key; the designated governed
+decryptor is Mordant-controlled.
 
 ## Fail-closed gates
 

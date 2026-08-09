@@ -1,5 +1,10 @@
 # Direct-participant bridge evidence
 
+Context: this is the bridge artifact used by the separate hardened two-wallet/Adapter V2 execution.
+It proves participant authorization and the historical on-chain path. It does not prove
+participant-originated encryption and it predates the current managed V2 Governed Recourse Policy
+authority chain.
+
 `mordant.direct-participant-bridge-evidence/1` is the bridge authorization
 artifact for a qualified direct-participant run. It exists because a
 direct-admission journey is a CUSTOM_SUPERVISED run, and such a run cannot
@@ -25,6 +30,10 @@ and the verifier re-derives every terminal value from that signed object after
 checking the signature with the existing `verifyGovernedResultSignature`. The
 conflict Boolean is returned only from there, so no field of the envelope, no
 request parameter and no configuration file can supply one.
+
+That governed Boolean establishes conflict status. In the historical execution, separate
+preconfigured policy and deployment configuration supplied the cure path, holders and payout
+amounts; the Boolean did not authorize settlement or carry those terms.
 
 ## What it binds
 

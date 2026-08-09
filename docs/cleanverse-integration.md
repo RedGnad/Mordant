@@ -7,6 +7,10 @@
 > order they were established. Several of them are **superseded**. Read this box
 > for the current position, and treat every dated block below as history.
 >
+> The Adapter V2/aUSDC execution below is the **separate retained historical proof**. It predates
+> and must not be merged with the current managed V2 24-hour policy/action chain, whose settlement
+> authorization is `NOT_AUTHORIZED`.
+>
 > **Now proven on Monad testnet:**
 >
 > | | |

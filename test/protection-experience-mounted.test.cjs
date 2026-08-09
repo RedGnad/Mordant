@@ -309,7 +309,7 @@ artifactTest("uncertain governed result release requires GET replacement before 
   });
   assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
   assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
-  assert.ok(button(renderer.root, "Apply governed result"));
+  assert.ok(button(renderer.root, "Apply retained local rule"));
   assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
   assert.equal(button(renderer.root, "Open complete evidence"), undefined);
   assert.deepEqual(calls.map(({ method }) => method), ["POST", "POST", "GET"]);

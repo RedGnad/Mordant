@@ -12,8 +12,8 @@ import styles from "./live-unavailable.module.css";
 export function LiveUnavailable() {
   return (
     <section className={styles.panel} aria-labelledby="live-unavailable-title">
-      <p className={styles.eyebrow}>Live check</p>
-      <h1 id="live-unavailable-title">The live check is not available on this deployment.</h1>
+      <p className={styles.eyebrow}>Live proof</p>
+      <h1 id="live-unavailable-title">The live proof is not available on this deployment.</h1>
       <p className={styles.lede}>
         This build has no managed execution service configured, so no encrypted check can be started here.
         A completed run and its full evidence remain inspectable.

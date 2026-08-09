@@ -661,6 +661,25 @@
   font-weight: 600;
 }
 
+.policyProof {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.policyProof summary {
+  width: fit-content;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--muted) 42%, transparent);
+  text-underline-offset: 3px;
+}
+
+.policyProof p {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .proveRows {
   display: grid;
   margin: 0 0 8px;

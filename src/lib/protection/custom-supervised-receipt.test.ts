@@ -8,6 +8,8 @@ import {
   CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
   CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
   LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
   classifyCustomReceiptDisclosures,
   currentCustomReceiptDisclosures,
 } from "../custom-supervised-receipt-disclosures";
@@ -90,6 +92,14 @@ function legacyDisclosures(): readonly string[] {
   ]);
 }
 
+function prePolicyDisclosures(): readonly string[] {
+  return Object.freeze([
+    ...currentCustomReceiptDisclosures("PARTICIPANT").slice(0, 3),
+    PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+    PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
+  ]);
+}
+
 function rejectsWithCode(value: CustomSupervisedProtectionReceipt, code: string): void {
   assert.throws(() => assertCustomSupervisedReceipt(value), (error: unknown) => (
     error instanceof CustomSupervisedReceiptError && error.code === code
@@ -101,8 +111,8 @@ test("fresh managed receipt disclosures state the Boolean and recourse authoriti
   assert.equal(classifyCustomReceiptDisclosures(disclosures), "CURRENT");
   assert.equal(disclosures[3], CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
   assert.equal(disclosures[4], CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE);
-  assert.match(disclosures[3], /conflict\/no-conflict result/u);
-  assert.match(disclosures[4], /Configured demo policy determines the recourse path/u);
+  assert.match(disclosures[3], /authenticated input to the precommitted policy/u);
+  assert.match(disclosures[4], /does not authorize settlement/u);
   assert.doesNotMatch(disclosures[3], /terminal outcome/u);
 });
 
@@ -119,10 +129,12 @@ for (const conflict of [true, false]) {
   });
 }
 
-test("only the exact current and exact historical disclosure layouts are accepted", () => {
+test("only the exact current and exact immutable historical disclosure layouts are accepted", () => {
   const current = currentCustomReceiptDisclosures("OPERATOR");
+  const prePolicy = prePolicyDisclosures();
   const legacy = legacyDisclosures();
   assert.equal(classifyCustomReceiptDisclosures(current), "CURRENT");
+  assert.equal(classifyCustomReceiptDisclosures(prePolicy), "PRE_POLICY");
   assert.equal(classifyCustomReceiptDisclosures(legacy), "LEGACY");
 
   const malformed = [
@@ -138,11 +150,14 @@ test("only the exact current and exact historical disclosure layouts are accepte
   }
 });
 
-test("correcting disclosure text changes new receipt digests without invalidating exact legacy bytes", () => {
+test("correcting disclosure text changes new receipt digests without invalidating immutable historical bytes", () => {
   const current = receipt(true, currentCustomReceiptDisclosures("PARTICIPANT"));
+  const prePolicy = receipt(true, prePolicyDisclosures());
   const legacy = receipt(true, legacyDisclosures());
+  assert.notEqual(current.receiptDigest, prePolicy.receiptDigest);
   assert.notEqual(current.receiptDigest, legacy.receiptDigest);
   assert.doesNotThrow(() => assertCustomSupervisedReceipt(current));
+  assert.doesNotThrow(() => assertCustomSupervisedReceipt(prePolicy));
   assert.doesNotThrow(() => assertCustomSupervisedReceipt(legacy));
 
   // Both disclosure contracts are recognized, so retaining a digest after

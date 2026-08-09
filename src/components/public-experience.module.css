@@ -1344,6 +1344,15 @@
   border-color: var(--ground);
 }
 
+.complementaryProof {
+  display: grid;
+  gap: 1rem;
+}
+
+.complementaryProof p {
+  margin: 0;
+}
+
 /* ---------------------------------------------------------------- 2. problem */
 
 .problem h2 {
@@ -1574,14 +1583,6 @@
   transition:
     stroke 160ms ease-out,
     stroke-width 160ms ease-out;
-}
-
-.integrationTether {
-  fill: none;
-  stroke: var(--integration-signal-colour);
-  stroke-linecap: butt;
-  stroke-width: 8;
-  vector-effect: non-scaling-stroke;
 }
 
 .flow[data-step="3"] .integrationSignal[data-arrived="true"] {

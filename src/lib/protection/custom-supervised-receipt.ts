@@ -123,7 +123,7 @@ export function assertCustomSupervisedReceipt(receipt: CustomSupervisedProtectio
     throw new CustomSupervisedReceiptError("TERMINAL_REFUSAL", "A false governed Boolean must record a signed refusal");
   }
   if (conflict && receipt.terminal.recourseRecordDigest === null) {
-    throw new CustomSupervisedReceiptError("TERMINAL_RECORD", "A true governed Boolean must bind a recourse record");
+    throw new CustomSupervisedReceiptError("TERMINAL_RECORD", "A true governed conflict result must bind its policy-authorized recourse record");
   }
   if (receipt.governedResult.resultCiphertextDigest !== receipt.governedResult.independentlyRecomputedResultDigest) {
     throw new CustomSupervisedReceiptError("RECOMPUTATION", "Governed recomputation digest mismatch");

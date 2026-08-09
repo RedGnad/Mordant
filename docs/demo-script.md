@@ -1,61 +1,71 @@
-# 80-second demo spine
+# 80-second product demo spine
 
-**Category framing, stated once at the start.** Tokenized platforms automate issuance, ownership and
-transfers. Mordant automates the remedy when a funded receivable later breaks its rules. The policy
-demonstrated below, a confirmed conflicting pledge, is the first implemented one, not the whole
-product.
+## 0–10s — Category
 
-**Settlement-token caveat, binding until Cleanverse answers.** Monad aUSDC currently rejects our
-test wallets with `ComplianceFailed` while other Monad A-Tokens accept them. A question is open with
-the sponsor. Until it is answered, no step below may be narrated as a live settlement rail, and no
-substitute settlement token is adopted. Steps that depend on the rail must be labelled `SYNTHETIC`,
-`READ-ONLY` or `NOT PROVEN` as applicable.
+“Mordant is the recourse layer for tokenized private credit. Conflicting Pledge Protection is the
+first implemented workflow.”
 
-1. **0–10s — Human problem.** One verified invoice has already financed real working capital. The
-   first holders should not receive only an alert if the originator breaks exclusivity.
-2. **10–25s — Issuance.** Show valid adapter and vault A-Passes plus the funder's holder role/A-Pass,
-   then show the aUSDC policy decision on 100 aUSDC of funder-to-vault funding: 90 reaches the
-   originator, 10 enters the reserve, and 100 custom CVA units are held 1:1 for two holders. Label
-   the settlement leg honestly; it is not proven live today.
-3. **25–38s — Transfer.** Move the beneficial units to a 60/40 holder split. Show both wallets pass
-   direct A-Pass and adapter-deliverability checks, then show the CVA policy approve the exact
-   holder-to-holder pair and amount; the adapter and vault fail as holder destinations.
-4. **38–52s — Conflict.** Facility B commits, then reveals a second overlapping EIP-712 pledge. The
-   record date predates the reveal.
-5. **52–68s — Consequence.** Finalize after the short cure window. Holder A claims 6 aUSDC and holder
-   B claims 4 aUSDC under holder A-Pass and real aUSDC policy checks, without an unrelated CVA
-   delivery probe.
-6. **68–76s — Principal continuity.** Their 60 and 40 invoice units remain. Fund 110 redemption and
-   show 66/44 cash redemption independently under the aUSDC policy after the 6/4 bond payout.
-7. **76–80s — Compression.** “Tokenized assets automate ownership. Mordant automates recourse. A
-   confirmed incident turns a pre-funded reserve into protection, without cancelling the claim.”
+Do not open by defining Mordant as a two-lender overlap detector. The conflict check is the concrete
+first workflow; result → policy → governed action → evidence is the product architecture.
 
-## Liveness appendix
+## 10–30s — Current live managed proof
 
-Use separate disposable fixtures so the main 80-second spine remains readable:
+Open the landing and place two synthetic financing claims on the shared 0–600 demo timeline. State:
 
-1. Configure a policy that permits the real 60/40 allocation burns but would reject one 100-unit burn.
-   Show base readiness pass on identity/role/custody/policy presence, both per-allocation readiness
-   checks pass, duplicate-holder activation fail, and the unique 60/40 activation succeed without a
-   false full-supply rejection.
-2. Fully escrow cash, make either holder A's complete 60-unit burn or exact 66-aUSDC payout fail its
-   policy precheck, then cross default. Show A receive CVA, `cvaReleasedFace` increase by 66, 66
-   excess aUSDC accrue as buyer `settlementCredit`, and holder B—whose burn and exact 44-aUSDC payout
-   both pass—still redeem the remaining cash.
-3. On another fixture, begin with only 20 escrow, let A receive CVA, then show the buyer fund the exact
-   residual shortfall of 24 despite `defaultCvaReleaseStarted == true`; B then redeems 44 cash.
-4. Expire the buyer before excess credit accrues and the originator before a clean redeem/close.
-   Holder actions still complete because refunds and bond returns accrue as pull credits. Restore each
-   A-Pass and show the exact `_transferExact` policy precheck pass before `claimSettlementCredit`
-   releases the accounted aUSDC.
-5. Attempt activation while the originator cannot receive aUSDC. Show the inline net-proceeds transfer
-   revert the entire activation, with no funder cash or partially activated state left behind.
-6. Transfer mINV into a holder that already has a position and show the adapter probe use the complete
-   future balance while the pair check uses only the transfer delta. Partially release CVA, then show
-   the next probe use the residual mINV balance and the adapter verify the real transfer delta.
+“These bars are synthetic claim periods on one shared timeline. The browser lets us place them but
+does not decide whether they conflict.”
 
-State the boundary explicitly: these checks target monotone balance caps. They may reject a valid
-max-per-transaction delta conservatively and cannot guarantee future execution under mutable,
-history-dependent or non-monotone policies.
+Run the encrypted check. During execution, name only what is observed: A-Pass checked, encrypted
+artifacts prepared, BGV evaluation complete, governed result released. The managed service receives
+the synthetic values during intake/preparation; the evaluator receives ciphertexts and has no
+decryption key.
 
-Never describe the synthetic invoice, local mock, or pending sponsor boundary as live production.
+## 30–48s — Result and policy authority
+
+When the result appears, say:
+
+“The governed result establishes conflict or no conflict only. It does not authorize recourse,
+settlement or legal judgment. A policy committed before result exposure selects one closed branch.”
+
+For conflict, show the current managed branch:
+
+- policy `mordant.managed-demo.facility-protection@1`;
+- 24-hour local protocol-double cure path;
+- settlement `NOT_AUTHORIZED`;
+- operation outcome bound to evidence.
+
+For no conflict, show record-and-close. Do not call no conflict a credit approval.
+
+## 48–62s — Verifiable operation
+
+Open the compact proof identifiers only if the reviewer asks. Explain that policy selection, plan,
+durable operation authorization and terminal evidence cross-bind the result and bounded operation.
+Hashes are verification handles, not inputs a judge has to paste elsewhere.
+
+## 62–76s — Separate historical on-chain proof
+
+Follow **Verify the completed on-chain recourse**. State the temporal boundary before showing any
+transaction:
+
+“This is a separate hardened two-wallet run under the historical Adapter V2 architecture, not a
+continuation of the fresh managed run.”
+
+Show the public explorer links for `ReleaseConsumed`, the real historical 600-second cure,
+permissionless finalization, both aUSDC claims and reserve reconciliation. The governed result
+established conflict; historical policy and deployment configuration supplied the cure path,
+holders and payout amounts.
+
+## 76–80s — Compression
+
+“One private case state. One precommitted policy branch. One authorized bounded operation. Evidence
+that binds the whole path.”
+
+## Claims to refuse
+
+- The managed run performed a fresh Monad/aUSDC settlement.
+- The governed Boolean authorized recourse or carried payout terms.
+- The historical 600-second run used the current 24-hour managed policy chain.
+- Direct wallet admission proves participant-originated encryption.
+- Mordant globally holds no decryption key.
+- N=2 isolated-worker evidence proves production horizontal scaling.
+- N=3 Private Conflict Graph is current product capability.

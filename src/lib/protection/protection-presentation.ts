@@ -43,7 +43,7 @@ export function recourseStatePresentation(status: RecourseState): Readonly<{ sta
     case "CURE_WINDOW": return { status, label: "Cure / dispute window open" };
     case "AVAILABLE": return { status, label: "Governed recourse available after cure chronology" };
     case "SIMULATED_AVAILABLE": return { status, label: "Simulated protocol clock · recourse would be available after cure" };
-    case "REFUSED": return { status, label: "Recourse refused — signed Boolean is false" };
+    case "REFUSED": return { status, label: "Historical local rule refused recourse after no-conflict status" };
   }
 }
 
@@ -66,14 +66,14 @@ export function localStagePresentation(view: ProtectionCaseView): LocalStagePres
     case "PARTICIPANT_B_SUBMITTED":
       return { stageLabel: view.stage, detail: "Encrypted synthetic participant submissions are being durably bound.", recourse, provisional: true };
     case "EVALUATED":
-      return { stageLabel: "EVALUATED", detail: "The fixed BGV circuit completed; governed recomputation and Boolean release are pending.", recourse, provisional: true };
+      return { stageLabel: "EVALUATED", detail: "The fixed BGV circuit completed; governed recomputation and signed conflict status are pending.", recourse, provisional: true };
     case "RELEASED":
-      return { stageLabel: "RELEASED", detail: "The governed Boolean is signed; recourse admission has not completed.", recourse, provisional: true };
+      return { stageLabel: "RELEASED", detail: "The governed conflict status is signed; the retained local rule has not been applied.", recourse, provisional: true };
     case "RECOURSE_OPENED":
       return {
         stageLabel: view.protectionCase.recourseState === "REFUSED" ? "REFUSED" : "RECOURSE_OPENED · CURE_WINDOW",
         detail: view.protectionCase.recourseState === "REFUSED"
-          ? "The signed false Boolean refused recourse; final public evidence is not sealed yet."
+          ? "The historical local rule recorded no recourse for the no-conflict status; final public evidence is not sealed yet."
           : "The local protocol double admitted the recourse record and opened its simulated cure window.",
         recourse,
         provisional: true,

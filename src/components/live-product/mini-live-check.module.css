@@ -131,28 +131,31 @@
   z-index: 3;
   inset: 1px;
   display: flex;
-  background: color-mix(in srgb, var(--ground) 18%, transparent);
+  background: color-mix(in srgb, var(--ground) 68%, transparent);
   color: var(--ink);
-  gap: 8px;
+  flex-direction: column;
+  gap: 7px;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
 
 .timelinePrivacy svg {
-  width: 19px;
-  height: 19px;
+  width: clamp(44px, 5vw, 58px);
+  height: clamp(44px, 5vw, 58px);
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.6;
+  stroke-width: 2.35;
 }
 
 .timelinePrivacy span {
   font-family: var(--font-proof), monospace;
   font-size: 10px;
-  letter-spacing: 0.045em;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-align: center;
   text-transform: uppercase;
 }
 

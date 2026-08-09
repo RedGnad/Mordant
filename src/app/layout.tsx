@@ -41,10 +41,10 @@ const productFont = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "Mordant — programmable recourse",
+    default: "Mordant — recourse for tokenized private credit",
     template: "%s · Mordant",
   },
-  description: "Operational control, funded consequences, and verifiable evidence for tokenized receivables.",
+  description: "Policy-governed bounded action and verifiable evidence for tokenized private credit.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
