@@ -21,7 +21,7 @@ const INTEGRATION_STEPS = [
   {
     label: "Cleanverse verifies",
     detail: "MINV01 + A-Pass",
-    story: "Cleanverse verifies MINV01 provenance and identity plus participant eligibility, not legal validity or enforceability.",
+    story: "Cleanverse verifies MINV01 provenance and identity plus participant eligibility.",
   },
   {
     label: "Mordant decides privately",
