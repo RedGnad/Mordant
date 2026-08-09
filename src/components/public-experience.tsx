@@ -42,7 +42,6 @@ const INTEGRATION_STEPS = [
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
 const INTEGRATION_ROUTE = "M150 120H380L470 40H660L750 120H1050";
 const INTEGRATION_TARGETS = [0.239, 0.365, 0.688, 1] as const;
-const INTEGRATION_REVEAL_LAG = 0.024;
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -169,8 +168,10 @@ export function PublicExperience({ liveCheckHolder }: {
     const length = path.getTotalLength();
     const placeSignal = (progress: number) => {
       const point = path.getPointAtLength(length * progress);
-      const revealProgress = Math.max(0, progress - INTEGRATION_REVEAL_LAG);
-      reveal.setAttribute("stroke-dashoffset", `${1 - revealProgress}`);
+      // Reveal through the centre of the travelling square. The square then
+      // covers the line ending, so every state reads as one continuous object
+      // instead of a route followed by a visibly detached marker.
+      reveal.setAttribute("stroke-dashoffset", `${1 - progress}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
       integrationMotionProgress.current = progress;
     };
@@ -288,7 +289,7 @@ export function PublicExperience({ liveCheckHolder }: {
                       d={INTEGRATION_ROUTE}
                       pathLength="1"
                       strokeDasharray="1"
-                      strokeDashoffset={1 - (INTEGRATION_TARGETS[0] - INTEGRATION_REVEAL_LAG)}
+                      strokeDashoffset={1 - INTEGRATION_TARGETS[0]}
                     />
                   </mask>
                 </defs>
@@ -296,7 +297,7 @@ export function PublicExperience({ liveCheckHolder }: {
                 <g mask="url(#integration-route-reveal)">
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} d="M150 120H380" />
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M368 120H380L470 40H660L750 120H780" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M768 120H1050" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M780 120H1050" />
                 </g>
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">
                   <rect x="-18" y="-18" width="36" height="36" />

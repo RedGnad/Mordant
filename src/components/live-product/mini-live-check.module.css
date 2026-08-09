@@ -106,6 +106,14 @@
   font-weight: 600;
 }
 
+.timelineExplanation {
+  max-width: 64ch;
+  margin: -3px 0 1px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .timelineHeading span,
 .timelineBoundary,
 .laneLabel,
@@ -699,10 +707,6 @@
 
   .timelineTicks {
     margin-inline: 53px 51px;
-  }
-
-  .timelineTicks span[data-mobile-tick="false"] {
-    display: none;
   }
 
   .presets button {

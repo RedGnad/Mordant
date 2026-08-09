@@ -41,9 +41,9 @@ const DEFAULT_DRAFT: WindowDraft = Object.freeze({
 });
 
 const PRESETS = [
-  { label: "Arrangement 01", draft: DEFAULT_DRAFT },
+  { label: "Example 1", draft: DEFAULT_DRAFT },
   {
-    label: "Arrangement 02",
+    label: "Example 2",
     draft: Object.freeze({ aFrom: "120", aUntil: "220", bFrom: "320", bUntil: "520" }),
   },
 ] as const;
@@ -337,12 +337,12 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           {inputsLocked ? null : (
             <div className={styles.presets} aria-label="Example claim arrangements">
               <span>Start from</span>
-              {PRESETS.map((preset) => (
+              {PRESETS.map((preset, index) => (
                 <button
                   type="button"
                   key={preset.label}
                   onClick={() => applyPreset(preset.draft)}
-                  data-testid={`mini-preset-${preset.label.endsWith("01") ? "one" : "two"}`}
+                  data-testid={`mini-preset-${index === 0 ? "one" : "two"}`}
                 >
                   {preset.label}
                 </button>
@@ -359,7 +359,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
                 <fieldset key={label}>
                   <legend>Financing claim {label}</legend>
                   <label>
-                    <span>Active from</span>
+                    <span>Start</span>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -372,7 +372,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
                     />
                   </label>
                   <label>
-                    <span>Active until</span>
+                    <span>End</span>
                     <input
                       type="text"
                       inputMode="numeric"

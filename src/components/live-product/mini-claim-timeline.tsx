@@ -174,9 +174,11 @@ export function MiniClaimTimeline({
   return (
     <div className={styles.timeline} data-testid="mini-claim-timeline">
       <div className={styles.timelineHeading}>
-        <strong>Claim geometry</strong>
-        <span>0–600 synthetic units</span>
+        <strong>Shared synthetic timeline · 0–600</strong>
       </div>
+      <p className={styles.timelineExplanation}>
+        Place both financing claims on the same timeline. These are synthetic time units for the demo—not dates or block numbers.
+      </p>
       <div className={styles.timelinePlot}>
         <ClaimLane claim="A" bounds={claimA} disabled={disabled} onChange={onChangeA} />
         <ClaimLane claim="B" bounds={claimB} disabled={disabled} onChange={onChangeB} />
@@ -187,7 +189,7 @@ export function MiniClaimTimeline({
         </div>
       </div>
       <p className={styles.timelineBoundary}>
-        Placement only. The timeline never interprets the relationship between these claims.
+        Placement only. The browser never interprets the relationship between these claims.
       </p>
     </div>
   );

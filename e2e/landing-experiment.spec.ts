@@ -200,8 +200,9 @@ test("the neutral timeline and exact fields stay synchronized without interpreti
   await page.goto("/");
 
   const timeline = page.getByTestId("mini-claim-timeline");
-  await expect(timeline).toContainText("0–600 synthetic units");
-  await expect(timeline).toContainText("never interprets the relationship");
+  await expect(timeline).toContainText("Shared synthetic timeline · 0–600");
+  await expect(timeline).toContainText("synthetic time units for the demo—not dates or block numbers");
+  await expect(timeline).toContainText("browser never interprets the relationship");
   await expect(page.getByRole("slider")).toHaveCount(4);
 
   const aFrom = page.getByRole("slider", { name: "Financing claim A active from" });

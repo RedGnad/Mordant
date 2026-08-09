@@ -79,6 +79,14 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
   await expect(page.getByTestId("mini-live-check")).toContainText("synthetic financing-claim windows");
   await expect(page.getByTestId("mini-live-check")).toContainText("real encrypted evaluation");
+  await expect(page.getByTestId("mini-claim-timeline")).toContainText("Shared synthetic timeline · 0–600");
+  await expect(page.getByTestId("mini-claim-timeline")).toContainText(
+    "These are synthetic time units for the demo—not dates or block numbers.",
+  );
+  await expect(page.getByTestId("mini-claim-timeline").locator("[class*='timelineTicks'] span")).toHaveCount(7);
+  await expect(page.getByTestId("mini-live-check").getByText("Example 1", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mini-live-check").getByText("Example 2", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("mini-live-check").getByText("Arrangement 01", { exact: true })).toHaveCount(0);
   const miniPanel = page.getByTestId("mini-live-check").locator("[class*='panel']");
   await miniPanel.scrollIntoViewIfNeeded();
   const panelOptics = await miniPanel.evaluate((node) => {
@@ -145,7 +153,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   expect(stageBoxes).toHaveLength(4);
   if (testInfo.project.name === "1280x800") {
     const reveal = page.locator("[class*='flowRouteReveal']");
-    const expectedOffsets = [0.785, 0.659, 0.336, 0.024];
+    const expectedOffsets = [0.761, 0.635, 0.312, 0];
     for (let index = 0; index < expectedOffsets.length; index += 1) {
       const stage = integration.getByRole("button").nth(index);
       await stage.click();
