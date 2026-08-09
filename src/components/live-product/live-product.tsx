@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { MordantMark } from "../mordant-mark";
 import { AdapterCompatibilityPanel, useAdapterCompatibility } from "./adapter-compatibility-panel";
@@ -117,14 +117,16 @@ export function LiveProduct({
   const [traceOpen, setTraceOpen] = useState(false);
   const chapter = chapterFor(model.state);
   const statusRef = useRef<HTMLElement>(null);
-  const previousChapter = useRef(chapter);
   const current = chapterIndex(chapter);
   const released = model.release !== null;
   const adapterCompatibility = useAdapterCompatibility(released);
   const conflict = model.release?.conflict === true;
   const activeStage = model.stages.find((stage) => stage.progress === "active") ?? null;
   const completedStageCount = model.stages.filter((stage) => stage.progress === "done").length;
+  const managedRunPending = model.intake === "MANAGED_COMBINED"
+    && model.runId !== null && !released && model.notice === null;
   const visiblyWorking = busy
+    || managedRunPending
     || model.eligibility.state === "CHECKING"
     || model.state === "BUSY"
     || (chapter === "DECIDE" && !released && model.notice === null);
@@ -133,6 +135,8 @@ export function LiveProduct({
     ? model.notice.title
     : busy && chapter === "AUTHORIZE"
       ? "Request received. Rechecking A-Pass before the secure execution opens."
+      : managedRunPending && chapter === "AUTHORIZE"
+        ? "Run admitted. Waiting for the execution service’s next observed stage."
       : model.eligibility.state === "CHECKING"
         ? "Reading the active A-Pass policy on Monad testnet."
         : chapter === "DECIDE"
@@ -148,18 +152,6 @@ export function LiveProduct({
     () => formatDeadline(model.decisionRail?.deadlineIso ?? null),
     [model.decisionRail?.deadlineIso],
   );
-
-  useEffect(() => {
-    if (previousChapter.current === chapter) return;
-    previousChapter.current = chapter;
-    const frame = window.requestAnimationFrame(() => {
-      statusRef.current?.scrollIntoView({
-        block: "start",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [chapter]);
 
   const claimRange = (from: string, until: string): readonly [number, number] | null => {
     const start = Number(from);
@@ -387,7 +379,7 @@ export function LiveProduct({
                         autoComplete="off"
                         value={managedDraft[fromKey]}
                         aria-invalid={invalidFields.includes(fromKey)}
-                        disabled={busy}
+                        disabled={busy || managedRunPending}
                         onChange={(event) => actions.onDraftChange?.(fromKey, event.target.value)}
                       />
                     </div>
@@ -400,7 +392,7 @@ export function LiveProduct({
                         autoComplete="off"
                         value={managedDraft[untilKey]}
                         aria-invalid={invalidFields.includes(untilKey)}
-                        disabled={busy}
+                        disabled={busy || managedRunPending}
                         onChange={(event) => actions.onDraftChange?.(untilKey, event.target.value)}
                       />
                     </div>
@@ -433,24 +425,28 @@ export function LiveProduct({
             <button
               type="button"
               className={styles.primary}
-              aria-disabled={busy}
-              aria-busy={busy}
-              data-loading={busy}
-              onClick={busy ? undefined : actions.onStart}
+              aria-disabled={busy || managedRunPending}
+              aria-busy={busy || managedRunPending}
+              data-loading={busy || managedRunPending}
+              onClick={busy || managedRunPending ? undefined : actions.onStart}
             >
-              {busy ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
-              <span>{busy ? "Starting confidential check" : "Run the confidential check"}</span>
+              {busy || managedRunPending ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
+              <span>{managedRunPending ? "Execution in progress" : busy ? "Starting confidential check" : "Run the confidential check"}</span>
             </button>
           )}
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
             <p
               className={styles.launchFeedback}
               data-testid="managed-launch-feedback"
-              data-visible={busy}
+              data-visible={busy || managedRunPending}
               role="status"
-              aria-hidden={!busy}
+              aria-hidden={!busy && !managedRunPending}
             >
-              <strong>Request received.</strong> Rechecking A-Pass, then opening the secure execution.
+              {managedRunPending ? (
+                <><strong>Run admitted.</strong> Waiting for the next observed execution stage.</>
+              ) : (
+                <><strong>Request received.</strong> Rechecking A-Pass, then opening the secure execution.</>
+              )}
             </p>
           )}
         </section>

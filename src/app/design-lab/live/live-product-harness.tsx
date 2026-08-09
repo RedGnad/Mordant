@@ -76,6 +76,16 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       busy: true,
     };
   }
+  if (scenario === "admitted") {
+    return {
+      model: adaptManagedIntake({
+        ...base,
+        view: Object.freeze({ ...RUNNING_VIEW, stage: "CASE_CREATED", nextOperation: "prepareMatch" }),
+        elapsedSeconds: 0,
+      }),
+      draft: DRAFT,
+    };
+  }
   if (scenario === "running") {
     return { model: adaptManagedIntake({ ...base, view: RUNNING_VIEW }), draft: DRAFT };
   }

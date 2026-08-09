@@ -83,6 +83,16 @@ test.describe("the judge acceptance path", () => {
       .toContainText("Request received. Rechecking A-Pass, then opening the secure execution.");
   });
 
+  test("feedback remains active between admission and the first worker stage", async ({ page }) => {
+    await open(page, "admitted");
+    const status = page.getByTestId("live-status");
+    await expect(status).toHaveAttribute("data-status", "active");
+    await expect(status).toContainText("Run admitted. Waiting for the execution service’s next observed stage.");
+    const action = page.getByRole("button", { name: "Execution in progress" });
+    await expect(action).toHaveAttribute("aria-disabled", "true");
+    await expect(action).toHaveAttribute("aria-busy", "true");
+  });
+
   test("the branded activity mark remains legible with reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await open(page, "starting");
