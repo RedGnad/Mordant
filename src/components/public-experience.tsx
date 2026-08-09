@@ -47,7 +47,12 @@ const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
 const INTEGRATION_RUNWAY = 10;
 const INTEGRATION_ROUTE = "M150 120H390L470 40H660L740 120H1050";
 const INTEGRATION_DIAGONAL_LENGTH = Math.hypot(80, 80);
-const INTEGRATION_ROUTE_LENGTH = 240 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + 310;
+const INTEGRATION_INPUT_LENGTH = 230;
+const INTEGRATION_DECISION_LENGTH = (INTEGRATION_RUNWAY * 2)
+  + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH;
+const INTEGRATION_ACTION_LENGTH = 300;
+const INTEGRATION_ROUTE_LENGTH = INTEGRATION_INPUT_LENGTH
+  + INTEGRATION_DECISION_LENGTH + INTEGRATION_ACTION_LENGTH;
 // Exact distances to the four authored junctions. Rounded progress values put
 // the travelling square a few pixels beyond a corner at some viewport scales.
 const INTEGRATION_TARGETS = [
@@ -176,11 +181,21 @@ export function PublicExperience({ liveCheckHolder }: {
     const path = integrationPathRef.current;
     const reveal = integrationRevealRef.current;
     const signal = integrationSignalRef.current;
-    if (path === null || reveal === null || signal === null) return;
+    const segments = Array.from(integrationFlowRef.current?.querySelectorAll<SVGPathElement>(
+      "[data-integration-route-segment]",
+    ) ?? []);
+    if (path === null || reveal === null || signal === null || segments.length !== 3) return;
 
     const from = integrationMotionProgress.current;
     const to = INTEGRATION_TARGETS[integrationStep] ?? INTEGRATION_TARGETS[0];
     const length = path.getTotalLength();
+    let segmentStart = 0;
+    const segmentRanges = segments.map((segment) => {
+      const segmentLength = segment.getTotalLength();
+      const range = { segment, start: segmentStart, length: segmentLength };
+      segmentStart += segmentLength;
+      return range;
+    });
     const placeSignal = (progress: number) => {
       const distance = length * progress;
       const point = path.getPointAtLength(distance);
@@ -189,6 +204,10 @@ export function PublicExperience({ liveCheckHolder }: {
       // segment, so reverse playback cannot expose a pivoting "tether", a gap,
       // or any responsibility ahead of the signal.
       reveal.setAttribute("stroke-dashoffset", `${1 - progress}`);
+      segmentRanges.forEach(({ segment, start, length: segmentLength }) => {
+        const revealedLength = Math.min(segmentLength, Math.max(0, distance - start));
+        segment.setAttribute("stroke-dasharray", `${revealedLength} ${segmentLength + 1}`);
+      });
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
       const signalColour = progress <= INTEGRATION_TARGETS[0]
         ? "var(--receivable)"
@@ -308,24 +327,40 @@ export function PublicExperience({ liveCheckHolder }: {
               Stable / Conflict / Recourse / Proof scrollytelling remains unmounted. */}
           <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
             <div className={styles.flowCanvas}>
-              <svg className={styles.flowGraphic} viewBox="0 0 1200 180" aria-hidden="true">
-                <defs>
-                  <mask id="integration-route-reveal" maskUnits="userSpaceOnUse" x="100" y="0" width="1000" height="180">
-                    <path
-                      ref={integrationRevealRef}
-                      className={styles.flowRouteReveal}
-                      d={INTEGRATION_ROUTE}
-                      pathLength="1"
-                      strokeDasharray="1"
-                      strokeDashoffset={1 - INTEGRATION_INITIAL_REVEAL}
-                    />
-                  </mask>
-                </defs>
+              <svg
+                className={styles.flowGraphic}
+                viewBox="0 0 1200 180"
+                preserveAspectRatio="xMidYMid meet"
+                aria-hidden="true"
+              >
+                <path
+                  ref={integrationRevealRef}
+                  className={styles.flowRouteReveal}
+                  d={INTEGRATION_ROUTE}
+                  pathLength="1"
+                  strokeDasharray="1"
+                  strokeDashoffset={1 - INTEGRATION_INITIAL_REVEAL}
+                />
                 <path ref={integrationPathRef} className={styles.flowMotionPath} d={INTEGRATION_ROUTE} />
-                <g mask="url(#integration-route-reveal)">
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} d="M150 120H380" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M380 120H390L470 40H660L740 120H750" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M750 120H1050" />
+                <g>
+                  <path
+                    className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`}
+                    d="M150 120H380"
+                    data-integration-route-segment
+                    strokeDasharray={`${INTEGRATION_INPUT_LENGTH} ${INTEGRATION_INPUT_LENGTH + 1}`}
+                  />
+                  <path
+                    className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`}
+                    d="M380 120H390L470 40H660L740 120H750"
+                    data-integration-route-segment
+                    strokeDasharray={`0 ${INTEGRATION_DECISION_LENGTH + 1}`}
+                  />
+                  <path
+                    className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`}
+                    d="M750 120H1050"
+                    data-integration-route-segment
+                    strokeDasharray={`0 ${INTEGRATION_ACTION_LENGTH + 1}`}
+                  />
                 </g>
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">
                   <rect x="-18" y="-18" width="36" height="36" />

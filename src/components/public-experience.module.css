@@ -156,7 +156,7 @@
    * visibly green. This slightly magenta source compensates the inversion so
    * the overlap reads as the same quiet violet-white as the selection accent.
    */
-  fill: #ffe9ff;
+  fill: #fdf0ff;
   transform-origin: center;
   will-change: transform, opacity;
 }
@@ -1342,11 +1342,11 @@
 
 .complementaryProof {
   display: grid;
-  align-content: start;
   padding: clamp(24px, 3vw, 38px);
   border: 1px solid color-mix(in srgb, var(--ground) 30%, transparent);
   border-top: 4px solid var(--receivable);
   gap: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .complementaryProof p {
@@ -1541,13 +1541,16 @@
 }
 
 .flowCanvas {
+  display: grid;
   min-width: 0;
+  justify-items: center;
 }
 
 .flowGraphic {
   display: block;
   width: 100%;
   height: auto;
+  margin-inline: auto;
   overflow: visible;
   touch-action: pan-y;
 }
@@ -1560,11 +1563,7 @@
 
 .flowRouteReveal {
   fill: none;
-  stroke: white;
-  stroke-linecap: butt;
-  stroke-linejoin: miter;
-  stroke-width: 12;
-  vector-effect: non-scaling-stroke;
+  stroke: none;
 }
 
 .flowRouteSegment {

@@ -46,7 +46,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
 
   const symbolField = page.locator("[class*='heroSymbolField']");
   await expect.poll(() => symbolField.locator("svg").evaluate((node) => getComputedStyle(node).fill))
-    .toBe("rgb(255, 233, 255)");
+    .toBe("rgb(253, 240, 255)");
   await page.waitForTimeout(900);
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     await page.screenshot({ path: testInfo.outputPath("hero-overlap-violet-white.png") });
@@ -255,6 +255,15 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(institutionalPrivacy).toContainText("separate from both the managed public demo and direct wallet admission");
   await expect(institutionalPrivacy.getByRole("link", { name: "Review the qualified privacy profile" }))
     .toHaveAttribute("href", /participant-originated-encryption\.md$/u);
+  if ((viewport?.width ?? 0) > 760) {
+    const proofActionBounds = await page.locator('[data-proof] a').evaluateAll((actions) => actions.map((action) => {
+      const bounds = action.getBoundingClientRect();
+      return { bottom: bounds.bottom, height: bounds.height };
+    }));
+    expect(proofActionBounds).toHaveLength(2);
+    expect(Math.abs(proofActionBounds[0].bottom - proofActionBounds[1].bottom)).toBeLessThanOrEqual(1);
+    expect(Math.abs(proofActionBounds[0].height - proofActionBounds[1].height)).toBeLessThanOrEqual(1);
+  }
   for (const technicalCaveat of [
     "native Monad FHE",
     "threshold release",
@@ -331,6 +340,21 @@ test("the responsibility route stays attached to its signal in both directions",
     });
     expect(connection).not.toBeNull();
     expect(connection?.routeToSignal).toBeLessThanOrEqual(1);
+
+    const visibleRoute = await page.locator("[data-integration-route-segment]").evaluateAll((segments) => {
+      const route = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
+      const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+      if (route === null || reveal === null) return null;
+      const visibleLength = segments.reduce((total, segment) => {
+        const dash = Number.parseFloat(segment.getAttribute("stroke-dasharray") ?? "0");
+        return total + (Number.isFinite(dash) ? dash : 0);
+      }, 0);
+      const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
+      return { visibleLength, signalDistance: route.getTotalLength() * progress };
+    });
+    expect(visibleRoute).not.toBeNull();
+    expect(Math.abs((visibleRoute?.visibleLength ?? 0) - (visibleRoute?.signalDistance ?? 0)))
+      .toBeLessThanOrEqual(1);
   }
 
   await expect(page.locator("[class*='integrationTether']")).toHaveCount(0);
