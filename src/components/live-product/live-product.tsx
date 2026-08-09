@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { MordantMark } from "../mordant-mark";
 import { AdapterCompatibilityPanel, useAdapterCompatibility } from "./adapter-compatibility-panel";
 import { OnchainPanel } from "./onchain-panel";
 import { ParticipantAdmission } from "./participant-admission";
@@ -212,7 +213,9 @@ export function LiveProduct({
         aria-live="polite"
         aria-atomic="true"
       >
-        <span className={styles.statusMark} aria-hidden="true"><span /></span>
+        <span className={styles.statusMark} aria-hidden="true">
+          <MordantMark className={styles.statusGlyph} />
+        </span>
         <div className={styles.statusCopy}>
           <p>Step {current + 1} of {LIVE_CHAPTERS.length} · {LIVE_CHAPTERS[current]?.title}</p>
           <strong>{statusMessage}</strong>

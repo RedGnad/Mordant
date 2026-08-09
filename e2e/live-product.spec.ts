@@ -32,8 +32,9 @@ test.describe("the judge acceptance path", () => {
 
     // The one line that names all three Cleanverse boundaries.
     const body = page.locator("body");
-    await expect(body).toContainText("Cleanverse verifies asset provenance and identity plus participant eligibility");
-    await expect(body).toContainText("not legal validity or enforceability");
+    await expect(body).toContainText(
+      "Cleanverse verifies asset provenance and identity plus participant eligibility. Mordant privately evaluates",
+    );
     await expect(body).toContainText("governed result establishes only that conflict status");
     await expect(body).toContainText("precommitted policy selects a bounded branch");
     const scope = page.locator("details").filter({ hasText: "What the live workflow establishes" });
@@ -68,6 +69,11 @@ test.describe("the judge acceptance path", () => {
     const status = page.getByTestId("live-status");
     await expect(status).toHaveAttribute("data-status", "active");
     await expect(status).toContainText("Request received. Rechecking A-Pass before the secure execution opens.");
+    const statusMark = status.locator("svg");
+    await expect(statusMark).toBeVisible();
+    await expect(statusMark.locator("rect")).toHaveCount(4);
+    expect(await statusMark.locator("..").evaluate((mark) => window.getComputedStyle(mark).animationName))
+      .toMatch(/liveStatusSpin.*liveStatusColour/u);
     const action = page.getByRole("button", { name: "Starting confidential check" });
     await expect(action).toHaveAttribute("aria-disabled", "true");
     await expect(action).toHaveAttribute("aria-busy", "true");
@@ -75,6 +81,15 @@ test.describe("the judge acceptance path", () => {
     await expect(action.locator("[class*='buttonLoader']")).toBeVisible();
     await expect(page.getByTestId("managed-launch-feedback"))
       .toContainText("Request received. Rechecking A-Pass, then opening the secure execution.");
+  });
+
+  test("the branded activity mark remains legible with reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await open(page, "starting");
+    const statusMark = page.getByTestId("live-status").locator("svg");
+    await expect(statusMark).toBeVisible();
+    await expect(statusMark.locator("rect")).toHaveCount(4);
+    await expect(statusMark.locator("..")).toHaveCSS("animation-name", "none");
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {

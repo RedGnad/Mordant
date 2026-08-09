@@ -593,7 +593,7 @@ export function chapterIndex(id: LiveChapterId): number {
  * the top of the product, not in a separate technology section.
  */
 export const CLEANVERSE_LINE =
-  "Cleanverse verifies asset provenance and identity plus participant eligibility—not legal validity or enforceability. "
+  "Cleanverse verifies asset provenance and identity plus participant eligibility. "
   + "Mordant privately evaluates whether claim windows conflict. The governed result establishes only that conflict "
   + "status; a precommitted policy selects a bounded branch, while human review determines legal and operational responsibility.";
 

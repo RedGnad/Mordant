@@ -189,29 +189,24 @@
   width: 28px;
   height: 28px;
   place-items: center;
-  border: 1px solid var(--rule);
-  border-radius: 50%;
+  color: var(--muted);
 }
 
-.statusMark span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
+.statusGlyph {
+  display: block;
+  width: 24px;
+  fill: currentColor;
+  transform: rotate(7deg);
 }
 
 .statusBar[data-status="active"] .statusMark {
-  border-color: var(--action);
-  border-right-color: transparent;
-  animation: liveStatusSpin 850ms linear infinite;
-}
-
-.statusBar[data-status="active"] .statusMark span {
-  background: var(--action);
+  animation:
+    liveStatusSpin 1.35s linear infinite,
+    liveStatusColour 2.7s linear infinite;
 }
 
 .statusBar[data-status="complete"] .statusMark {
-  border-color: var(--cleared);
+  border-radius: 50%;
   background: var(--cleared);
 }
 
@@ -222,14 +217,12 @@
   font-weight: 700;
 }
 
-.statusBar[data-status="complete"] .statusMark span {
+.statusBar[data-status="complete"] .statusGlyph {
   display: none;
 }
 
-.statusBar[data-status="attention"] .statusMark,
-.statusBar[data-status="attention"] .statusMark span {
-  border-color: var(--protection);
-  background: var(--protection);
+.statusBar[data-status="attention"] .statusMark {
+  color: var(--protection);
 }
 
 .statusCopy {
@@ -266,6 +259,15 @@
 
 @keyframes liveStatusSpin {
   to { transform: rotate(360deg); }
+}
+
+/* Long colour holds separated by short fades: branded and legible without
+   turning the activity marker into a decorative rainbow loop. */
+@keyframes liveStatusColour {
+  0%, 27% { color: var(--receivable); }
+  34%, 60% { color: var(--protection); }
+  67%, 93% { color: var(--action); }
+  100% { color: var(--receivable); }
 }
 
 .chapterFrame {
@@ -958,5 +960,9 @@
   .product * {
     animation: none !important;
     transition: none !important;
+  }
+
+  .statusBar[data-status="active"] .statusMark {
+    color: var(--action);
   }
 }
