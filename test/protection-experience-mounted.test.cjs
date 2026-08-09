@@ -15,6 +15,7 @@ const resolveFilename = Module._resolveFilename;
 Module._resolveFilename = function resolveProductAlias(request, parent, isMain, options) {
   if (request === "next/link") return join(process.cwd(), "test", "stubs", "next", "link.js");
   if (request === "./protection-experience.module.css") return join(process.cwd(), "src", "components", "protection-experience.module.css");
+  if (request === "./public-shell.module.css") return join(process.cwd(), "src", "components", "public-shell.module.css");
   if (request.startsWith("@/")) {
     return resolveFilename.call(this, join(process.cwd(), ".product-test-dist", "src", request.slice(2)), parent, isMain, options);
   }
@@ -154,15 +155,19 @@ artifactTest("mounted local states show admitted cure window provisionally befor
     })));
   });
   await act(async () => { button(renderer.root, "Run this case locally").props.onClick(); });
-  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
+  assert.equal(button(renderer.root, "Open complete evidence"), undefined);
   await act(async () => { button(renderer.root, "Prepare private match").props.onClick(); });
   assert.match(text(renderer.root), /RECOURSE_OPENED · CURE_WINDOW/);
   assert.match(text(renderer.root), /Cure \/ dispute window open\s+· provisional backend state/);
   assert.doesNotMatch(text(renderer.root), /Recourse not opened/);
-  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
+  assert.equal(button(renderer.root, "Open complete evidence"), undefined);
   await act(async () => { button(renderer.root, "Simulate cure-window completion").props.onClick(); });
   assert.match(text(renderer.root), /Simulated protocol clock/);
-  assert.equal(button(renderer.root, "Evidence").props.disabled, false);
+  const completedEvidence = button(renderer.root, "Open complete evidence");
+  assert.equal(text(completedEvidence), "Open complete evidence");
+  assert.equal(completedEvidence.props.disabled, false);
   assert.equal(renderer.root.findByProps({ "data-execution": "local" }).props["data-execution"], "local");
   await act(async () => { renderer.unmount(); });
 });
@@ -295,7 +300,8 @@ artifactTest("uncertain governed result release requires GET replacement before 
   assert.doesNotMatch(text(renderer.root), /MUST_NOT_ENTER_STATE/);
   assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
   assert.equal(button(renderer.root, "Start a fresh local case").props.disabled, true);
-  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
+  assert.equal(button(renderer.root, "Open complete evidence"), undefined);
 
   await act(async () => {
     button(renderer.root, "Resume durable run").props.onClick();
@@ -304,7 +310,8 @@ artifactTest("uncertain governed result release requires GET replacement before 
   assert.equal(renderer.root.findAllByProps({ "data-testid": "durable-readback-required" }).length, 0);
   assert.equal(button(renderer.root, "Verify and release Boolean"), undefined);
   assert.ok(button(renderer.root, "Apply governed result"));
-  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
+  assert.equal(button(renderer.root, "Open complete evidence"), undefined);
   assert.deepEqual(calls.map(({ method }) => method), ["POST", "POST", "GET"]);
   assert.match(calls[2].url, new RegExp(`\\?runId=${runId}$`));
   assert.equal(calls[2].body, undefined);
@@ -453,7 +460,8 @@ artifactTest("failed imported scenario load clears every previous case authority
     await Promise.resolve();
   });
   assert.doesNotMatch(text(renderer.root), new RegExp(imported.protectionCase.fheCaseId.slice(-16)));
-  assert.equal(button(renderer.root, "Evidence").props.disabled, true);
+  assert.equal(button(renderer.root, "Evidence available after sealing"), undefined);
+  assert.equal(button(renderer.root, "Open complete evidence"), undefined);
   assert.match(text(renderer.root), /Previous case authority is cleared/);
   await act(async () => {
     rejectRequest(new Error("IMPORTED_READ_FAILED"));
@@ -555,8 +563,10 @@ artifactTest("drawer renders the actual recourse record digest and full required
   const imported = evidence("conflict");
   let renderer;
   await act(async () => { renderer = create(React.createElement(ProtectionExperience, props(imported))); });
+  const evidenceTrigger = button(renderer.root, "Open complete evidence");
+  assert.equal(text(evidenceTrigger), "Open complete evidence");
   await act(async () => {
-    button(renderer.root, "Evidence").props.onClick({ currentTarget: { focus() {} } });
+    evidenceTrigger.props.onClick({ currentTarget: { focus() {} } });
   });
   const dialog = renderer.root.findByProps({ role: "dialog" });
   const rendered = text(dialog);
@@ -585,8 +595,10 @@ artifactTest("no-conflict drawer states explicit refusal and absence without a f
   const imported = evidence("no-conflict");
   let renderer;
   await act(async () => { renderer = create(React.createElement(ProtectionExperience, props(imported))); });
+  const evidenceTrigger = button(renderer.root, "Open complete evidence");
+  assert.equal(text(evidenceTrigger), "Open complete evidence");
   await act(async () => {
-    button(renderer.root, "Evidence").props.onClick({ currentTarget: { focus() {} } });
+    evidenceTrigger.props.onClick({ currentTarget: { focus() {} } });
   });
   const rendered = text(renderer.root.findByProps({ role: "dialog" }));
   assert.match(rendered, /ABSENT — signed false Boolean refused recourse/);
