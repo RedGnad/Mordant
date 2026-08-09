@@ -1620,7 +1620,6 @@
   cursor: pointer;
   font: inherit;
   gap: 12px;
-  grid-template-columns: auto minmax(0, 1fr);
   opacity: 0.52;
   text-align: left;
   transition: opacity 140ms ease-out, background-color 140ms ease-out;
@@ -1650,13 +1649,6 @@
 .integrationStages button:nth-child(4)[aria-pressed="true"] {
   border-top: 5px solid var(--action);
   opacity: 1;
-}
-
-.integrationStageIndex {
-  padding-top: 2px;
-  color: var(--muted);
-  font: 10px var(--font-proof), monospace;
-  letter-spacing: 0.06em;
 }
 
 .integrationStageCopy {

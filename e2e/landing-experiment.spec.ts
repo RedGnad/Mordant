@@ -643,6 +643,31 @@ test("busy, eligibility refusal and malformed projections fail closed", async ({
   await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
 });
 
+test("worker capacity limits explain the retry window instead of looking broken", async ({ page }) => {
+  await installManagedHarness(page, {
+    create: () => ({ status: 429, body: { code: "DAILY_LIMIT" } }),
+  });
+  await page.goto("/");
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-status"))
+    .toContainText("reached its rolling 24-hour run allowance");
+  await expect(page.getByTestId("mini-status"))
+    .toContainText("No execution started");
+  await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
+
+  await page.unrouteAll({ behavior: "wait" });
+  await installManagedHarness(page, {
+    create: () => ({ status: 429, body: { code: "COOLDOWN" } }),
+  });
+  await page.reload();
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-status"))
+    .toContainText("slot is reopening after the previous run");
+  await expect(page.getByTestId("mini-status"))
+    .toContainText("wait a few seconds and try again");
+  await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
+});
+
 test("the accepted scrollytelling is preserved, compiled and not mounted", async ({ page }) => {
   await installManagedHarness(page);
   await page.goto("/");

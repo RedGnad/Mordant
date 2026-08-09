@@ -254,6 +254,8 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(institutionalPrivacy).toContainText("separate institutional workflow—not the managed check above");
   await expect(institutionalPrivacy.getByRole("link", { name: "Read the technical qualification" }))
     .toHaveAttribute("href", /participant-originated-encryption\.md$/u);
+  await expect(page.locator('[data-proof]').nth(0)).toHaveAttribute("data-proof", "historical-onchain");
+  await expect(page.locator('[data-proof]').nth(1)).toHaveAttribute("data-proof", "institutional-privacy");
   if ((viewport?.width ?? 0) > 760) {
     const proofActionBounds = await page.locator('[data-proof] a').evaluateAll((actions) => actions.map((action) => {
       const bounds = action.getBoundingClientRect();

@@ -359,7 +359,6 @@ export function PublicExperience({ liveCheckHolder }: {
                   onFocus={(event) => selectIntegrationStep(index, event.timeStamp)}
                   onPointerEnter={(event) => selectIntegrationStep(index, event.timeStamp)}
                 >
-                  <span className={styles.integrationStageIndex}>0{index + 1}</span>
                   <span className={styles.integrationStageCopy}>
                     <strong>{stage.label}</strong>
                     <small>{stage.detail}</small>
@@ -376,6 +375,21 @@ export function PublicExperience({ liveCheckHolder }: {
         {/* 4. Complementary proofs. These are deliberately separate profiles:
             neither one changes what the managed public run above can claim. */}
         <section className={styles.hardenedProof} aria-label="Complementary proofs" data-reveal>
+          <article
+            className={`${styles.complementaryProof} ${styles.onchainProof}`}
+            data-proof="historical-onchain"
+            aria-labelledby="hardened-proof-title"
+          >
+            <p className={styles.eyebrowOnProof}>Verified on-chain execution · separate completed run</p>
+            <h2 id="hardened-proof-title">See a completed recourse, on chain.</h2>
+            <p>
+              Review a separate completed run with verifiable on-chain actions and aUSDC settlement.
+              This historical evidence is independent from the managed check above.
+            </p>
+            <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
+              Verify the completed on-chain recourse
+            </Link>
+          </article>
           <article
             className={styles.complementaryProof}
             data-proof="institutional-privacy"
@@ -394,21 +408,6 @@ export function PublicExperience({ liveCheckHolder }: {
             >
               Read the technical qualification
             </a>
-          </article>
-          <article
-            className={`${styles.complementaryProof} ${styles.onchainProof}`}
-            data-proof="historical-onchain"
-            aria-labelledby="hardened-proof-title"
-          >
-            <p className={styles.eyebrowOnProof}>Verified on-chain execution · separate completed run</p>
-            <h2 id="hardened-proof-title">See a completed recourse, on chain.</h2>
-            <p>
-              Review a separate completed run with verifiable on-chain actions and aUSDC settlement.
-              This historical evidence is independent from the managed check above.
-            </p>
-            <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
-              Verify the completed on-chain recourse
-            </Link>
           </article>
         </section>
 

@@ -56,6 +56,24 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+async function capacityMessage(response: Response): Promise<string> {
+  let code: unknown = null;
+  try {
+    const body = await response.json() as unknown;
+    if (record(body)) code = body.code;
+  } catch {
+    // The HTTP status remains authoritative when an intermediary strips the
+    // worker's bounded JSON error projection.
+  }
+  if (code === "DAILY_LIMIT") {
+    return "The public demo has reached its rolling 24-hour run allowance. No execution started; try again when an earlier run leaves that window.";
+  }
+  if (code === "COOLDOWN") {
+    return "The execution slot is reopening after the previous run. No execution started; wait a few seconds and try again.";
+  }
+  return "The execution service is temporarily limiting new runs. No execution started; try again shortly.";
+}
+
 function eligibilityObservation(value: unknown, expectedHolder: string): ManagedEligibilityObservation | null {
   if (!record(value)) return null;
   if (value.schemaVersion !== "mordant.ccp-eligibility/1"
@@ -124,6 +142,9 @@ export async function startManagedRun(
       cache: "no-store",
     });
     if (created.status === 409) return Object.freeze({ kind: "BUSY" as const });
+    if (created.status === 429) {
+      return Object.freeze({ kind: "FAILED" as const, message: await capacityMessage(created) });
+    }
     if (!created.ok) {
       return Object.freeze({ kind: "FAILED" as const, message: "The execution service refused the request." });
     }
