@@ -55,12 +55,23 @@ test.describe("the judge acceptance path", () => {
     await expect(body).toContainText("Participant A");
     await expect(body).toContainText("Participant B");
     await expect(body).toContainText("does not require either lender to disclose its pledge window to the counterparty");
-    await expect(body).toContainText("does not transfer funds");
+    await expect(body).toContainText("moves neither funds nor the receivable");
     await expect(page.getByTestId("claim-timeline")).toBeVisible();
     const scope = page.locator("details").filter({ hasText: "Privacy and execution scope" });
     await expect(scope).not.toHaveAttribute("open", "");
     await scope.locator("summary").click();
     await expect(page.getByTestId("intake-disclosure")).toBeVisible();
+  });
+
+  test("starting a managed check produces immediate, unmistakable feedback", async ({ page }) => {
+    await open(page, "starting");
+    const status = page.getByTestId("live-status");
+    await expect(status).toHaveAttribute("data-status", "active");
+    await expect(status).toContainText("Creating the case and preparing the secure execution.");
+    const action = page.getByRole("button", { name: "Starting now · preparing the secure execution" });
+    await expect(action).toBeDisabled();
+    await expect(action).toHaveAttribute("data-loading", "true");
+    await expect(action.locator("[class*='buttonLoader']")).toBeVisible();
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {
@@ -200,6 +211,14 @@ test.describe("receipt drawer", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer).toContainText("Layer 1 · Decision");
     await expect(drawer).toContainText("Layer 2 · Verification");
+    const verification = drawer.locator("details").filter({ hasText: "Technical verification values" });
+    await expect(verification).not.toHaveAttribute("open", "");
+    const verificationHelp = verification.getByText(/You do not need to enter them anywhere\./u);
+    await expect(verificationHelp).toBeHidden();
+    await verification.locator("summary").click();
+    await expect(verification).toHaveAttribute("open", "");
+    await expect(verificationHelp).toBeVisible();
+    await expect(verification).toContainText("Governed result digest");
     await expect(drawer).toContainText("Layer 3 · Raw evidence");
     await expect(drawer).toContainText("conflict/no-conflict between the submitted windows only");
     await expect(drawer).toContainText("precommitted policy selects the bounded branch");
@@ -286,7 +305,7 @@ test.describe("participant admission, behind a disabled capability", () => {
     await expect(page.getByTestId("handoff")).toHaveCount(0);
     // The production disclosure is the managed one, and only that one.
     await expect(page.getByTestId("intake-disclosure"))
-      .toContainText("submits both demo claims to Mordant's managed execution service");
+      .toContainText("submits both synthetic claim windows to Mordant's managed service");
     await expect(page.locator("body")).not.toContainText("independently authorize role-bound");
   });
 

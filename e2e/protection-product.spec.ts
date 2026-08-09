@@ -437,15 +437,20 @@ test.describe("verified public projection and evidence dialog", () => {
 
     const dialog = page.getByRole("dialog", { name: "Case evidence" });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toHaveAccessibleDescription(/Only the verified public projection is shown/u);
+    await expect(dialog).toHaveAccessibleDescription(/no user needs to enter them anywhere/u);
     await expect(page.locator("[inert]")).toHaveCount(1);
     const close = dialog.getByRole("button", { name: "Close evidence drawer" });
     await expect(close).toBeFocused();
 
     await page.keyboard.press("Shift+Tab");
-    await expect(dialog.locator("button").last()).toBeFocused();
+    await expect(dialog.locator("summary")).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(close).toBeFocused();
+
+    const technical = dialog.locator("details").filter({ hasText: "Technical verification values" });
+    await expect(technical).not.toHaveAttribute("open", "");
+    await technical.locator("summary").click();
+    await expect(technical).toHaveAttribute("open", "");
 
     await expect(evidenceRow(dialog, "Source commit").locator("code")).toHaveText(sourceCommit);
     await expect(evidenceRow(dialog, "Governed-result digest").locator("code")).toHaveText(governedResult.digest as string);
@@ -473,20 +478,15 @@ test.describe("verified public projection and evidence dialog", () => {
     await expect(page.getByRole("dialog", { name: "Case evidence" })).toHaveCount(0);
     await expect(trigger).toBeFocused();
 
-    const navigationTrigger = page.getByRole("button", { name: "Evidence", exact: true });
-    await navigationTrigger.click();
-    await expect(page.getByRole("dialog", { name: "Case evidence" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Close evidence drawer" })).toBeFocused();
-    await page.getByRole("button", { name: "Close evidence drawer" }).click();
-    await expect(navigationTrigger).toBeFocused();
   });
 
   test("signed false evidence explicitly refuses recourse and exposes no invented record digest", async ({ page }) => {
     await page.goto("/protection?scenario=no-conflict");
-    await expect(page.getByText("Recourse refused — signed Boolean is false", { exact: true })).toBeVisible();
+    await expect(page.getByText("No conflict found", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open complete evidence" }).click();
 
     const dialog = page.getByRole("dialog", { name: "Case evidence" });
+    await dialog.locator("details").filter({ hasText: "Technical verification values" }).locator("summary").click();
     const row = evidenceRow(dialog, "Recourse-record digest");
     await expect(row).toContainText("ABSENT — signed false Boolean refused recourse; no recourse record was created.");
     await expect(row.getByRole("button", { name: "Copy Recourse-record digest" })).toHaveCount(0);

@@ -763,6 +763,22 @@
   opacity: 0.55;
 }
 
+.primary[data-loading="true"] {
+  gap: 11px;
+  background: var(--action-fill-hover);
+  opacity: 1;
+}
+
+.buttonLoader {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  border-right-color: var(--ink);
+  border-radius: 50%;
+  animation: liveStatusSpin 700ms linear infinite;
+}
+
 .secondary,
 .disclose {
   background: transparent;

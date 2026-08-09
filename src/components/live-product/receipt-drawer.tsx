@@ -16,7 +16,7 @@ import styles from "./receipt-drawer.module.css";
  * Escape, focus restoration and scroll lock.
  */
 
-const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 function Rows({ rows, mono }: { readonly rows: readonly { label: string; value: string }[]; readonly mono: boolean }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -81,7 +81,14 @@ export function ReceiptDrawer({
       return;
     }
     if (event.key !== "Tab") return;
-    const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
+      .filter((node) => {
+        const closedDetails = node.closest<HTMLDetailsElement>("details:not([open])");
+        const isClosedSummary = closedDetails !== null
+          && node.tagName === "SUMMARY"
+          && node.parentElement === closedDetails;
+        return node.getClientRects().length > 0 && (closedDetails === null || isClosedSummary);
+      });
     if (nodes.length === 0) return;
     const first = nodes[0];
     const last = nodes[nodes.length - 1];
@@ -122,10 +129,17 @@ export function ReceiptDrawer({
 
         <Rows rows={receipt.summary} mono={false} />
 
-        <section className={styles.layer} aria-labelledby={`${titleId}-verification`}>
-          <p className={styles.eyebrow} id={`${titleId}-verification`}>Layer 2 · Verification</p>
+        <details className={`${styles.layer} ${styles.verificationLayer}`}>
+          <summary id={`${titleId}-verification`}>
+            <span className={styles.eyebrow}>Layer 2 · Verification</span>
+            <strong>Technical verification values</strong>
+          </summary>
+          <p className={styles.verificationHelp}>
+            These SHA-256 fingerprints let a technical reviewer confirm that the case artifacts and
+            receipt have not changed. You do not need to enter them anywhere.
+          </p>
           <Rows rows={receipt.technical} mono />
-        </section>
+        </details>
 
         <section className={styles.layer} aria-labelledby={`${titleId}-raw`}>
           <p className={styles.eyebrow} id={`${titleId}-raw`}>Layer 3 · Raw evidence</p>

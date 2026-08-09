@@ -9,7 +9,8 @@ schema, BGV circuit, governed-result schema, or protection binding.
 
 Separate admission proves who authorized each role-bound claim. It does **not** prove that the claim
 was encrypted in a participant-controlled environment before Mordant coordination received it.
-Participant-originated native-CLI encryption is not integrated in the current `origin/main`.
+That property belongs to the separately qualified, opt-in participant-originated native-CLI
+profile; it must not be inferred from this browser admission flow.
 
 ## Protocol
 

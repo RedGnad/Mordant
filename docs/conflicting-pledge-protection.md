@@ -63,13 +63,16 @@ not participant-local encryption.
 
 ### Participant-originated native CLI
 
-This profile is not integrated in the current `origin/main`. It remains the intended
-institutional-privacy path and must be merged and requalified before any current-product claim says
-that Mordant coordination receives ciphertext rather than a raw claim window.
+This is a current qualified, opt-in native-CLI profile, disabled by default. Each participant
+encrypts its claim in a participant-controlled environment before Mordant coordination receives it;
+the coordinator accepts authenticated encrypted artifacts and no raw claim-window fields. This
+privacy claim belongs only to that profile. It does not describe the managed public run or browser
+direct admission. See [Participant-originated encryption](participant-originated-encryption.md).
 
-The workflow does not require either counterparty to disclose its claim window to the other. It does
-not claim browser/device BGV, participant-controlled decryption, threshold release or that no Mordant
-infrastructure sees plaintext.
+Across all three profiles, the workflow does not require either counterparty to disclose its claim
+window to the other. Browser/device BGV, participant-controlled decryption and threshold release are
+not qualified capabilities. Managed Mordant preparation still receives the public demo's plaintext
+windows.
 
 ## Runtime split
 

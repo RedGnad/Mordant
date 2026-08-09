@@ -470,7 +470,7 @@ test("real worker evidence appears, and no verdict exists before governed releas
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     for (const section of [
       page.locator("#how"),
-      page.getByRole("region", { name: "Verify the consequence, not a claim about it." }),
+      page.getByRole("region", { name: "Complementary proofs" }),
     ]) {
       await section.scrollIntoViewIfNeeded();
       await expect(section).toHaveAttribute("data-visible", "true");

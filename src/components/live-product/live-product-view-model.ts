@@ -61,8 +61,9 @@ export function intakeMode(set: CapabilitySet): IntakeMode {
  */
 export const INTAKE_DISCLOSURE: Readonly<Record<IntakeMode, string>> = Object.freeze({
   MANAGED_COMBINED:
-    "This supervised test submits both demo claims to Mordant's managed execution service. "
-    + "The service prepares their encryption before the FHE evaluator processes them.",
+    "This supervised demo submits both synthetic claim windows to Mordant's managed service. "
+    + "Mordant prepares their encryption before the fixed FHE circuit evaluates them. "
+    + "Starting the check moves neither funds nor the receivable.",
   SEPARATE_WALLET_STAGING:
     "Each eligible wallet authorizes only its own claim. Mordant's managed execution service "
     + "prepares the encryption for both claims once each has been separately authorized.",

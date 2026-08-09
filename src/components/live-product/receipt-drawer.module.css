@@ -138,6 +138,55 @@
   border-bottom: 1px solid var(--rule);
 }
 
+.verificationLayer {
+  border-bottom: 1px solid var(--rule);
+}
+
+.verificationLayer > summary {
+  display: grid;
+  padding: 0 0 14px;
+  cursor: pointer;
+  gap: 6px;
+  list-style: none;
+}
+
+.verificationLayer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.verificationLayer > summary::after {
+  content: "Open";
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--muted);
+  font-family: var(--font-proof), monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verificationLayer[open] > summary::after {
+  content: "Close";
+}
+
+.verificationLayer > summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.verificationLayer > summary strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.verificationHelp {
+  max-width: 54ch;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .rawContext {
   margin: 14px 0 0;
   color: var(--muted);

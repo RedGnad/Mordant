@@ -203,6 +203,14 @@
 .evidenceList > div { display: grid; grid-template-columns: 145px minmax(0, 1fr) auto; gap: 9px 15px; align-items: start; padding: 13px 0; border-bottom: 1px solid var(--soft-rule); }
 .evidenceList dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font: 11px/1.45 var(--font-proof), monospace; white-space: normal; user-select: text; }
 .evidenceList code { font: inherit; }
+.technicalEvidence { margin-top: 26px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.technicalEvidence > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: 16px 0; cursor: pointer; gap: 5px; list-style: none; }
+.technicalEvidence > summary::-webkit-details-marker { display: none; }
+.technicalEvidence > summary::after { content: "Open"; grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--muted); font: 10px var(--font-proof), monospace; letter-spacing: .06em; text-transform: uppercase; }
+.technicalEvidence[open] > summary::after { content: "Close"; }
+.technicalEvidence > summary strong { font-size: 15px; }
+.technicalEvidence > summary span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.technicalEvidence > p { max-width: 56ch; margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .copyButton { min-width: 58px; min-height: 44px; padding: 0 10px; border: 1px solid var(--rule); background: transparent; font-weight: 600; }
 .absentValue { color: var(--muted); font-size: 11px; }
 .copyStatus { grid-column: 2 / -1; min-height: 1em; color: #26704b; font-size: 10px; }

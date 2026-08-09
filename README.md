@@ -15,8 +15,9 @@ receipt.
 | **Mordant** | Recourse infrastructure for tokenized private credit: governed result, precommitted policy, bounded operation and evidence. |
 | **First implemented workflow** | Conflicting Pledge Protection. It establishes whether two submitted claim windows conflict; it is the concrete first workflow, not the entire product category. |
 | **Current live managed proof** | A fresh real BGV evaluation followed by the current Governed Recourse Policy, a bounded local operation and operation-bound evidence. |
+| **Qualified institutional privacy profile** | An opt-in native CLI lets each participant encrypt its claim in a participant-controlled environment before ciphertext-only Mordant coordination receives it. This profile is separate from the managed public proof and browser direct admission. |
 | **Separate verified execution** | A retained hardened two-wallet Adapter V2 run with a real 600-second cure window, finalization, aUSDC claims and reconciliation on Monad testnet. |
-| **Roadmap** | Participant-originated institutional encryption, production execution routing and N=3 private conflict graphs. These are not current capabilities on this branch. |
+| **Roadmap** | Production execution routing and N=3 private conflict graphs. These are not current capabilities on this branch. |
 
 The current managed authority chain is:
 
@@ -130,7 +131,7 @@ Privacy claims are scoped to the component and profile that actually provides th
 | --- | --- |
 | **Managed combined intake** | Active public profile. Managed infrastructure receives both synthetic demo windows during intake/preparation, then performs real BGV evaluation. |
 | **Direct participant admission** | Implemented and tested. Two distinct wallets separately sign `ParticipantAdmissionV1`; this proves separate authorization, not participant-local encryption. |
-| **Participant-originated native CLI** | **Not integrated in this `origin/main`.** It remains the intended institutional-privacy profile and must be requalified before being promoted as current product truth. |
+| **Participant-originated native CLI** | Current qualified capability. In this opt-in, disabled-by-default profile, each participant encrypts its claim in a participant-controlled environment before Mordant coordination receives it. It is not the managed public profile or the browser direct-admission profile. |
 | **Evaluator** | Receives ciphertext artifacts only and has no decryption key. |
 | **Governed decryptor** | Designated, trusted and Mordant-controlled; not threshold or independently operated. |
 
@@ -139,9 +140,11 @@ different from claiming that no Mordant infrastructure receives plaintext. Brows
 participant-controlled decryption, threshold release, semantic equality proofs and ERC-1271
 support are not current capabilities.
 
-The participant-originated target is intentionally a profile of the same recourse system, not a
+The participant-originated capability is intentionally a profile of the same recourse system, not a
 second product: encrypt in a participant-controlled native environment, authenticate the ciphertext
-artifact, then admit it to Mordant coordination. It is roadmap until merged and requalified.
+artifact, then admit it to Mordant coordination. Its supported surface is the qualified native CLI
+and ciphertext-only coordinator service. It remains opt-in and is not wired into the universal
+managed public demo or browser wallet-admission flow.
 
 ## Cleanverse responsibility boundary
 
@@ -172,6 +175,20 @@ cureDeadlineUnix - boundAtUnix = 86,400 seconds
 ```
 
 This local action does not move real funds and is not Adapter V2 settlement authorization.
+
+### Qualified institutional privacy profile
+
+Participant-originated encryption is a current, qualified native-CLI capability. Each participant
+prepares and signs its own case- and role-bound encrypted artifact in a participant-controlled
+environment. Mordant coordination receives authenticated encrypted artifacts rather than raw claim
+window bounds in this profile.
+
+This does not globalize the claim to the public managed profile or direct wallet admission. It does
+not claim browser/device BGV, participant-controlled or threshold decryption, semantic equality
+between a commitment and ciphertext plaintext, production institutional key management, or
+production-cluster readiness. The profile is opt-in and disabled by default. See
+[Participant-originated encryption](docs/participant-originated-encryption.md) and the retained
+[qualification evidence](docs/evidence/participant-originated-encryption-product-qualification.json).
 
 ### Separate verified historical on-chain execution
 
@@ -205,6 +222,8 @@ evidence remain unchanged.
 - Current managed V2 policy selection, closed branch, plan-derived operation authorization and
   operation-bound evidence.
 - Direct-participant wallet authorization and exact admission retry semantics.
+- Qualified participant-originated native-CLI encryption with ciphertext-only coordination, within
+  its documented opt-in boundary.
 - A separate completed Adapter V2 execution with a real 600-second cure, finalization and aUSDC
   reconciliation.
 - Architectural N=2 evidence that multiple isolated existing worker slots can run concurrently.
@@ -213,6 +232,8 @@ evidence remain unchanged.
 
 - Claim windows and protected notionals are synthetic fixtures.
 - Managed infrastructure sees demo plaintext during intake/preparation.
+- The qualified participant-originated profile is a separate native-CLI surface; it is not wired
+  into the managed public run or browser direct-admission flow.
 - The designated decryptor is trusted and Mordant-controlled.
 - The public deployment exposes one active BGV slot.
 - The managed 24-hour cure action is a local protocol double and cannot authorize settlement.

@@ -4,7 +4,9 @@ Status: product definition for a permissioned B2B pilot. This is not production 
 
 Mordant is the recourse layer for tokenized private credit. Conflicting Pledge Protection is the
 first implemented workflow; this shadow-pilot design evaluates broader institutional fit without
-claiming that additional workflows or participant-originated encryption are current capabilities.
+claiming that additional workflows are current. Participant-originated encryption is a separately
+qualified, opt-in native-CLI profile; this shadow-pilot definition does not silently enable or
+globalize that privacy claim.
 
 ## Purpose
 

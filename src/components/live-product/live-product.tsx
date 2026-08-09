@@ -160,6 +160,17 @@ export function LiveProduct({
     return () => window.cancelAnimationFrame(frame);
   }, [chapter]);
 
+  useEffect(() => {
+    if (!busy || chapter !== "AUTHORIZE") return;
+    const frame = window.requestAnimationFrame(() => {
+      statusRef.current?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [busy, chapter]);
+
   const claimRange = (from: string, until: string): readonly [number, number] | null => {
     const start = Number(from);
     const end = Number(until);
@@ -414,19 +425,28 @@ export function LiveProduct({
           {formError === null ? null : <p className={styles.error} role="alert">{formError}</p>}
 
           <details className={styles.scopeDetails}>
-            <summary>Privacy and execution scope · no funds or receivable move</summary>
+            <summary>Privacy and execution scope</summary>
             <p className={styles.disclosure} data-testid="intake-disclosure">{model.intakeDisclosure}</p>
-            {model.intake !== "MANAGED_COMBINED" ? null : (
+            {model.intake === "MANAGED_COMBINED" ? null : (
               <p className={styles.privacy}>{model.claimA.privacyNote}</p>
             )}
-            <p className={styles.privacy}>
-              Authorizing a claim does not transfer funds and does not move the receivable.
-            </p>
+            {model.intake === "MANAGED_COMBINED" ? null : (
+              <p className={styles.privacy}>
+                Authorizing a claim does not transfer funds and does not move the receivable.
+              </p>
+            )}
           </details>
 
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
-            <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
-              {busy ? "Starting the confidential check" : "Run the confidential check"}
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={busy}
+              data-loading={busy}
+              onClick={actions.onStart}
+            >
+              {busy ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
+              <span>{busy ? "Starting now · preparing the secure execution" : "Run the confidential check"}</span>
             </button>
           )}
         </section>

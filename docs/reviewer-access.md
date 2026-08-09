@@ -16,8 +16,8 @@
 >   `MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION=enabled` on the worker and Vercel, followed by
 >   a worker redeploy.
 >
-> Participant-originated native-CLI encryption is not integrated in the current `origin/main` and
-> must not be inferred from direct participant admission.
+> Participant-originated native-CLI encryption is now a current qualified, opt-in capability. It is
+> disabled by default and is not wired into the public managed demo or browser direct admission.
 
 The reviewer wallet addresses are public so the historical run can be checked on chain. Their
 private keys stay out of band and are neither distributed nor required for the current public proof.
@@ -39,6 +39,24 @@ private keys stay out of band and are neither distributed nor required for the c
 The managed profile prepares both synthetic windows under one eligible test context. Managed
 infrastructure receives those demo values during intake/preparation, then performs a real encrypted
 evaluation. It is not two independent wallets and it does not execute a fresh aUSDC settlement.
+
+## Qualified institutional privacy profile
+
+The qualified native-CLI profile is a separate supported intake. Each participant prepares and
+signs its own case- and role-bound encrypted artifact inside a participant-controlled environment;
+the participant-originated coordinator receives authenticated encrypted artifacts rather than raw
+claim-window bounds. The profile is opt-in, disabled by default and has no public browser route.
+
+Reviewers can inspect:
+
+- the exact supported boundary in
+  [`participant-originated-encryption.md`](participant-originated-encryption.md);
+- the retained product-qualification receipt in
+  [`participant-originated-encryption-product-qualification.json`](evidence/participant-originated-encryption-product-qualification.json).
+
+This qualification does not relabel the managed public run or direct wallet admission. It does not
+establish browser/device BGV, threshold or participant-controlled decryption, commitment/plaintext
+semantic equality, production institutional key management or production-cluster readiness.
 
 ## Direct participant admission
 

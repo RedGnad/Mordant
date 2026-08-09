@@ -187,7 +187,7 @@ test.describe("live product presentation model", () => {
     const model = adapt(RUNNING_VIEW);
     expect(model.intake).toBe("MANAGED_COMBINED");
     expect(model.intakeDisclosure).toBe(INTAKE_DISCLOSURE.MANAGED_COMBINED);
-    expect(model.intakeDisclosure).toContain("managed execution service");
+    expect(model.intakeDisclosure).toContain("managed service");
     // The two-wallet sentence may never appear under the managed capability.
     expect(model.intakeDisclosure).not.toContain("independently authorize");
   });

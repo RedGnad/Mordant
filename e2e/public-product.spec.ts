@@ -46,8 +46,9 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
 
   const symbolField = page.locator("[class*='heroSymbolField']");
   await expect.poll(() => symbolField.locator("svg").evaluate((node) => getComputedStyle(node).fill))
-    .toBe("rgb(253, 240, 255)");
-  if (testInfo.project.name === "1280x800") {
+    .toBe("rgb(255, 233, 255)");
+  await page.waitForTimeout(900);
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     await page.screenshot({ path: testInfo.outputPath("hero-overlap-violet-white.png") });
   }
   await page.evaluate(() => window.scrollTo({ top: 240, behavior: "instant" }));
@@ -70,8 +71,27 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   ))).toBeGreaterThanOrEqual(11.5);
   await expect.poll(() => symbolField.evaluate((node) => (
     Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-y"))
-  ))).toBeLessThanOrEqual(-87);
+  ))).toBeLessThanOrEqual(-111);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
+    const mobileComposition = await page.locator("[class*='heroPhrase']").evaluate((phrase) => {
+      const words = Array.from(phrase.children).map((word) => word.getBoundingClientRect());
+      const phraseBounds = phrase.getBoundingClientRect();
+      const symbolBounds = document.querySelector<HTMLElement>("[class*='heroSymbolField']")?.getBoundingClientRect();
+      return {
+        oneLine: words.length === 2 && Math.abs(words[0].top - words[1].top) <= 1,
+        insideViewport: phraseBounds.left >= 0 && phraseBounds.right <= window.innerWidth,
+        intersectionWidth: symbolBounds === undefined ? 0 : Math.min(phraseBounds.right, symbolBounds.right)
+          - Math.max(phraseBounds.left, symbolBounds.left),
+        intersectionHeight: symbolBounds === undefined ? 0 : Math.min(phraseBounds.bottom, symbolBounds.bottom)
+          - Math.max(phraseBounds.top, symbolBounds.top),
+      };
+    });
+    expect(mobileComposition.oneLine).toBe(true);
+    expect(mobileComposition.insideViewport).toBe(true);
+    expect(mobileComposition.intersectionWidth).toBeGreaterThan(12);
+    expect(mobileComposition.intersectionHeight).toBeGreaterThan(8);
+  }
   // On the landing, both primary entry points move to its one real experiment.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
   await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" }).first())
@@ -150,7 +170,12 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     "One path.",
     "Four bounded responsibilities.",
   ]);
-  await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
+  await expect(page.locator("#how").getByText("Responsibility", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-proof="historical-onchain"]')).toBeVisible();
+  await expect(page.locator('[data-proof="historical-onchain"]'))
+    .toContainText("See a completed recourse, on chain.");
+  await expect(page.locator('[data-proof="historical-onchain"]'))
+    .toContainText("historical proof, not a continuation of the managed check above");
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
@@ -163,7 +188,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   for (const section of [
     page.getByTestId("mini-live-check"),
     page.locator("#how"),
-    page.getByRole("region", { name: "Verify the consequence, not a claim about it." }),
+    page.getByRole("region", { name: "Complementary proofs" }),
   ]) {
     expect(await section.evaluate((node) => getComputedStyle(node).borderTopWidth)).toBe("0px");
   }
@@ -197,7 +222,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   if ((viewport?.width ?? 0) <= 900) await policyActionStage.click();
   await expect(policyActionStage).toHaveAttribute("aria-pressed", "true");
   if ((viewport?.width ?? 0) > 900) {
-    const hardenedProofTop = await page.getByRole("region", { name: "Verify the consequence, not a claim about it." })
+    const hardenedProofTop = await page.locator('[data-proof="historical-onchain"]')
       .evaluate((node) => node.getBoundingClientRect().top);
     expect(hardenedProofTop).toBeGreaterThan((viewport?.height ?? 800) * 0.82);
   }
@@ -221,8 +246,15 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByRole("link", { name: "What this is and is not" })).toHaveCount(0);
   await expect(page.locator("main > section").last())
     .toContainText("Complementary proof · verified on-chain execution");
-  await expect(page.locator("main > section").last()).toContainText("separate hardened historical run");
-  await expect(page.locator('[data-proof="institutional-privacy"]')).toHaveCount(0);
+  await expect(page.locator("main > section").last())
+    .toContainText("historical proof, not a continuation of the managed check above");
+  const institutionalPrivacy = page.locator('[data-proof="institutional-privacy"]');
+  await expect(institutionalPrivacy).toBeVisible();
+  await expect(institutionalPrivacy).toContainText("Qualified institutional privacy profile");
+  await expect(institutionalPrivacy).toContainText("before Mordant coordination receives it");
+  await expect(institutionalPrivacy).toContainText("separate from both the managed public demo and direct wallet admission");
+  await expect(institutionalPrivacy.getByRole("link", { name: "Review the qualified privacy profile" }))
+    .toHaveAttribute("href", /participant-originated-encryption\.md$/u);
   for (const technicalCaveat of [
     "native Monad FHE",
     "threshold release",
@@ -411,7 +443,7 @@ test("public and recorded product routes fit the viewport", async ({ page }) => 
   }
 });
 
-test("the shadow pilot route asks only for pilot-fit information and never fakes delivery", async ({ page }) => {
+test("the shadow pilot route asks only for pilot-fit information and never fakes delivery", async ({ page }, testInfo) => {
   await page.goto("/pilot");
 
   await expect(page.getByRole("heading", { name: "Test accountable recourse against your current process." })).toBeVisible();
@@ -434,7 +466,13 @@ test("the shadow pilot route asks only for pilot-fit information and never fakes
   }
   await expect(form.getByRole("button", { name: "Apply for a shadow pilot" })).toBeDisabled();
   await expect(form).toContainText("no data can be sent yet");
+  const pilotIntroHeight = await page.locator("main > section").first()
+    .evaluate((node) => node.getBoundingClientRect().height);
+  if ((page.viewportSize()?.width ?? 0) > 760) expect(pilotIntroHeight).toBeLessThanOrEqual(720);
   await expectNoHorizontalOverflow(page);
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await page.screenshot({ path: testInfo.outputPath("pilot-compact.png"), fullPage: true });
+  }
 
   const invalid = await page.request.post("/api/pilot-applications", {
     data: {

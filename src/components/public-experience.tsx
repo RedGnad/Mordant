@@ -40,11 +40,6 @@ const INTEGRATION_STEPS = [
   },
 ] as const;
 
-// Reserved in the complementary-evidence composition for the participant-originated
-// native CLI. It must remain unmounted until PR #44 is merged and requalified; the
-// public product must never promote an unqualified privacy profile as current.
-const INSTITUTIONAL_PRIVACY_QUALIFIED = false;
-
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
 // The decision colour owns a short horizontal runway on both junctions.
 // Those few pixels keep a colour change and a direction change from collapsing
@@ -121,7 +116,7 @@ export function PublicExperience({ liveCheckHolder }: {
       heroScrollFrame.current = null;
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
-      hero.style.setProperty("--symbol-scroll-y", `${progress * -88}px`);
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -112}px`);
       hero.style.setProperty("--symbol-scroll-rotation", `${progress * 12}deg`);
     };
 
@@ -302,7 +297,6 @@ export function PublicExperience({ liveCheckHolder }: {
         {/* 3. The one retained responsibility model after the experiment. */}
         <section className={styles.invitation} id="how" aria-labelledby="invitation-title" data-reveal>
           <div className={styles.invitationText}>
-            <p className={styles.eyebrow}>Responsibility</p>
             <h2 id="invitation-title">
               <span>One path.</span>{" "}
               <span>Four bounded responsibilities.</span>
@@ -362,29 +356,43 @@ export function PublicExperience({ liveCheckHolder }: {
           </div>
         </section>
 
-        {/* 4. Complementary proof surfaces. Participant-originated privacy is
-            deliberately absent until its native CLI has merged and requalified. */}
-        <section className={styles.hardenedProof} aria-labelledby="hardened-proof-title" data-reveal>
-          {INSTITUTIONAL_PRIVACY_QUALIFIED ? (
-            <article className={styles.complementaryProof} data-proof="institutional-privacy">
-              <p className={styles.eyebrowOnProof}>Institutional privacy</p>
-              <h2>Prepare private claims at their source.</h2>
-              <p>Participant-originated native CLI preparation, independently requalified.</p>
-            </article>
-          ) : null}
-          <div>
-            <p className={styles.eyebrowOnProof}>Complementary proof · verified on-chain execution</p>
-            <h2 id="hardened-proof-title">Verify the consequence, not a claim about it.</h2>
+        {/* 4. Complementary proofs. These are deliberately separate profiles:
+            neither one changes what the managed public run above can claim. */}
+        <section className={styles.hardenedProof} aria-label="Complementary proofs" data-reveal>
+          <article
+            className={styles.complementaryProof}
+            data-proof="institutional-privacy"
+            aria-labelledby="institutional-privacy-title"
+          >
+            <p className={styles.eyebrowOnProof}>Qualified institutional privacy profile</p>
+            <h2 id="institutional-privacy-title">Private claims can originate encrypted.</h2>
             <p>
-              This opens a separate hardened historical run, not the managed workflow above. Its governed
-              result established conflict; preconfigured demo policy applied; Adapter V2 opened the cure
-              path; deployment configuration determined holders and payouts; on-chain aUSDC settlement
-              then completed.
+              In the current opt-in native CLI profile, each participant encrypts its financing claim
+              in its own controlled environment before Mordant coordination receives it. This is separate
+              from both the managed public demo and direct wallet admission.
             </p>
-          </div>
-          <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
-            Verify the completed on-chain recourse
-          </Link>
+            <a
+              className={styles.proofSecondary}
+              href="https://github.com/RedGnad/Mordant/blob/main/docs/participant-originated-encryption.md"
+            >
+              Review the qualified privacy profile
+            </a>
+          </article>
+          <article
+            className={`${styles.complementaryProof} ${styles.onchainProof}`}
+            data-proof="historical-onchain"
+            aria-labelledby="hardened-proof-title"
+          >
+            <p className={styles.eyebrowOnProof}>Complementary proof · verified on-chain execution</p>
+            <h2 id="hardened-proof-title">See a completed recourse, on chain.</h2>
+            <p>
+              Open a separate completed run to verify its on-chain actions and aUSDC settlement.
+              It is historical proof, not a continuation of the managed check above.
+            </p>
+            <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
+              Verify the completed on-chain recourse
+            </Link>
+          </article>
         </section>
 
       </main>

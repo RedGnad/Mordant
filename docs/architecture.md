@@ -35,8 +35,9 @@ authorization `NOT_AUTHORIZED`. Exact semantics are documented in
 
 The public deployment uses managed combined intake. Direct participant admission separately proves
 two wallet authorizations, but not participant-local encryption. Participant-originated native-CLI
-encryption is not integrated in the current `origin/main` and remains roadmap until merged and
-requalified.
+encryption is a current qualified, opt-in capability: participants encrypt locally before the
+ciphertext-only coordinator receives their artifacts. It remains disabled by default and separate
+from both public managed intake and browser direct admission.
 
 ## Current managed V2 authority layers
 

@@ -65,7 +65,7 @@ that binds the whole path.”
 - The managed run performed a fresh Monad/aUSDC settlement.
 - The governed Boolean authorized recourse or carried payout terms.
 - The historical 600-second run used the current 24-hour managed policy chain.
-- Direct wallet admission proves participant-originated encryption.
+- Any claim that direct wallet admission proves participant-originated encryption.
 - Mordant globally holds no decryption key.
 - N=2 isolated-worker evidence proves production horizontal scaling.
 - N=3 Private Conflict Graph is current product capability.
