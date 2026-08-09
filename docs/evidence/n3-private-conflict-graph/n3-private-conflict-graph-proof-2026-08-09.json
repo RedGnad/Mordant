@@ -1,0 +1,2065 @@
+{
+  "schemaVersion": "mordant.n3-private-conflict-graph-evidence/1",
+  "evidenceDigestDomain": "MordantN3PrivateConflictGraphProofEvidence/v1",
+  "verdict": "PASS — N=3 PRIVATE CONFLICT GRAPH PROOF READY FOR REVIEW",
+  "generatedAt": "2026-08-09T00:11:46.230Z",
+  "source": {
+    "repository": "RedGnad/Mordant",
+    "branch": "experiment/n3-private-conflict-graph",
+    "startingCommit": "9ea6652dbf61c6227e3a21183e628a7356b6df18",
+    "executionCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6",
+    "executionTree": "3df3aa8f0cf31d5a53543a9706be20e6583738b3",
+    "baseCommit": "9ea6652dbf61c6227e3a21183e628a7356b6df18",
+    "cleanCommittedCheckout": true,
+    "sourceCommitEnvironmentMatched": true,
+    "modules": [
+      {
+        "id": "proofHarness",
+        "source": "scripts/n3-private-conflict-graph-proof.mjs",
+        "compiled": null,
+        "sourceSha256": "sha256:77c9382ce733fb9382af0cccbb4b0556da4f120669b98c020f5105a5b47ff7e0",
+        "compiledSha256": null
+      },
+      {
+        "id": "graphCore",
+        "source": "src/lib/protection/receivable-conflict-session.ts",
+        "compiled": ".product-test-dist/src/lib/protection/receivable-conflict-session.js",
+        "sourceSha256": "sha256:d9cadc90edb5c4483f45fddd9beea23dd1dfeacb827e52c7d23d4d963a8996c4",
+        "compiledSha256": "sha256:0c69e0f3742e783d6625120fb6935cd008095941eb238d9c501d28513f9a0293"
+      },
+      {
+        "id": "graphRunner",
+        "source": "src/lib/protection/receivable-conflict-session-runner.ts",
+        "compiled": ".product-test-dist/src/lib/protection/receivable-conflict-session-runner.js",
+        "sourceSha256": "sha256:cff603d527222a3caddd969e955b52187a9c5004b0a77518e7c5bfb3307d2551",
+        "compiledSha256": "sha256:5c12984b8bd00b3bc1a17e1e0de817b02ce1b2ed656fe25c08cc8db48bf4534c"
+      },
+      {
+        "id": "graphStore",
+        "source": "src/lib/protection/receivable-conflict-session-store.ts",
+        "compiled": ".product-test-dist/src/lib/protection/receivable-conflict-session-store.js",
+        "sourceSha256": "sha256:77d8e287d5fe5848a2cf835cb3ed89f933f9ebf3e52b584d26a61298783346ef",
+        "compiledSha256": "sha256:298b908f82ba25d4114c35e4200b3fe8de56ccf94d1197a3f6b7bcb19e00d50d"
+      },
+      {
+        "id": "pairOrchestrator",
+        "source": "src/lib/protection/governed-fhe-product-server.ts",
+        "compiled": ".product-test-dist/src/lib/protection/governed-fhe-product-server.js",
+        "sourceSha256": "sha256:757e7c7777dd19582ff9f61bb534bc2e9e6495ab1eb20c714c0f24a2e564990a",
+        "compiledSha256": "sha256:f303659f28554c18fbfb68c1cf30823c84157f144123a546102c0d35f0ff90b3"
+      }
+    ]
+  },
+  "nativeBuild": {
+    "proofGrade": true,
+    "builtDuringProof": true,
+    "prepopulatedBinaryRootAccepted": false,
+    "sourceCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6",
+    "sourceTree": "3df3aa8f0cf31d5a53543a9706be20e6583738b3",
+    "startedAt": "2026-08-09T00:08:14.160Z",
+    "completedAt": "2026-08-09T00:09:14.021Z",
+    "toolchain": {
+      "goVersion": "go1.24.0",
+      "goToolchain": "auto",
+      "goos": "darwin",
+      "goarch": "amd64",
+      "cgoEnabled": false
+    },
+    "flags": [
+      "-mod=readonly",
+      "-trimpath",
+      "-buildvcs=false"
+    ],
+    "binaries": [
+      {
+        "id": "keygen",
+        "name": "mordant-fhe-keygen",
+        "package": "./cmd/mordant-fhe-keygen",
+        "bytes": 10537424,
+        "sha256": "sha256:c16ab091d89c98099b6e3813d3270067fffbc65c7fef5eb9b258dc30ce5a22b5"
+      },
+      {
+        "id": "client",
+        "name": "mordant-fhe-client",
+        "package": "./cmd/mordant-fhe-client",
+        "bytes": 10522016,
+        "sha256": "sha256:a073631b8322c9f992ed805d0f3e78293b60f253df6515eb5994a11a9a158a31"
+      },
+      {
+        "id": "evaluator",
+        "name": "mordant-fhe-evaluator",
+        "package": "./cmd/mordant-fhe-evaluator",
+        "bytes": 11020464,
+        "sha256": "sha256:20c76fd46d37bb28a72bddc9cb70284538ca830081b73187e39dcb448ef10191"
+      },
+      {
+        "id": "decryptor",
+        "name": "mordant-fhe-decryptor",
+        "package": "./cmd/mordant-fhe-decryptor",
+        "bytes": 11132240,
+        "sha256": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113"
+      },
+      {
+        "id": "inspect",
+        "name": "mordant-fhe-inspect",
+        "package": "./cmd/mordant-fhe-inspect",
+        "bytes": 9672080,
+        "sha256": "sha256:a282420d415bac02e1634ccc4ce4acf88b91ff74bf1cdd553aedb0464a18062e"
+      }
+    ]
+  },
+  "graph": {
+    "session": {
+      "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+      "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+      "issuedAtUnix": 1786234153,
+      "expiresAtUnix": 1786248553,
+      "admissionOrder": [
+        "A",
+        "B",
+        "C"
+      ],
+      "expectedClaimCount": 3,
+      "expectedPairExecutionOrder": [
+        "A/B",
+        "A/C",
+        "B/C"
+      ]
+    },
+    "claims": [
+      {
+        "label": "A",
+        "authorization": {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "claimVersion": 1,
+          "participantRef": "sha256:d06f4f3837e45b13f7e3fb4ec46d83f74e800417756e4c0799ec43e7ec173900",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAx/qlJbDt1PRDxWRVURmKAwXLWSKoR+iaTgCu7uQHQuw=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:0732249ce56db8026bc4894b3195f98d708cbaefcefaf05a1c6b5daae2997e69",
+          "authorizationDigest": "sha256:7eaee89d302f9e557e6cf65ea02d2ca95bc2bb28ae7cef8789a17b8221517c52",
+          "signature": "YI97r8Wro8nhgfY+ieNd1rJKHLwdVrDgYQfpMRlBNU+lugvQn9nnmAbL1JmmPpxZTI3wTVjPxRvJ+xWxhOxtDA=="
+        }
+      },
+      {
+        "label": "B",
+        "authorization": {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "claimVersion": 1,
+          "participantRef": "sha256:40a750b1560754f545d64780355ad9b78149d2e9ac19fa63c54644d3ffb365ad",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAingLjvDuRnLoqPSOJk28wcr7aoKvWx9scGYh5D2QPSg=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:571fbc221f83dae6968390121b95f352cec4e0804218c68bf7ad4b389fa7d8bb",
+          "authorizationDigest": "sha256:4b098d953bbd579df9414c7ea5700ffcaec504a76f6892f75f4a9c5c9708b016",
+          "signature": "+XeYEHvA3JxDQ5J4X7Sti7WnH4yEoIrhH39f+8rTK8HbQfZWVleb9c1ejvcHCOceN6C53dCql5MmFJLkuyEkAQ=="
+        }
+      },
+      {
+        "label": "C",
+        "authorization": {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "claimVersion": 1,
+          "participantRef": "sha256:6d764a3f8d5a6e95778d8530521433091e69d7c7eff1a86ec84349da021e9910",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAWxqyl2aicRxSYy2JzndtFcvqwReWpTwC6vyxe0t6O6c=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:94873d312704c1cb6894edf267edbf52c5912334e8fc24b424dc8002bb7af07a",
+          "authorizationDigest": "sha256:beea9ec9df4769bc40b0c17b4b3c050e2fac87e1ec6b7c5859f4b8099cdff5ba",
+          "signature": "HlJA01fyqS5OKufzXmepYKRjp9fOCn1zYETSywyGqxNJ0HH3ggJPGYTw/9e9lCCavHZuXwOXJTDpiNoWx0wBAA=="
+        }
+      }
+    ],
+    "pairs": [
+      {
+        "label": "A/B",
+        "intent": {
+          "schemaVersion": "mordant.graph-pair-intent/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+          },
+          "roleMapping": {
+            "participantAClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "participantBClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19"
+          },
+          "claimBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:603aff6cded54fd00dfe4362f06f7a6b440543eacd429ec27df505cfb487d535",
+              "claimCommitment": "sha256:571fbc221f83dae6968390121b95f352cec4e0804218c68bf7ad4b389fa7d8bb",
+              "claimAuthorizationDigest": "sha256:4b098d953bbd579df9414c7ea5700ffcaec504a76f6892f75f4a9c5c9708b016"
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:dd4f5e0af618b6ff8397436cb7dec7fff677d2e9b4f1d492d261cd5e7ada5dcc",
+              "claimCommitment": "sha256:0732249ce56db8026bc4894b3195f98d708cbaefcefaf05a1c6b5daae2997e69",
+              "claimAuthorizationDigest": "sha256:7eaee89d302f9e557e6cf65ea02d2ca95bc2bb28ae7cef8789a17b8221517c52"
+            }
+          ],
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "createdAtUnix": 1786234154,
+          "authorizations": [
+            {
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "signature": "EqIpP1Ku7+pTOcz79vGFOEstOleIBuFMwlkFO6uUwKH0Z1rBRptsnc2j16ZXkbbOSk5hLQRfvFOx6dOYcCbpBw=="
+            },
+            {
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "signature": "P5xE9KviVlXMg7dO6aDpAW9X5TPIsZOzYrJC9zlksnB7zrpCmwS0gzG9i4WjsdY1lY3Yu6CBcZhQte7aU5FhDA=="
+            }
+          ],
+          "intentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83"
+        },
+        "binding": {
+          "schemaVersion": "mordant.graph-pair-binding/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+          },
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "pairIntentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83",
+          "caseId": "sha256:6b87706f15ad91a1ce0440d8e0fbafdbbc2ab0b93aa5e9be8ad6d7d3a56de626",
+          "caseBindingDigest": "sha256:e672b5728b38b20c7b0c32959999c90062a765190168fa5c8770dfe3bc6c9bf1",
+          "caseBinding": {
+            "schemaVersion": "mordant.fhe-case-binding/1",
+            "caseId": "sha256:6b87706f15ad91a1ce0440d8e0fbafdbbc2ab0b93aa5e9be8ad6d7d3a56de626",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "publicKeyDigest": "sha256:b33962edbe061b7c359a3e994c0d0ffdadc17cf0b7074ff0ff8c98e759beb781",
+            "evaluationKeyManifestDigest": "sha256:9957cedea39a3bce2fbbfe7fb1d156e845db002f87998ebf33fe02c427f00bd7",
+            "participantA": {
+              "id": "sha256:af7e92d31e4d1a16b002feed5c440342a62fd5849e6b3d0c234000febff82edf",
+              "role": "PARTICIPANT_A",
+              "signingPublicKey": "Ifo2tEB8FwZRb3gqyK4EcuG251cKHpvMBm5YPRuKqk4="
+            },
+            "participantB": {
+              "id": "sha256:fd098f09826206cff8197a53bcfbfc5cd46e4037fb45deed792e1044fbb0cd0c",
+              "role": "PARTICIPANT_B",
+              "signingPublicKey": "Bzn06fnWgRtk5HE6MImunJo5FvBdrK9umWeDOfiYd60="
+            },
+            "participantOrder": [
+              "sha256:af7e92d31e4d1a16b002feed5c440342a62fd5849e6b3d0c234000febff82edf",
+              "sha256:fd098f09826206cff8197a53bcfbfc5cd46e4037fb45deed792e1044fbb0cd0c"
+            ],
+            "inputSchema": "mordant.encrypted-pledge/governed-fhe-v1",
+            "resultSchema": "mordant.fixed-conflict-boolean/v1",
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:dad8ff3ec02dc5d87990fb3e82ac6ebcafe8643f0dd35a58d4217886e9813947",
+            "releaseAuthorityPublicKey": "yKGjaMonqqBKyncYySB9qoWNUtSlJBYhX1BZQGUYYWY=",
+            "caseNonce": "sha256:cc03aa3834e664878e57438fde256f4f270270a91cef9b09dafa7db9b8eee5a2",
+            "createdAtUnix": 1786234154,
+            "expiresAtUnix": 1786248554
+          },
+          "roleBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "claimNodeDigest": "sha256:603aff6cded54fd00dfe4362f06f7a6b440543eacd429ec27df505cfb487d535",
+              "pairParticipantId": "sha256:af7e92d31e4d1a16b002feed5c440342a62fd5849e6b3d0c234000febff82edf",
+              "pairParticipantSigningPublicKey": "Ifo2tEB8FwZRb3gqyK4EcuG251cKHpvMBm5YPRuKqk4="
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "claimNodeDigest": "sha256:dd4f5e0af618b6ff8397436cb7dec7fff677d2e9b4f1d492d261cd5e7ada5dcc",
+              "pairParticipantId": "sha256:fd098f09826206cff8197a53bcfbfc5cd46e4037fb45deed792e1044fbb0cd0c",
+              "pairParticipantSigningPublicKey": "Bzn06fnWgRtk5HE6MImunJo5FvBdrK9umWeDOfiYd60="
+            }
+          ],
+          "boundAtUnix": 1786234160,
+          "authorizations": [
+            {
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "signature": "DpOf79nUDlK44bxrfUtVzVwTujOtlZ1bgcIZmSXudLI/X5vQDZO6ajcz/4QkX+DGgac2AKPC9jlCodHB3eKoDQ=="
+            },
+            {
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "signature": "x88xMwpSCEmMQvccVD9GYdqTcNq8ld2pU5oYJat1gSx60GZl6k0cHjPhedR0fkA2mZ5B+RTirV4cnPV8bwucBA=="
+            }
+          ],
+          "bindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a"
+        },
+        "leaf": {
+          "schemaVersion": "mordant.graph-pair-evidence/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+          },
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "pairBindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a",
+          "caseId": "sha256:6b87706f15ad91a1ce0440d8e0fbafdbbc2ab0b93aa5e9be8ad6d7d3a56de626",
+          "caseBindingDigest": "sha256:e672b5728b38b20c7b0c32959999c90062a765190168fa5c8770dfe3bc6c9bf1",
+          "participantArtifactDigests": [
+            "sha256:af64d74918893be3fe4c4c425576423f6b72ef36061623f86e84065834757fa1",
+            "sha256:670ab3a198a7385eb92e912e2e69116334ee88bca0ef4546a1bb353e412115f5"
+          ],
+          "evaluatedArtifactDigest": "sha256:ed433dff5d1f169f5f4b9c94e47755add866c8e4150c91e2db5de1951fd0a522",
+          "evaluatorProvenance": "sha256:20c76fd46d37bb28a72bddc9cb70284538ca830081b73187e39dcb448ef10191",
+          "governedResult": {
+            "schemaVersion": "mordant.governed-conflict-result/1",
+            "caseId": "sha256:6b87706f15ad91a1ce0440d8e0fbafdbbc2ab0b93aa5e9be8ad6d7d3a56de626",
+            "caseBindingDigest": "sha256:e672b5728b38b20c7b0c32959999c90062a765190168fa5c8770dfe3bc6c9bf1",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "participantArtifactDigests": [
+              "sha256:af64d74918893be3fe4c4c425576423f6b72ef36061623f86e84065834757fa1",
+              "sha256:670ab3a198a7385eb92e912e2e69116334ee88bca0ef4546a1bb353e412115f5"
+            ],
+            "evaluatedArtifactDigest": "sha256:ed433dff5d1f169f5f4b9c94e47755add866c8e4150c91e2db5de1951fd0a522",
+            "resultCiphertextDigest": "sha256:866148c8571a3edd3fe3a96cad966db2c7865846d72e21743c0347b2c132676e",
+            "resultCiphertextCommitment": "sha256:e9359e1ec4c9d7d8f6a0a0e9c39d944daddebee994eab941f2428fadb0c0a886",
+            "conflict": true,
+            "releaseOrdinal": 1,
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:dad8ff3ec02dc5d87990fb3e82ac6ebcafe8643f0dd35a58d4217886e9813947",
+            "releaseAuthorityPublicKey": "yKGjaMonqqBKyncYySB9qoWNUtSlJBYhX1BZQGUYYWY=",
+            "releasedAtUnix": 1786234191,
+            "sourceProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+            "signature": "GeawJeN/ev5Jo07sX54GcwEkbSpYAkyti0KwKawseiAiKU2gV+5c0XrBTJsUlsM2MjKRo9Y6y2sz8NS43RgLCg=="
+          },
+          "governedResultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+          "state": "CONFLICT",
+          "inspection": {
+            "finalized": true,
+            "evaluationAdmission": true,
+            "releaseVerified": true,
+            "ambiguous": false,
+            "recoursePresent": false,
+            "publicEvidencePresent": false,
+            "resultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+            "conflict": true,
+            "releaseMode": "governed-decryptor-v1",
+            "participantArtifactDigests": [
+              "sha256:af64d74918893be3fe4c4c425576423f6b72ef36061623f86e84065834757fa1",
+              "sha256:670ab3a198a7385eb92e912e2e69116334ee88bca0ef4546a1bb353e412115f5"
+            ],
+            "evaluatedArtifactDigest": "sha256:ed433dff5d1f169f5f4b9c94e47755add866c8e4150c91e2db5de1951fd0a522",
+            "inspectBinaryDigest": "sha256:a282420d415bac02e1634ccc4ce4acf88b91ff74bf1cdd553aedb0464a18062e",
+            "inspectionReportDigest": "sha256:5b26048cfab42349cde2875478321577b30396b07ad1e5a3e2de143eb01fe3e6",
+            "inspectionDigest": "sha256:f22734571b76c12bf34739ac2b415be4b0cf3e7f95b04e2ea4328b1c1d52dd78"
+          },
+          "execution": {
+            "executionOrdinal": 1,
+            "startedAt": "2026-08-09T00:09:14.261Z",
+            "completedAt": "2026-08-09T00:10:13.016Z",
+            "terminalStage": "RELEASED",
+            "operations": [
+              "preparePrivateMatch",
+              "submitParticipantA",
+              "submitParticipantB",
+              "finalizeParticipantSubmissions",
+              "evaluatePrivateConflict",
+              "releaseGovernedResult"
+            ]
+          },
+          "evidenceDigest": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc"
+        },
+        "inspectReport": {
+          "foundation": {
+            "bindingDigest": "sha256:e672b5728b38b20c7b0c32959999c90062a765190168fa5c8770dfe3bc6c9bf1",
+            "report": {
+              "duration": 0,
+              "parameterBytes": 459,
+              "publicKeyBytes": 7864600,
+              "relinearizationKeyBytes": 31458448,
+              "galoisKeyBytes": [
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464
+              ],
+              "publicArtifactBytes": 391681159,
+              "privateArtifactBytes": 0
+            }
+          },
+          "submissionA": {
+            "artifactDigest": "sha256:af64d74918893be3fe4c4c425576423f6b72ef36061623f86e84065834757fa1",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "submissionB": {
+            "artifactDigest": "sha256:670ab3a198a7385eb92e912e2e69116334ee88bca0ef4546a1bb353e412115f5",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "finalized": true,
+          "evaluationAdmission": true,
+          "evaluation": {
+            "artifactDigest": "sha256:ed433dff5d1f169f5f4b9c94e47755add866c8e4150c91e2db5de1951fd0a522",
+            "resultBytes": 6291950,
+            "artifactBytes": 1347
+          },
+          "releaseAdmission": false,
+          "foundationPrivateComplete": false,
+          "releasePrivateComplete": false,
+          "release": {
+            "resultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+            "conflict": true,
+            "releaseMode": "governed-decryptor-v1",
+            "resultBytes": 1750,
+            "exactRetry": true,
+            "trustedRecoursePins": {
+              "participantArtifactDigestA": "sha256:af64d74918893be3fe4c4c425576423f6b72ef36061623f86e84065834757fa1",
+              "participantArtifactDigestB": "sha256:670ab3a198a7385eb92e912e2e69116334ee88bca0ef4546a1bb353e412115f5",
+              "evaluatedArtifactDigest": "sha256:ed433dff5d1f169f5f4b9c94e47755add866c8e4150c91e2db5de1951fd0a522",
+              "recomputedResultCiphertextDigest": "sha256:866148c8571a3edd3fe3a96cad966db2c7865846d72e21743c0347b2c132676e",
+              "resultCiphertextCommitment": "sha256:e9359e1ec4c9d7d8f6a0a0e9c39d944daddebee994eab941f2428fadb0c0a886",
+              "decryptorProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+              "releaseMode": "governed-decryptor-v1",
+              "releaseAuthorityId": "sha256:dad8ff3ec02dc5d87990fb3e82ac6ebcafe8643f0dd35a58d4217886e9813947"
+            }
+          },
+          "protectionBindingDigest": "sha256:eb09b39c31c57ec5347778c37b1766a175cfe10930924e15eb249d644876e885",
+          "ambiguous": false
+        }
+      },
+      {
+        "label": "A/C",
+        "intent": {
+          "schemaVersion": "mordant.graph-pair-intent/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+          },
+          "roleMapping": {
+            "participantAClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "participantBClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19"
+          },
+          "claimBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:36e155e240f2721a158fae048f140a2479698009f6d115123757d7d44a7b7e39",
+              "claimCommitment": "sha256:94873d312704c1cb6894edf267edbf52c5912334e8fc24b424dc8002bb7af07a",
+              "claimAuthorizationDigest": "sha256:beea9ec9df4769bc40b0c17b4b3c050e2fac87e1ec6b7c5859f4b8099cdff5ba"
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:dd4f5e0af618b6ff8397436cb7dec7fff677d2e9b4f1d492d261cd5e7ada5dcc",
+              "claimCommitment": "sha256:0732249ce56db8026bc4894b3195f98d708cbaefcefaf05a1c6b5daae2997e69",
+              "claimAuthorizationDigest": "sha256:7eaee89d302f9e557e6cf65ea02d2ca95bc2bb28ae7cef8789a17b8221517c52"
+            }
+          ],
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "createdAtUnix": 1786234214,
+          "authorizations": [
+            {
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "signature": "iHo3EVRlw5yhzgQ1ojhE72KmznT0GO/n6YUHylKkhOd5VB1v+YlX2F1cxhUoO6moPJByDKyhHRxeBhtlKDhgDw=="
+            },
+            {
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "signature": "uhxIyG8xqj9L2Gnas03bF82yyVreCLXi5PRvgX3Q/hxzQNl+0q2LrgnRMgByXM/ts7bfYeBXM1GAjDOPxnBODg=="
+            }
+          ],
+          "intentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8"
+        },
+        "binding": {
+          "schemaVersion": "mordant.graph-pair-binding/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+          },
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "pairIntentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8",
+          "caseId": "sha256:bdd101bd55160bded3214bc3327e67585b1bab66a0bde3336fb5a85c23f7e3f8",
+          "caseBindingDigest": "sha256:19794b7198f3a3318c4f0fd61d3caf3648443cbe9f8b3c1d52450f769b2d5af5",
+          "caseBinding": {
+            "schemaVersion": "mordant.fhe-case-binding/1",
+            "caseId": "sha256:bdd101bd55160bded3214bc3327e67585b1bab66a0bde3336fb5a85c23f7e3f8",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "publicKeyDigest": "sha256:d0e8311b1227cd3737166bbadfd7424d38cd8b128a718bbb5a35b41a7c61723e",
+            "evaluationKeyManifestDigest": "sha256:5050e10f40aa96dacfcf3fd327b59ba3c3a0b7e32477f9db247f7078e877a2aa",
+            "participantA": {
+              "id": "sha256:fa17364f5ad2bffb690ac24bc915ec191fa51f8338b0b9c8c0b31eb6ea7985b7",
+              "role": "PARTICIPANT_A",
+              "signingPublicKey": "0jLwmcwZpVfHhfYzA2+lUOnGmysXkih/i5PVYFh0TY4="
+            },
+            "participantB": {
+              "id": "sha256:09462faa482fbd8a4c48b1fec3fe360454e2721041a3f999283ebecbc6ecd630",
+              "role": "PARTICIPANT_B",
+              "signingPublicKey": "9WvNmNTLMyorLfffHCvV70A4aL/MX5Z/t3sVSEaVG+U="
+            },
+            "participantOrder": [
+              "sha256:fa17364f5ad2bffb690ac24bc915ec191fa51f8338b0b9c8c0b31eb6ea7985b7",
+              "sha256:09462faa482fbd8a4c48b1fec3fe360454e2721041a3f999283ebecbc6ecd630"
+            ],
+            "inputSchema": "mordant.encrypted-pledge/governed-fhe-v1",
+            "resultSchema": "mordant.fixed-conflict-boolean/v1",
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:b6d7e4d952963ae9fd9041d525656172d54b975e06b9498081dbe9062adaef1c",
+            "releaseAuthorityPublicKey": "eCZ8V1oSjleMpSgtL8OsGjVSwLVeU4mSSFd69JRKFjQ=",
+            "caseNonce": "sha256:726a41a155bc84ee2fb981c6dac5dfa24291018552a1ab263cb807757a6f4b01",
+            "createdAtUnix": 1786234214,
+            "expiresAtUnix": 1786248614
+          },
+          "roleBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "claimNodeDigest": "sha256:36e155e240f2721a158fae048f140a2479698009f6d115123757d7d44a7b7e39",
+              "pairParticipantId": "sha256:fa17364f5ad2bffb690ac24bc915ec191fa51f8338b0b9c8c0b31eb6ea7985b7",
+              "pairParticipantSigningPublicKey": "0jLwmcwZpVfHhfYzA2+lUOnGmysXkih/i5PVYFh0TY4="
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "claimNodeDigest": "sha256:dd4f5e0af618b6ff8397436cb7dec7fff677d2e9b4f1d492d261cd5e7ada5dcc",
+              "pairParticipantId": "sha256:09462faa482fbd8a4c48b1fec3fe360454e2721041a3f999283ebecbc6ecd630",
+              "pairParticipantSigningPublicKey": "9WvNmNTLMyorLfffHCvV70A4aL/MX5Z/t3sVSEaVG+U="
+            }
+          ],
+          "boundAtUnix": 1786234219,
+          "authorizations": [
+            {
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "signature": "+9L7Mxlx70htOVF9KHmDMMPVC45as43C3+SF4+EQK7zqfBfJus8LqrzanjsScm5aw2SNH+iG7YwOAygqjLpzCg=="
+            },
+            {
+              "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "signature": "U2WFLY+0ISO2cAwCiad9LLTxWtRjlOmHIsd8jQvKFHd5lCj3D/Sit8GdlmTT0ioJikuwapWHHworneWPSHw1BA=="
+            }
+          ],
+          "bindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282"
+        },
+        "leaf": {
+          "schemaVersion": "mordant.graph-pair-evidence/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+          },
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "pairBindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282",
+          "caseId": "sha256:bdd101bd55160bded3214bc3327e67585b1bab66a0bde3336fb5a85c23f7e3f8",
+          "caseBindingDigest": "sha256:19794b7198f3a3318c4f0fd61d3caf3648443cbe9f8b3c1d52450f769b2d5af5",
+          "participantArtifactDigests": [
+            "sha256:9dd025ce4c7680305febc5452e12dba677571674fbb5d3da1cd8df6385f5e5b8",
+            "sha256:683365e0f04275dca158ee222e546dee03bfc774aa0d91d8ee4891b3cb71dc14"
+          ],
+          "evaluatedArtifactDigest": "sha256:09fbf69d6941383f38713ea2936bd5ba76392d9eda091118f334f675a0e01498",
+          "evaluatorProvenance": "sha256:20c76fd46d37bb28a72bddc9cb70284538ca830081b73187e39dcb448ef10191",
+          "governedResult": {
+            "schemaVersion": "mordant.governed-conflict-result/1",
+            "caseId": "sha256:bdd101bd55160bded3214bc3327e67585b1bab66a0bde3336fb5a85c23f7e3f8",
+            "caseBindingDigest": "sha256:19794b7198f3a3318c4f0fd61d3caf3648443cbe9f8b3c1d52450f769b2d5af5",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "participantArtifactDigests": [
+              "sha256:9dd025ce4c7680305febc5452e12dba677571674fbb5d3da1cd8df6385f5e5b8",
+              "sha256:683365e0f04275dca158ee222e546dee03bfc774aa0d91d8ee4891b3cb71dc14"
+            ],
+            "evaluatedArtifactDigest": "sha256:09fbf69d6941383f38713ea2936bd5ba76392d9eda091118f334f675a0e01498",
+            "resultCiphertextDigest": "sha256:5771d34e5bd7f2fd9077a701a8f4c499c922f19cf8951e8a371e8401fb11cc81",
+            "resultCiphertextCommitment": "sha256:afb8cc960b1141e53e081871179331e0ba88a464a66e630ec05dd49cc8945c67",
+            "conflict": false,
+            "releaseOrdinal": 1,
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:b6d7e4d952963ae9fd9041d525656172d54b975e06b9498081dbe9062adaef1c",
+            "releaseAuthorityPublicKey": "eCZ8V1oSjleMpSgtL8OsGjVSwLVeU4mSSFd69JRKFjQ=",
+            "releasedAtUnix": 1786234241,
+            "sourceProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+            "signature": "0VUiVPkG1Xbb/cOvA7VL1ZA1d0Dy+QuspTqPTHXKQ1Ihrd1+8F4Mka3J5XM/6JDTB494Zo1ONugzdyPNlzLaBw=="
+          },
+          "governedResultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+          "state": "NO_CONFLICT_UNDER_POLICY",
+          "inspection": {
+            "finalized": true,
+            "evaluationAdmission": true,
+            "releaseVerified": true,
+            "ambiguous": false,
+            "recoursePresent": false,
+            "publicEvidencePresent": false,
+            "resultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+            "conflict": false,
+            "releaseMode": "governed-decryptor-v1",
+            "participantArtifactDigests": [
+              "sha256:9dd025ce4c7680305febc5452e12dba677571674fbb5d3da1cd8df6385f5e5b8",
+              "sha256:683365e0f04275dca158ee222e546dee03bfc774aa0d91d8ee4891b3cb71dc14"
+            ],
+            "evaluatedArtifactDigest": "sha256:09fbf69d6941383f38713ea2936bd5ba76392d9eda091118f334f675a0e01498",
+            "inspectBinaryDigest": "sha256:a282420d415bac02e1634ccc4ce4acf88b91ff74bf1cdd553aedb0464a18062e",
+            "inspectionReportDigest": "sha256:dc962ad0a85ab1757a048e91b88449547927c5560a2db055dd0b35f50448c0da",
+            "inspectionDigest": "sha256:b6d3460ec3c59de03a34887a2db2ad7a32755b6ee92bc489c6624dae740a8d94"
+          },
+          "execution": {
+            "executionOrdinal": 2,
+            "startedAt": "2026-08-09T00:10:14.850Z",
+            "completedAt": "2026-08-09T00:11:01.782Z",
+            "terminalStage": "RELEASED",
+            "operations": [
+              "preparePrivateMatch",
+              "submitParticipantA",
+              "submitParticipantB",
+              "finalizeParticipantSubmissions",
+              "evaluatePrivateConflict",
+              "releaseGovernedResult"
+            ]
+          },
+          "evidenceDigest": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a"
+        },
+        "inspectReport": {
+          "foundation": {
+            "bindingDigest": "sha256:19794b7198f3a3318c4f0fd61d3caf3648443cbe9f8b3c1d52450f769b2d5af5",
+            "report": {
+              "duration": 0,
+              "parameterBytes": 459,
+              "publicKeyBytes": 7864600,
+              "relinearizationKeyBytes": 31458448,
+              "galoisKeyBytes": [
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464
+              ],
+              "publicArtifactBytes": 391681160,
+              "privateArtifactBytes": 0
+            }
+          },
+          "submissionA": {
+            "artifactDigest": "sha256:9dd025ce4c7680305febc5452e12dba677571674fbb5d3da1cd8df6385f5e5b8",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "submissionB": {
+            "artifactDigest": "sha256:683365e0f04275dca158ee222e546dee03bfc774aa0d91d8ee4891b3cb71dc14",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "finalized": true,
+          "evaluationAdmission": true,
+          "evaluation": {
+            "artifactDigest": "sha256:09fbf69d6941383f38713ea2936bd5ba76392d9eda091118f334f675a0e01498",
+            "resultBytes": 6291950,
+            "artifactBytes": 1347
+          },
+          "releaseAdmission": false,
+          "foundationPrivateComplete": false,
+          "releasePrivateComplete": false,
+          "release": {
+            "resultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+            "conflict": false,
+            "releaseMode": "governed-decryptor-v1",
+            "resultBytes": 1751,
+            "exactRetry": true,
+            "trustedRecoursePins": {
+              "participantArtifactDigestA": "sha256:9dd025ce4c7680305febc5452e12dba677571674fbb5d3da1cd8df6385f5e5b8",
+              "participantArtifactDigestB": "sha256:683365e0f04275dca158ee222e546dee03bfc774aa0d91d8ee4891b3cb71dc14",
+              "evaluatedArtifactDigest": "sha256:09fbf69d6941383f38713ea2936bd5ba76392d9eda091118f334f675a0e01498",
+              "recomputedResultCiphertextDigest": "sha256:5771d34e5bd7f2fd9077a701a8f4c499c922f19cf8951e8a371e8401fb11cc81",
+              "resultCiphertextCommitment": "sha256:afb8cc960b1141e53e081871179331e0ba88a464a66e630ec05dd49cc8945c67",
+              "decryptorProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+              "releaseMode": "governed-decryptor-v1",
+              "releaseAuthorityId": "sha256:b6d7e4d952963ae9fd9041d525656172d54b975e06b9498081dbe9062adaef1c"
+            }
+          },
+          "protectionBindingDigest": "sha256:7719f019e00025e876c693d9059cfbeb4ba2688c877d6a0b85797bfab6c52270",
+          "ambiguous": false
+        }
+      },
+      {
+        "label": "B/C",
+        "intent": {
+          "schemaVersion": "mordant.graph-pair-intent/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+          },
+          "roleMapping": {
+            "participantAClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "participantBClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15"
+          },
+          "claimBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:36e155e240f2721a158fae048f140a2479698009f6d115123757d7d44a7b7e39",
+              "claimCommitment": "sha256:94873d312704c1cb6894edf267edbf52c5912334e8fc24b424dc8002bb7af07a",
+              "claimAuthorizationDigest": "sha256:beea9ec9df4769bc40b0c17b4b3c050e2fac87e1ec6b7c5859f4b8099cdff5ba"
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "claimVersion": 1,
+              "claimNodeDigest": "sha256:603aff6cded54fd00dfe4362f06f7a6b440543eacd429ec27df505cfb487d535",
+              "claimCommitment": "sha256:571fbc221f83dae6968390121b95f352cec4e0804218c68bf7ad4b389fa7d8bb",
+              "claimAuthorizationDigest": "sha256:4b098d953bbd579df9414c7ea5700ffcaec504a76f6892f75f4a9c5c9708b016"
+            }
+          ],
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "createdAtUnix": 1786234262,
+          "authorizations": [
+            {
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "signature": "arR7S4HZRkmANe8T9NzXnVu/ijJOQCoquN50v8aSC1HanV7nzkAyz7TeINLxraFE/t5/ci9G7eSmxGlQ/hU9AA=="
+            },
+            {
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "signature": "O5voAR+vjedjXLLAinzX3bGCiLIswVdW55RV0yqn/f29TxJBNqZwLQSArLq9nszz7mi01DCfaGcqENxSvgjmBg=="
+            }
+          ],
+          "intentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581"
+        },
+        "binding": {
+          "schemaVersion": "mordant.graph-pair-binding/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+          },
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "pairIntentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581",
+          "caseId": "sha256:0521efde3a427e6a1493a2972b4acd8847022530b302e58fff7dcb1405d338c1",
+          "caseBindingDigest": "sha256:01de3649a27af562be2761fbf102bef9629db226235ea2447b26dc4da68dc28c",
+          "caseBinding": {
+            "schemaVersion": "mordant.fhe-case-binding/1",
+            "caseId": "sha256:0521efde3a427e6a1493a2972b4acd8847022530b302e58fff7dcb1405d338c1",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "publicKeyDigest": "sha256:f66497e91ee8b414f2449989156a94e15d7b4b74bfdd912eebdf19ea855354ca",
+            "evaluationKeyManifestDigest": "sha256:8f396c5acf966c075ac292e6a2ea94a7ca01962174c5542ed09595b60a819d6b",
+            "participantA": {
+              "id": "sha256:19442ed6cbaf4118ca551dad75859996aff94ecaa8511f82e762f13a20ca3742",
+              "role": "PARTICIPANT_A",
+              "signingPublicKey": "INysTs/GH0WzoWmmWs/u0D+RO/DITcw6m5HrxnfNsj0="
+            },
+            "participantB": {
+              "id": "sha256:b29cd48bf43a8ad6105c8ffb91c9f40cda964ad083907a6e291e3de3fbbfecde",
+              "role": "PARTICIPANT_B",
+              "signingPublicKey": "us+y5dWkhXyXlTXC5Voa0AJfA2Riuyl4OP0gqw+q1k4="
+            },
+            "participantOrder": [
+              "sha256:19442ed6cbaf4118ca551dad75859996aff94ecaa8511f82e762f13a20ca3742",
+              "sha256:b29cd48bf43a8ad6105c8ffb91c9f40cda964ad083907a6e291e3de3fbbfecde"
+            ],
+            "inputSchema": "mordant.encrypted-pledge/governed-fhe-v1",
+            "resultSchema": "mordant.fixed-conflict-boolean/v1",
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:4bd0798654b0404e34dcf416415a08eeb1912967e306cea0c4d1e543e0ba133a",
+            "releaseAuthorityPublicKey": "eLxAWuVVfAXwzMOdYAWzpRKVG1gfAw4wUdErGlpxZCk=",
+            "caseNonce": "sha256:e24e61e8fde4384a174702d3f3a2ca375d03a7ce27d2f9aadf587f20642259c8",
+            "createdAtUnix": 1786234262,
+            "expiresAtUnix": 1786248662
+          },
+          "roleBindings": [
+            {
+              "role": "PARTICIPANT_A",
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "claimNodeDigest": "sha256:36e155e240f2721a158fae048f140a2479698009f6d115123757d7d44a7b7e39",
+              "pairParticipantId": "sha256:19442ed6cbaf4118ca551dad75859996aff94ecaa8511f82e762f13a20ca3742",
+              "pairParticipantSigningPublicKey": "INysTs/GH0WzoWmmWs/u0D+RO/DITcw6m5HrxnfNsj0="
+            },
+            {
+              "role": "PARTICIPANT_B",
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "claimNodeDigest": "sha256:603aff6cded54fd00dfe4362f06f7a6b440543eacd429ec27df505cfb487d535",
+              "pairParticipantId": "sha256:b29cd48bf43a8ad6105c8ffb91c9f40cda964ad083907a6e291e3de3fbbfecde",
+              "pairParticipantSigningPublicKey": "us+y5dWkhXyXlTXC5Voa0AJfA2Riuyl4OP0gqw+q1k4="
+            }
+          ],
+          "boundAtUnix": 1786234267,
+          "authorizations": [
+            {
+              "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "signature": "/4cro0l07wBz29dPbnCf/Mbu9T2IRZzIQqDO6jMusjsIZj/ZGYKyimNRUSiyCSQWLyGuN5AL41HDFA7M0aoYAQ=="
+            },
+            {
+              "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "signature": "w35pI+qrPVm1F825Y5yr6zCiNEUHO3c9p3giBa6htiWjFQaFNk0VWW0FOcXEw/F1xpgewnRqOYwVchgZIErWBQ=="
+            }
+          ],
+          "bindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0"
+        },
+        "leaf": {
+          "schemaVersion": "mordant.graph-pair-evidence/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+          },
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "pairBindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0",
+          "caseId": "sha256:0521efde3a427e6a1493a2972b4acd8847022530b302e58fff7dcb1405d338c1",
+          "caseBindingDigest": "sha256:01de3649a27af562be2761fbf102bef9629db226235ea2447b26dc4da68dc28c",
+          "participantArtifactDigests": [
+            "sha256:d7d2ce89064c1ff6916546dffd7b7d82a2c161261a17d11821b55bab51c42c8a",
+            "sha256:ac5224b672f87735a20dcba5c67ccfb144e2fc5875457705338c1b3580a407a5"
+          ],
+          "evaluatedArtifactDigest": "sha256:4d0dedfb5d01a80def4cdcadcb71a6ee3b4c570a8fbacc9d177520a3879b24fa",
+          "evaluatorProvenance": "sha256:20c76fd46d37bb28a72bddc9cb70284538ca830081b73187e39dcb448ef10191",
+          "governedResult": {
+            "schemaVersion": "mordant.governed-conflict-result/1",
+            "caseId": "sha256:0521efde3a427e6a1493a2972b4acd8847022530b302e58fff7dcb1405d338c1",
+            "caseBindingDigest": "sha256:01de3649a27af562be2761fbf102bef9629db226235ea2447b26dc4da68dc28c",
+            "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+            "serviceId": "mordant.private-pledge-matching",
+            "serviceVersion": 1,
+            "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+            "policyVersion": 1,
+            "circuitId": "mordant.identity-full-fhe-256",
+            "circuitVersion": 5,
+            "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+            "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+            "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+            "participantArtifactDigests": [
+              "sha256:d7d2ce89064c1ff6916546dffd7b7d82a2c161261a17d11821b55bab51c42c8a",
+              "sha256:ac5224b672f87735a20dcba5c67ccfb144e2fc5875457705338c1b3580a407a5"
+            ],
+            "evaluatedArtifactDigest": "sha256:4d0dedfb5d01a80def4cdcadcb71a6ee3b4c570a8fbacc9d177520a3879b24fa",
+            "resultCiphertextDigest": "sha256:f0401822ecfddd6979b5946143f657764dfe251e5c010935e9dc52b8579e8f3f",
+            "resultCiphertextCommitment": "sha256:97d4485497d12b202113adafdc0bbab10465445201457341d7496c1eeeab38fb",
+            "conflict": true,
+            "releaseOrdinal": 1,
+            "releaseMode": "governed-decryptor-v1",
+            "releaseAuthorityId": "sha256:4bd0798654b0404e34dcf416415a08eeb1912967e306cea0c4d1e543e0ba133a",
+            "releaseAuthorityPublicKey": "eLxAWuVVfAXwzMOdYAWzpRKVG1gfAw4wUdErGlpxZCk=",
+            "releasedAtUnix": 1786234288,
+            "sourceProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+            "signature": "MdrhpVv0KzuwwvbuhgHOOL3m+fLYby15291bIudcqXH9/iximuHaaPi4hECE9qZLwC3INYL51RjPyem8LltyBA=="
+          },
+          "governedResultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+          "state": "CONFLICT",
+          "inspection": {
+            "finalized": true,
+            "evaluationAdmission": true,
+            "releaseVerified": true,
+            "ambiguous": false,
+            "recoursePresent": false,
+            "publicEvidencePresent": false,
+            "resultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+            "conflict": true,
+            "releaseMode": "governed-decryptor-v1",
+            "participantArtifactDigests": [
+              "sha256:d7d2ce89064c1ff6916546dffd7b7d82a2c161261a17d11821b55bab51c42c8a",
+              "sha256:ac5224b672f87735a20dcba5c67ccfb144e2fc5875457705338c1b3580a407a5"
+            ],
+            "evaluatedArtifactDigest": "sha256:4d0dedfb5d01a80def4cdcadcb71a6ee3b4c570a8fbacc9d177520a3879b24fa",
+            "inspectBinaryDigest": "sha256:a282420d415bac02e1634ccc4ce4acf88b91ff74bf1cdd553aedb0464a18062e",
+            "inspectionReportDigest": "sha256:773946571ca4361be81a1a121209230612adad78e14ac363fb4c4f1d018bb342",
+            "inspectionDigest": "sha256:45a70f3f813f612daad7eeed6fb4671027aac4ec508f525a718dca87cf9a160b"
+          },
+          "execution": {
+            "executionOrdinal": 3,
+            "startedAt": "2026-08-09T00:11:02.610Z",
+            "completedAt": "2026-08-09T00:11:44.992Z",
+            "terminalStage": "RELEASED",
+            "operations": [
+              "preparePrivateMatch",
+              "submitParticipantA",
+              "submitParticipantB",
+              "finalizeParticipantSubmissions",
+              "evaluatePrivateConflict",
+              "releaseGovernedResult"
+            ]
+          },
+          "evidenceDigest": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784"
+        },
+        "inspectReport": {
+          "foundation": {
+            "bindingDigest": "sha256:01de3649a27af562be2761fbf102bef9629db226235ea2447b26dc4da68dc28c",
+            "report": {
+              "duration": 0,
+              "parameterBytes": 459,
+              "publicKeyBytes": 7864600,
+              "relinearizationKeyBytes": 31458448,
+              "galoisKeyBytes": [
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464,
+                31458464
+              ],
+              "publicArtifactBytes": 391681159,
+              "privateArtifactBytes": 0
+            }
+          },
+          "submissionA": {
+            "artifactDigest": "sha256:d7d2ce89064c1ff6916546dffd7b7d82a2c161261a17d11821b55bab51c42c8a",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "submissionB": {
+            "artifactDigest": "sha256:ac5224b672f87735a20dcba5c67ccfb144e2fc5875457705338c1b3580a407a5",
+            "ciphertextBytes": 31459990,
+            "artifactBytes": 1853
+          },
+          "finalized": true,
+          "evaluationAdmission": true,
+          "evaluation": {
+            "artifactDigest": "sha256:4d0dedfb5d01a80def4cdcadcb71a6ee3b4c570a8fbacc9d177520a3879b24fa",
+            "resultBytes": 6291950,
+            "artifactBytes": 1347
+          },
+          "releaseAdmission": false,
+          "foundationPrivateComplete": false,
+          "releasePrivateComplete": false,
+          "release": {
+            "resultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+            "conflict": true,
+            "releaseMode": "governed-decryptor-v1",
+            "resultBytes": 1750,
+            "exactRetry": true,
+            "trustedRecoursePins": {
+              "participantArtifactDigestA": "sha256:d7d2ce89064c1ff6916546dffd7b7d82a2c161261a17d11821b55bab51c42c8a",
+              "participantArtifactDigestB": "sha256:ac5224b672f87735a20dcba5c67ccfb144e2fc5875457705338c1b3580a407a5",
+              "evaluatedArtifactDigest": "sha256:4d0dedfb5d01a80def4cdcadcb71a6ee3b4c570a8fbacc9d177520a3879b24fa",
+              "recomputedResultCiphertextDigest": "sha256:f0401822ecfddd6979b5946143f657764dfe251e5c010935e9dc52b8579e8f3f",
+              "resultCiphertextCommitment": "sha256:97d4485497d12b202113adafdc0bbab10465445201457341d7496c1eeeab38fb",
+              "decryptorProvenance": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+              "releaseMode": "governed-decryptor-v1",
+              "releaseAuthorityId": "sha256:4bd0798654b0404e34dcf416415a08eeb1912967e306cea0c4d1e543e0ba133a"
+            }
+          },
+          "protectionBindingDigest": "sha256:206751ec6eb768a9e333d1d3aeb6f48f6d3c14ad9ea3ca3ec01465d7cb13de13",
+          "ambiguous": false
+        }
+      }
+    ],
+    "aggregate": {
+      "schemaVersion": "mordant.receivable-conflict-aggregate/1",
+      "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+      "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+      "issuedAtUnix": 1786234153,
+      "expiresAtUnix": 1786248553,
+      "expectedClaimCount": 3,
+      "nodesSealed": true,
+      "nodes": [
+        {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "claimVersion": 1,
+          "participantRef": "sha256:6d764a3f8d5a6e95778d8530521433091e69d7c7eff1a86ec84349da021e9910",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAWxqyl2aicRxSYy2JzndtFcvqwReWpTwC6vyxe0t6O6c=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:94873d312704c1cb6894edf267edbf52c5912334e8fc24b424dc8002bb7af07a",
+          "authorizationDigest": "sha256:beea9ec9df4769bc40b0c17b4b3c050e2fac87e1ec6b7c5859f4b8099cdff5ba",
+          "signature": "HlJA01fyqS5OKufzXmepYKRjp9fOCn1zYETSywyGqxNJ0HH3ggJPGYTw/9e9lCCavHZuXwOXJTDpiNoWx0wBAA=="
+        },
+        {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "claimVersion": 1,
+          "participantRef": "sha256:40a750b1560754f545d64780355ad9b78149d2e9ac19fa63c54644d3ffb365ad",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAingLjvDuRnLoqPSOJk28wcr7aoKvWx9scGYh5D2QPSg=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:571fbc221f83dae6968390121b95f352cec4e0804218c68bf7ad4b389fa7d8bb",
+          "authorizationDigest": "sha256:4b098d953bbd579df9414c7ea5700ffcaec504a76f6892f75f4a9c5c9708b016",
+          "signature": "+XeYEHvA3JxDQ5J4X7Sti7WnH4yEoIrhH39f+8rTK8HbQfZWVleb9c1ejvcHCOceN6C53dCql5MmFJLkuyEkAQ=="
+        },
+        {
+          "schemaVersion": "mordant.graph-claim-authorization/1",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "receivableIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+          "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "claimVersion": 1,
+          "participantRef": "sha256:d06f4f3837e45b13f7e3fb4ec46d83f74e800417756e4c0799ec43e7ec173900",
+          "authorizationPublicKey": "MCowBQYDK2VwAyEAx/qlJbDt1PRDxWRVURmKAwXLWSKoR+iaTgCu7uQHQuw=",
+          "issuedAtUnix": 1786234153,
+          "expiresAtUnix": 1786248553,
+          "claimCommitment": "sha256:0732249ce56db8026bc4894b3195f98d708cbaefcefaf05a1c6b5daae2997e69",
+          "authorizationDigest": "sha256:7eaee89d302f9e557e6cf65ea02d2ca95bc2bb28ae7cef8789a17b8221517c52",
+          "signature": "YI97r8Wro8nhgfY+ieNd1rJKHLwdVrDgYQfpMRlBNU+lugvQn9nnmAbL1JmmPpxZTI3wTVjPxRvJ+xWxhOxtDA=="
+        }
+      ],
+      "expectedPairs": [
+        {
+          "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+        },
+        {
+          "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+        },
+        {
+          "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+        }
+      ],
+      "pairRelations": [
+        {
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+          },
+          "state": "CONFLICT",
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "pairIntentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581",
+          "pairBindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0",
+          "evidenceDigest": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784",
+          "governedResultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+          "failureDigest": null,
+          "executionOrdinal": 3,
+          "startedAt": "2026-08-09T00:11:02.610Z",
+          "completedAt": "2026-08-09T00:11:44.992Z"
+        },
+        {
+          "claimPair": {
+            "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+          },
+          "state": "NO_CONFLICT_UNDER_POLICY",
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "pairIntentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8",
+          "pairBindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282",
+          "evidenceDigest": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a",
+          "governedResultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+          "failureDigest": null,
+          "executionOrdinal": 2,
+          "startedAt": "2026-08-09T00:10:14.850Z",
+          "completedAt": "2026-08-09T00:11:01.782Z"
+        },
+        {
+          "claimPair": {
+            "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+            "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+            "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+          },
+          "state": "CONFLICT",
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "pairIntentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83",
+          "pairBindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a",
+          "evidenceDigest": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc",
+          "governedResultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+          "failureDigest": null,
+          "executionOrdinal": 1,
+          "startedAt": "2026-08-09T00:09:14.261Z",
+          "completedAt": "2026-08-09T00:10:13.016Z"
+        }
+      ],
+      "pins": {
+        "startingCommit": "9ea6652dbf61c6227e3a21183e628a7356b6df18",
+        "executionSourceCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6",
+        "executionSourceTree": "3df3aa8f0cf31d5a53543a9706be20e6583738b3",
+        "governedFheSourceCommit": "3b0247593d022fb18aadd2b554329f85c5a19898",
+        "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+        "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+        "policyVersion": 1,
+        "serviceId": "mordant.private-pledge-matching",
+        "serviceVersion": 1,
+        "circuitId": "mordant.identity-full-fhe-256",
+        "circuitVersion": 5,
+        "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+        "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+        "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+        "releaseMode": "governed-decryptor-v1",
+        "nativeBinaries": {
+          "keygen": "sha256:c16ab091d89c98099b6e3813d3270067fffbc65c7fef5eb9b258dc30ce5a22b5",
+          "client": "sha256:a073631b8322c9f992ed805d0f3e78293b60f253df6515eb5994a11a9a158a31",
+          "evaluator": "sha256:20c76fd46d37bb28a72bddc9cb70284538ca830081b73187e39dcb448ef10191",
+          "decryptor": "sha256:5e32847dcf8d4c8e9785d21bea9b3e6cd70c17b5aef6ea79f120c516d83c5113",
+          "inspect": "sha256:a282420d415bac02e1634ccc4ce4acf88b91ff74bf1cdd553aedb0464a18062e"
+        }
+      },
+      "chronologyDigest": "sha256:b86dcbec3f42d9d2cf37b17424412863a5c367f7915866ac38fc47d357f3c304",
+      "completeness": "COMPLETE",
+      "reviewState": "REVIEW_READY",
+      "globalAllClear": false,
+      "trueConflictEdges": [
+        {
+          "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+        },
+        {
+          "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+        }
+      ],
+      "execution": {
+        "scheduling": "SEQUENTIAL",
+        "workerArchitecture": "UNCHANGED_SINGLE_SLOT",
+        "maxConcurrentPairsObserved": 1,
+        "strictlySequential": true
+      },
+      "retention": {
+        "scope": "OPERATOR_PRIVATE",
+        "exactIntervalsRetained": true,
+        "saltRetained": true,
+        "authorizationPrivateKeyRetained": false,
+        "authorizationPrivateKeyLifetime": "CALLER_MANAGED_PROCESS_MEMORY_UNTIL_REFERENCES_RELEASED",
+        "authorizationPrivateKeyZeroizationClaimed": false,
+        "authorizationPrivateKeyGarbageCollectionTimingClaimed": false,
+        "automaticTerminalDeletion": false,
+        "secureErasureClaimed": false,
+        "deletionTrigger": "EXPLICIT_OPERATOR_ACTION_AFTER_REVIEW_OR_EXPIRY",
+        "publicEvidenceContainsOpenings": false
+      },
+      "reviewHandoff": {
+        "automaticIncidentCreation": false,
+        "policyOrHumanReviewRequired": true,
+        "evidenceReferences": [
+          "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784",
+          "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a",
+          "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc"
+        ]
+      },
+      "sideEffects": {
+        "recourseOpened": false,
+        "adapterDeployed": false,
+        "cureWindowCreated": false,
+        "settlementExecuted": false,
+        "tokensMoved": false
+      },
+      "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3"
+    },
+    "chronology": {
+      "schemaVersion": "mordant.receivable-conflict-chronology/1",
+      "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+      "events": [
+        {
+          "ordinal": 1,
+          "kind": "CLAIM_ADMITTED",
+          "occurredAt": "2026-08-09T00:09:14.182Z",
+          "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "newPairIds": []
+        },
+        {
+          "ordinal": 2,
+          "kind": "CLAIM_ADMITTED",
+          "occurredAt": "2026-08-09T00:09:14.260Z",
+          "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "newPairIds": [
+            "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+          ]
+        },
+        {
+          "ordinal": 3,
+          "kind": "PAIR_INTENT_FROZEN",
+          "occurredAt": "2026-08-09T00:09:14.261Z",
+          "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0",
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "evidenceRef": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83"
+        },
+        {
+          "ordinal": 4,
+          "kind": "PAIR_BOUND",
+          "occurredAt": "2026-08-09T00:09:20.837Z",
+          "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0",
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "evidenceRef": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a"
+        },
+        {
+          "ordinal": 5,
+          "kind": "PAIR_COMPLETED",
+          "occurredAt": "2026-08-09T00:10:13.016Z",
+          "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0",
+          "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+          "evidenceRef": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc"
+        },
+        {
+          "ordinal": 6,
+          "kind": "CLAIM_ADMITTED",
+          "occurredAt": "2026-08-09T00:10:14.849Z",
+          "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "newPairIds": [
+            "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea",
+            "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+          ]
+        },
+        {
+          "ordinal": 7,
+          "kind": "ADMISSIONS_SEALED",
+          "occurredAt": "2026-08-09T00:10:14.849Z"
+        },
+        {
+          "ordinal": 8,
+          "kind": "PAIR_INTENT_FROZEN",
+          "occurredAt": "2026-08-09T00:10:14.850Z",
+          "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea",
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "evidenceRef": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8"
+        },
+        {
+          "ordinal": 9,
+          "kind": "PAIR_BOUND",
+          "occurredAt": "2026-08-09T00:10:19.281Z",
+          "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea",
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "evidenceRef": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282"
+        },
+        {
+          "ordinal": 10,
+          "kind": "PAIR_COMPLETED",
+          "occurredAt": "2026-08-09T00:11:01.782Z",
+          "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea",
+          "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+          "evidenceRef": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a"
+        },
+        {
+          "ordinal": 11,
+          "kind": "PAIR_INTENT_FROZEN",
+          "occurredAt": "2026-08-09T00:11:02.610Z",
+          "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad",
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "evidenceRef": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581"
+        },
+        {
+          "ordinal": 12,
+          "kind": "PAIR_BOUND",
+          "occurredAt": "2026-08-09T00:11:07.092Z",
+          "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad",
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "evidenceRef": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0"
+        },
+        {
+          "ordinal": 13,
+          "kind": "PAIR_COMPLETED",
+          "occurredAt": "2026-08-09T00:11:44.992Z",
+          "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad",
+          "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+          "evidenceRef": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784"
+        }
+      ],
+      "digest": "sha256:b86dcbec3f42d9d2cf37b17424412863a5c367f7915866ac38fc47d357f3c304"
+    },
+    "projections": {
+      "schemaVersion": "mordant.receivable-conflict-projections/1",
+      "operator": {
+        "scope": "OPERATOR",
+        "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+        "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+        "completeness": "COMPLETE",
+        "reviewState": "REVIEW_READY",
+        "relations": [
+          {
+            "claimPair": {
+              "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+            },
+            "state": "CONFLICT",
+            "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+            "pairIntentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581",
+            "pairBindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0",
+            "evidenceDigest": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784",
+            "governedResultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+            "failureDigest": null,
+            "executionOrdinal": 3,
+            "startedAt": "2026-08-09T00:11:02.610Z",
+            "completedAt": "2026-08-09T00:11:44.992Z"
+          },
+          {
+            "claimPair": {
+              "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+              "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+            },
+            "state": "NO_CONFLICT_UNDER_POLICY",
+            "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+            "pairIntentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8",
+            "pairBindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282",
+            "evidenceDigest": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a",
+            "governedResultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+            "failureDigest": null,
+            "executionOrdinal": 2,
+            "startedAt": "2026-08-09T00:10:14.850Z",
+            "completedAt": "2026-08-09T00:11:01.782Z"
+          },
+          {
+            "claimPair": {
+              "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+              "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+              "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+            },
+            "state": "CONFLICT",
+            "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+            "pairIntentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83",
+            "pairBindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a",
+            "evidenceDigest": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc",
+            "governedResultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+            "failureDigest": null,
+            "executionOrdinal": 1,
+            "startedAt": "2026-08-09T00:09:14.261Z",
+            "completedAt": "2026-08-09T00:10:13.016Z"
+          }
+        ]
+      },
+      "claimants": [
+        {
+          "scope": "CLAIMANT",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "claimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+          "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+          "completeness": "COMPLETE",
+          "relations": [
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+                "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+                "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+              },
+              "state": "CONFLICT",
+              "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+              "pairIntentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581",
+              "pairBindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0",
+              "evidenceDigest": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784",
+              "governedResultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+              "failureDigest": null,
+              "executionOrdinal": 3,
+              "startedAt": "2026-08-09T00:11:02.610Z",
+              "completedAt": "2026-08-09T00:11:44.992Z"
+            },
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+                "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+                "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+              },
+              "state": "NO_CONFLICT_UNDER_POLICY",
+              "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+              "pairIntentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8",
+              "pairBindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282",
+              "evidenceDigest": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a",
+              "governedResultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+              "failureDigest": null,
+              "executionOrdinal": 2,
+              "startedAt": "2026-08-09T00:10:14.850Z",
+              "completedAt": "2026-08-09T00:11:01.782Z"
+            }
+          ]
+        },
+        {
+          "scope": "CLAIMANT",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "claimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+          "completeness": "COMPLETE",
+          "relations": [
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+                "rightClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+                "pairId": "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+              },
+              "state": "CONFLICT",
+              "pairRunId": "c03d93e5-2ac0-4edb-bced-71c2287424f8",
+              "pairIntentDigest": "sha256:0506cc290a4112bf1877b0328226d01ad8ee911006a2503c2460b691253f3581",
+              "pairBindingDigest": "sha256:857a951cbb6af3de883cded4e29220cc59ed120fadbe02e85ce437c948af2cf0",
+              "evidenceDigest": "sha256:2615f33faf4eafae84ba35c53b956ae54f7a90ecbace172803f1a8bd5edc6784",
+              "governedResultDigest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec",
+              "failureDigest": null,
+              "executionOrdinal": 3,
+              "startedAt": "2026-08-09T00:11:02.610Z",
+              "completedAt": "2026-08-09T00:11:44.992Z"
+            },
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+                "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+                "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+              },
+              "state": "CONFLICT",
+              "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+              "pairIntentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83",
+              "pairBindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a",
+              "evidenceDigest": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc",
+              "governedResultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+              "failureDigest": null,
+              "executionOrdinal": 1,
+              "startedAt": "2026-08-09T00:09:14.261Z",
+              "completedAt": "2026-08-09T00:10:13.016Z"
+            }
+          ]
+        },
+        {
+          "scope": "CLAIMANT",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+          "completeness": "COMPLETE",
+          "relations": [
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67",
+                "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+                "pairId": "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea"
+              },
+              "state": "NO_CONFLICT_UNDER_POLICY",
+              "pairRunId": "f9a62b2d-4582-4af7-ba71-e4c779c8f7bc",
+              "pairIntentDigest": "sha256:1aa9a0752f29895142f7f8c01fa5175cdbe72f938cdebc5588b37d3167f55fe8",
+              "pairBindingDigest": "sha256:3c4dc057c63fa5f9c40e05177b6e67a4ab98dd475afabdb4eec9b445f4f9c282",
+              "evidenceDigest": "sha256:b609fbf07fed59c78ed8420162bd971af2b765a0131e5e87db804e9805190f9a",
+              "governedResultDigest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f",
+              "failureDigest": null,
+              "executionOrdinal": 2,
+              "startedAt": "2026-08-09T00:10:14.850Z",
+              "completedAt": "2026-08-09T00:11:01.782Z"
+            },
+            {
+              "claimPair": {
+                "leftClaimId": "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+                "rightClaimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+                "pairId": "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0"
+              },
+              "state": "CONFLICT",
+              "pairRunId": "03e08732-2846-447e-9264-3e04faa743d6",
+              "pairIntentDigest": "sha256:37efd2acf19ba13f1935a9c033369f9aabd0b167c5e2edd8916095a92a962c83",
+              "pairBindingDigest": "sha256:19569e318129c34b288eaf1d4fcb11820fc0fb9e284b4aead556b00e6e311e6a",
+              "evidenceDigest": "sha256:408c1773b32e9c66f20f216b3091573e0ccd6c987020c32aa9305e22fbe777fc",
+              "governedResultDigest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45",
+              "failureDigest": null,
+              "executionOrdinal": 1,
+              "startedAt": "2026-08-09T00:09:14.261Z",
+              "completedAt": "2026-08-09T00:10:13.016Z"
+            }
+          ]
+        }
+      ],
+      "public": {
+        "scope": "PUBLIC",
+        "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+        "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+        "completeness": "COMPLETE",
+        "reviewState": "REVIEW_READY",
+        "nodeCount": 3,
+        "expectedPairCount": 3,
+        "resolvedPairCount": 3,
+        "executionSourceCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6"
+      }
+    }
+  },
+  "execution": {
+    "scheduling": "SEQUENTIAL",
+    "workerArchitecture": "UNCHANGED_SINGLE_SLOT",
+    "maxConcurrentPairsObserved": 1,
+    "pairExecutionOrder": [
+      "A/B",
+      "A/C",
+      "B/C"
+    ],
+    "expectedStates": [
+      {
+        "label": "A/B",
+        "state": "CONFLICT"
+      },
+      {
+        "label": "A/C",
+        "state": "NO_CONFLICT_UNDER_POLICY"
+      },
+      {
+        "label": "B/C",
+        "state": "CONFLICT"
+      }
+    ],
+    "actualStates": [
+      {
+        "label": "A/B",
+        "state": "CONFLICT"
+      },
+      {
+        "label": "A/C",
+        "state": "NO_CONFLICT_UNDER_POLICY"
+      },
+      {
+        "label": "B/C",
+        "state": "CONFLICT"
+      }
+    ],
+    "stoppedAtStage": "RELEASED",
+    "inspectedBy": "mordant-fhe-inspect",
+    "recourseBoundaryPreserved": true
+  },
+  "sideEffectScan": {
+    "forbiddenArtifactClasses": [
+      "RECOURSE",
+      "EVIDENCE_EXPORT",
+      "ADAPTER",
+      "CURE",
+      "SETTLEMENT"
+    ],
+    "pairs": [
+      {
+        "label": "A/B",
+        "terminalStage": "RELEASED",
+        "operations": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult"
+        ],
+        "operationOutcomes": [
+          {
+            "operation": "preparePrivateMatch",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantA",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantB",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "finalizeParticipantSubmissions",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "evaluatePrivateConflict",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "releaseGovernedResult",
+            "outcome": "COMPLETED"
+          }
+        ],
+        "scannedFileCount": 42,
+        "forbiddenOperationMatches": [],
+        "forbiddenArtifactMatches": [],
+        "recourseState": "NOT_OPEN",
+        "cureDeadline": null,
+        "recourseRecordPresent": false,
+        "publicEvidencePresent": false,
+        "pairCaseRootCleanupPerformed": true,
+        "cleanupMethod": "ORDINARY_RECURSIVE_UNLINK_AFTER_LEAF_CAPTURE"
+      },
+      {
+        "label": "A/C",
+        "terminalStage": "RELEASED",
+        "operations": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult"
+        ],
+        "operationOutcomes": [
+          {
+            "operation": "preparePrivateMatch",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantA",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantB",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "finalizeParticipantSubmissions",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "evaluatePrivateConflict",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "releaseGovernedResult",
+            "outcome": "COMPLETED"
+          }
+        ],
+        "scannedFileCount": 42,
+        "forbiddenOperationMatches": [],
+        "forbiddenArtifactMatches": [],
+        "recourseState": "NOT_OPEN",
+        "cureDeadline": null,
+        "recourseRecordPresent": false,
+        "publicEvidencePresent": false,
+        "pairCaseRootCleanupPerformed": true,
+        "cleanupMethod": "ORDINARY_RECURSIVE_UNLINK_AFTER_LEAF_CAPTURE"
+      },
+      {
+        "label": "B/C",
+        "terminalStage": "RELEASED",
+        "operations": [
+          "preparePrivateMatch",
+          "submitParticipantA",
+          "submitParticipantB",
+          "finalizeParticipantSubmissions",
+          "evaluatePrivateConflict",
+          "releaseGovernedResult"
+        ],
+        "operationOutcomes": [
+          {
+            "operation": "preparePrivateMatch",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantA",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "submitParticipantB",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "finalizeParticipantSubmissions",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "evaluatePrivateConflict",
+            "outcome": "COMPLETED"
+          },
+          {
+            "operation": "releaseGovernedResult",
+            "outcome": "COMPLETED"
+          }
+        ],
+        "scannedFileCount": 42,
+        "forbiddenOperationMatches": [],
+        "forbiddenArtifactMatches": [],
+        "recourseState": "NOT_OPEN",
+        "cureDeadline": null,
+        "recourseRecordPresent": false,
+        "publicEvidencePresent": false,
+        "pairCaseRootCleanupPerformed": true,
+        "cleanupMethod": "ORDINARY_RECURSIVE_UNLINK_AFTER_LEAF_CAPTURE"
+      }
+    ],
+    "allPairsReleased": true,
+    "allForbiddenMatchesAbsent": true
+  },
+  "retention": {
+    "declaration": {
+      "schemaVersion": "mordant.receivable-conflict-retention/1",
+      "sessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+      "privateExactClaimOpenings": {
+        "record": "private-claim-record.json",
+        "retainedFields": [
+          "activeFrom",
+          "activeUntil",
+          "salt"
+        ],
+        "authorizationPrivateKey": "NOT_PERSISTED",
+        "authorizationPrivateKeyLifetime": "CALLER_MANAGED_PROCESS_MEMORY_UNTIL_REFERENCES_RELEASED",
+        "authorizationPrivateKeyZeroizationClaimed": false,
+        "authorizationPrivateKeyGarbageCollectionTimingClaimed": false,
+        "location": "PRIVATE_ROOT_ONLY",
+        "disposition": "PERSIST_UNTIL_EXPLICIT_OPERATOR_CLEANUP",
+        "automaticCleanup": false,
+        "operatorCleanupRequired": true,
+        "secureErasureClaim": false
+      }
+    },
+    "productionModel": {
+      "exactIntervalsAndSaltsPersistPrivateUntilExplicitOperatorCleanup": true,
+      "authorizationPrivateKeyPersisted": false,
+      "authorizationPrivateKeyLifetime": "CALLER_MANAGED_PROCESS_MEMORY_UNTIL_REFERENCES_RELEASED",
+      "authorizationPrivateKeyZeroizationClaimed": false,
+      "authorizationPrivateKeyGarbageCollectionTimingClaimed": false,
+      "automaticTerminalCleanup": false,
+      "secureErasureClaimed": false,
+      "deletionTrigger": "EXPLICIT_OPERATOR_ACTION_AFTER_REVIEW_OR_EXPIRY",
+      "publicEvidenceContainsOpenings": false
+    },
+    "operatorCleanupPerformed": true,
+    "cleanupMethod": "ORDINARY_UNLINK_AFTER_EVIDENCE_CAPTURE",
+    "cleanupSecureErasureClaimed": false,
+    "pairCaseRootsRemoved": 3,
+    "temporaryRootClassesRemoved": [
+      "PAIR_RUN_ROOT",
+      "OPERATOR_AUDIT_EVIDENCE_ROOT",
+      "PRIVATE_CLAIM_ROOT",
+      "NATIVE_BINARY_ROOT",
+      "GO_BUILD_CACHE"
+    ],
+    "allTemporaryRootsRemoved": true
+  },
+  "assertions": [
+    {
+      "id": "source-pin",
+      "description": "clean committed experiment source and environment pins match",
+      "pass": true,
+      "evidence": {
+        "branch": "experiment/n3-private-conflict-graph",
+        "startingCommit": "9ea6652dbf61c6227e3a21183e628a7356b6df18",
+        "executionCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6",
+        "executionTree": "3df3aa8f0cf31d5a53543a9706be20e6583738b3"
+      }
+    },
+    {
+      "id": "native-build",
+      "description": "exactly five required native binaries were freshly built with fixed flags",
+      "pass": true,
+      "evidence": {
+        "binaryIds": [
+          "keygen",
+          "client",
+          "evaluator",
+          "decryptor",
+          "inspect"
+        ],
+        "flags": [
+          "-mod=readonly",
+          "-trimpath",
+          "-buildvcs=false"
+        ]
+      }
+    },
+    {
+      "id": "claim-set",
+      "description": "three opaque authorized claims are admitted in A/B/C order",
+      "pass": true,
+      "evidence": {
+        "labels": [
+          "A",
+          "B",
+          "C"
+        ],
+        "claimIds": [
+          "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+          "sha256:14d2227327704a3c6f012e1a41873b4c9331396717d81c55565fb193ccfc4d15",
+          "sha256:0dcf421a34e0877db404dd78ce99d7f434f61746eadb903714969118c2ed3e67"
+        ]
+      }
+    },
+    {
+      "id": "pair-set",
+      "description": "all three canonical pairs have complete intent, binding and leaf records",
+      "pass": true,
+      "evidence": {
+        "labels": [
+          "A/B",
+          "A/C",
+          "B/C"
+        ],
+        "pairIds": [
+          "sha256:7290ccc35913942130720fa81117ef7fbc42e01a0ac38d9b14c50014a4d46ff0",
+          "sha256:39ef59549d0e690885dcc27282d20fb03099965d8129233543536c22f3f1d7ea",
+          "sha256:8da7f103d3b80cf93c25028e337772846d16b2ff3dd8cc131dc585b53c66cfad"
+        ]
+      }
+    },
+    {
+      "id": "governed-results",
+      "description": "real signed pair results match the required N=3 relation set",
+      "pass": true,
+      "evidence": {
+        "expectedStates": [
+          {
+            "label": "A/B",
+            "state": "CONFLICT"
+          },
+          {
+            "label": "A/C",
+            "state": "NO_CONFLICT_UNDER_POLICY"
+          },
+          {
+            "label": "B/C",
+            "state": "CONFLICT"
+          }
+        ],
+        "actualStates": [
+          {
+            "label": "A/B",
+            "state": "CONFLICT"
+          },
+          {
+            "label": "A/C",
+            "state": "NO_CONFLICT_UNDER_POLICY"
+          },
+          {
+            "label": "B/C",
+            "state": "CONFLICT"
+          }
+        ]
+      }
+    },
+    {
+      "id": "governed-signatures",
+      "description": "every complete governed result passed core signature and binding verification",
+      "pass": true,
+      "evidence": {
+        "resultDigests": [
+          {
+            "label": "A/B",
+            "digest": "sha256:70ea8ec908b8f937276d38b4fe60b08d68ab7a3bc95d0ba9830b2446c7d3cb45"
+          },
+          {
+            "label": "A/C",
+            "digest": "sha256:7eb457d871d65d56a4afd60a5ff8ac349bbcfcb333dae5ffea9f2f9aa8c1651f"
+          },
+          {
+            "label": "B/C",
+            "digest": "sha256:2701e25d0d61dbd1a711c865bf38b777ace38ecdb382c9670024e7e389d446ec"
+          }
+        ]
+      }
+    },
+    {
+      "id": "public-inspection",
+      "description": "the fresh inspect binary independently verified every public pair release",
+      "pass": true,
+      "evidence": {
+        "inspections": [
+          {
+            "label": "A/B",
+            "digest": "sha256:f22734571b76c12bf34739ac2b415be4b0cf3e7f95b04e2ea4328b1c1d52dd78"
+          },
+          {
+            "label": "A/C",
+            "digest": "sha256:b6d3460ec3c59de03a34887a2db2ad7a32755b6ee92bc489c6624dae740a8d94"
+          },
+          {
+            "label": "B/C",
+            "digest": "sha256:45a70f3f813f612daad7eeed6fb4671027aac4ec508f525a718dca87cf9a160b"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stable-claim-binding",
+      "description": "claim A remains stably bound across A/B and A/C with fresh pair-local identities",
+      "pass": true,
+      "evidence": {
+        "claimId": "sha256:950f12957666efaaf62d483b477e865679ca3466f80f9625538763e3a72c4e19",
+        "pairs": [
+          "A/B",
+          "A/C"
+        ]
+      }
+    },
+    {
+      "id": "fresh-pair-keys",
+      "description": "all pair runs, cases, BGV public keys and release authorities are distinct",
+      "pass": true,
+      "evidence": {
+        "distinctCounts": [
+          3,
+          3,
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "aggregate-complete",
+      "description": "aggregate is complete and review-ready without a global all-clear",
+      "pass": true,
+      "evidence": {
+        "completeness": "COMPLETE",
+        "reviewState": "REVIEW_READY",
+        "globalAllClear": false,
+        "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3"
+      }
+    },
+    {
+      "id": "sequential-execution",
+      "description": "pair jobs ran one at a time in the required order",
+      "pass": true,
+      "evidence": {
+        "pairOrder": [
+          "A/B",
+          "A/C",
+          "B/C"
+        ],
+        "maxConcurrentPairsObserved": 1
+      }
+    },
+    {
+      "id": "projection-privacy",
+      "description": "public and claimant projections retain their canonical scopes",
+      "pass": true,
+      "evidence": {
+        "publicProjection": {
+          "scope": "PUBLIC",
+          "graphSessionId": "sha256:6a28ed41d2ed85de4518a319c523e687c9730258ef7c5e5ac68638c9d5ff4e1a",
+          "aggregateRoot": "sha256:e9d01a7267b2c1518baf734166e053fbdd6c536c463a00ab1daabadbe00817a3",
+          "completeness": "COMPLETE",
+          "reviewState": "REVIEW_READY",
+          "nodeCount": 3,
+          "expectedPairCount": 3,
+          "resolvedPairCount": 3,
+          "executionSourceCommit": "c7ddb004a89627beec248c228125d5a42f6a1fe6"
+        },
+        "claimantRelationCounts": [
+          2,
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "recourse-boundary",
+      "description": "all pair roots stopped at RELEASED without forbidden side effects",
+      "pass": true,
+      "evidence": {
+        "pairScans": [
+          {
+            "label": "A/B",
+            "terminalStage": "RELEASED",
+            "forbiddenOperationMatches": [],
+            "forbiddenArtifactMatches": []
+          },
+          {
+            "label": "A/C",
+            "terminalStage": "RELEASED",
+            "forbiddenOperationMatches": [],
+            "forbiddenArtifactMatches": []
+          },
+          {
+            "label": "B/C",
+            "terminalStage": "RELEASED",
+            "forbiddenOperationMatches": [],
+            "forbiddenArtifactMatches": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "retention-disclosure",
+      "description": "private opening retention is explicit and makes no automatic cleanup or secure-erasure claim",
+      "pass": true,
+      "evidence": {
+        "disposition": "PERSIST_UNTIL_EXPLICIT_OPERATOR_CLEANUP",
+        "authorizationPrivateKeyLifetime": "CALLER_MANAGED_PROCESS_MEMORY_UNTIL_REFERENCES_RELEASED",
+        "authorizationPrivateKeyZeroizationClaimed": false,
+        "authorizationPrivateKeyGarbageCollectionTimingClaimed": false,
+        "automaticCleanup": false,
+        "secureErasureClaim": false
+      }
+    },
+    {
+      "id": "operator-cleanup",
+      "description": "validated temporary roots were removed by explicit ordinary operator cleanup",
+      "pass": true,
+      "evidence": {
+        "operatorCleanupPerformed": true,
+        "cleanupMethod": "ORDINARY_UNLINK_AFTER_EVIDENCE_CAPTURE",
+        "pairCaseRootsRemoved": 3,
+        "allTemporaryRootsRemoved": true
+      }
+    },
+    {
+      "id": "evidence-sanitation",
+      "description": "retained proof contains no raw openings, salts, private keys, absolute paths or ciphertexts",
+      "pass": true,
+      "evidence": {
+        "violationCount": 0
+      }
+    }
+  ],
+  "supportedClaims": [
+    "Three separately authorized opaque graph claims over one synthetic receivable were admitted in order A, B, C.",
+    "The existing reviewed two-party BGV primitive produced three independent signed governed Booleans sequentially.",
+    "A/B is CONFLICT, A/C is NO_CONFLICT_UNDER_POLICY, and B/C is CONFLICT.",
+    "Every expected canonical pair has a retained intent, binding, independently verified signed result, and evidence leaf.",
+    "The aggregate is COMPLETE and REVIEW_READY, with scoped operator, claimant, and public projections.",
+    "Execution stopped at RELEASED and created no recourse, evidence-export, adapter, cure, or settlement artifacts.",
+    "Exact claim openings were persisted only in temporary operator-private filesystem roots, which were removed by explicit ordinary cleanup after evidence capture; caller-managed process-memory references and secure erasure are not claimed."
+  ],
+  "unsupportedClaims": [
+    "This is an N-party FHE circuit or an N-party ciphertext-reuse design.",
+    "The existing production worker supports concurrent pair execution or increased throughput.",
+    "The experiment proves production deployment, horizontal scaling, or high availability.",
+    "Conflict edges automatically determine one incident, multiple incidents, recourse, cure, or settlement.",
+    "The proof moves tokens, deploys adapters, or exercises settlement.",
+    "Ordinary unlink is secure erasure or proves forensic deletion of private material.",
+    "Native binary bytes remain available for independent post-cleanup re-hashing.",
+    "The experiment supports arbitrary N or any receivable beyond the bounded synthetic N=3 case."
+  ],
+  "evidenceDigest": "sha256:9151ff402a4e103575523bf06c4021b8ee4cac9b62fd628a32c7dc88eb5a9f1d"
+}
