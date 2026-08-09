@@ -249,8 +249,8 @@ node scripts/run-participant-originated-qualification.mjs \
 
 The real qualification refuses a dirty checkout and requires the caller to pin
 the exact committed `HEAD` it will execute. It additionally proves that the
-executed commit descends from exact product-promotion base
-`45da79fc8136706cac96dadd0541174a53c80298`. The work root must not already
+executed commit descends from exact post-policy product-promotion base
+`8a523d36dbfe6935f27e6a55a8b5fd048a7b4883`. The work root must not already
 exist; it is marked, used for the heavy transient artifacts, and removed after
 the sanitized evidence has been written:
 

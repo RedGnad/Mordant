@@ -53,7 +53,7 @@ import {
 export const PARTICIPANT_ORIGINATED_PRODUCT_QUALIFICATION_SCHEMA = "mordant.participant-originated-product-qualification-evidence/1";
 export const PARTICIPANT_ORIGINATED_TOPOLOGY_SCHEMA = "mordant.participant-originated-process-topology/1";
 export const PARTICIPANT_ORIGINATED_IMPORT_REQUEST_SCHEMA = "mordant.participant-originated-import-request/1";
-export const PARTICIPANT_ORIGINATED_QUALIFICATION_BASE_SHA = "45da79fc8136706cac96dadd0541174a53c80298";
+export const PARTICIPANT_ORIGINATED_QUALIFICATION_BASE_SHA = "8a523d36dbfe6935f27e6a55a8b5fd048a7b4883";
 export const PARTICIPANT_ORIGINATED_PRODUCT_PROFILE = "mordant.participant-originated-encryption/native-cli-v1";
 export const PARTICIPANT_ORIGINATED_PRIVACY_CLAIM =
   "For the participant-originated profile, the financing claim is encrypted in the participant-controlled environment before Mordant coordination infrastructure receives it.";

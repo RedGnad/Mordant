@@ -37,7 +37,7 @@ test("digest bridges keep SHA-256 and EIP bytes32 representations explicit", () 
   assert.equal(bytes32ToGoDigest(hex("b")), go("b"));
   assert.throws(() => goDigestToBytes32(hex("a")), /invalid Go SHA-256 digest/u);
   assert.throws(() => bytes32ToGoDigest(go("a")), /invalid bytes32 digest/u);
-  assert.equal(PARTICIPANT_ORIGINATED_QUALIFICATION_BASE_SHA, "45da79fc8136706cac96dadd0541174a53c80298");
+  assert.equal(PARTICIPANT_ORIGINATED_QUALIFICATION_BASE_SHA, "8a523d36dbfe6935f27e6a55a8b5fd048a7b4883");
 });
 
 test("Go import mapping separates the semantic artifact digest from newline-bearing object bytes", () => {
@@ -248,7 +248,7 @@ test("bundle-to-authorization context maps every Go digest without algorithm-lab
 test("dry plan declares two real, sequential cases and no expensive execution", () => {
   const plan = buildParticipantOriginatedQualificationDryRunPlan("/ABS/qualification");
   assert.equal(plan.executesExpensiveFhe, false);
-  assert.equal(plan.baseSha, "45da79fc8136706cac96dadd0541174a53c80298");
+  assert.equal(plan.baseSha, "8a523d36dbfe6935f27e6a55a8b5fd048a7b4883");
   assert.equal(plan.productProfile, PARTICIPANT_ORIGINATED_PRODUCT_PROFILE);
   assert.equal(plan.privacyClaim, PARTICIPANT_ORIGINATED_PRIVACY_CLAIM);
   assert.deepEqual(assertStableParticipantOriginatedRoutes(), {
