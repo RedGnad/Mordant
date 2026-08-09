@@ -119,17 +119,61 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByRole("region", { name: "Verify the consequence, not a claim about it." })).toBeVisible();
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
+  await expect(page.locator("[class*='flowMotionPath']"))
+    .toHaveAttribute("d", "M150 120H350L450 40H650L750 120H1050");
+  for (const section of [
+    page.getByTestId("mini-live-check"),
+    page.locator("#how"),
+    page.getByRole("region", { name: "Verify the consequence, not a claim about it." }),
+  ]) {
+    expect(await section.evaluate((node) => getComputedStyle(node).borderTopWidth)).toBe("0px");
+  }
 
   const integration = page.locator('[aria-label="Integration stages"]');
-  await page.locator("#how").scrollIntoViewIfNeeded();
-  await expect(page.locator("#how")).toHaveAttribute("data-visible", "true");
+  const responsibility = page.locator("#how");
+  await page.mouse.move(1, 1);
+  await responsibility.scrollIntoViewIfNeeded();
+  await expect(responsibility).toHaveAttribute("data-visible", "true");
+  const stageBoxes = await integration.getByRole("button").evaluateAll((buttons) => buttons.map((button) => {
+    const bounds = button.getBoundingClientRect();
+    return { height: bounds.height, width: bounds.width, x: bounds.x, y: bounds.y };
+  }));
+  expect(stageBoxes).toHaveLength(4);
+  if ((viewport?.width ?? 0) > 900) {
+    expect(Math.max(...stageBoxes.map(({ y }) => y)) - Math.min(...stageBoxes.map(({ y }) => y)))
+      .toBeLessThanOrEqual(1);
+    const flowWidth = await page.locator('[aria-label="Interactive integration path"]')
+      .evaluate((node) => node.getBoundingClientRect().width);
+    expect(flowWidth).toBeGreaterThanOrEqual((viewport?.width ?? 1280) * 0.8);
+
+    const flowTop = await page.locator('[aria-label="Interactive integration path"]').evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      return bounds.top + window.scrollY;
+    });
+    await page.evaluate(({ top, viewportHeight }) => {
+      window.scrollTo({ top: top - (viewportHeight * 0.42), behavior: "instant" });
+    }, { top: flowTop, viewportHeight: viewport?.height ?? 800 });
+  }
   const monadStage = integration.getByRole("button", { name: /Monad recourse/ });
-  await monadStage.click();
+  if ((viewport?.width ?? 0) <= 900) await monadStage.click();
   await expect(monadStage).toHaveAttribute("aria-pressed", "true");
+  if ((viewport?.width ?? 0) > 900) {
+    const hardenedProofTop = await page.getByRole("region", { name: "Verify the consequence, not a claim about it." })
+      .evaluate((node) => node.getBoundingClientRect().top);
+    expect(hardenedProofTop).toBeGreaterThan((viewport?.height ?? 800) * 0.82);
+  }
   await expect(page.getByText(
     "In the separate hardened run, preconfigured demo policy opened the cure path and deployment configuration determined holders and payouts before settlement.",
     { exact: true },
   )).toBeVisible();
+  if (testInfo.project.name === "1280x800" || testInfo.project.name === "390x844") {
+    await page.waitForTimeout(700);
+    await page.screenshot({
+      path: testInfo.outputPath(testInfo.project.name === "1280x800"
+        ? "responsibility-path-desktop.png"
+        : "responsibility-path-mobile.png"),
+    });
+  }
 
   // The standalone caveat section is gone. The main narrative now ends at the
   // separate completed proof without replacing it with another disclaimer.
@@ -305,15 +349,19 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   }
 
   if (!testInfo.project.use.hasTouch) {
+    const header = page.getByRole("banner");
     const how = navigation.getByRole("link", { name: "How it works" });
     const label = how.locator("[class*='tabLabel']");
     const beforeBox = await how.boundingBox();
-    const headerHeight = await page.getByRole("banner").evaluate((node) => node.getBoundingClientRect().height);
+    const headerHeight = await header.evaluate((node) => node.getBoundingClientRect().height);
+    const headerRule = await header.evaluate((node) => getComputedStyle(node).borderBottomColor);
     const restingTongue = await how.evaluate((node) => {
       const style = getComputedStyle(node, "::before");
       return {
         bottom: Number.parseFloat(style.bottom),
-        height: Number.parseFloat(style.height),
+        height: Number.parseFloat(style.height)
+          + Number.parseFloat(style.borderTopWidth)
+          + Number.parseFloat(style.borderBottomWidth),
         opacity: Number(style.opacity),
         top: Number.parseFloat(style.top),
       };
@@ -323,13 +371,38 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
       ? headerHeight
       : (beforeBox?.height ?? headerHeight);
     expect(restingTongue.height).toBeGreaterThanOrEqual(restingReferenceHeight);
-    expect(restingTongue.top).toBeLessThanOrEqual(-0.9);
+    expect(restingTongue.top).toBeLessThanOrEqual(0.1);
     expect(restingTongue.bottom).toBeLessThanOrEqual(-0.9);
+    const navigationRules = await navigation.getByRole("link").evaluateAll((links) => links.map((link) => {
+      const style = getComputedStyle(link, "::before");
+      return {
+        color: style.borderLeftColor,
+        transition: style.transitionProperty,
+        width: style.borderLeftWidth,
+      };
+    }));
+    for (const rule of navigationRules) {
+      expect(rule.color).toBe(headerRule);
+      expect(rule.width).toBe("1px");
+      expect(rule.transition).not.toContain("background");
+    }
+    const navigationBoxes = await navigation.getByRole("link").evaluateAll((links) => links.map((link) => {
+      const bounds = link.getBoundingClientRect();
+      return { left: bounds.left, right: bounds.right };
+    }));
+    for (let index = 1; index < navigationBoxes.length; index += 1) {
+      expect(navigationBoxes[index].left - navigationBoxes[index - 1].right).toBeLessThanOrEqual(0.1);
+    }
 
     await how.hover();
     await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
       .toBeGreaterThanOrEqual(11.5);
-    await expect.poll(() => how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").height)))
+    await expect.poll(() => how.evaluate((node) => {
+      const style = getComputedStyle(node, "::before");
+      return Number.parseFloat(style.height)
+        + Number.parseFloat(style.borderTopWidth)
+        + Number.parseFloat(style.borderBottomWidth);
+    }))
       .toBeGreaterThanOrEqual(restingTongue.height + 11.5);
     expect(await how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").top)))
       .toBeCloseTo(restingTongue.top, 1);
@@ -341,8 +414,50 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
     await page.getByRole("link", { name: "Mordant home" }).hover();
     await expect.poll(() => label.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
       .toBeLessThanOrEqual(0.1);
-    await expect.poll(() => how.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").height)))
+    await expect.poll(() => how.evaluate((node) => {
+      const style = getComputedStyle(node, "::before");
+      return Number.parseFloat(style.height)
+        + Number.parseFloat(style.borderTopWidth)
+        + Number.parseFloat(style.borderBottomWidth);
+    }))
       .toBeLessThanOrEqual(restingTongue.height + 0.1);
+
+    const liveTab = page.getByTestId("shell-live-cta");
+    const liveLabel = liveTab.locator("[class*='ctaLabel']");
+    const restingLiveTab = await liveTab.evaluate((node) => {
+      const style = getComputedStyle(node, "::before");
+      return {
+        background: style.backgroundColor,
+        borderColor: style.borderLeftColor,
+        borderWidth: style.borderLeftWidth,
+        height: Number.parseFloat(style.height)
+          + Number.parseFloat(style.borderTopWidth)
+          + Number.parseFloat(style.borderBottomWidth),
+        top: Number.parseFloat(style.top),
+        transition: style.transitionProperty,
+      };
+    });
+    expect(restingLiveTab.borderColor).toBe(headerRule);
+    expect(restingLiveTab.borderWidth).toBe("1px");
+    expect(restingLiveTab.height).toBeGreaterThanOrEqual(restingReferenceHeight);
+    expect(restingLiveTab.transition).not.toContain("background");
+    await liveTab.hover();
+    await expect.poll(() => liveLabel.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42))
+      .toBeGreaterThanOrEqual(11.5);
+    await expect.poll(() => liveTab.evaluate((node) => {
+      const style = getComputedStyle(node, "::before");
+      return Number.parseFloat(style.height)
+        + Number.parseFloat(style.borderTopWidth)
+        + Number.parseFloat(style.borderBottomWidth);
+    }))
+      .toBeGreaterThanOrEqual(restingLiveTab.height + 11.5);
+    expect(await liveTab.evaluate((node) => Number.parseFloat(getComputedStyle(node, "::before").top)))
+      .toBeCloseTo(restingLiveTab.top, 1);
+    expect(await liveTab.evaluate((node) => getComputedStyle(node, "::before").backgroundColor))
+      .not.toBe(restingLiveTab.background);
+    if (testInfo.project.name === "1280x800") {
+      await page.screenshot({ path: testInfo.outputPath("header-live-tongue-hover.png") });
+    }
 
     if ((page.viewportSize()?.width ?? 0) > 1023) expect(headerHeight).toBeLessThanOrEqual(57);
     else expect(headerHeight).toBeLessThanOrEqual(110);

@@ -39,6 +39,8 @@ const INTEGRATION_STEPS = [
   },
 ] as const;
 
+const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
+
 function Symbol({ className }: { readonly className: string }) {
   return (
     <svg className={className} viewBox="0 0 100 100" aria-hidden="true">
@@ -122,14 +124,18 @@ export function PublicExperience({ liveCheckHolder }: {
     const updateFromScroll = () => {
       integrationScrollFrame.current = null;
       if (performance.now() < integrationInteractionLockUntil.current) return;
+      if (!window.matchMedia(SCROLL_DRIVEN_INTEGRATION).matches
+        || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const bounds = flow.getBoundingClientRect();
-      const activeTop = window.innerHeight * 0.88;
-      const activeBottom = window.innerHeight * 0.18;
-      if (bounds.top > activeTop || bounds.bottom < activeBottom) return;
+      // The state changes while the whole rail still occupies the viewport.
+      // Basing this on the rail's top (rather than its full height) prevents the
+      // final state from arriving only after the hardened-proof section appears.
+      const activeStart = window.innerHeight * 0.76;
+      const activeEnd = window.innerHeight * 0.34;
+      if (bounds.top > activeStart || bounds.top < activeEnd) return;
 
-      const range = activeTop - activeBottom + bounds.height;
-      const progress = Math.min(1, Math.max(0, (activeTop - bounds.top) / Math.max(1, range)));
-      const nextStep = progress < 0.2 ? 0 : progress < 0.44 ? 1 : progress < 0.68 ? 2 : 3;
+      const progress = Math.min(1, Math.max(0, (activeStart - bounds.top) / Math.max(1, activeStart - activeEnd)));
+      const nextStep = progress < 0.2 ? 0 : progress < 0.46 ? 1 : progress < 0.72 ? 2 : 3;
       setIntegrationStep((current) => current === nextStep ? current : nextStep);
     };
 
@@ -153,7 +159,9 @@ export function PublicExperience({ liveCheckHolder }: {
     const signal = integrationSignalRef.current;
     if (path === null || signal === null) return;
 
-    const targets = [0, 0.42, 0.633, 1];
+    // Nodes on the restored narrative geometry: normal flow, private detour,
+    // governed return to the rail, then continued recourse.
+    const targets = [0, 0.343, 0.686, 1];
     const from = integrationMotionProgress.current;
     const to = targets[integrationStep] ?? 0;
     const length = path.getTotalLength();
@@ -208,7 +216,7 @@ export function PublicExperience({ liveCheckHolder }: {
   };
 
   const selectIntegrationStep = (index: number, interactionTimestamp: number) => {
-    integrationInteractionLockUntil.current = interactionTimestamp + 500;
+    integrationInteractionLockUntil.current = interactionTimestamp + 900;
     setIntegrationStep(index);
   };
 
@@ -257,27 +265,27 @@ export function PublicExperience({ liveCheckHolder }: {
             <h2 id="invitation-title">One path. Four bounded responsibilities.</h2>
           </div>
 
-          {/* The old integration flow, verbatim in structure: the same 3fr/9fr
-              composition, the same measured motion path, the same hover, focus
-              and click selection with a 500ms lock so a deliberate choice is not
-              immediately overridden by scrolling. Only the route is a stage
-              longer, because the truthful narrative has four responsibilities
-              rather than three. */}
+          {/* The four institutional boundaries remain distinct, but the compact
+              landing gives their route the full editorial width. The preserved
+              Stable / Conflict / Recourse / Proof scrollytelling remains unmounted. */}
           <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
             <div className={styles.flowCanvas}>
-              <svg className={styles.flowGraphic} viewBox="0 0 1000 180" aria-hidden="true">
-                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M40 102H392L460 34H612L680 102H920" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="352" d="M40 102H392" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="164" d="M392 102H392L460 34H540" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="168" d="M540 34H612L680 102" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="240" d="M680 102H920" />
-                <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(40 102)">
+              <svg className={styles.flowGraphic} viewBox="0 0 1200 180" aria-hidden="true">
+                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M150 120H350L450 40H650L750 120H1050" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="1" d="M150 120H350" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="1" d="M350 120L450 40H650" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="1" d="M650 40L750 120" />
+                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="1" d="M750 120H1050" />
+                <g className={styles.flowNodes}>
+                  <rect x="138" y="108" width="24" height="24" />
+                  <rect x="438" y="28" width="24" height="24" />
+                  <rect x="738" y="108" width="24" height="24" />
+                  <rect x="1038" y="108" width="24" height="24" />
+                </g>
+                <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(150 120)">
                   <rect x="-18" y="-18" width="36" height="36" />
                 </g>
               </svg>
-              <p className={styles.integrationStory} aria-live="polite">
-                <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
-              </p>
             </div>
             <div className={styles.integrationStages} aria-label="Integration stages">
               {INTEGRATION_STEPS.map((stage, index) => (
@@ -289,11 +297,17 @@ export function PublicExperience({ liveCheckHolder }: {
                   onFocus={(event) => selectIntegrationStep(index, event.timeStamp)}
                   onPointerEnter={(event) => selectIntegrationStep(index, event.timeStamp)}
                 >
-                  <strong>{stage.label}</strong>
-                  <small>{stage.detail}</small>
+                  <span className={styles.integrationStageIndex}>0{index + 1}</span>
+                  <span className={styles.integrationStageCopy}>
+                    <strong>{stage.label}</strong>
+                    <small>{stage.detail}</small>
+                  </span>
                 </button>
               ))}
             </div>
+            <p className={styles.integrationStory} aria-live="polite">
+              <span key={integrationStep}>{INTEGRATION_STEPS[integrationStep].story}</span>
+            </p>
           </div>
         </section>
 

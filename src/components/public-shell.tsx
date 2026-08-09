@@ -71,13 +71,17 @@ export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
 
       {onLive ? (
         <p className={styles.ctaCurrent} aria-current="page">
-          <span className={styles.wide}>Live check</span>
-          <span className={styles.narrow}>Live</span>
+          <span className={styles.ctaLabel}>
+            <span className={styles.wide}>Live check</span>
+            <span className={styles.narrow}>Live</span>
+          </span>
         </p>
       ) : (
         <Link className={styles.cta} href={primaryHref} data-testid="shell-live-cta">
-          <span className={styles.wide}>{LIVE_PRODUCT_CTA}</span>
-          <span className={styles.narrow}>Run check</span>
+          <span className={styles.ctaLabel}>
+            <span className={styles.wide}>{LIVE_PRODUCT_CTA}</span>
+            <span className={styles.narrow}>Run check</span>
+          </span>
         </Link>
       )}
     </header>

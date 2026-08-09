@@ -1274,7 +1274,6 @@
 .pilot {
   padding-inline: clamp(22px, 5vw, 76px);
   padding-block: clamp(56px, 8vw, 128px);
-  border-top: 1px solid var(--rule);
 }
 
 .eyebrow,
@@ -1310,7 +1309,6 @@
 .hardenedProof {
   display: grid;
   padding: clamp(52px, 7vw, 92px) clamp(22px, 5vw, 76px);
-  border-top: 1px solid color-mix(in srgb, var(--ground) 24%, transparent);
   background: var(--proof);
   color: var(--ground);
   gap: clamp(28px, 5vw, 72px);
@@ -1484,43 +1482,36 @@
 /* ---------------------------------------------------------------- 5. invitation */
 
 .invitation {
-  display: grid;
-  gap: clamp(28px, 4vw, 72px);
-  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
-  align-items: start;
+  overflow: clip;
 }
 
-.invitationText p {
-  max-width: 50ch;
-  margin: 22px 0 0;
-  font-size: clamp(14px, 1.15vw, 17px);
-  line-height: 1.5;
+.invitationText {
+  max-width: 1120px;
 }
 
-/*
- * The integration flow, ported from the earlier art direction: a wide canvas
- * beside a tall stage list, a route drawn segment by segment as the signal
- * reaches it, and a large story line that changes with the stage.
- */
+.invitationText h2 {
+  max-width: 17ch;
+}
+
+/* One wide route. The four boundaries sit directly under their own position,
+   so the diagram never has to compete with the section title for one column. */
 
 .flow {
   position: relative;
   display: grid;
-  min-height: 390px;
-  grid-template-columns: minmax(180px, 3fr) minmax(0, 9fr);
-  align-items: center;
-  gap: clamp(28px, 4vw, 64px);
+  width: min(100%, 1500px);
+  margin: clamp(46px, 6vw, 88px) auto 0;
+  gap: clamp(18px, 2.2vw, 32px);
 }
 
 .flowCanvas {
   min-width: 0;
-  grid-column: 2;
-  grid-row: 1;
 }
 
 .flowGraphic {
   display: block;
   width: 100%;
+  height: auto;
   overflow: visible;
   touch-action: pan-y;
 }
@@ -1535,8 +1526,8 @@
   fill: none;
   stroke-linecap: butt;
   stroke-linejoin: miter;
-  stroke-width: 10;
-  transition: stroke-dashoffset 480ms cubic-bezier(0.4, 0.14, 0.3, 1);
+  stroke-width: 8;
+  transition: stroke-dashoffset 520ms cubic-bezier(0.4, 0.14, 0.3, 1);
   vector-effect: non-scaling-stroke;
 }
 
@@ -1546,20 +1537,27 @@
 
 .flowRoutePolicy {
   stroke: var(--protection);
-  stroke-dasharray: 164;
-  stroke-dashoffset: 164;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
 }
 
 .flowRouteGoverned {
   stroke: var(--protection);
-  stroke-dasharray: 168;
-  stroke-dashoffset: 168;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
 }
 
 .flowRouteAction {
   stroke: var(--action);
-  stroke-dasharray: 240;
-  stroke-dashoffset: 240;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.flowNodes {
+  fill: var(--ground);
+  stroke: var(--rule);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
 }
 
 .integrationSignal {
@@ -1592,59 +1590,74 @@
 
 .integrationStages {
   display: grid;
-  grid-column: 1;
-  grid-row: 1;
-  grid-template-columns: 1fr;
-  align-content: center;
-  gap: 6px;
+  border-bottom: 1px solid var(--rule);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .integrationStages button {
   display: grid;
-  min-height: 76px;
-  align-content: center;
-  gap: 8px;
-  padding: 14px 18px;
+  min-height: 116px;
+  padding: 20px clamp(12px, 1.8vw, 26px);
   border: 0;
-  border-left: 5px solid transparent;
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  opacity: 0.56;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  opacity: 0.52;
   text-align: left;
   transition: opacity 140ms ease-out, background-color 140ms ease-out;
 }
 
+.integrationStages button:last-child {
+  border-right: 1px solid var(--rule);
+}
+
 .integrationStages button:hover,
 .integrationStages button:focus-visible {
-  border-left-color: var(--rule);
   background: color-mix(in srgb, var(--ink) 4%, transparent);
   opacity: 1;
 }
 
 .integrationStages button:first-child[aria-pressed="true"] {
-  border-left-color: var(--receivable);
+  border-top: 5px solid var(--receivable);
   opacity: 1;
 }
 
 .integrationStages button:nth-child(2)[aria-pressed="true"],
 .integrationStages button:nth-child(3)[aria-pressed="true"] {
-  border-left-color: var(--protection);
+  border-top: 5px solid var(--protection);
   opacity: 1;
 }
 
 .integrationStages button:nth-child(4)[aria-pressed="true"] {
-  border-left-color: var(--action);
+  border-top: 5px solid var(--action);
   opacity: 1;
 }
 
-.integrationStages strong {
-  font-size: 17px;
-  font-weight: 500;
+.integrationStageIndex {
+  padding-top: 2px;
+  color: var(--muted);
+  font: 10px var(--font-proof), monospace;
+  letter-spacing: 0.06em;
 }
 
-.integrationStages small {
+.integrationStageCopy {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.integrationStageCopy strong {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.integrationStageCopy small {
   color: var(--muted);
   font-family: var(--font-proof), monospace;
   font-size: 11px;
@@ -1653,16 +1666,19 @@
 }
 
 .integrationStory {
-  width: min(86%, 820px);
-  min-height: 96px;
-  margin: 4px 0 0 auto;
-  padding: 12px 0 12px 24px;
-  border-left: 5px solid var(--protection);
-  font-size: clamp(19px, 1.9vw, 28px);
+  width: min(100%, 920px);
+  min-height: 108px;
+  margin: 2px auto 0;
+  padding: 20px 24px 0;
+  border-top: 5px solid var(--protection);
+  font-size: clamp(18px, 1.65vw, 25px);
   font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.25;
+  line-height: 1.32;
 }
+
+.flow[data-step="0"] .integrationStory { border-top-color: var(--receivable); }
+.flow[data-step="3"] .integrationStory { border-top-color: var(--action); }
 
 .integrationStory > span {
   display: block;
@@ -1688,27 +1704,47 @@
 
 @media (max-width: 900px) {
   .flow {
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .flowCanvas,
-  .integrationStages {
-    grid-column: 1;
-  }
-
-  .flowCanvas {
-    grid-row: 1;
+    margin-top: clamp(34px, 7vw, 54px);
   }
 
   .integrationStages {
-    grid-row: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .integrationStages button:nth-child(2) {
+    border-right: 1px solid var(--rule);
   }
 
   .integrationStory {
     width: 100%;
-    min-height: 0;
-    margin-left: 0;
+    min-height: 118px;
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .flowCanvas {
+    display: none;
+  }
+
+  .integrationStages button {
+    min-height: 104px;
+    padding: 16px 12px;
+    gap: 8px;
+  }
+
+  .integrationStageCopy strong {
+    font-size: 15px;
+  }
+
+  .integrationStageCopy small {
+    font-size: 9px;
+  }
+
+  .integrationStory {
+    min-height: 142px;
+    padding: 16px 12px 0;
+    font-size: 17px;
   }
 }
 
