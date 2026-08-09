@@ -149,6 +149,8 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
   const [workerOrigin, setWorkerOrigin] = useState<string | null>(null);
   const [previousRun, setPreviousRun] = useState<CompletedRun | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [stablePanelHeight, setStablePanelHeight] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const startedAt = useRef<number | null>(null);
   const polls = useRef(0);
   const failures = useRef(0);
@@ -211,6 +213,8 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
     setFormError(parsed.message);
     if (parsed.windows === null) return;
 
+    const panelHeight = panelRef.current?.getBoundingClientRect().height;
+    if (panelHeight !== undefined && panelHeight > 0) setStablePanelHeight(Math.ceil(panelHeight));
     setSubmittedDraft(draft);
     setPhase({ kind: "STARTING" });
     setView(null);
@@ -222,8 +226,13 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
     failures.current = 0;
 
     const outcome = await startManagedRun(publicTestHolder, parsed.windows);
-    if (outcome.kind === "BUSY") { setPhase({ kind: "BUSY" }); return; }
+    if (outcome.kind === "BUSY") {
+      setStablePanelHeight(null);
+      setPhase({ kind: "BUSY" });
+      return;
+    }
     if (outcome.kind === "REJECTED") {
+      setStablePanelHeight(null);
       setPhase({
         kind: "REFUSED",
         title: "The execution response was rejected.",
@@ -232,6 +241,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
       return;
     }
     if (outcome.kind === "INELIGIBLE") {
+      setStablePanelHeight(null);
       setPhase({
         kind: "REFUSED",
         title: "The test context is not eligible right now.",
@@ -240,6 +250,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
       return;
     }
     if (outcome.kind === "FAILED") {
+      setStablePanelHeight(null);
       setPhase({ kind: "REFUSED", title: "The check could not be started.", body: outcome.message });
       return;
     }
@@ -271,6 +282,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
         } catch (error) {
           if (cancelled) return;
           if (error instanceof ManagedResponseRejected) {
+            setStablePanelHeight(null);
             setPhase({
               kind: "REFUSED",
               title: "The execution response was rejected.",
@@ -280,6 +292,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           }
           failures.current += 1;
           if (failures.current >= FAILURES_BEFORE_UNAVAILABLE) {
+            setStablePanelHeight(null);
             setPhase({
               kind: "REFUSED",
               title: "The execution service did not answer.",
@@ -317,9 +330,17 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
         </p>
       </div>
 
-      <div className={styles.panel}>
+      <div
+        ref={panelRef}
+        className={styles.panel}
+        data-testid="mini-panel"
+        data-size-locked={stablePanelHeight === null ? "false" : "true"}
+        data-view={terminal ? "RESULT" : busy ? "RUNNING" : "DRAFT"}
+        aria-busy={busy}
+        style={stablePanelHeight === null ? undefined : { height: `${stablePanelHeight}px` }}
+      >
         <form onSubmit={submit} noValidate>
-          {terminal && submittedDraft !== null ? (
+          {inputsLocked && submittedDraft !== null ? (
             <dl className={styles.submittedGeometry} aria-label="Submitted claim geometry" data-testid="mini-submitted-geometry">
               <div><dt>Claim A</dt><dd>{submittedDraft.aFrom}–{submittedDraft.aUntil}</dd></div>
               <div><dt>Claim B</dt><dd>{submittedDraft.bFrom}–{submittedDraft.bUntil}</dd></div>
@@ -350,7 +371,7 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
             </div>
           )}
 
-          {terminal ? null : (
+          {inputsLocked ? null : (
             <div className={styles.windows} aria-label="Synthetic financing claim windows">
               {([
                 ["A", "aFrom", "aUntil"],
@@ -390,22 +411,28 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           )}
 
           {formError === null ? null : <p className={styles.formError} role="alert">{formError}</p>}
-          {terminal ? null : <p className={styles.windowNote}>The evaluator never sees these plaintext values.</p>}
+          {inputsLocked ? null : <p className={styles.windowNote}>The evaluator never sees these plaintext values.</p>}
 
-          {terminal ? null : (
+          {inputsLocked ? null : (
             <button
               type="submit"
               className={styles.primaryAction}
               disabled={busy}
               data-testid="mini-run"
             >
-              {phase.kind === "STARTING" ? "Starting" : phase.kind === "RUNNING" ? "Running" : "Run live check"}
+              Run live check
             </button>
           )}
         </form>
 
         {phase.kind === "IDLE" ? null : (
-          <div className={styles.status} role="status" aria-live="polite" data-testid="mini-status">
+          <div
+            key={terminal ? "RESULT" : phase.kind}
+            className={styles.status}
+            role="status"
+            aria-live="polite"
+            data-testid="mini-status"
+          >
             {phase.kind === "BUSY" ? (
               <>
                 <strong data-testid="mini-busy">A private check is already running.</strong>
@@ -490,15 +517,17 @@ export function MiniLiveCheck({ publicTestHolder }: { readonly publicTestHolder:
           </div>
         ) : null}
 
-        {previousRun === null ? null : (
-          <aside className={styles.previousRun} data-testid="mini-previous-run">
-            <span>Previous</span>
-            <strong>{previousRun.verdict === "conflict" ? "Conflict" : "No conflict"}</strong>
-            <code>{shortRunId(previousRun.runId)}</code>
-            <span>A {previousRun.draft.aFrom}–{previousRun.draft.aUntil} · B {previousRun.draft.bFrom}–{previousRun.draft.bUntil}</span>
-            <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect</Link>
-          </aside>
-        )}
+        <div className={styles.previousRunSlot}>
+          {previousRun === null ? null : (
+            <aside className={styles.previousRun} data-testid="mini-previous-run">
+              <span>Previous</span>
+              <strong>{previousRun.verdict === "conflict" ? "Conflict" : "No conflict"}</strong>
+              <code>{shortRunId(previousRun.runId)}</code>
+              <span>A {previousRun.draft.aFrom}–{previousRun.draft.aUntil} · B {previousRun.draft.bFrom}–{previousRun.draft.bUntil}</span>
+              <Link href={`/protection/live?runId=${previousRun.runId}`}>Inspect</Link>
+            </aside>
+          )}
+        </div>
       </div>
     </section>
   );

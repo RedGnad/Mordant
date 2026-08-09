@@ -319,6 +319,11 @@ test("real worker evidence appears, and no verdict exists before governed releas
     read: () => envelope(true),
   });
   await page.goto("/");
+  const miniPanel = page.getByTestId("mini-panel");
+  const idlePanelHeight = await miniPanel.evaluate((node) => node.getBoundingClientRect().height);
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await miniPanel.screenshot({ path: testInfo.outputPath("mini-panel-idle.png") });
+  }
   await page.getByTestId("mini-run").click();
 
   expect(tokenHolders).toEqual([HOLDER]);
@@ -328,11 +333,17 @@ test("real worker evidence appears, and no verdict exists before governed releas
     .toContainText("BGV evaluation completed");
   await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
   await expect(page.getByTestId("mini-proof-details")).toHaveCount(0);
-  await expect(page.getByTestId("claim-a-from")).toBeDisabled();
-  await expect(page.getByTestId("claim-a-from")).toHaveValue("120");
-  await expect(page.getByTestId("claim-a-until")).toHaveValue("420");
-  await expect(page.getByTestId("claim-b-from")).toHaveValue("220");
-  await expect(page.getByTestId("claim-b-until")).toHaveValue("520");
+  await expect(miniPanel).toHaveAttribute("data-size-locked", "true");
+  const runningPanelHeight = await miniPanel.evaluate((node) => node.getBoundingClientRect().height);
+  expect(await miniPanel.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await miniPanel.screenshot({ path: testInfo.outputPath("mini-panel-running.png") });
+  }
+  await expect(page.getByTestId("mini-claim-timeline")).toHaveCount(0);
+  await expect(page.getByTestId("claim-a-from")).toHaveCount(0);
+  const runningGeometry = page.getByTestId("mini-submitted-geometry");
+  await expect(runningGeometry).toContainText("Claim A120–420");
+  await expect(runningGeometry).toContainText("Claim B220–520");
 
   await expect(page.getByTestId("mini-verdict")).toHaveAttribute("data-verdict", "conflict", { timeout: 5_000 });
   await expect(page.getByTestId("mini-verdict")).toHaveText("Conflict confirmed");
@@ -343,6 +354,13 @@ test("real worker evidence appears, and no verdict exists before governed releas
   const submitted = page.getByTestId("mini-submitted-geometry");
   await expect(submitted).toContainText("Claim A120–420");
   await expect(submitted).toContainText("Claim B220–520");
+  const terminalPanelHeight = await miniPanel.evaluate((node) => node.getBoundingClientRect().height);
+  expect(await miniPanel.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
+  expect(Math.max(idlePanelHeight, runningPanelHeight, terminalPanelHeight)
+    - Math.min(idlePanelHeight, runningPanelHeight, terminalPanelHeight)).toBeLessThanOrEqual(1);
+  if (["1280x800", "390x844"].includes(testInfo.project.name)) {
+    await miniPanel.screenshot({ path: testInfo.outputPath("mini-panel-result.png") });
+  }
 
   const proof = page.getByTestId("mini-proof-details");
   await expect(proof.getByText("Execution proof")).toBeVisible();
@@ -350,6 +368,7 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect(proof).not.toHaveAttribute("open", "");
   await proof.locator("summary").click();
   await expect(proof).toHaveAttribute("open", "");
+  expect(await miniPanel.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1);
   await expect(proof).toContainText("A-Pass");
   await expect(proof).toContainText(`Block ${OBSERVED_BLOCK}`);
   await expect(proof).toContainText("BGV evaluation");
@@ -389,10 +408,15 @@ test("Try another case starts a fresh draft while retaining exactly one complete
 
   await page.getByTestId("mini-run").click();
   await expect(page.getByTestId("mini-verdict")).toHaveText("Conflict confirmed");
+  const terminalPanelHeight = await page.getByTestId("mini-panel")
+    .evaluate((node) => node.getBoundingClientRect().height);
   await page.getByTestId("mini-try-another").click();
 
   await expect(page.getByTestId("mini-run")).toHaveText("Run live check");
   await expect(page.getByTestId("claim-a-from")).toBeEnabled();
+  const nextDraftPanelHeight = await page.getByTestId("mini-panel")
+    .evaluate((node) => node.getBoundingClientRect().height);
+  expect(nextDraftPanelHeight).toBeCloseTo(terminalPanelHeight, 0);
   const previous = page.getByTestId("mini-previous-run");
   await expect(previous).toHaveCount(1);
   await expect(previous).toContainText("Previous");
