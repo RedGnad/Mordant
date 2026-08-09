@@ -358,9 +358,11 @@ async function runCaptured(command, args, options = {}) {
   const output = Buffer.concat(stdout).toString("utf8");
   const diagnostic = Buffer.concat(stderr).toString("utf8");
   if (result.code !== 0) {
-    const error = new Error(`${basename(command)} exited ${result.code ?? result.signal}: ${diagnostic.trim().slice(0, 2000)}`);
+    const detail = diagnostic.trim() === "" ? output.trim() : diagnostic.trim();
+    const error = new Error(`${basename(command)} exited ${result.code ?? result.signal}: ${detail.slice(0, 2000)}`);
     error.code = "CHILD_PROCESS";
     error.exitCode = result.code;
+    error.stdout = output;
     error.stderr = diagnostic;
     throw error;
   }

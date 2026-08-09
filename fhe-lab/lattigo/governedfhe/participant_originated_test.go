@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,6 +24,14 @@ func participantOriginatedRepeated32(value byte) [32]byte {
 		result[index] = value
 	}
 	return result
+}
+
+func participantOriginatedTestRunID(label string) string {
+	digest := sha256.Sum256([]byte(label))
+	digest[6] = (digest[6] & 0x0f) | 0x40
+	digest[8] = (digest[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(digest[:16])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
 }
 
 func TestParticipantOriginatedCrossLanguageDigestVectors(t *testing.T) {
@@ -152,11 +161,12 @@ func newParticipantOriginatedFixture(t *testing.T, label string) *participantOri
 	sourceDigest := testDigest(label + "/source")
 	buildDigest := testDigest(label + "/build-manifest")
 	clientDigest := testDigest(label + "/client-binary")
-	requestA, err := BuildParticipantOriginatedCeremonyRequest(publicRoot, label, RoleA, sourceDigest, buildDigest, clientDigest)
+	runID := participantOriginatedTestRunID(label)
+	requestA, err := BuildParticipantOriginatedCeremonyRequest(publicRoot, runID, RoleA, sourceDigest, buildDigest, clientDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	requestB, err := BuildParticipantOriginatedCeremonyRequest(publicRoot, label, RoleB, sourceDigest, buildDigest, clientDigest)
+	requestB, err := BuildParticipantOriginatedCeremonyRequest(publicRoot, runID, RoleB, sourceDigest, buildDigest, clientDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
