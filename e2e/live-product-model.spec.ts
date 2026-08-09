@@ -175,7 +175,7 @@ test.describe("live product presentation model", () => {
     expect(model.onchain.phase).toBe("NOT_CONNECTED");
     expect(model.onchain.entitlement).toBeNull();
     expect(model.onchain.evidence.contractAddress).toBeNull();
-    expect(model.onchain.disabledReason).toContain("not connected");
+    expect(model.onchain.disabledReason).toBe("This managed run ends at the governed result.");
   });
 
   test("the receipt is layered and keeps raw evidence last", () => {
