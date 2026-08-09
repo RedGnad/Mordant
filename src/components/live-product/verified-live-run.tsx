@@ -66,6 +66,20 @@ function shortHash(value: string): string {
   return value.length > 22 ? `${value.slice(0, 12)}…${value.slice(-8)}` : value;
 }
 
+function ChapterHead({ index, id, children }: {
+  readonly index: string;
+  readonly id: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <div className={styles.chapterHead}>
+      <span className={styles.chapterCheck} aria-hidden="true">✓</span>
+      <span className={styles.chapterIndex}>{index}</span>
+      <h2 className={styles.chapterTitle} id={id}>{children}</h2>
+    </div>
+  );
+}
+
 export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRunReceipt }) {
   const [a, b] = receipt.authorize.participants;
   const claimA = formatAusdcExact(receipt.prove.claimA.atomic);
@@ -92,11 +106,23 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
         </p>
       </header>
 
-      <section className={styles.chapter} aria-labelledby="chapter-verify">
-        <div className={styles.chapterHead}>
-          <span className={styles.chapterIndex}>01</span>
-          <h2 className={styles.chapterTitle} id="chapter-verify">Verify</h2>
+      <section className={styles.verificationSummary} aria-labelledby="verification-summary-title" data-testid="verification-summary">
+        <div className={styles.verificationSummaryHead}>
+          <p>Completed path</p>
+          <h2 id="verification-summary-title">Five verified stages. One reconciled run.</h2>
+          <span>Each status below is backed by the retained receipt and public chain readback.</span>
         </div>
+        <ol className={styles.verificationRail}>
+          <li><span aria-hidden="true">✓</span><div><strong>Provenance observed</strong><small>{receipt.verify.assetLabel}</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>Eligibility verified</strong><small>Two distinct wallets</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>Private decision verified</strong><small>Signed Boolean</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>Recourse finalized</strong><small>Configured path</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>Settlement reconciled</strong><small>Reserve cleared</small></div></li>
+        </ol>
+      </section>
+
+      <section className={styles.chapter} aria-labelledby="chapter-verify">
+        <ChapterHead index="01" id="chapter-verify">Verify</ChapterHead>
         <p className={styles.answer}>
           The protected asset is MINV01, whose Cleanverse provenance and identity are verified. That
           evidence does not establish invoice authenticity, legal validity or enforceability. The
@@ -119,10 +145,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       </section>
 
       <section className={styles.chapter} aria-labelledby="chapter-authorize">
-        <div className={styles.chapterHead}>
-          <span className={styles.chapterIndex}>02</span>
-          <h2 className={styles.chapterTitle} id="chapter-authorize">Authorize</h2>
-        </div>
+        <ChapterHead index="02" id="chapter-authorize">Authorize</ChapterHead>
         <p className={styles.answer}>
           Two distinct wallets participated. Cleanverse verified an A-Pass for each one on Monad
           before it was admitted, and each signed its own role-bound admission.
@@ -150,10 +173,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       </section>
 
       <section className={styles.chapter} aria-labelledby="chapter-decide">
-        <div className={styles.chapterHead}>
-          <span className={styles.chapterIndex}>03</span>
-          <h2 className={styles.chapterTitle} id="chapter-decide">Decide privately</h2>
-        </div>
+        <ChapterHead index="03" id="chapter-decide">Decide privately</ChapterHead>
         <p className={styles.answer}>
           The counterparty-facing workflow did not disclose either pledge window. A fixed BGV circuit
           evaluated them under encryption, and the designated decryptor recomputed the circuit and signed
@@ -182,10 +202,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       </section>
 
       <section className={styles.chapter} aria-labelledby="chapter-act">
-        <div className={styles.chapterHead}>
-          <span className={styles.chapterIndex}>04</span>
-          <h2 className={styles.chapterTitle} id="chapter-act">Act</h2>
-        </div>
+        <ChapterHead index="04" id="chapter-act">Act</ChapterHead>
         <p className={styles.answer}>
           After the governed result established conflict, the preconfigured demo recourse policy applied.
           Adapter V2 opened the configured case and real {receipt.act.cureWindowSeconds}-second cure
@@ -225,10 +242,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       </section>
 
       <section className={styles.chapter} aria-labelledby="chapter-prove">
-        <div className={styles.chapterHead}>
-          <span className={styles.chapterIndex}>05</span>
-          <h2 className={styles.chapterTitle} id="chapter-prove">Prove</h2>
-        </div>
+        <ChapterHead index="05" id="chapter-prove">Prove</ChapterHead>
         <p className={styles.answer}>
           Deployment configuration determined the two holders and their payout amounts; the Boolean
           carried neither. Both holders claimed those configured amounts on chain. The adapter&rsquo;s reserve
@@ -310,14 +324,17 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
         </Link>
       </div>
 
-      <p className={styles.disclosure}>
-        Managed Mordant infrastructure prepares each participant&rsquo;s encrypted artifact, so it sees
-        that participant&rsquo;s claim during admission and preparation. The evaluator receives encrypted
-        participant artifacts only. The internal FHE identities are Mordant&rsquo;s, not the participants&rsquo;
-        wallets; encryption is not performed on the participant&rsquo;s device; release is governed by a
-        single designated decryptor rather than a threshold or an independent institution. This is a
-        hackathon testnet deployment and is not production ready.
-      </p>
+      <details className={styles.scopeDisclosure}>
+        <summary>Technical scope of this completed run</summary>
+        <p>
+          Managed Mordant infrastructure prepares each participant&rsquo;s encrypted artifact, so it sees
+          that participant&rsquo;s claim during admission and preparation. The evaluator receives encrypted
+          participant artifacts only. The internal FHE identities are Mordant&rsquo;s, not the participants&rsquo;
+          wallets; encryption is not performed on the participant&rsquo;s device; release is governed by a
+          single designated decryptor rather than a threshold or an independent institution. This is a
+          hackathon testnet deployment and is not production ready.
+        </p>
+      </details>
     </article>
   );
 }

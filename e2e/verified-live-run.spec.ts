@@ -52,6 +52,10 @@ test.describe("verified live run", () => {
 
   test("answers the five chapters in order", async ({ page }) => {
     await page.goto(PATH);
+    const summary = page.getByTestId("verification-summary");
+    await expect(summary).toContainText("Five verified stages. One reconciled run.");
+    await expect(summary.locator("li")).toHaveCount(5);
+    await expect(summary.locator("li > span")).toHaveText(["✓", "✓", "✓", "✓", "✓"]);
     for (const [index, heading] of ["Verify", "Authorize", "Decide privately", "Act", "Prove"].entries()) {
       const chapter = page.getByRole("heading", { level: 2, name: heading, exact: true });
       await expect(chapter, `chapter ${index + 1} ${heading}`).toBeVisible();
@@ -88,7 +92,7 @@ test.describe("verified live run", () => {
   test("keeps deep cryptographic detail behind disclosures", async ({ page }) => {
     await page.goto(PATH);
     const details = page.locator("details");
-    await expect(details).toHaveCount(5);
+    await expect(details).toHaveCount(6);
     // Closed by default: the narrative leads, the hashes do not.
     for (const open of await details.evaluateAll((nodes) => nodes.map((node) => (node as HTMLDetailsElement).open))) {
       expect(open).toBe(false);
