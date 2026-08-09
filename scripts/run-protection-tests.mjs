@@ -112,6 +112,7 @@ command(join(ROOT, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.product-test
 // One invocation, one environment, every registered file exactly once: a file listed
 // twice could pass in one run and be hidden by the other.
 const TEST_FILES = Object.freeze([
+  ".product-test-dist/src/lib/recourse-policy-experiment/policy.test.js",
   ".product-test-dist/src/lib/protection/protection-product.test.js",
   ".product-test-dist/src/lib/protection/protection-reconciliation.test.js",
   ".product-test-dist/src/lib/protection/supervised-pledge-windows.test.js",

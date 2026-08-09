@@ -1,0 +1,539 @@
+{
+  "schemaVersion": "mordant.governed-recourse-policy-experiment-evidence/1",
+  "classification": "EXPERIMENTAL_OFF_CHAIN_EVIDENCE_ONLY",
+  "retainedAtUnix": 1786269607,
+  "governedResultSource": {
+    "path": "docs/evidence/conflicting-pledge-protection/conflict.json",
+    "digest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+    "schemaVersion": "mordant.governed-conflict-result/1",
+    "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+    "outcome": "CONFLICT",
+    "originalObjectModified": false,
+    "existingSignatureVerifierReused": "verifyGovernedResultSignature"
+  },
+  "capabilities": {
+    "executionMode": "EVIDENCE_ONLY",
+    "rpcWrites": false,
+    "transactionBroadcast": false,
+    "settlement": false,
+    "tokenMovement": false
+  },
+  "paths": [
+    {
+      "runId": "mordant-experiment-facility-protection-conflict-001",
+      "policyReference": {
+        "policyId": "mordant.experimental.facility-protection",
+        "policyVersion": 1,
+        "digest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d"
+      },
+      "selectionEvent": {
+        "schemaVersion": "mordant.policy-selection-event/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-facility-protection-conflict-001",
+        "programId": "mordant.governed-recourse-policy-experiment-v1",
+        "policyDigest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d",
+        "selectedAtUnix": 1786269601,
+        "applicabilityAtUnix": 1786269601,
+        "nonce": "mordant-experiment-facility-protection-conflict-001-selection-001",
+        "previousEventDigest": "sha256:518428cfc7988f78e1b79cd8c80350ba9707f37ea7c48b4e3897e54942ff1c67",
+        "selectorAuthority": {
+          "authorityId": "sha256:26525f4fe2df509d130f382e9f8582addb0901e83b29ae1c6d5799f03cc1de80",
+          "purpose": "POLICY_SELECTOR",
+          "label": "Mordant design lab policy selector — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "cUOdA9js//83v/wFA0C0TUIkSALoKRRP9cWC1nh+Yz4="
+        },
+        "digest": "sha256:9ee6be9cb03aa3223934f694ac7bd8bcab4ff3b829eed8669e542d43218f5717",
+        "signature": "C/9jCPBTMy7vgNwsJB+ffnEWOyygXpCoT26wTP/966sTg1GautrZiglGHDy4d072FPMCWprkwWBJN1xY7kDOCQ=="
+      },
+      "governedResultExposure": {
+        "sourcePath": "docs/evidence/conflicting-pledge-protection/conflict.json",
+        "digest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "schemaVersion": "mordant.governed-conflict-result/1",
+        "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+        "outcome": "CONFLICT",
+        "releasedAtUnix": 1785768619,
+        "exposedAtUnix": 1786269602,
+        "immutable": true
+      },
+      "proposedAction": {
+        "schemaVersion": "mordant.governed-proposed-action/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-facility-protection-conflict-001",
+        "governedResultDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "policyDigest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d",
+        "selectionEventDigest": "sha256:9ee6be9cb03aa3223934f694ac7bd8bcab4ff3b829eed8669e542d43218f5717",
+        "governedOutcome": "CONFLICT",
+        "evaluationActionType": "REVIEW_REQUIRED",
+        "actionType": "OPEN_CURE_PATH",
+        "accountableInstitutionalRole": "CREDIT_OPERATIONS",
+        "authorizationMode": "HUMAN_APPROVAL_REQUIRED",
+        "allowedApproverRoles": [
+          "CREDIT_OPS_APPROVER"
+        ],
+        "approvalExpiresAtUnix": 1786356002,
+        "operationalDeadlineUnix": 1786874402,
+        "escalationActionType": "MANUAL_ESCALATION",
+        "actionConfigurationDigest": "sha256:4a6df474441f38d5eee29fc55f66be2bc24dee5b76b9e6970ee6fbbe4c0c7cd8",
+        "settlementPermission": "PROHIBITED",
+        "settlementConfigurationDigest": null,
+        "executionMode": "EVIDENCE_ONLY",
+        "digest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129"
+      },
+      "governanceApprovalEvent": {
+        "schemaVersion": "mordant.governance-approval-event/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-facility-protection-conflict-001",
+        "governedResultDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "policyDigest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d",
+        "proposedActionDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+        "decision": "APPROVED",
+        "approverRole": "CREDIT_OPS_APPROVER",
+        "approverAuthority": {
+          "authorityId": "sha256:8ae4bb2fa9db90e9033e0be7068cd91f8940dc858afc3beaffb23a1d3850b9fc",
+          "purpose": "CREDIT_OPS_APPROVER",
+          "label": "Credit Ops approver — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "m0V8od8bK7t+7+JtjfiIaFTWofswdVddH28ONF0/MFM="
+        },
+        "nonce": "mordant-experiment-facility-protection-conflict-001-approval-001",
+        "issuedAtUnix": 1786269604,
+        "expiresAtUnix": 1786270200,
+        "previousEventDigest": "sha256:e9a6353c3c1d658e772ef637b031ca8aed2174504b2dea8e100f149fc03dd978",
+        "digest": "sha256:5e7e8cb11e1b041089ee9d669bad3c288ad1fbcb12c476de89b3a0bbae307248",
+        "signature": "eOMyXbGTI/VZFmATkd59sLH+76DduOJVHCIMCA8E6XvbVKbNfQI3tBJr5MdxSTCjZoaSpQ+DPINDkGd9bn8HCQ=="
+      },
+      "governedActionReceipt": {
+        "schemaVersion": "mordant.governed-action-receipt/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-facility-protection-conflict-001",
+        "governedResult": {
+          "digest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+          "schemaVersion": "mordant.governed-conflict-result/1",
+          "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+          "outcome": "CONFLICT",
+          "exposedAtUnix": 1786269602
+        },
+        "policy": {
+          "policyId": "mordant.experimental.facility-protection",
+          "policyVersion": 1,
+          "digest": "sha256:342e02001a05d6e758c4b95c1e53076ad528435e86d550c3934b8a50235cfb7d"
+        },
+        "selectionEventDigest": "sha256:9ee6be9cb03aa3223934f694ac7bd8bcab4ff3b829eed8669e542d43218f5717",
+        "approvalEventDigest": "sha256:5e7e8cb11e1b041089ee9d669bad3c288ad1fbcb12c476de89b3a0bbae307248",
+        "proposedActionDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+        "resultingAction": {
+          "actionType": "OPEN_CURE_PATH",
+          "accountableInstitutionalRole": "CREDIT_OPERATIONS",
+          "operationalDeadlineUnix": 1786874402,
+          "escalationActionType": "MANUAL_ESCALATION",
+          "actionConfigurationDigest": "sha256:4a6df474441f38d5eee29fc55f66be2bc24dee5b76b9e6970ee6fbbe4c0c7cd8",
+          "settlementPermission": "PROHIBITED",
+          "settlementConfigurationDigest": null,
+          "executionMode": "EVIDENCE_ONLY"
+        },
+        "stateTransition": {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 8,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "ACTION_AUTHORIZED",
+          "toState": "ACTION_RECORDED",
+          "atUnix": 1786269606,
+          "evidenceDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+          "previousEventDigest": "sha256:5913fe22282c79fbf3db4c25db94bc491272d51e4d1f8809bde1f3a26a0dcf32",
+          "digest": "sha256:bbc29014d7ffd6d784c252e127e5861a4e93c4da791c44c8727c4eedf1746ef9"
+        },
+        "recorderAuthority": {
+          "authorityId": "sha256:ae8017a4335bbe6c70089b3cfb62e65866a391014ac4d46d514b8bc7b9ba81b4",
+          "purpose": "ACTION_RECORDER",
+          "label": "Mordant action evidence recorder — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "CZRy6WVPXijIIH4GPmadDZ0g2PaiVY5MwgrfM74XPQs="
+        },
+        "recordedAtUnix": 1786269606,
+        "digest": "sha256:cbefce995353418ff313c1271ba0413352ef1796490cd752e6e35af4a99620ce",
+        "signature": "BND+/J2fMItFiFxPFwynrVke5R7v2HIAWAvUMnVbUvZVHeUO7QD31OcVhUYKDBXNUviGJPFMZ5hc3YlNUTrtDQ=="
+      },
+      "actionHistory": [
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 1,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": null,
+          "toState": "CASE_AUTHORIZED",
+          "atUnix": 1786269600,
+          "evidenceDigest": "sha256:6c17de89d8328ecf57681169f3976f880dbc8b8f34270f9cd9ed14bae688e553",
+          "previousEventDigest": null,
+          "digest": "sha256:518428cfc7988f78e1b79cd8c80350ba9707f37ea7c48b4e3897e54942ff1c67"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 2,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "CASE_AUTHORIZED",
+          "toState": "POLICY_BOUND",
+          "atUnix": 1786269601,
+          "evidenceDigest": "sha256:9ee6be9cb03aa3223934f694ac7bd8bcab4ff3b829eed8669e542d43218f5717",
+          "previousEventDigest": "sha256:518428cfc7988f78e1b79cd8c80350ba9707f37ea7c48b4e3897e54942ff1c67",
+          "digest": "sha256:bdae4bac2ad43abce98872eeb940facf7b04619141a2d31bfd15b4ea29fa947b"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 3,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "POLICY_BOUND",
+          "toState": "RESULT_AVAILABLE",
+          "atUnix": 1786269602,
+          "evidenceDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+          "previousEventDigest": "sha256:bdae4bac2ad43abce98872eeb940facf7b04619141a2d31bfd15b4ea29fa947b",
+          "digest": "sha256:c9d9433f7add67c4720f4d1fbf11b3075e24c577cd03cc9e2144b89b4aac0570"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 4,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "RESULT_AVAILABLE",
+          "toState": "POLICY_EVALUATED",
+          "atUnix": 1786269603,
+          "evidenceDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+          "previousEventDigest": "sha256:c9d9433f7add67c4720f4d1fbf11b3075e24c577cd03cc9e2144b89b4aac0570",
+          "digest": "sha256:b7d8dd63543762d457b14459d5ab5c7206afc48d9c65afd2eb06a89873cb1156"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 5,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "POLICY_EVALUATED",
+          "toState": "REVIEW_REQUIRED",
+          "atUnix": 1786269603,
+          "evidenceDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+          "previousEventDigest": "sha256:b7d8dd63543762d457b14459d5ab5c7206afc48d9c65afd2eb06a89873cb1156",
+          "digest": "sha256:e9a6353c3c1d658e772ef637b031ca8aed2174504b2dea8e100f149fc03dd978"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 6,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "REVIEW_REQUIRED",
+          "toState": "REVIEW_APPROVED",
+          "atUnix": 1786269604,
+          "evidenceDigest": "sha256:5e7e8cb11e1b041089ee9d669bad3c288ad1fbcb12c476de89b3a0bbae307248",
+          "previousEventDigest": "sha256:e9a6353c3c1d658e772ef637b031ca8aed2174504b2dea8e100f149fc03dd978",
+          "digest": "sha256:d1f1a0d819d5ecd092bddbe0e0c6d95126cd986cc9beaec9c3825de3e6b496bb"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 7,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "REVIEW_APPROVED",
+          "toState": "ACTION_AUTHORIZED",
+          "atUnix": 1786269605,
+          "evidenceDigest": "sha256:5e7e8cb11e1b041089ee9d669bad3c288ad1fbcb12c476de89b3a0bbae307248",
+          "previousEventDigest": "sha256:d1f1a0d819d5ecd092bddbe0e0c6d95126cd986cc9beaec9c3825de3e6b496bb",
+          "digest": "sha256:5913fe22282c79fbf3db4c25db94bc491272d51e4d1f8809bde1f3a26a0dcf32"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 8,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-facility-protection-conflict-001",
+          "fromState": "ACTION_AUTHORIZED",
+          "toState": "ACTION_RECORDED",
+          "atUnix": 1786269606,
+          "evidenceDigest": "sha256:beded5b9407c3c1282f86da9c96d234aadb2fdf469c96a1a7e713b5703191129",
+          "previousEventDigest": "sha256:5913fe22282c79fbf3db4c25db94bc491272d51e4d1f8809bde1f3a26a0dcf32",
+          "digest": "sha256:bbc29014d7ffd6d784c252e127e5861a4e93c4da791c44c8727c4eedf1746ef9"
+        }
+      ],
+      "authorizationEvent": {
+        "schemaVersion": "mordant.governed-action-history-event/1",
+        "ordinal": 7,
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-facility-protection-conflict-001",
+        "fromState": "REVIEW_APPROVED",
+        "toState": "ACTION_AUTHORIZED",
+        "atUnix": 1786269605,
+        "evidenceDigest": "sha256:5e7e8cb11e1b041089ee9d669bad3c288ad1fbcb12c476de89b3a0bbae307248",
+        "previousEventDigest": "sha256:d1f1a0d819d5ecd092bddbe0e0c6d95126cd986cc9beaec9c3825de3e6b496bb",
+        "digest": "sha256:5913fe22282c79fbf3db4c25db94bc491272d51e4d1f8809bde1f3a26a0dcf32"
+      }
+    },
+    {
+      "runId": "mordant-experiment-manual-escalation-conflict-001",
+      "policyReference": {
+        "policyId": "mordant.experimental.manual-escalation",
+        "policyVersion": 1,
+        "digest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af"
+      },
+      "selectionEvent": {
+        "schemaVersion": "mordant.policy-selection-event/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-manual-escalation-conflict-001",
+        "programId": "mordant.governed-recourse-policy-experiment-v1",
+        "policyDigest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af",
+        "selectedAtUnix": 1786269601,
+        "applicabilityAtUnix": 1786269601,
+        "nonce": "mordant-experiment-manual-escalation-conflict-001-selection-001",
+        "previousEventDigest": "sha256:53b6328069793442f5149d942fa6f375fb5ec4c268062fca57c6da320cdb950e",
+        "selectorAuthority": {
+          "authorityId": "sha256:26525f4fe2df509d130f382e9f8582addb0901e83b29ae1c6d5799f03cc1de80",
+          "purpose": "POLICY_SELECTOR",
+          "label": "Mordant design lab policy selector — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "cUOdA9js//83v/wFA0C0TUIkSALoKRRP9cWC1nh+Yz4="
+        },
+        "digest": "sha256:69bc31a4d11b9c6ed468c2076c344af1236457247e48c0cfab9519e1dd9c61ed",
+        "signature": "wCOivSZExgHvVJNzbmtIuP2XEkPTHDvt2wU6cZanaG/Pq7vhz5O964SHHehwT1KKTcSrd2yN+1lHQgrdMdl3CQ=="
+      },
+      "governedResultExposure": {
+        "sourcePath": "docs/evidence/conflicting-pledge-protection/conflict.json",
+        "digest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "schemaVersion": "mordant.governed-conflict-result/1",
+        "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+        "outcome": "CONFLICT",
+        "releasedAtUnix": 1785768619,
+        "exposedAtUnix": 1786269602,
+        "immutable": true
+      },
+      "proposedAction": {
+        "schemaVersion": "mordant.governed-proposed-action/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-manual-escalation-conflict-001",
+        "governedResultDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "policyDigest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af",
+        "selectionEventDigest": "sha256:69bc31a4d11b9c6ed468c2076c344af1236457247e48c0cfab9519e1dd9c61ed",
+        "governedOutcome": "CONFLICT",
+        "evaluationActionType": "REVIEW_REQUIRED",
+        "actionType": "MANUAL_ESCALATION",
+        "accountableInstitutionalRole": "RISK_OPERATIONS",
+        "authorizationMode": "HUMAN_APPROVAL_REQUIRED",
+        "allowedApproverRoles": [
+          "INSTITUTIONAL_REVIEWER"
+        ],
+        "approvalExpiresAtUnix": 1786356002,
+        "operationalDeadlineUnix": null,
+        "escalationActionType": null,
+        "actionConfigurationDigest": "sha256:8980d4a41eabbca70fea2812c57405623a13bfdcf1fba0a457cdb561d77e164e",
+        "settlementPermission": "PROHIBITED",
+        "settlementConfigurationDigest": null,
+        "executionMode": "EVIDENCE_ONLY",
+        "digest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04"
+      },
+      "governanceApprovalEvent": {
+        "schemaVersion": "mordant.governance-approval-event/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-manual-escalation-conflict-001",
+        "governedResultDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+        "policyDigest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af",
+        "proposedActionDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+        "decision": "APPROVED",
+        "approverRole": "INSTITUTIONAL_REVIEWER",
+        "approverAuthority": {
+          "authorityId": "sha256:71fd6f49f6effa10fa51f5736237931bd202363af779bb05c04f5f8802147324",
+          "purpose": "INSTITUTIONAL_REVIEWER",
+          "label": "Institutional reviewer — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "MTyGINuEAIbULONjamqtIMEGZdJuHNzEMbYeEuH5Src="
+        },
+        "nonce": "mordant-experiment-manual-escalation-conflict-001-approval-001",
+        "issuedAtUnix": 1786269604,
+        "expiresAtUnix": 1786270200,
+        "previousEventDigest": "sha256:441e129c36c6602e6066f8663e293df07a8075e7a21f16e22ea71999381ec805",
+        "digest": "sha256:fab8aaa4709e883c89c064459135d000feaf10c655b5398a67dc2fc275d75af9",
+        "signature": "a6EVOfve3f9jSAZzgfP0mD8doZ4qzBA+gvrj716CQCJRMcgfj3fycMZLjxbPBdHNiF4xYDNGjNoH+NXqmItlAg=="
+      },
+      "governedActionReceipt": {
+        "schemaVersion": "mordant.governed-action-receipt/1",
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-manual-escalation-conflict-001",
+        "governedResult": {
+          "digest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+          "schemaVersion": "mordant.governed-conflict-result/1",
+          "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+          "outcome": "CONFLICT",
+          "exposedAtUnix": 1786269602
+        },
+        "policy": {
+          "policyId": "mordant.experimental.manual-escalation",
+          "policyVersion": 1,
+          "digest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af"
+        },
+        "selectionEventDigest": "sha256:69bc31a4d11b9c6ed468c2076c344af1236457247e48c0cfab9519e1dd9c61ed",
+        "approvalEventDigest": "sha256:fab8aaa4709e883c89c064459135d000feaf10c655b5398a67dc2fc275d75af9",
+        "proposedActionDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+        "resultingAction": {
+          "actionType": "MANUAL_ESCALATION",
+          "accountableInstitutionalRole": "RISK_OPERATIONS",
+          "operationalDeadlineUnix": null,
+          "escalationActionType": null,
+          "actionConfigurationDigest": "sha256:8980d4a41eabbca70fea2812c57405623a13bfdcf1fba0a457cdb561d77e164e",
+          "settlementPermission": "PROHIBITED",
+          "settlementConfigurationDigest": null,
+          "executionMode": "EVIDENCE_ONLY"
+        },
+        "stateTransition": {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 8,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "ACTION_AUTHORIZED",
+          "toState": "ACTION_RECORDED",
+          "atUnix": 1786269606,
+          "evidenceDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+          "previousEventDigest": "sha256:178a18bf6098157e832a4c68bb3073e00c5752d03b78eeb830104e753da60812",
+          "digest": "sha256:35c081862f767ea3c321f284b8919e519b5952caa038ceac6573e55659599c90"
+        },
+        "recorderAuthority": {
+          "authorityId": "sha256:ae8017a4335bbe6c70089b3cfb62e65866a391014ac4d46d514b8bc7b9ba81b4",
+          "purpose": "ACTION_RECORDER",
+          "label": "Mordant action evidence recorder — prototype only",
+          "prototypeAuthority": true,
+          "algorithm": "Ed25519",
+          "publicKey": "CZRy6WVPXijIIH4GPmadDZ0g2PaiVY5MwgrfM74XPQs="
+        },
+        "recordedAtUnix": 1786269606,
+        "digest": "sha256:4d74cb77794217c3da5d4676abf8dd299c992a079288dbd4b9f0a95f8d1fda09",
+        "signature": "IUi4gKV7U1j7ZawbrwLhI8iwI1bj0sbfY6wvfPUsFk2K6nh1K+44ywk3Be/Fh2gOclhihiyQAwPSuycl1sXJBQ=="
+      },
+      "actionHistory": [
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 1,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": null,
+          "toState": "CASE_AUTHORIZED",
+          "atUnix": 1786269600,
+          "evidenceDigest": "sha256:9e2b7a607fe1f18caf77ff4b9935b4dd0a921be2d8f2373cb955780db02094f6",
+          "previousEventDigest": null,
+          "digest": "sha256:53b6328069793442f5149d942fa6f375fb5ec4c268062fca57c6da320cdb950e"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 2,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "CASE_AUTHORIZED",
+          "toState": "POLICY_BOUND",
+          "atUnix": 1786269601,
+          "evidenceDigest": "sha256:69bc31a4d11b9c6ed468c2076c344af1236457247e48c0cfab9519e1dd9c61ed",
+          "previousEventDigest": "sha256:53b6328069793442f5149d942fa6f375fb5ec4c268062fca57c6da320cdb950e",
+          "digest": "sha256:e1a958acd64747ee0ebe9ca71fa37b1acb081e6b12b810084bb7502530242ded"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 3,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "POLICY_BOUND",
+          "toState": "RESULT_AVAILABLE",
+          "atUnix": 1786269602,
+          "evidenceDigest": "sha256:f53b9e7a61ecaa88cc202781263f1e05a77c8aabe235240a0d7e5e4d9078b354",
+          "previousEventDigest": "sha256:e1a958acd64747ee0ebe9ca71fa37b1acb081e6b12b810084bb7502530242ded",
+          "digest": "sha256:86be4a10413db84e7f42a115590091cb03e78530840955cb64f9968d10761ffc"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 4,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "RESULT_AVAILABLE",
+          "toState": "POLICY_EVALUATED",
+          "atUnix": 1786269603,
+          "evidenceDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+          "previousEventDigest": "sha256:86be4a10413db84e7f42a115590091cb03e78530840955cb64f9968d10761ffc",
+          "digest": "sha256:eb8624ffb29693b073f0a859a9e419a22dae5f0e350a5bc4e2056a8d9071d50f"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 5,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "POLICY_EVALUATED",
+          "toState": "REVIEW_REQUIRED",
+          "atUnix": 1786269603,
+          "evidenceDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+          "previousEventDigest": "sha256:eb8624ffb29693b073f0a859a9e419a22dae5f0e350a5bc4e2056a8d9071d50f",
+          "digest": "sha256:441e129c36c6602e6066f8663e293df07a8075e7a21f16e22ea71999381ec805"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 6,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "REVIEW_REQUIRED",
+          "toState": "REVIEW_APPROVED",
+          "atUnix": 1786269604,
+          "evidenceDigest": "sha256:fab8aaa4709e883c89c064459135d000feaf10c655b5398a67dc2fc275d75af9",
+          "previousEventDigest": "sha256:441e129c36c6602e6066f8663e293df07a8075e7a21f16e22ea71999381ec805",
+          "digest": "sha256:1c09f97d80660f892546995045e359f60c17e710ea184be4127fa98bf83f34db"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 7,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "REVIEW_APPROVED",
+          "toState": "ACTION_AUTHORIZED",
+          "atUnix": 1786269605,
+          "evidenceDigest": "sha256:fab8aaa4709e883c89c064459135d000feaf10c655b5398a67dc2fc275d75af9",
+          "previousEventDigest": "sha256:1c09f97d80660f892546995045e359f60c17e710ea184be4127fa98bf83f34db",
+          "digest": "sha256:178a18bf6098157e832a4c68bb3073e00c5752d03b78eeb830104e753da60812"
+        },
+        {
+          "schemaVersion": "mordant.governed-action-history-event/1",
+          "ordinal": 8,
+          "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+          "runId": "mordant-experiment-manual-escalation-conflict-001",
+          "fromState": "ACTION_AUTHORIZED",
+          "toState": "ACTION_RECORDED",
+          "atUnix": 1786269606,
+          "evidenceDigest": "sha256:7835adb58b3de0f6263fc2490fa46430ca0e34da9c2fd3dc87f63100c6de1c04",
+          "previousEventDigest": "sha256:178a18bf6098157e832a4c68bb3073e00c5752d03b78eeb830104e753da60812",
+          "digest": "sha256:35c081862f767ea3c321f284b8919e519b5952caa038ceac6573e55659599c90"
+        }
+      ],
+      "authorizationEvent": {
+        "schemaVersion": "mordant.governed-action-history-event/1",
+        "ordinal": 7,
+        "caseId": "sha256:806de678d14adbde33a0048d244389d3404b6c45d0c71163e2fd5a283c60828e",
+        "runId": "mordant-experiment-manual-escalation-conflict-001",
+        "fromState": "REVIEW_APPROVED",
+        "toState": "ACTION_AUTHORIZED",
+        "atUnix": 1786269605,
+        "evidenceDigest": "sha256:fab8aaa4709e883c89c064459135d000feaf10c655b5398a67dc2fc275d75af9",
+        "previousEventDigest": "sha256:1c09f97d80660f892546995045e359f60c17e710ea184be4127fa98bf83f34db",
+        "digest": "sha256:178a18bf6098157e832a4c68bb3073e00c5752d03b78eeb830104e753da60812"
+      }
+    }
+  ],
+  "comparison": {
+    "sameGovernedResultDigest": true,
+    "facilityProtectionAction": "OPEN_CURE_PATH",
+    "manualEscalationAction": "MANUAL_ESCALATION",
+    "policyDigestsDiffer": true
+  },
+  "verification": {
+    "policySignaturesVerified": true,
+    "selectionSignaturesVerified": true,
+    "approvalSignaturesVerified": true,
+    "receiptSignaturesVerified": true,
+    "hashLinkedStateTransitionsVerified": true,
+    "prototypeAuthoritiesOnly": true,
+    "productionAuthorizationClaimed": false,
+    "legalCorrectnessClaimed": false
+  }
+}

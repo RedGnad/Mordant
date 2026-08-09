@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "mordant.governed-recourse-policy/1",
+  "policyVersion": 1,
+  "scope": {
+    "programId": "mordant.governed-recourse-policy-experiment-v1",
+    "assetClass": "TOKENIZED_PRIVATE_CREDIT",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c"
+  },
+  "acceptedGovernedResult": {
+    "semantic": "CONFLICT_OR_NO_CONFLICT_ONLY",
+    "schemaVersion": "mordant.governed-conflict-result/1",
+    "serviceId": "mordant.private-pledge-matching",
+    "serviceVersion": 1,
+    "releaseMode": "governed-decryptor-v1"
+  },
+  "effectiveFromUnix": 1785542400,
+  "effectiveUntilUnix": 1817078400,
+  "noConflictBranch": {
+    "governedOutcome": "NO_CONFLICT",
+    "evaluationActionType": "RECORD_AND_CLOSE",
+    "authorizedActionType": "RECORD_AND_CLOSE",
+    "accountableInstitutionalRole": "RECORDS_OPERATIONS",
+    "authorizationMode": "AUTOMATIC_PERMITTED",
+    "allowedApproverRoles": [],
+    "approvalWindowSeconds": null,
+    "deadlineRule": null,
+    "escalationRule": null,
+    "actionConfigurationDigest": "sha256:490777df9cfa54f79c0f6f25032a68ebdd111f75a7cef23491a99938d2fa75db"
+  },
+  "settlement": {
+    "permission": "PROHIBITED",
+    "configurationDigest": null
+  },
+  "policyId": "mordant.experimental.manual-escalation",
+  "conflictBranch": {
+    "governedOutcome": "CONFLICT",
+    "evaluationActionType": "REVIEW_REQUIRED",
+    "authorizedActionType": "MANUAL_ESCALATION",
+    "accountableInstitutionalRole": "RISK_OPERATIONS",
+    "authorizationMode": "HUMAN_APPROVAL_REQUIRED",
+    "allowedApproverRoles": [
+      "INSTITUTIONAL_REVIEWER"
+    ],
+    "approvalWindowSeconds": 86400,
+    "deadlineRule": null,
+    "escalationRule": null,
+    "actionConfigurationDigest": "sha256:8980d4a41eabbca70fea2812c57405623a13bfdcf1fba0a457cdb561d77e164e"
+  },
+  "policyAuthority": {
+    "authorityId": "sha256:75c80b220834167f263d60cc30ce15a492d6c562e1407fbd21a37e6de4b923d0",
+    "purpose": "POLICY_AUTHORITY",
+    "label": "Mordant design lab policy authority — prototype only",
+    "prototypeAuthority": true,
+    "algorithm": "Ed25519",
+    "publicKey": "5hL8ZNrE1tjmxxd863yZAsDtcIZgEai9G8eNGBrszCA="
+  },
+  "digest": "sha256:52410df2563fc084cc81bdd222f6e6ff2080d070faf3d716898b8585f88ee6af",
+  "signature": "Qa7WTh4nNko7s5QOvxmbTyIbkZbkEx0bkWxrxXJ5UbGPgacUYKdG+VcH5B/FBvtuevQ87FV1NBQ2wlnB01NJBw=="
+}
