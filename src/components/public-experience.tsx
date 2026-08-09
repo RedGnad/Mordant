@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { MiniLiveCheck } from "./live-product/mini-live-check";
-import { LIVE_PRODUCT_CTA, PublicFooter, PublicHeader } from "./public-shell";
+import { PublicFooter, PublicHeader } from "./public-shell";
 import styles from "./public-experience.module.css";
 
 /**
@@ -296,7 +296,7 @@ export function PublicExperience({ liveCheckHolder }: {
             precommitted policy to the next bounded action.
           </p>
           <div className={styles.actions}>
-            <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
+            <Link className={styles.primary} href="#product">Run live check</Link>
             <Link className={styles.secondary} href="/protection/verified-run">Inspect verified evidence</Link>
           </div>
         </section>
