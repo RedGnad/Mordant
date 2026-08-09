@@ -33,7 +33,7 @@ The aggregate is `COMPLETE` and `REVIEW_READY`; `globalAllClear` is `false`. Its
 
 ## Validation
 
-The retained envelope and all 17 evidence mutation tests passed with:
+The retained envelope and all 17 retained-evidence tests passed with:
 
 ```sh
 pnpm proof:n3-private-conflict-graph:validate
