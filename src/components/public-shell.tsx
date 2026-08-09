@@ -38,7 +38,7 @@ function BrandMark() {
 export function PublicHeader({ surface }: { readonly surface: PublicSurface }) {
   const activeNav = SURFACE_NAV[surface];
   const onLive = surface === "live";
-  const primaryHref = surface === "landing" ? "/#product" : LIVE_PRODUCT_HREF;
+  const primaryHref = LIVE_PRODUCT_HREF;
 
   return (
     <header className={styles.header}>
