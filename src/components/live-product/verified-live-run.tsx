@@ -324,7 +324,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           precommitted policy and bounded local action.
         </p>
         <Link className={styles.cta} href="/protection/live" data-testid="verified-run-to-live">
-          Run fresh managed proof
+          Run live proof
         </Link>
       </div>
 

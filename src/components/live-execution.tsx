@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { DirectParticipantExecution } from "./live-product/direct-participant-execution";
 import { LiveProduct, type ClaimDraft } from "./live-product/live-product";
@@ -37,6 +38,19 @@ const POLL_INTERVAL_MS = 2_000;
 const MAX_POLLS = 300;
 /** A single failed poll is a blip. Only a sustained silence is unavailability. */
 const FAILURES_BEFORE_UNAVAILABLE = 3;
+
+/**
+ * A requestAnimationFrame callback runs before its frame is painted. Waiting
+ * for the following frame guarantees that the local acknowledgement was
+ * actually visible before token issuance or worker admission starts.
+ */
+function afterVisiblePaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
 
 const FIELD_KEYS = ["aFrom", "aUntil", "bFrom", "bUntil"] as const;
 type FieldKey = (typeof FIELD_KEYS)[number];
@@ -154,10 +168,11 @@ function ManagedLiveExecution({ workerOrigin, initialRunId, publicTestHolder, ca
     setFormError(message);
     if (windows === null) return;
     startingRef.current = true;
-    setStarting(true);
-    // Commit and paint the local acknowledgement before token issuance or the
-    // worker request can spend several seconds waiting on external services.
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    // This is an acknowledgement of the local click, not a claim about worker
+    // progress. Commit it synchronously, then allow one complete browser paint
+    // before token issuance or worker admission can spend seconds off-page.
+    flushSync(() => setStarting(true));
+    await afterVisiblePaint();
     try {
       const outcome = await startManagedRun(eligibility.holderAddress ?? "", windows);
       if (outcome.kind === "BUSY") {

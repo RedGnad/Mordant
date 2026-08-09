@@ -753,12 +753,13 @@
   background: var(--action-fill);
 }
 
-.primary:hover:not(:disabled),
+.primary:hover:not(:disabled):not([aria-disabled="true"]),
 .primary:focus-visible {
   background: var(--action-fill-hover);
 }
 
-.primary:disabled {
+.primary:disabled,
+.primary[aria-disabled="true"] {
   cursor: wait;
   opacity: 0.55;
 }
@@ -780,6 +781,7 @@
 }
 
 .launchFeedback {
+  min-height: 38px;
   max-width: 62ch;
   margin: 12px 0 0;
   padding-left: 14px;
@@ -787,6 +789,13 @@
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.launchFeedback[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
 }
 
 .launchFeedback strong {

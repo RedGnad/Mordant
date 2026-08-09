@@ -577,6 +577,34 @@ test("the full managed run gives immediate start feedback and preserves its loca
 
   await page.getByRole("button", { name: "Use the public test holder" }).click();
   await expect(page.getByRole("heading", { name: "Two private claims on the same receivable." })).toBeVisible();
+  await page.evaluate(() => {
+    let framesAfterClick = 0;
+    document.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button") : null;
+      if (!button?.textContent?.includes("Run the confidential check")) return;
+      framesAfterClick = 0;
+      window.requestAnimationFrame(function markPaintOpportunity() {
+        framesAfterClick += 1;
+        if (framesAfterClick < 3) window.requestAnimationFrame(markPaintOpportunity);
+      });
+    }, { capture: true });
+
+    const browserFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const input = args[0];
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/api/live-protection/token")) {
+        const button = document.querySelector<HTMLButtonElement>('button[aria-busy="true"]');
+        const feedback = document.querySelector<HTMLElement>('[data-testid="managed-launch-feedback"]');
+        document.documentElement.dataset.launchFramesAtToken = String(framesAfterClick);
+        document.documentElement.dataset.launchButtonBusyAtToken = button?.getAttribute("aria-busy") ?? "missing";
+        document.documentElement.dataset.launchFeedbackAtToken = feedback === null
+          ? "missing"
+          : window.getComputedStyle(feedback).visibility;
+      }
+      return browserFetch(...args);
+    };
+  });
   const runButton = page.getByRole("button", { name: "Run the confidential check" });
   await runButton.scrollIntoViewIfNeeded();
   const scrollBeforeStart = await page.evaluate(() => window.scrollY);
@@ -587,10 +615,16 @@ test("the full managed run gives immediate start feedback and preserves its loca
     .toContainText("Request received. Rechecking A-Pass before the secure execution opens");
   await expect(page.locator("[class*='chapterFrame']")).toHaveAttribute("aria-busy", "true");
   const startingButton = page.getByRole("button", { name: "Starting confidential check" });
-  await expect(startingButton).toBeDisabled();
+  await expect(startingButton).toHaveAttribute("aria-disabled", "true");
+  await expect(startingButton).toHaveAttribute("aria-busy", "true");
   await expect(startingButton.locator("[class*='buttonLoader']")).toBeVisible();
   await expect(page.getByTestId("managed-launch-feedback"))
     .toContainText("Request received. Rechecking A-Pass, then opening the secure execution.");
+  await expect.poll(() => page.evaluate(() => ({
+    frames: document.documentElement.dataset.launchFramesAtToken,
+    busy: document.documentElement.dataset.launchButtonBusyAtToken,
+    feedback: document.documentElement.dataset.launchFeedbackAtToken,
+  }))).toEqual({ frames: "2", busy: "true", feedback: "visible" });
   await page.waitForTimeout(250);
   const scrollAfterStart = await page.evaluate(() => window.scrollY);
   expect(Math.abs(scrollAfterStart - scrollBeforeStart)).toBeLessThanOrEqual(2);

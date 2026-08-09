@@ -120,6 +120,7 @@ test.describe("verified historical on-chain execution", () => {
     await page.goto(PATH);
     const cta = page.getByTestId("verified-run-to-live");
     await expect(cta).toBeVisible();
+    await expect(cta).toHaveText("Run live proof");
     await expect(cta).toHaveAttribute("href", "/protection/live");
   });
 

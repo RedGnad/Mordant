@@ -430,16 +430,23 @@ export function LiveProduct({
             <button
               type="button"
               className={styles.primary}
-              disabled={busy}
+              aria-disabled={busy}
+              aria-busy={busy}
               data-loading={busy}
-              onClick={actions.onStart}
+              onClick={busy ? undefined : actions.onStart}
             >
               {busy ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
               <span>{busy ? "Starting confidential check" : "Run the confidential check"}</span>
             </button>
           )}
-          {model.intake !== "MANAGED_COMBINED" || managedDraft === null || !busy ? null : (
-            <p className={styles.launchFeedback} data-testid="managed-launch-feedback" role="status">
+          {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
+            <p
+              className={styles.launchFeedback}
+              data-testid="managed-launch-feedback"
+              data-visible={busy}
+              role="status"
+              aria-hidden={!busy}
+            >
               <strong>Request received.</strong> Rechecking A-Pass, then opening the secure execution.
             </p>
           )}

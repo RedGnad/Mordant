@@ -69,7 +69,8 @@ test.describe("the judge acceptance path", () => {
     await expect(status).toHaveAttribute("data-status", "active");
     await expect(status).toContainText("Request received. Rechecking A-Pass before the secure execution opens.");
     const action = page.getByRole("button", { name: "Starting confidential check" });
-    await expect(action).toBeDisabled();
+    await expect(action).toHaveAttribute("aria-disabled", "true");
+    await expect(action).toHaveAttribute("aria-busy", "true");
     await expect(action).toHaveAttribute("data-loading", "true");
     await expect(action.locator("[class*='buttonLoader']")).toBeVisible();
     await expect(page.getByTestId("managed-launch-feedback"))
