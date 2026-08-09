@@ -41,19 +41,20 @@ const (
 	productAttestationObject   = "product-recourse-attestation.json"
 	evidenceObject             = "evidence.json"
 
-	secretKeyObject           = "secret-key.bin"
-	decryptorSigningKeyObject = "decryptor-signing-key.bin"
-	privateCaseObject         = "private-case.json"
-	recomputeAdmissionObject  = "recompute-admitted.json"
-	recomputedResultObject    = "recomputed-conflict.bin"
-	recomputeVerifiedObject   = "recompute-verified.json"
-	recomputeMismatchObject   = "recompute-mismatch.json"
-	releaseAdmissionObject    = "release-admitted.json"
-	releaseConsumedObject     = "release-consumed.json"
-	retainedResultObject      = "retained-governed-result.json"
-	maxPublicCaseObjects      = 40
-	maxPrivateCaseObjects     = 16
-	maximumTemporaryNameTries = 16
+	secretKeyObject                               = "secret-key.bin"
+	decryptorSigningKeyObject                     = "decryptor-signing-key.bin"
+	privateCaseObject                             = "private-case.json"
+	recomputeAdmissionObject                      = "recompute-admitted.json"
+	recomputedResultObject                        = "recomputed-conflict.bin"
+	recomputeVerifiedObject                       = "recompute-verified.json"
+	recomputeMismatchObject                       = "recompute-mismatch.json"
+	releaseAdmissionObject                        = "release-admitted.json"
+	releaseConsumedObject                         = "release-consumed.json"
+	retainedResultObject                          = "retained-governed-result.json"
+	maxPublicCaseObjects                          = 40
+	maxPrivateCaseObjects                         = 16
+	maximumTemporaryNameTries                     = 16
+	maximumRecoverableParticipantTemporaryObjects = 2
 )
 
 func galoisObject(index int) string { return fmt.Sprintf("galois-key-%02d.bin", index) }
@@ -72,9 +73,29 @@ type objectStore struct {
 
 type objectCreateHooks struct {
 	beforePublish func(directoryFD int, name string) error
+	afterCommit   func(directoryFD int, name string) error
+}
+
+// participantTemporaryRecoveryPolicy is supplied only by the
+// participant-originated stores. targetLimit recognizes every create-only
+// object name that may legitimately share this root, rather than only the role
+// currently being imported; that prevents a crash temporary from role A from
+// poisoning role B's next open of the shared root.
+type participantTemporaryRecoveryPolicy struct {
+	maximum     int64
+	targetLimit func(name string) (int64, bool)
 }
 
 func openObjectStore(root string, quota int64, private bool) (*objectStore, error) {
+	return openObjectStoreWithParticipantRecovery(root, quota, private, nil)
+}
+
+// openObjectStoreWithParticipantRecovery is deliberately not used by managed
+// governed-FHE paths. A non-nil recovery policy authorizes the native-CLI
+// participant-originated path to remove at most two strictly shaped crash
+// temporaries while holding the directory lock. Post-link temporaries are
+// recovered only when their inode has exactly one authorized target link.
+func openObjectStoreWithParticipantRecovery(root string, quota int64, private bool, recovery *participantTemporaryRecoveryPolicy) (*objectStore, error) {
 	if !filepath.IsAbs(root) || quota <= 0 {
 		return nil, ErrStore
 	}
@@ -115,11 +136,107 @@ func openObjectStore(root string, quota int64, private bool) (*objectStore, erro
 		root: clean, fd: fd, device: uint64(descriptorStat.Dev), inode: uint64(descriptorStat.Ino),
 		quota: quota, maxObjects: maxObjects, fileMode: fileMode, directory: directoryMode, private: private,
 	}
+	if recovery != nil {
+		if err := store.recoverParticipantOriginatedTemporaryObjects(recovery); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := store.usedBytes(); err != nil {
 		return nil, err
 	}
 	closeOnError = false
 	return store, nil
+}
+
+func validMordantTemporaryObjectName(name string) bool {
+	const prefix = ".mordant-create-"
+	if len(name) != len(prefix)+32 || !strings.HasPrefix(name, prefix) {
+		return false
+	}
+	for _, value := range []byte(name[len(prefix):]) {
+		if (value < '0' || value > '9') && (value < 'a' || value > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func sameStatIdentity(left, right unix.Stat_t) bool {
+	return uint64(left.Dev) == uint64(right.Dev) && uint64(left.Ino) == uint64(right.Ino)
+}
+
+func (s *objectStore) recoverParticipantOriginatedTemporaryObjects(policy *participantTemporaryRecoveryPolicy) error {
+	if s == nil || policy == nil || policy.maximum <= 0 || policy.maximum > s.quota || policy.targetLimit == nil || s.verifyPathIdentity() != nil {
+		return ErrStore
+	}
+	if err := unix.Flock(s.fd, unix.LOCK_EX); err != nil {
+		return ErrStore
+	}
+	defer func() { _ = unix.Flock(s.fd, unix.LOCK_UN) }()
+	if s.verifyPathIdentity() != nil {
+		return ErrStore
+	}
+	entries, err := s.directoryEntries()
+	if err != nil {
+		return err
+	}
+	temporaryNames := make([]string, 0, maximumRecoverableParticipantTemporaryObjects)
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".mordant-create-") {
+			if !validMordantTemporaryObjectName(entry.Name()) || len(temporaryNames) >= maximumRecoverableParticipantTemporaryObjects {
+				return ErrStore
+			}
+			temporaryNames = append(temporaryNames, entry.Name())
+		}
+	}
+	if len(temporaryNames) == 0 {
+		return nil
+	}
+	for _, temporaryName := range temporaryNames {
+		var temporaryStat unix.Stat_t
+		if unix.Fstatat(s.fd, temporaryName, &temporaryStat, unix.AT_SYMLINK_NOFOLLOW) != nil ||
+			temporaryStat.Mode&unix.S_IFMT != unix.S_IFREG || temporaryStat.Size < 0 || temporaryStat.Size > policy.maximum ||
+			temporaryStat.Uid != uint32(os.Geteuid()) || (uint32(temporaryStat.Mode)&0o777 != 0o600 && uint32(temporaryStat.Mode)&0o777 != uint32(s.fileMode.Perm())) ||
+			(temporaryStat.Nlink != 1 && temporaryStat.Nlink != 2) {
+			return ErrStore
+		}
+		matchingTargets := 0
+		for _, targetEntry := range entries {
+			target := targetEntry.Name()
+			limit, allowed := policy.targetLimit(target)
+			if !allowed {
+				continue
+			}
+			if validateObjectName(target) != nil || limit <= 0 || limit > policy.maximum {
+				return ErrStore
+			}
+			var targetStat unix.Stat_t
+			if err := unix.Fstatat(s.fd, target, &targetStat, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) {
+				continue
+			} else if err != nil {
+				return ErrStore
+			}
+			if targetStat.Mode&unix.S_IFMT != unix.S_IFREG {
+				return ErrStore
+			}
+			if sameStatIdentity(temporaryStat, targetStat) {
+				if targetStat.Size > limit {
+					return ErrStore
+				}
+				matchingTargets++
+			}
+		}
+		if (temporaryStat.Nlink == 1 && matchingTargets != 0) || (temporaryStat.Nlink == 2 && matchingTargets != 1) {
+			return ErrStore
+		}
+		if err := unix.Unlinkat(s.fd, temporaryName, 0); err != nil {
+			return ErrStore
+		}
+	}
+	if err := unix.Fsync(s.fd); err != nil || s.verifyPathIdentity() != nil {
+		return ErrStore
+	}
+	return nil
 }
 
 func (s *objectStore) close() error {
@@ -257,6 +374,171 @@ func temporaryObjectName() (string, error) {
 
 func (s *objectStore) create(name string, data []byte) (ObjectRef, error) {
 	return s.createWithHooks(name, data, objectCreateHooks{})
+}
+
+// createFromReaderExpected authenticates the exact transport digest and length
+// before the temporary inode is linked under its public object name. It is the
+// bounded streaming counterpart used by the native-CLI import profile.
+func (s *objectStore) createFromReaderExpected(name string, reader io.Reader, maximum int64, expected *ObjectRef) (ObjectRef, error) {
+	return s.createFromReaderExpectedWithHooks(name, reader, maximum, expected, objectCreateHooks{})
+}
+
+func (s *objectStore) unlinkObjectIfIdentity(name string, expected unix.Stat_t) error {
+	var actual unix.Stat_t
+	if err := unix.Fstatat(s.fd, name, &actual, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) {
+		return nil
+	} else if err != nil || !sameStatIdentity(actual, expected) {
+		return ErrStore
+	}
+	if err := unix.Unlinkat(s.fd, name, 0); err != nil {
+		return ErrStore
+	}
+	return nil
+}
+
+func (s *objectStore) createFromReaderExpectedWithHooks(name string, reader io.Reader, maximum int64, expected *ObjectRef, hooks objectCreateHooks) (result ObjectRef, returnErr error) {
+	var ref ObjectRef
+	if s == nil || reader == nil || validateObjectName(name) != nil || maximum <= 0 || maximum > s.quota || s.verifyPinned() != nil {
+		return ref, ErrStore
+	}
+	if expected != nil && expected.validate(name, maximum) != nil {
+		return ref, ErrStore
+	}
+	if err := unix.Flock(s.fd, unix.LOCK_EX); err != nil {
+		return ref, ErrStore
+	}
+	defer func() { _ = unix.Flock(s.fd, unix.LOCK_UN) }()
+	used, err := s.usedBytes()
+	if err != nil || used >= s.quota {
+		return ref, ErrResourceAdmission
+	}
+	entries, err := s.directoryEntries()
+	if err != nil || len(entries) >= s.maxObjects {
+		return ref, ErrResourceAdmission
+	}
+	if existing, _, openErr := s.openRegular(name); openErr == nil {
+		_ = unix.Close(existing)
+		return ref, ErrStore
+	} else if !errors.Is(openErr, unix.ENOENT) {
+		return ref, ErrStore
+	}
+
+	remaining := s.quota - used
+	limit := maximum
+	if remaining < limit {
+		limit = remaining
+	}
+	if limit <= 0 {
+		return ref, ErrResourceAdmission
+	}
+
+	var tempName string
+	tempFD := -1
+	for attempt := 0; attempt < maximumTemporaryNameTries; attempt++ {
+		tempName, err = temporaryObjectName()
+		if err != nil {
+			return ref, ErrStore
+		}
+		tempFD, err = unix.Openat(s.fd, tempName, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EEXIST) {
+			return ref, ErrStore
+		}
+	}
+	if tempFD < 0 {
+		return ref, ErrStore
+	}
+	var temporary *os.File
+	var temporaryStat unix.Stat_t
+	temporaryRemoved := false
+	targetCreated := false
+	completed := false
+	defer func() {
+		if temporary != nil {
+			_ = temporary.Close()
+		} else {
+			_ = unix.Close(tempFD)
+		}
+		cleanupFailed := false
+		if targetCreated && !completed {
+			if s.unlinkObjectIfIdentity(name, temporaryStat) != nil {
+				cleanupFailed = true
+			}
+		}
+		if !temporaryRemoved {
+			if err := unix.Unlinkat(s.fd, tempName, 0); err != nil && !errors.Is(err, unix.ENOENT) {
+				cleanupFailed = true
+			}
+		}
+		if targetCreated && !completed && unix.Fsync(s.fd) != nil {
+			cleanupFailed = true
+		}
+		if cleanupFailed {
+			result = ObjectRef{}
+			returnErr = ErrStore
+		}
+	}()
+	temporary = os.NewFile(uintptr(tempFD), tempName)
+	if temporary == nil || unix.Fstat(tempFD, &temporaryStat) != nil || temporaryStat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return ref, ErrStore
+	}
+	hash := sha256.New()
+	count, copyErr := io.Copy(io.MultiWriter(temporary, hash), io.LimitReader(reader, limit+1))
+	if copyErr != nil {
+		return ref, fmt.Errorf("%w: stream temporary object: %v", ErrStore, copyErr)
+	}
+	if count <= 0 || count > limit {
+		return ref, ErrResourceAdmission
+	}
+	var digest Digest
+	copy(digest[:], hash.Sum(nil))
+	ref = ObjectRef{Path: name, Digest: digest, Length: count}
+	if expected != nil && ref != *expected {
+		return ObjectRef{}, ErrArtifact
+	}
+	if err := temporary.Sync(); err != nil {
+		return ref, fmt.Errorf("%w: sync temporary object: %v", ErrStore, err)
+	}
+	if err := unix.Fchmod(tempFD, uint32(s.fileMode.Perm())); err != nil {
+		return ref, ErrStore
+	}
+	if err := temporary.Sync(); err != nil {
+		return ref, ErrStore
+	}
+	if s.verifyPathIdentity() != nil {
+		return ref, ErrStore
+	}
+	if hooks.beforePublish != nil {
+		if err := hooks.beforePublish(s.fd, name); err != nil {
+			return ref, ErrStore
+		}
+	}
+	if s.verifyPathIdentity() != nil {
+		return ref, ErrStore
+	}
+	if err := unix.Linkat(s.fd, tempName, s.fd, name, 0); err != nil {
+		return ref, fmt.Errorf("%w: publish object: %v", ErrStore, err)
+	}
+	targetCreated = true
+	if err := unix.Unlinkat(s.fd, tempName, 0); err != nil {
+		return ref, ErrStore
+	}
+	temporaryRemoved = true
+	if err := unix.Fsync(s.fd); err != nil {
+		return ref, ErrStore
+	}
+	if hooks.afterCommit != nil {
+		if err := hooks.afterCommit(s.fd, name); err != nil {
+			return ref, ErrStore
+		}
+	}
+	if s.verifyPathIdentity() != nil {
+		return ref, ErrStore
+	}
+	completed = true
+	return ref, nil
 }
 
 func (s *objectStore) createWithHooks(name string, data []byte, hooks objectCreateHooks) (ObjectRef, error) {
