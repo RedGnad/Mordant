@@ -30,3 +30,4 @@ docs/design/m17/references/
 # accident on the fhe-lab branch and is deliberately not carried forward.
 fhe-lab/lattigo/ceremony-client
 fhe-lab/lattigo/cmd/**/[a-z-]*.bin
+.settlement-test-dist/

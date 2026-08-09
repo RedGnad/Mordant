@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": ".settlement-test-dist",
+    "rootDir": ".",
+    "plugins": [],
+    "types": ["node"]
+  },
+  "include": [
+    "src/lib/protection/settlement-authority.ts",
+    "src/lib/protection/settlement-authority.test.ts"
+  ]
+}

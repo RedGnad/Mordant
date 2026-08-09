@@ -161,6 +161,16 @@ receivable. The original receivable stays intact through both demonstrated outco
 
 ## Proof surfaces
 
+### Settlement authority seam
+
+A governed Boolean cannot authorize payment on its own. The settlement profile is
+committed and digest-bound before any result exists, the plan takes only the
+Boolean from the governed result, and `BridgeExecutor` refuses to sign a paying
+release without a matching authorization. Code-level proof, 15 focused tests,
+ten negative controls: [settlement authority proof](docs/evidence/settlement-authority-proof.md).
+No fresh Adapter V2 settlement is claimed there.
+
+
 ### Current managed V2 proof
 
 The fresh public run proves the current result-to-policy chain. Its receipt carries eligibility

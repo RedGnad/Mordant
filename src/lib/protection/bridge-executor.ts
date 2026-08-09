@@ -63,6 +63,12 @@ import {
 import { digestToBytes32 } from "./participant-authorization";
 import { readAdmission } from "./participant-admission-store";
 import {
+  assertSettlementAuthorization,
+  SettlementAuthorityError,
+  type SettlementAuthorization,
+  type SettlementPlan,
+} from "./settlement-authority";
+import {
   loadCaseAdapterDeploymentProofForRun,
   type CaseAdapterDeploymentProof,
 } from "./case-adapter-deployment-proof";
@@ -344,12 +350,26 @@ function withReadOnlyRetries(reader: AdapterReader): RetriedAdapterReader {
   });
 }
 
+/**
+ * The settlement authority a caller offers for a release that moves money.
+ *
+ * Optional in the type, mandatory in effect: `simulate` refuses to sign any
+ * release with a positive payout unless one of these is present and matches it.
+ * A refusing (no-conflict) release carries none, because there is nothing to
+ * authorize.
+ */
+export type SettlementAuthorityInput = Readonly<{
+  plan: SettlementPlan;
+  authorization: SettlementAuthorization;
+}>;
+
 export type PrepareInput = Readonly<{
   /** Full public evidence; production verifies signature and cross-references internally. */
   evidence: unknown;
   nonce: bigint;
   issuedAt: number;
   expiry: number;
+  settlement?: SettlementAuthorityInput;
 }>;
 
 export type PreparedBridge = Readonly<{
@@ -364,6 +384,8 @@ export type PreparedBridge = Readonly<{
 
 type PreparedState = Readonly<{
   prepared: PreparedBridge;
+  /** Bound at preparation so a later caller cannot attach authority to a signed intent. */
+  settlement?: SettlementAuthorityInput;
   /**
    * Present only for the retained V4 path. The direct-participant path
    * establishes its release from its own verified evidence, so it has no
@@ -614,7 +636,7 @@ async function buildPrepared(
     adapter: checked.adapter,
     signerAddress,
   });
-  return Object.freeze({ prepared, canonical });
+  return Object.freeze({ prepared, canonical, settlement: input.settlement });
 }
 
 // ------------------------------------------------- direct-participant bridging
@@ -638,6 +660,7 @@ export type DirectParticipantPrepareInput = Readonly<{
   nonce: bigint;
   issuedAt: number;
   expiry: number;
+  settlement?: SettlementAuthorityInput;
 }>;
 
 const RUN_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -1474,11 +1497,44 @@ function createBridgeExecutorInternal(options: ExecutorOptions, dependencies: Ex
       // The direct path shares the simulate/sign/reconcile discipline exactly;
       // only how the release was established differs. `canonical` is carried for
       // shape compatibility and is not consulted again after preparation.
-      preparedStates.set(prepared as object, Object.freeze({ prepared }));
+      preparedStates.set(prepared as object, Object.freeze({ prepared, settlement: input.settlement }));
       return prepared;
     },
     simulate: async (prepared: PreparedBridge) => {
       const state = requirePrepared(prepared);
+      // A governed Boolean is not an instruction to pay. Before the attestor key
+      // is even loaded, any release that would move value must present a
+      // settlement authorization derived from a profile committed before the
+      // result existed, and that authorization must match this exact release.
+      {
+        const m = state.prepared.payload.message;
+        if (m.payoutA + m.payoutB > 0n) {
+          if (state.settlement === undefined) {
+            fail(
+              "SETTLEMENT_NOT_AUTHORIZED",
+              "Adapter V2 signing requires a settlement authorization; a governed conflict alone never authorizes payment",
+            );
+          }
+          try {
+            assertSettlementAuthorization(state.settlement.authorization, state.settlement.plan, {
+              adapter: state.prepared.adapter.address,
+              chainId: state.prepared.adapter.chainId,
+              governedResultDigest: m.governedResultDigest,
+              runId: m.runId,
+              holderA: m.holderA,
+              holderB: m.holderB,
+              payoutA: m.payoutA,
+              payoutB: m.payoutB,
+              conflict: m.conflict,
+            });
+          } catch (error) {
+            if (error instanceof SettlementAuthorityError) {
+              fail(`SETTLEMENT_${error.code}`, `The settlement authorization does not cover this release: ${error.message}`);
+            }
+            throw error;
+          }
+        }
+      }
       let signing: SigningCapability;
       try {
         signing = dependencies.loadSigner();
