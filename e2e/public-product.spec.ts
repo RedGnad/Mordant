@@ -132,6 +132,10 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
     .toHaveAttribute("d", "M150 120H380L470 40H660L750 120H1050");
+  await expect(page.locator("[class*='flowRouteDecision']"))
+    .toHaveAttribute("d", "M380 120L470 40H660L750 120");
+  await expect(page.locator("[class*='flowRouteAction']"))
+    .toHaveAttribute("d", "M750 120H1050");
   await expect(page.locator("[class*='flowNodes']")).toHaveCount(0);
   for (const section of [
     page.getByTestId("mini-live-check"),
@@ -153,7 +157,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   expect(stageBoxes).toHaveLength(4);
   if (testInfo.project.name === "1280x800") {
     const reveal = page.locator("[class*='flowRouteReveal']");
-    const expectedOffsets = [0.761, 0.635, 0.312, 0];
+    const expectedOffsets = [0.773, 0.648, 0.325, 0.012];
     for (let index = 0; index < expectedOffsets.length; index += 1) {
       const stage = integration.getByRole("button").nth(index);
       await stage.click();
@@ -161,6 +165,38 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
       await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
         .toBeCloseTo(expectedOffsets[index], 2);
       await expect(page.locator("[class*='integrationSignal']")).toHaveAttribute("data-arrived", "true");
+      const connection = await page.locator("[class*='integrationSignal']").evaluate((signal) => {
+        const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
+        const reveal = document.querySelector<SVGPathElement>("[class*='flowRouteReveal']");
+        const tether = signal.querySelector<SVGLineElement>("[class*='integrationTether']");
+        const signalMatrix = (signal as SVGGElement).getScreenCTM();
+        const pathMatrix = path?.getScreenCTM();
+        const tetherMatrix = tether?.getScreenCTM();
+        if (path === null || reveal === null || tether === null
+          || signalMatrix === null || pathMatrix === null || tetherMatrix === null) return null;
+        const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
+        const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
+        const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
+        const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
+        const tetherEnd = new DOMPoint(Number(tether.getAttribute("x2")), 0).matrixTransform(tetherMatrix);
+        return {
+          routeToSignal: Math.hypot(
+            routeScreenPoint.x - signalScreenPoint.x,
+            routeScreenPoint.y - signalScreenPoint.y,
+          ),
+          tetherToSignal: Math.hypot(
+            tetherEnd.x - signalScreenPoint.x,
+            tetherEnd.y - signalScreenPoint.y,
+          ),
+        };
+      });
+      expect(connection).not.toBeNull();
+      // The revealed multi-colour route ends beneath the marker while the
+      // same-colour tether overlaps it. This guards both visible gaps and a
+      // premature sliver from the following segment.
+      expect(connection?.routeToSignal).toBeGreaterThanOrEqual(9);
+      expect(connection?.routeToSignal).toBeLessThanOrEqual(13);
+      expect(connection?.tetherToSignal).toBeLessThanOrEqual(3);
       await page.locator('[aria-label="Interactive integration path"]')
         .screenshot({ path: testInfo.outputPath(`responsibility-stage-${index + 1}.png`) });
     }

@@ -1561,13 +1561,30 @@
     stroke-width 160ms ease-out;
 }
 
+.integrationTether {
+  fill: none;
+  stroke: var(--receivable);
+  stroke-linecap: butt;
+  stroke-width: 8;
+  vector-effect: non-scaling-stroke;
+}
+
 .flow[data-step="1"] .integrationSignal,
 .flow[data-step="2"] .integrationSignal {
   fill: var(--protection);
 }
 
+.flow[data-step="1"] .integrationTether,
+.flow[data-step="2"] .integrationTether {
+  stroke: var(--protection);
+}
+
 .flow[data-step="3"] .integrationSignal {
   fill: var(--action);
+}
+
+.flow[data-step="3"] .integrationTether {
+  stroke: var(--action);
 }
 
 .flow[data-step="3"] .integrationSignal[data-arrived="true"] {

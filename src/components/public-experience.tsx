@@ -41,7 +41,17 @@ const INTEGRATION_STEPS = [
 
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
 const INTEGRATION_ROUTE = "M150 120H380L470 40H660L750 120H1050";
-const INTEGRATION_TARGETS = [0.239, 0.365, 0.688, 1] as const;
+const INTEGRATION_DIAGONAL_LENGTH = Math.hypot(90, 80);
+const INTEGRATION_ROUTE_LENGTH = 230 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH + 300;
+const INTEGRATION_REVEAL_INSET = 12;
+// Exact distances to the four authored junctions. Rounded progress values put
+// the travelling square a few pixels beyond a corner at some viewport scales.
+const INTEGRATION_TARGETS = [
+  230 / INTEGRATION_ROUTE_LENGTH,
+  (230 + INTEGRATION_DIAGONAL_LENGTH) / INTEGRATION_ROUTE_LENGTH,
+  (230 + INTEGRATION_DIAGONAL_LENGTH + 190 + INTEGRATION_DIAGONAL_LENGTH) / INTEGRATION_ROUTE_LENGTH,
+  1,
+] as const;
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -65,6 +75,7 @@ export function PublicExperience({ liveCheckHolder }: {
   const integrationPathRef = useRef<SVGPathElement>(null);
   const integrationRevealRef = useRef<SVGPathElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
+  const integrationTetherRef = useRef<SVGLineElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
   const integrationMotionFrame = useRef<number | null>(null);
@@ -161,18 +172,30 @@ export function PublicExperience({ liveCheckHolder }: {
     const path = integrationPathRef.current;
     const reveal = integrationRevealRef.current;
     const signal = integrationSignalRef.current;
-    if (path === null || reveal === null || signal === null) return;
+    const tether = integrationTetherRef.current;
+    if (path === null || reveal === null || signal === null || tether === null) return;
 
     const from = integrationMotionProgress.current;
     const to = INTEGRATION_TARGETS[integrationStep] ?? INTEGRATION_TARGETS[0];
     const length = path.getTotalLength();
     const placeSignal = (progress: number) => {
-      const point = path.getPointAtLength(length * progress);
-      // Reveal through the centre of the travelling square. The square then
-      // covers the line ending, so every state reads as one continuous object
-      // instead of a route followed by a visibly detached marker.
-      reveal.setAttribute("stroke-dashoffset", `${1 - progress}`);
+      const distance = length * progress;
+      const point = path.getPointAtLength(distance);
+      const precedingPoint = path.getPointAtLength(Math.max(0, distance - 2));
+      const incomingAngle = Math.atan2(
+        point.y - precedingPoint.y,
+        point.x - precedingPoint.x,
+      ) * (180 / Math.PI);
+      // Stop the masked route just inside the travelling square. This prevents
+      // the next coloured segment from peeking beyond a junction; the tether
+      // below overlaps this inset and keeps the route visibly continuous.
+      const revealProgress = Math.max(0, (distance - INTEGRATION_REVEAL_INSET) / length);
+      reveal.setAttribute("stroke-dashoffset", `${1 - revealProgress}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      // A short, co-moving incoming segment removes sub-pixel gaps caused by
+      // SVG mask rasterisation. It sits behind the square and follows the real
+      // path tangent, so it cannot reveal any future part of the route.
+      tether.setAttribute("transform", `rotate(${incomingAngle})`);
       integrationMotionProgress.current = progress;
     };
 
@@ -289,17 +312,18 @@ export function PublicExperience({ liveCheckHolder }: {
                       d={INTEGRATION_ROUTE}
                       pathLength="1"
                       strokeDasharray="1"
-                      strokeDashoffset={1 - INTEGRATION_TARGETS[0]}
+                      strokeDashoffset={1 - INTEGRATION_TARGETS[0] + (INTEGRATION_REVEAL_INSET / INTEGRATION_ROUTE_LENGTH)}
                     />
                   </mask>
                 </defs>
                 <path ref={integrationPathRef} className={styles.flowMotionPath} d={INTEGRATION_ROUTE} />
                 <g mask="url(#integration-route-reveal)">
                   <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} d="M150 120H380" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M368 120H380L470 40H660L750 120H780" />
-                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M780 120H1050" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M380 120L470 40H660L750 120" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M750 120H1050" />
                 </g>
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">
+                  <line ref={integrationTetherRef} className={styles.integrationTether} x1="-42" y1="0" x2="2" y2="0" />
                   <rect x="-18" y="-18" width="36" height="36" />
                 </g>
               </svg>
