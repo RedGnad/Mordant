@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdapterCompatibilityPanel, useAdapterCompatibility } from "./adapter-compatibility-panel";
 import { OnchainPanel } from "./onchain-panel";
@@ -79,7 +79,9 @@ function ChapterRail({ current }: { readonly current: number }) {
           data-state={index < current ? "done" : index === current ? "current" : "pending"}
           aria-current={index === current ? "step" : undefined}
         >
-          <span className={styles.chapterOrdinal}>{chapter.ordinal}</span>
+          <span className={styles.chapterMarker} aria-hidden="true">
+            {index < current ? "✓" : chapter.ordinal}
+          </span>
           <span className={styles.chapterTitle}>{chapter.title}</span>
         </li>
       ))}
@@ -110,14 +112,50 @@ export function LiveProduct({
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
   const chapter = chapterFor(model.state);
+  const statusRef = useRef<HTMLElement>(null);
+  const previousChapter = useRef(chapter);
   const current = chapterIndex(chapter);
   const released = model.release !== null;
   const adapterCompatibility = useAdapterCompatibility(released);
   const conflict = model.release?.conflict === true;
+  const activeStage = model.stages.find((stage) => stage.progress === "active") ?? null;
+  const completedStageCount = model.stages.filter((stage) => stage.progress === "done").length;
+  const visiblyWorking = busy
+    || model.eligibility.state === "CHECKING"
+    || model.state === "BUSY"
+    || (chapter === "DECIDE" && !released && model.notice === null);
+  const statusMode = model.notice !== null ? "attention" : visiblyWorking ? "active" : released ? "complete" : "ready";
+  const statusMessage = model.notice !== null
+    ? model.notice.title
+    : busy && chapter === "AUTHORIZE"
+      ? "Creating the case and preparing the secure execution."
+      : model.eligibility.state === "CHECKING"
+        ? "Reading the active A-Pass policy on Monad testnet."
+        : chapter === "DECIDE"
+          ? activeStage?.detail ?? "The encrypted execution is advancing through its fixed sequence."
+          : chapter === "ACT"
+            ? "The governed result is available. Review the case state and configured next decision."
+            : chapter === "PROVE"
+              ? "The receipt is sealed and ready to inspect."
+              : chapter === "AUTHORIZE"
+                ? "The participant claims are ready for authorization."
+                : "Confirm participant eligibility before a claim enters the case.";
   const deadline = useMemo(
     () => formatDeadline(model.decisionRail?.deadlineIso ?? null),
     [model.decisionRail?.deadlineIso],
   );
+
+  useEffect(() => {
+    if (previousChapter.current === chapter) return;
+    previousChapter.current = chapter;
+    const frame = window.requestAnimationFrame(() => {
+      statusRef.current?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [chapter]);
 
   const claimRange = (from: string, until: string): readonly [number, number] | null => {
     const start = Number(from);
@@ -152,9 +190,35 @@ export function LiveProduct({
         </dl>
       </header>
 
-      <p className={styles.cleanverseLine}>{CLEANVERSE_LINE}</p>
+      <details className={styles.productScope}>
+        <summary>Cleanverse verifies provenance and eligibility. Mordant decides conflict only.</summary>
+        <p>{CLEANVERSE_LINE}</p>
+      </details>
 
       <ChapterRail current={current} />
+
+      <section
+        ref={statusRef}
+        className={styles.statusBar}
+        data-status={statusMode}
+        data-testid="live-status"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span className={styles.statusMark} aria-hidden="true"><span /></span>
+        <div className={styles.statusCopy}>
+          <p>Step {current + 1} of {LIVE_CHAPTERS.length} · {LIVE_CHAPTERS[current]?.title}</p>
+          <strong>{statusMessage}</strong>
+        </div>
+        {model.elapsedSeconds === null ? null : (
+          <span className={styles.statusElapsed} data-testid="elapsed" aria-hidden="true">
+            {model.elapsedSeconds}s elapsed
+          </span>
+        )}
+      </section>
+
+      <div className={styles.chapterFrame} aria-busy={visiblyWorking}>
 
       {notice === null ? null : (
         <section className={styles.notice} data-kind={model.state} aria-live="polite">
@@ -338,7 +402,9 @@ export function LiveProduct({
                       />
                     </div>
                   </div>
-                  <p className={styles.privacy}>{claim.privacyNote}</p>
+                  {model.intake === "MANAGED_COMBINED" ? null : (
+                    <p className={styles.privacy}>{claim.privacyNote}</p>
+                  )}
                 </article>
               );
             })}
@@ -347,10 +413,16 @@ export function LiveProduct({
 
           {formError === null ? null : <p className={styles.error} role="alert">{formError}</p>}
 
-          <p className={styles.disclosure} data-testid="intake-disclosure">{model.intakeDisclosure}</p>
-          <p className={styles.privacy}>
-            Authorizing a claim does not transfer funds and does not move the receivable.
-          </p>
+          <details className={styles.scopeDetails}>
+            <summary>Privacy and execution scope · no funds or receivable move</summary>
+            <p className={styles.disclosure} data-testid="intake-disclosure">{model.intakeDisclosure}</p>
+            {model.intake !== "MANAGED_COMBINED" ? null : (
+              <p className={styles.privacy}>{model.claimA.privacyNote}</p>
+            )}
+            <p className={styles.privacy}>
+              Authorizing a claim does not transfer funds and does not move the receivable.
+            </p>
+          </details>
 
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
             <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
@@ -364,19 +436,20 @@ export function LiveProduct({
       {chapter !== "DECIDE" || notice !== null ? null : (
         <section className={styles.chapter} aria-labelledby="chapter-decide">
           <h2 id="chapter-decide" className={styles.chapterHeading}>Deciding privately.</h2>
-          <p className={styles.lede} aria-live="polite">
-            {model.stages.find((stage) => stage.progress === "active")?.detail
-              ?? "The managed execution service is working through the fixed sequence."}
-          </p>
           <p className={styles.waitFact}>
             No result exists until the governed decryptor releases a signed Boolean.
             {model.expectation === null ? "" : ` ${model.expectation}`}
           </p>
-          {model.elapsedSeconds === null ? null : (
-            <p className={styles.elapsed} data-testid="elapsed">
-              {model.elapsedSeconds}s elapsed
+
+          <div className={styles.executionProgress} data-testid="execution-progress">
+            <div className={styles.executionTrack} aria-hidden="true">
+              {model.stages.map((stage) => <span key={stage.id} data-progress={stage.progress} />)}
+            </div>
+            <p>
+              <strong>{completedStageCount} of {model.stages.length} secure stages observed</strong>
+              <span>{activeStage?.label ?? "Waiting for governed release"}</span>
             </p>
-          )}
+          </div>
 
           {!managedRunKeepsInputsPrivate ? null : (
             <p className={styles.privacy} data-testid="managed-private-inputs-unavailable">
@@ -495,6 +568,7 @@ export function LiveProduct({
           onClose={() => setReceiptOpen(false)}
         />
       )}
+      </div>
     </div>
   );
 }

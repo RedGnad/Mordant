@@ -35,6 +35,9 @@ test.describe("the judge acceptance path", () => {
     await expect(body).toContainText("not legal validity or enforceability");
     await expect(body).toContainText("governed result establishes only that conflict status");
     await expect(body).toContainText("approved policy and human review determine recourse actions");
+    const scope = page.locator("details").filter({ hasText: "Mordant decides conflict only" });
+    await expect(scope.locator("summary")).toBeVisible();
+    await expect(scope).not.toHaveAttribute("open", "");
   });
 
   test("the journey is five chapters, not thirty runtime states", async ({ page }) => {
@@ -42,6 +45,7 @@ test.describe("the judge acceptance path", () => {
     const rail = page.getByRole("list", { name: "Live product chapters" });
     await expect(rail.locator("li")).toHaveCount(5);
     await expect(rail.locator('li[aria-current="step"]')).toHaveCount(1);
+    await expect(page.getByTestId("live-status")).toContainText("Step 5 of 5");
   });
 
   test("both participants and the privacy reason are visible while authoring", async ({ page }) => {
@@ -52,6 +56,10 @@ test.describe("the judge acceptance path", () => {
     await expect(body).toContainText("does not require either lender to disclose its pledge window to the counterparty");
     await expect(body).toContainText("does not transfer funds");
     await expect(page.getByTestId("claim-timeline")).toBeVisible();
+    const scope = page.locator("details").filter({ hasText: "Privacy and execution scope" });
+    await expect(scope).not.toHaveAttribute("open", "");
+    await scope.locator("summary").click();
+    await expect(page.getByTestId("intake-disclosure")).toBeVisible();
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {
@@ -75,6 +83,8 @@ test.describe("private decision", () => {
       .toContainText("not retained in this public projection");
     await expect(page.locator("body")).toContainText("Encrypted evaluation is complete");
     await expect(page.locator("body")).not.toContainText("Encrypted evaluation running");
+    await expect(page.getByTestId("live-status")).toHaveAttribute("data-status", "active");
+    await expect(page.getByTestId("execution-progress")).toContainText("secure stages observed");
   });
 
   test("the detailed trace is disclosed, not displayed by default", async ({ page }) => {
