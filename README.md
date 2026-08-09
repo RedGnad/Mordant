@@ -186,7 +186,9 @@ current qualification.
 - **Lender pledge windows are synthetic fixtures.** No real lender book is represented, and the
   protected notional is illustrative.
 - **Managed Mordant infrastructure sees each role's plaintext during preparation.** There is no
-  participant-device encryption today.
+  participant-device encryption in either deployed profile today. A separate, disabled-by-default
+  [participant-originated CLI experiment](docs/participant-originated-encryption-poc.md) exercises
+  local native encryption and bounded ciphertext import; it is not a production migration.
 - The evaluator receives ciphertext artifacts only and holds no decryption key.
 - The decryptor is **designated and trusted**, not distributed.
 - Execution is supervised single-host, with **one active BGV slot**.
