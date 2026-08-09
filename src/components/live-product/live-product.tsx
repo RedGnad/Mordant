@@ -503,6 +503,34 @@ export function LiveProduct({
             />
           )}
 
+          {model.governedPolicy === null ? null : (
+            <>
+              <p className={styles.eyebrow}>Governed Recourse Policy</p>
+              <dl className={styles.decisionRail} data-testid="governed-policy">
+                <div>
+                  <dt>Committed policy</dt>
+                  <dd>{model.governedPolicy.policyId} · v{model.governedPolicy.policyVersion}</dd>
+                </div>
+                <div>
+                  <dt>Audit binding</dt>
+                  <dd><code>{shorten(model.governedPolicy.policyHash)}</code> · selected before result exposure</dd>
+                </div>
+                <div>
+                  <dt>Selected action</dt>
+                  <dd>{model.governedPolicy.actionPlan?.selectedGovernedAction ?? "No action plan released"}</dd>
+                </div>
+                <div>
+                  <dt>Settlement authority</dt>
+                  <dd>Not authorized</dd>
+                </div>
+              </dl>
+              <p className={styles.privacy}>
+                This policy consumes conflict status only. It establishes no legal priority, responsibility,
+                ownership, fraud, default, payout recipient, payout amount, or legally correct action.
+              </p>
+            </>
+          )}
+
           {model.decisionRail === null ? null : (
             <dl className={styles.decisionRail} data-testid="decision-rail">
               <div>

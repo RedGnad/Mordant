@@ -45,7 +45,7 @@ export type ManagedWorkerStage =
   | "ABORTED";
 
 export type ManagedWorkerView = Readonly<{
-  schemaVersion: string;
+  schemaVersion: "mordant.custom-supervised-protection-view/1" | "mordant.custom-supervised-protection-view/2";
   runId: string;
   executionVariant: "CUSTOM_SUPERVISED";
   stage: ManagedWorkerStage;
@@ -63,12 +63,50 @@ export type ManagedWorkerView = Readonly<{
   governedResult: null | Readonly<{ conflict: boolean; digest: string; releaseMode: string }>;
   recourse: null | Readonly<{ opened: boolean; reason: string | null }>;
   receipt: Readonly<Record<string, unknown>> | null;
+  governedPolicy: ManagedGovernedPolicy | null;
+}>;
+
+export type ManagedGovernedPolicy = Readonly<{
+  selection: Readonly<{
+    policyId: "mordant.managed-demo.facility-protection";
+    policyVersion: 1;
+    policyHash: string;
+    selectionHash: string;
+    selectedAtUnix: number;
+  }>;
+  actionPlan: null | Readonly<{
+    resultDigest: string;
+    resultOutcome: "CONFLICT" | "NO_CONFLICT";
+    resultSemantic: "CONFLICT_STATUS_ONLY";
+    selectedGovernedAction: "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE";
+    actionOwner: "MORDANT_MANAGED_EXECUTION";
+    cureWindowSeconds: 86_400 | null;
+    deadlineRule: "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" | "NOT_APPLICABLE";
+    escalation: "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE";
+    requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE";
+    actionClass: "LOCAL_PROTOCOL_DOUBLE" | "EVIDENCE_ONLY";
+    settlementAuthorization: "NOT_AUTHORIZED";
+    planHash: string;
+  }>;
+  actionEvidence: null | Readonly<{
+    operationId: string;
+    operationAuthorizationHash: string;
+    operationParametersDigest: string;
+    operationOutcomeDigest: string;
+    operationRecordHash: string;
+    evidenceDigest: string;
+    referenceHash: string;
+    settlementAuthorization: "NOT_AUTHORIZED";
+  }>;
 }>;
 
 const WORKER_SCHEMA = "mordant.live-worker/1";
 const CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/1";
+const GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/2";
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+const MANAGED_POLICY_HASH = "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e";
+const RESULT_POLICY_ID = "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65";
 const MANAGED_STAGES: readonly ManagedWorkerStage[] = Object.freeze([
   "CASE_CREATED",
   "MATCH_PREPARED",
@@ -223,17 +261,132 @@ function parseCustomSupervisedReceipt(
   return value;
 }
 
+function parseManagedGovernedPolicy(
+  value: unknown,
+  expected: Readonly<{
+    caseId: string;
+    governedResult: ManagedWorkerView["governedResult"];
+    receipt: Readonly<Record<string, unknown>> | null;
+  }>,
+): ManagedGovernedPolicy | null {
+  if (!exactRecord(value, ["selection", "actionPlan", "actionEvidence"])) return null;
+  const selection = value.selection;
+  if (!exactRecord(selection, [
+    "schemaVersion", "policyId", "policyVersion", "policyHash", "caseId", "resultPolicyId",
+    "resultPolicyVersion", "selectedAtUnix", "selectionHash",
+  ])) return null;
+  if (selection.schemaVersion !== "mordant.governed-recourse-policy-selection/1"
+    || selection.policyId !== "mordant.managed-demo.facility-protection" || selection.policyVersion !== 1
+    || selection.policyHash !== MANAGED_POLICY_HASH || selection.caseId !== expected.caseId
+    || selection.resultPolicyId !== RESULT_POLICY_ID
+    || selection.resultPolicyVersion !== 1 || !positiveUnix(selection.selectedAtUnix)
+    || !digest(selection.selectionHash)) return null;
+
+  if (expected.governedResult === null) {
+    if (value.actionPlan !== null || value.actionEvidence !== null || expected.receipt !== null) return null;
+    return Object.freeze({
+      selection: Object.freeze({
+        policyId: selection.policyId,
+        policyVersion: selection.policyVersion,
+        policyHash: selection.policyHash,
+        selectionHash: selection.selectionHash,
+        selectedAtUnix: selection.selectedAtUnix,
+      }),
+      actionPlan: null,
+      actionEvidence: null,
+    });
+  }
+
+  const plan = value.actionPlan;
+  if (!exactRecord(plan, [
+    "schemaVersion", "policyId", "policyVersion", "policyHash", "policySelectionHash", "resultDigest",
+    "resultOutcome", "resultSemantic", "selectedGovernedAction", "actionOwner", "cureWindowSeconds",
+    "deadlineRule", "escalation", "requiredApproval", "actionClass", "settlementAuthorization", "planHash",
+  ])) return null;
+  if (plan.schemaVersion !== "mordant.governed-action-plan/1" || plan.policyId !== selection.policyId
+    || plan.policyVersion !== selection.policyVersion || plan.policyHash !== selection.policyHash
+    || plan.policySelectionHash !== selection.selectionHash || plan.resultDigest !== expected.governedResult.digest
+    || plan.resultOutcome !== (expected.governedResult.conflict ? "CONFLICT" : "NO_CONFLICT")
+    || plan.resultSemantic !== "CONFLICT_STATUS_ONLY" || plan.actionOwner !== "MORDANT_MANAGED_EXECUTION"
+    || plan.requiredApproval !== "NONE_FOR_LOCAL_PROTOCOL_DOUBLE"
+    || plan.settlementAuthorization !== "NOT_AUTHORIZED" || !digest(plan.planHash)) return null;
+  if (expected.governedResult.conflict) {
+    if (plan.selectedGovernedAction !== "OPEN_LOCAL_CURE_PATH" || plan.cureWindowSeconds !== 86_400
+      || plan.deadlineRule !== "STARTS_WHEN_LOCAL_CURE_PATH_OPENS"
+      || plan.escalation !== "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" || plan.actionClass !== "LOCAL_PROTOCOL_DOUBLE") return null;
+  } else if (plan.selectedGovernedAction !== "RECORD_AND_CLOSE" || plan.cureWindowSeconds !== null
+    || plan.deadlineRule !== "NOT_APPLICABLE" || plan.escalation !== "NONE" || plan.actionClass !== "EVIDENCE_ONLY") return null;
+
+  let actionEvidence: ManagedGovernedPolicy["actionEvidence"] = null;
+  if (value.actionEvidence !== null) {
+    const evidence = value.actionEvidence;
+    if (!exactRecord(evidence, [
+      "schemaVersion", "policySelectionHash", "resultDigest", "actionPlanHash", "selectedGovernedAction",
+      "actionOwner", "operationId", "operationAuthorizationHash", "operationParametersDigest",
+      "operationOutcomeDigest", "operationRecordHash", "evidenceDigest", "evidenceClass",
+      "settlementAuthorization", "referenceHash",
+    ])) return null;
+    if (evidence.schemaVersion !== "mordant.governed-action-evidence-reference/1"
+      || evidence.policySelectionHash !== selection.selectionHash || evidence.resultDigest !== expected.governedResult.digest
+      || evidence.actionPlanHash !== plan.planHash || evidence.selectedGovernedAction !== plan.selectedGovernedAction
+      || evidence.actionOwner !== plan.actionOwner || typeof evidence.operationId !== "string"
+      || !RUN_ID.test(evidence.operationId) || !digest(evidence.operationAuthorizationHash)
+      || !digest(evidence.operationParametersDigest) || !digest(evidence.operationOutcomeDigest)
+      || !digest(evidence.operationRecordHash) || !digest(evidence.evidenceDigest)
+      || evidence.evidenceClass !== "CUSTOM_SUPERVISED_RECEIPT" || evidence.settlementAuthorization !== "NOT_AUTHORIZED"
+      || !digest(evidence.referenceHash) || expected.receipt?.receiptDigest !== evidence.evidenceDigest) return null;
+    actionEvidence = Object.freeze({
+      operationId: evidence.operationId,
+      operationAuthorizationHash: evidence.operationAuthorizationHash,
+      operationParametersDigest: evidence.operationParametersDigest,
+      operationOutcomeDigest: evidence.operationOutcomeDigest,
+      operationRecordHash: evidence.operationRecordHash,
+      evidenceDigest: evidence.evidenceDigest,
+      referenceHash: evidence.referenceHash,
+      settlementAuthorization: evidence.settlementAuthorization,
+    });
+  } else if (expected.receipt !== null) return null;
+
+  return Object.freeze({
+    selection: Object.freeze({
+      policyId: selection.policyId,
+      policyVersion: selection.policyVersion,
+      policyHash: selection.policyHash,
+      selectionHash: selection.selectionHash,
+      selectedAtUnix: selection.selectedAtUnix,
+    }),
+    actionPlan: Object.freeze({
+      resultDigest: plan.resultDigest as string,
+      resultOutcome: plan.resultOutcome as "CONFLICT" | "NO_CONFLICT",
+      resultSemantic: plan.resultSemantic as "CONFLICT_STATUS_ONLY",
+      selectedGovernedAction: plan.selectedGovernedAction as "OPEN_LOCAL_CURE_PATH" | "RECORD_AND_CLOSE",
+      actionOwner: plan.actionOwner as "MORDANT_MANAGED_EXECUTION",
+      cureWindowSeconds: plan.cureWindowSeconds as 86_400 | null,
+      deadlineRule: plan.deadlineRule as "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" | "NOT_APPLICABLE",
+      escalation: plan.escalation as "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" | "NONE",
+      requiredApproval: plan.requiredApproval as "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",
+      actionClass: plan.actionClass as "LOCAL_PROTOCOL_DOUBLE" | "EVIDENCE_ONLY",
+      settlementAuthorization: plan.settlementAuthorization as "NOT_AUTHORIZED",
+      planHash: plan.planHash as string,
+    }),
+    actionEvidence,
+  });
+}
+
 /**
  * Browser-owned exact parser for the public worker projection. The runtime has a
  * matching server parser, but the browser must still reject a malformed or
  * over-broad response instead of rendering whatever a network boundary sent.
  */
 export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null {
+  if (!record(value)) return null;
+  const governedPolicyView = value.schemaVersion === GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA;
   if (!exactRecord(value, [
     "schemaVersion", "runId", "executionVariant", "stage", "nextOperation", "terminalScenario",
     "protectionCase", "participantArtifactDigests", "evaluatedArtifactDigest", "governedResult", "recourse", "receipt",
+    ...(governedPolicyView ? ["governedPolicy"] : []),
   ])) return null;
-  if (value.schemaVersion !== CUSTOM_VIEW_SCHEMA || value.executionVariant !== "CUSTOM_SUPERVISED") return null;
+  if ((value.schemaVersion !== CUSTOM_VIEW_SCHEMA && !governedPolicyView) || value.executionVariant !== "CUSTOM_SUPERVISED") return null;
   if (typeof value.runId !== "string" || !RUN_ID.test(value.runId)) return null;
   if (typeof value.stage !== "string" || !(MANAGED_STAGES as readonly string[]).includes(value.stage)) return null;
   if (value.nextOperation !== null && (typeof value.nextOperation !== "string" || value.nextOperation.length === 0 || value.nextOperation.length > 120)) return null;
@@ -291,10 +444,18 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
     recourseState: value.protectionCase.recourseState as string,
   });
   if (value.receipt !== null && receipt === null) return null;
+  const governedPolicy = governedPolicyView
+    ? parseManagedGovernedPolicy(value.governedPolicy, {
+      caseId: value.protectionCase.fheCaseId as string,
+      governedResult,
+      receipt,
+    })
+    : null;
+  if (governedPolicyView && governedPolicy === null) return null;
   if (carriesForbiddenViewKey(value)) return null;
 
   return Object.freeze({
-    schemaVersion: CUSTOM_VIEW_SCHEMA,
+    schemaVersion: governedPolicyView ? GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA : CUSTOM_VIEW_SCHEMA,
     runId: value.runId,
     executionVariant: "CUSTOM_SUPERVISED",
     stage: value.stage as ManagedWorkerStage,
@@ -315,6 +476,7 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
     governedResult,
     recourse,
     receipt,
+    governedPolicy,
   });
 }
 
@@ -402,8 +564,32 @@ export function managedProductState(
 function decisionRailFor(
   release: GovernedRelease | null,
   recourse: RecourseDecision | null,
+  governedPolicy: ManagedGovernedPolicy | null,
 ): DecisionRail | null {
   if (release === null) return null;
+  const plan = governedPolicy?.actionPlan ?? null;
+  if (plan !== null && release.conflict) {
+    return Object.freeze({
+      nextDecision: "Open the local cure path selected by the committed policy",
+      responsibleNow: "Mordant managed execution · local protocol double",
+      deadlineIso: recourse?.cureDeadlineIso ?? null,
+      deadlineNote: recourse?.cureDeadlineIso == null
+        ? "The ten-minute demo window starts only if the local cure path opens."
+        : null,
+      consequence: "If unresolved, manual review happens outside this managed run. Settlement is not authorized.",
+      receiptAvailable: governedPolicy !== null && governedPolicy.actionEvidence !== null,
+    });
+  }
+  if (plan !== null) {
+    return Object.freeze({
+      nextDecision: "Record and close under the committed policy",
+      responsibleNow: "Mordant managed execution · evidence only",
+      deadlineIso: null,
+      deadlineNote: "No cure deadline applies.",
+      consequence: "No cure path or settlement is authorized by the no-conflict result.",
+      receiptAvailable: governedPolicy?.actionEvidence !== null,
+    });
+  }
   if (release.conflict) {
     return Object.freeze({
       nextDecision: "Apply approved cure policy after conflict review",
@@ -517,6 +703,26 @@ export function adaptManagedIntake(input: Readonly<{
   const reached = view === null || view.stage === "ABORTED" ? -1 : STAGE_INDEX[view.stage] ?? -1;
 
   const release: GovernedRelease | null = view?.governedResult ?? null;
+  const governedPolicy = view?.governedPolicy === null || view?.governedPolicy === undefined
+    ? null
+    : Object.freeze({
+      policyId: view.governedPolicy.selection.policyId,
+      policyVersion: view.governedPolicy.selection.policyVersion,
+      policyHash: view.governedPolicy.selection.policyHash,
+      selectionHash: view.governedPolicy.selection.selectionHash,
+      selectedAtUnix: view.governedPolicy.selection.selectedAtUnix,
+      actionPlan: view.governedPolicy.actionPlan === null ? null : Object.freeze({
+        selectedGovernedAction: view.governedPolicy.actionPlan.selectedGovernedAction,
+        actionOwner: view.governedPolicy.actionPlan.actionOwner,
+        cureWindowSeconds: view.governedPolicy.actionPlan.cureWindowSeconds,
+        escalation: view.governedPolicy.actionPlan.escalation,
+        requiredApproval: view.governedPolicy.actionPlan.requiredApproval,
+        actionClass: view.governedPolicy.actionPlan.actionClass,
+        settlementAuthorization: view.governedPolicy.actionPlan.settlementAuthorization,
+        planHash: view.governedPolicy.actionPlan.planHash,
+      }),
+      actionEvidenceDigest: view.governedPolicy.actionEvidence?.evidenceDigest ?? null,
+    });
   const recourse: RecourseDecision | null = view?.recourse == null ? null : Object.freeze({
     opened: view.recourse.opened,
     reason: view.recourse.reason,
@@ -571,7 +777,8 @@ export function adaptManagedIntake(input: Readonly<{
 
     release,
     recourse,
-    decisionRail: decisionRailFor(release, recourse),
+    governedPolicy,
+    decisionRail: decisionRailFor(release, recourse, view?.governedPolicy ?? null),
 
     // The on-chain capability is not qualified, so the adapter never fabricates one.
     onchain: ONCHAIN_NOT_CONNECTED,

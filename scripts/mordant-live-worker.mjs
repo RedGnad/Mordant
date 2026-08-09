@@ -414,9 +414,9 @@ async function finishJourney(orchestrator, runId, step) {
   await step(() => orchestrator.evaluatePrivateConflict(runId));
   await step(() => orchestrator.releaseGovernedResult(runId));
   const afterRecourse = await step(() => orchestrator.openRecourseCase(runId));
-  // Only a released true Boolean opens a cure chronology, read from the engine's
-  // own governed result and never anticipated.
-  if (afterRecourse.governedResult?.conflict === true) {
+  // Chronology follows the operation that the server admitted from the governed
+  // action plan. The worker does not independently authorize it from a Boolean.
+  if (afterRecourse.recourse?.opened === true) {
     await step(() => orchestrator.completeCureChronology(runId));
   }
   return step(() => orchestrator.exportProtectionEvidence(runId));
@@ -740,7 +740,7 @@ export function createLiveWorker(options) {
   async function admitCase(windows, nowMs) {
     const orchestrator = createOrchestrator();
     const runId = randomUUID();
-    const created = await orchestrator.createProtectionCase("conflict", runId, windows);
+    const created = await orchestrator.createManagedGovernedPolicyCase(runId, windows);
     if (created.runId !== runId) throw new WorkerError(500, "RUN_ID", "Case creation did not bind the generated run identifier");
     const view = await orchestrator.readCustomSupervisedCase(runId);
     await persistStage(runId, view);

@@ -8,6 +8,7 @@ import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./g
 import { isPublicProtectionCaseProjection } from "./protection-presentation";
 import {
   CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
   parseCustomSupervisedProtectionView,
 } from "./custom-supervised-view";
 
@@ -109,6 +110,21 @@ test("a custom run is readable under its own schema", async () => {
   assert.equal(parsed!.executionVariant, "CUSTOM_SUPERVISED");
   assert.equal(parsed!.terminalScenario, null);
   assert.equal(parsed!.governedResult, null);
+});
+
+test("the managed product commits its policy before result exposure without changing legacy custom creation", async () => {
+  const base = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createManagedGovernedPolicyCase(CUSTOM_RUN, structuredClone(WINDOWS));
+  const view = await orchestrator.readCustomSupervisedCase(CUSTOM_RUN);
+  assert.equal(view.schemaVersion, GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA);
+  assert.equal(view.governedResult, null);
+  if (view.schemaVersion !== GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA) assert.fail("expected V2 view");
+  assert.equal(view.governedPolicy.selection.caseId, view.protectionCase.fheCaseId);
+  assert.equal(view.governedPolicy.selection.policyId, "mordant.managed-demo.facility-protection");
+  assert.equal(view.governedPolicy.actionPlan, null);
+  assert.equal(view.governedPolicy.actionEvidence, null);
+  assert.notEqual(parseCustomSupervisedProtectionView(view), null);
 });
 
 test("a fixed run is refused by the custom readback", async () => {

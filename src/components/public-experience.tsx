@@ -30,7 +30,7 @@ const INTEGRATION_STEPS = [
   {
     label: "Governed result",
     detail: "Signed conflict status",
-    story: "The governed result establishes only whether the submitted claim windows conflict. Policy and human review determine every next action.",
+    story: "The governed result establishes only whether the submitted claim windows conflict. A precommitted governed recourse policy selects the next bounded action; human approval applies where that policy requires it.",
   },
   {
     label: "Onchain recourse",

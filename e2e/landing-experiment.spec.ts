@@ -14,6 +14,10 @@ const DIGESTS = Object.freeze({
   participantB: `sha256:${"4".repeat(64)}`,
   evaluated: `sha256:${"5".repeat(64)}`,
   governed: `sha256:${"6".repeat(64)}`,
+  resultPolicy: "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+  policy: "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e",
+  selection: `sha256:${"9".repeat(64)}`,
+  plan: `sha256:${"a".repeat(64)}`,
 });
 
 type ClaimWindows = Readonly<{
@@ -23,7 +27,7 @@ type ClaimWindows = Readonly<{
 
 function workerView(conflict: boolean | null, runId = RUN_ID): Record<string, unknown> {
   return {
-    schemaVersion: "mordant.custom-supervised-protection-view/1",
+    schemaVersion: "mordant.custom-supervised-protection-view/2",
     runId,
     executionVariant: "CUSTOM_SUPERVISED",
     stage: conflict === null ? "EVALUATED" : "RELEASED",
@@ -50,6 +54,39 @@ function workerView(conflict: boolean | null, runId = RUN_ID): Record<string, un
       ? { opened: true, reason: null }
       : { opened: false, reason: "SIGNED_RESULT_FALSE" },
     receipt: null,
+    governedPolicy: {
+      selection: {
+        schemaVersion: "mordant.governed-recourse-policy-selection/1",
+        policyId: "mordant.managed-demo.facility-protection",
+        policyVersion: 1,
+        policyHash: DIGESTS.policy,
+        caseId: DIGESTS.case,
+        resultPolicyId: DIGESTS.resultPolicy,
+        resultPolicyVersion: 1,
+        selectedAtUnix: 1_700_000_000,
+        selectionHash: DIGESTS.selection,
+      },
+      actionPlan: conflict === null ? null : {
+        schemaVersion: "mordant.governed-action-plan/1",
+        policyId: "mordant.managed-demo.facility-protection",
+        policyVersion: 1,
+        policyHash: DIGESTS.policy,
+        policySelectionHash: DIGESTS.selection,
+        resultDigest: DIGESTS.governed,
+        resultOutcome: conflict ? "CONFLICT" : "NO_CONFLICT",
+        resultSemantic: "CONFLICT_STATUS_ONLY",
+        selectedGovernedAction: conflict ? "OPEN_LOCAL_CURE_PATH" : "RECORD_AND_CLOSE",
+        actionOwner: "MORDANT_MANAGED_EXECUTION",
+        cureWindowSeconds: conflict ? 86_400 : null,
+        deadlineRule: conflict ? "STARTS_WHEN_LOCAL_CURE_PATH_OPENS" : "NOT_APPLICABLE",
+        escalation: conflict ? "MANUAL_REVIEW_OUTSIDE_MANAGED_RUN" : "NONE",
+        requiredApproval: "NONE_FOR_LOCAL_PROTOCOL_DOUBLE",
+        actionClass: conflict ? "LOCAL_PROTOCOL_DOUBLE" : "EVIDENCE_ONLY",
+        settlementAuthorization: "NOT_AUTHORIZED",
+        planHash: DIGESTS.plan,
+      },
+      actionEvidence: null,
+    },
   };
 }
 
@@ -390,8 +427,8 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect(proof).toContainText("Completed");
   await expect(proof).toContainText("sha256:66666666");
 
-  await expect(page.getByTestId("mini-status")).toContainText("establishes that these windows conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("Policy and human review determine what happens next");
+  await expect(page.getByTestId("mini-status")).toContainText("establishes only that these windows conflict");
+  await expect(page.getByTestId("mini-status")).toContainText("does not authorize legal judgment or settlement");
   await expect(page.getByTestId("mini-status")).not.toContainText("names who is responsible");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveText("Verify the completed on-chain recourse");
@@ -471,8 +508,8 @@ test("the cleared wording also comes only from governedResult.conflict", async (
   await page.getByTestId("mini-run").click();
   await expect(page.getByTestId("mini-verdict")).toHaveAttribute("data-verdict", "no-conflict");
   await expect(page.getByTestId("mini-verdict")).toHaveText("No conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("establishes that these windows do not conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("Policy and human review determine what happens next");
+  await expect(page.getByTestId("mini-status")).toContainText("establishes only that these windows do not conflict");
+  await expect(page.getByTestId("mini-status")).toContainText("does not authorize legal judgment or settlement");
   await expect(page.getByTestId("mini-status")).not.toContainText("assigns");
 });
 
@@ -486,6 +523,15 @@ test("a restored managed run never reconstructs private geometry from defaults",
   await expect(page.getByTestId("managed-private-inputs-unavailable")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("Private claim windows are not retained in this public projection.");
   await expect(page.locator("#live-aFrom, #live-aUntil, #live-bFrom, #live-bUntil")).toHaveCount(0);
+  const policy = page.getByTestId("governed-policy");
+  await expect(policy).toContainText("mordant.managed-demo.facility-protection · v1");
+  await expect(policy).toContainText("selected before result exposure");
+  await expect(policy).toContainText("OPEN_LOCAL_CURE_PATH");
+  await expect(policy).toContainText("Not authorized");
+  await expect(reveal).toContainText("establishes no legal priority, responsibility");
+  await expect(page.getByTestId("decision-rail").last()).toContainText("local protocol double");
+  await expect(page.getByTestId("decision-rail").last()).toContainText("Settlement is not authorized");
+  await expect(reveal).toContainText("This managed run ends at the governed result");
   expect(tokenHolders).toEqual([]);
 });
 
@@ -538,6 +584,18 @@ test("busy, eligibility refusal and malformed projections fail closed", async ({
 
   await page.unrouteAll({ behavior: "wait" });
   await installManagedHarness(page, { create: () => ({ body: { schemaVersion: "wrong" } }) });
+  await page.reload();
+  await page.getByTestId("mini-run").click();
+  await expect(page.getByTestId("mini-status")).toContainText("execution response was rejected");
+  await expect(page.getByTestId("mini-verdict")).toHaveCount(0);
+
+  const tamperedPolicy = envelope(true);
+  const tamperedView = tamperedPolicy.view as Record<string, unknown>;
+  const governedPolicy = tamperedView.governedPolicy as Record<string, unknown>;
+  const selection = governedPolicy.selection as Record<string, unknown>;
+  selection.policyHash = `sha256:${"f".repeat(64)}`;
+  await page.unrouteAll({ behavior: "wait" });
+  await installManagedHarness(page, { create: () => ({ body: tamperedPolicy }) });
   await page.reload();
   await page.getByTestId("mini-run").click();
   await expect(page.getByTestId("mini-status")).toContainText("execution response was rejected");
