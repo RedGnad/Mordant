@@ -63,15 +63,18 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect.poll(() => symbolField.evaluate((node) => (
     Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-rotation"))
   ))).toBeGreaterThanOrEqual(11.5);
+  await expect.poll(() => symbolField.evaluate((node) => (
+    Number.parseFloat(getComputedStyle(node).getPropertyValue("--symbol-scroll-y"))
+  ))).toBeLessThanOrEqual(-87);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   // On the landing, both primary entry points move to its one real experiment.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
   await expect(page.getByRole("main").getByRole("link", { name: "Run the live check" }).first())
     .toHaveAttribute("href", "#product");
   await expect(page.getByRole("navigation", { name: "Product navigation" })
-    .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection?scenario=conflict");
+    .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByRole("main").getByRole("link", { name: "Inspect verified evidence" }).first())
-    .toHaveAttribute("href", "/protection?scenario=conflict");
+    .toHaveAttribute("href", "/protection/verified-run");
 
   await expect(page.getByTestId("mini-live-check")).toBeVisible();
   await expect(page.getByTestId("mini-live-check")).toContainText("synthetic financing-claim windows");
@@ -98,7 +101,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     const viewportWidth = page.viewportSize()?.width ?? 1280;
     const expectedBlur = viewportWidth <= 640 ? 10 : viewportWidth <= 900 ? 16 : 24;
     expect(panelOptics.backdrop).toContain(`blur(${expectedBlur}px)`);
-    const maximumAlpha = viewportWidth <= 640 ? 0.65 : viewportWidth <= 900 ? 0.57 : 0.43;
+    const maximumAlpha = viewportWidth <= 640 ? 0.59 : viewportWidth <= 900 ? 0.51 : 0.37;
     expect(panelOptics.backgroundAlpha).toBeLessThanOrEqual(maximumAlpha);
   }
   expect(panelOptics.background).not.toBe("rgba(0, 0, 0, 0)");
@@ -120,7 +123,8 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
-    .toHaveAttribute("d", "M150 120H350L450 40H650L750 120H1050");
+    .toHaveAttribute("d", "M150 120H380L470 40H660L750 120H1050");
+  await expect(page.locator("[class*='flowNodes']")).toHaveCount(0);
   for (const section of [
     page.getByTestId("mini-live-check"),
     page.locator("#how"),
@@ -139,6 +143,20 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     return { height: bounds.height, width: bounds.width, x: bounds.x, y: bounds.y };
   }));
   expect(stageBoxes).toHaveLength(4);
+  if (testInfo.project.name === "1280x800") {
+    const reveal = page.locator("[class*='flowRouteReveal']");
+    const expectedOffsets = [0.785, 0.659, 0.336, 0.024];
+    for (let index = 0; index < expectedOffsets.length; index += 1) {
+      const stage = integration.getByRole("button").nth(index);
+      await stage.click();
+      await expect(stage).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
+        .toBeCloseTo(expectedOffsets[index], 2);
+      await expect(page.locator("[class*='integrationSignal']")).toHaveAttribute("data-arrived", "true");
+      await page.locator('[aria-label="Interactive integration path"]')
+        .screenshot({ path: testInfo.outputPath(`responsibility-stage-${index + 1}.png`) });
+    }
+  }
   if ((viewport?.width ?? 0) > 900) {
     expect(Math.max(...stageBoxes.map(({ y }) => y)) - Math.min(...stageBoxes.map(({ y }) => y)))
       .toBeLessThanOrEqual(1);
@@ -154,9 +172,9 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
       window.scrollTo({ top: top - (viewportHeight * 0.42), behavior: "instant" });
     }, { top: flowTop, viewportHeight: viewport?.height ?? 800 });
   }
-  const monadStage = integration.getByRole("button", { name: /Monad recourse/ });
-  if ((viewport?.width ?? 0) <= 900) await monadStage.click();
-  await expect(monadStage).toHaveAttribute("aria-pressed", "true");
+  const onchainStage = integration.getByRole("button", { name: /Onchain recourse/ });
+  if ((viewport?.width ?? 0) <= 900) await onchainStage.click();
+  await expect(onchainStage).toHaveAttribute("aria-pressed", "true");
   if ((viewport?.width ?? 0) > 900) {
     const hardenedProofTop = await page.getByRole("region", { name: "Verify the consequence, not a claim about it." })
       .evaluate((node) => node.getBoundingClientRect().top);
@@ -340,7 +358,7 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   const hrefs = await navigation.getByRole("link").evaluateAll(
     (links) => links.map((link) => link.getAttribute("href")),
   );
-  expect(hrefs).toEqual(["/#how", "/protection?scenario=conflict", "/pilot"]);
+  expect(hrefs).toEqual(["/#how", "/protection/verified-run", "/pilot"]);
 
   // Every destination must still announce a name at this viewport, so a short
   // label can never become an empty one.

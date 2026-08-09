@@ -5,8 +5,8 @@ import { loadImportedProtectionEvidence } from "@/lib/protection/governed-fhe-pr
 import type { ProductScenario } from "@/lib/protection/protection-case";
 
 export const metadata: Metadata = {
-  title: "Conflicting Pledge Protection",
-  description: "Protect one Cleanverse receivable with private BGV matching and governed recourse evidence.",
+  title: "Retained case evidence",
+  description: "Inspect the governed result, chronology and public evidence for a retained Mordant protection case.",
 };
 
 type ProtectionSearchParams = Readonly<Record<string, string | string[] | undefined>>;

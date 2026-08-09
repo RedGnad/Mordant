@@ -45,15 +45,6 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(dimensions.document).toBeLessThanOrEqual(dimensions.client + 1);
 }
 
-async function expectAboveFold(page: Page, locator: Locator): Promise<void> {
-  await expect(locator).toBeVisible();
-  const bounds = await locator.boundingBox();
-  const viewport = page.viewportSize();
-  expect(bounds, "truth boundary must have layout bounds").not.toBeNull();
-  expect(viewport, "page must have a viewport").not.toBeNull();
-  expect(bounds!.y).toBeLessThan(viewport!.height);
-}
-
 async function expectMinimumTarget(locator: Locator): Promise<void> {
   await expect(locator).toBeVisible();
   const bounds = await locator.boundingBox();
@@ -166,21 +157,11 @@ test.describe("public discovery and fixed product viewport", () => {
     { name: "desktop", width: 1280, height: 900 },
     { name: "mobile", width: 390, height: 844 },
   ] as const) {
-    test(`landing exposes Conflicting Pledge Protection on ${viewport.name}`, async ({ page }, testInfo) => {
+    test(`landing exposes the completed evidence route on ${viewport.name}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await page.goto("/");
 
-      // The compressed boundary section closes the landing and distinguishes
-      // the fresh managed experiment from the separately retained settlement.
-      const truthBoundary = page.getByRole("region", { name: "What this is, and what it is not." });
-      await expect(truthBoundary).toBeVisible();
-      await expect(truthBoundary).toContainText("MINV01 Cleanverse provenance and identity plus A-Pass eligibility");
-      await expect(truthBoundary).toContainText("does not establish invoice authenticity, legal validity or enforceability");
-      await expect(truthBoundary).toContainText("financing-claim windows are synthetic");
-      await expect(truthBoundary).toContainText("separate hardened two-wallet run");
-      await expect(truthBoundary).toContainText("does not settle aUSDC");
-      await expect(truthBoundary).toContainText("not production authorized");
-      await expect(truthBoundary).toContainText("designated decryptor governs release");
+      await expect(page.getByRole("region", { name: "What this is, and what it is not." })).toHaveCount(0);
 
       // A judge must be able to reach the settled run from the landing itself.
       await expect(page.getByTestId("landing-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
@@ -188,19 +169,18 @@ test.describe("public discovery and fixed product viewport", () => {
       const publicNavigation = page.getByRole("navigation", { name: "Product navigation" });
       const protectionLink = publicNavigation.getByRole("link", { name: "Evidence" });
       await expectMinimumTarget(protectionLink);
-      // The landing offers this route more than once by design. Every one of
-      // them must reach the same evidence, so none is asserted in isolation.
+      await expect(protectionLink).toHaveAttribute("href", "/protection/verified-run");
       const evidenceLinks = page.getByRole("link", { name: "Inspect verified evidence" });
       await expect(evidenceLinks.first()).toBeVisible();
       const hrefs = await evidenceLinks.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
       expect(hrefs.length).toBeGreaterThan(0);
-      expect(new Set(hrefs)).toEqual(new Set(["/protection?scenario=conflict"]));
+      expect(new Set(hrefs)).toEqual(new Set(["/protection/verified-run"]));
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`landing-${viewport.name}.png`), fullPage: true });
 
       await protectionLink.click();
-      await expect(page).toHaveURL(/\/protection\?scenario=conflict$/u);
-      await expect(page.getByRole("heading", { name: /Protect MINV01 from conflicting pledges/u })).toBeVisible();
+      await expect(page).toHaveURL(/\/protection\/verified-run$/u);
+      await expect(page.getByRole("heading", { name: /A conflicting pledge, decided privately and settled on Monad/u })).toBeVisible();
     });
   }
 
@@ -229,7 +209,9 @@ test.describe("public discovery and fixed product viewport", () => {
       await page.setViewportSize(viewport);
       await page.goto("/protection?scenario=conflict");
       await expect(page.getByText("Conflict confirmed", { exact: true })).toBeVisible();
-      await expectAboveFold(page, page.getByRole("region", { name: "MVP evidence and execution boundaries" }));
+      await expect(page.getByRole("heading", { name: "Retained case evidence for MINV01." })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Product navigation" })).toBeVisible();
+      await expect(page.getByText("Real observed provenance · retained Cleanverse / Monad testnet asset identity", { exact: true })).toBeHidden();
       await expectNoHorizontalOverflow(page);
 
       await expectMinimumTarget(page.getByRole("button", { name: "Conflict", exact: true }));
@@ -238,6 +220,14 @@ test.describe("public discovery and fixed product viewport", () => {
       await page.screenshot({ path: testInfo.outputPath(`protection-${viewport.name}.png`), fullPage: true });
     });
   }
+
+  test("retained technical qualifications are available on demand, not dominant", async ({ page }) => {
+    await page.goto("/protection?scenario=conflict");
+    const fact = page.getByText("Trusted designated decryptor · not native Monad FHE, threshold, or trustless release", { exact: true });
+    await expect(fact).toBeHidden();
+    await page.getByText("Technical scope of this retained case", { exact: true }).click();
+    await expect(fact).toBeVisible();
+  });
 
   test("200 percent desktop zoom equivalent reflows without horizontal overflow", async ({ page }, testInfo) => {
     // At 200% browser zoom a 1280px physical viewport exposes 640 CSS pixels.

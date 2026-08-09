@@ -31,78 +31,6 @@
 
 .skip:focus { transform: none; }
 
-.chrome {
-  display: grid;
-  min-height: 68px;
-  grid-template-columns: minmax(270px, 4fr) minmax(0, 8fr);
-  border-bottom: 1px solid var(--rule);
-  background: var(--paper);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 clamp(20px, 3vw, 42px);
-  border-right: 1px solid var(--rule);
-  text-decoration: none;
-}
-
-.brand svg { width: 19px; fill: currentColor; transform: rotate(7deg); }
-.brand span { font-size: 23px; font-weight: 600; letter-spacing: -0.045em; }
-.brand small { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
-
-.chrome nav { display: grid; grid-template-columns: 130px minmax(240px, 1fr) 130px; }
-.chrome nav > * {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 18px;
-  border: 0;
-  border-right: 1px solid var(--soft-rule);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  text-decoration: none;
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-.chrome nav span { font-weight: 600; }
-.chrome nav button:hover, .chrome nav a:hover { background: var(--ground); }
-
-.boundaryBar {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 5px clamp(20px, 4.5vw, 70px);
-  border-bottom: 1px solid var(--rule);
-  background: var(--ink);
-  color: var(--ground);
-  font-family: var(--font-proof), monospace;
-  font-size: 11px;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-}
-
-.truthBoundary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: 1px solid var(--rule);
-  background: #fff7db;
-}
-.truthBoundary p {
-  min-width: 0;
-  margin: 0;
-  padding: 11px clamp(14px, 2vw, 26px);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-.truthBoundary p + p { border-left: 1px solid var(--soft-rule); }
-
 .main { padding: clamp(34px, 5vw, 72px) clamp(20px, 4.5vw, 70px) 80px; }
 
 .assetHeader {
@@ -265,10 +193,6 @@
 .timeline .claimRetained > i::after { border-color: #26704b; background: #26704b; }
 .timeline .claimRetained strong { color: #26704b; }
 
-.claimBoundary { display: grid; grid-template-columns: 1.35fr 0.65fr; gap: clamp(30px, 7vw, 110px); margin-top: 70px; padding: 32px 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); }
-.claimBoundary p { margin: 0; font-family: var(--font-identity), serif; font-size: clamp(22px, 2.4vw, 36px); line-height: 1.17; }
-.claimBoundary strong { align-self: end; font-size: 12px; line-height: 1.5; }
-
 .drawerBackdrop { position: fixed; z-index: 80; inset: 0; background: rgb(20 14 23 / 58%); }
 .drawer { position: absolute; top: 0; right: 0; width: min(650px, 92vw); height: 100%; overflow: auto; border-left: 1px solid var(--ink); background: var(--paper); box-shadow: -22px 0 70px rgb(0 0 0 / 18%); }
 .drawerHeader { position: sticky; z-index: 2; top: 0; display: flex; min-height: 94px; align-items: center; justify-content: space-between; padding: 20px 28px; border-bottom: 1px solid var(--rule); background: var(--paper); }
@@ -294,23 +218,50 @@
 .drawerDigest span { display: block; margin-bottom: 7px; font-size: 10px; text-transform: uppercase; }
 .drawerDigest code { display: block; overflow-wrap: anywhere; font: 9px var(--font-proof), monospace; }
 
+.technicalScope {
+  margin-top: 34px;
+  border-top: 1px solid var(--soft-rule);
+  border-bottom: 1px solid var(--soft-rule);
+  color: var(--muted);
+}
+
+.technicalScope summary {
+  width: fit-content;
+  padding: 14px 0;
+  cursor: pointer;
+  font: 10px var(--font-proof), monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.technicalScopeFacts {
+  display: grid;
+  padding: 2px 0 18px;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.technicalScopeFacts p,
+.technicalScopeDisclosure p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.technicalScopeDisclosure {
+  display: grid;
+  padding: 16px 0 22px;
+  border-top: 1px solid var(--soft-rule);
+  gap: 8px;
+}
+
 @media (max-width: 1050px) {
-  .truthBoundary { grid-template-columns: 1fr 1fr; }
-  .truthBoundary p:nth-child(3) { border-left: 0; border-top: 1px solid var(--soft-rule); }
-  .truthBoundary p:nth-child(4) { border-top: 1px solid var(--soft-rule); }
   .productGrid { grid-template-columns: 1fr 1fr; }
   .matchCard { grid-column: 1 / -1; }
   .matchCard ol { display: grid; grid-template-columns: 1fr 1fr; column-gap: 30px; }
 }
 
 @media (max-width: 820px) {
-  .chrome { grid-template-columns: 1fr; }
-  .brand { min-height: 62px; border-right: 0; border-bottom: 1px solid var(--rule); }
-  .chrome nav { min-height: 48px; grid-template-columns: 1fr 2fr 1fr; }
-  .chrome nav > * { min-height: 48px; padding: 6px 8px; font-size: 11px; text-align: center; }
-  .boundaryBar { align-items: flex-start; flex-direction: column; gap: 3px; }
-  .truthBoundary { grid-template-columns: 1fr; }
-  .truthBoundary p + p, .truthBoundary p:nth-child(3), .truthBoundary p:nth-child(4) { border-top: 1px solid var(--soft-rule); border-left: 0; }
   .assetHeader { grid-template-columns: 1fr; }
   .assetTitle h1 { font-size: clamp(45px, 15vw, 68px); }
   .controlStrip { grid-template-columns: 1fr; }
@@ -324,15 +275,12 @@
   .timeline li > i::after { left: 6px; }
   .timeline li > div { align-items: flex-start; flex-direction: column; justify-content: center; gap: 3px; padding: 10px 0; }
   .timeline li span { text-align: left; }
-  .claimBoundary { grid-template-columns: 1fr; }
   .provisionalState { grid-template-columns: 1fr; gap: 8px; }
+  .technicalScopeFacts { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
   .main { padding-inline: 14px; }
-  .brand { padding-inline: 14px; }
-  .brand small { display: none; }
-  .chrome nav { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.7fr) minmax(0, 0.85fr); }
   .controlStrip > div { align-items: stretch; flex-direction: column; }
   .segmented { display: grid; grid-template-columns: 1fr 1fr; }
   .drawer { width: 100vw; border-left: 0; }

@@ -43,9 +43,9 @@
 }
 
 .panel {
-  --mini-glass-background: color-mix(in srgb, var(--ground) 42%, transparent);
+  --mini-glass-background: color-mix(in srgb, var(--ground) 36%, transparent);
   --mini-glass-blur: 24px;
-  --mini-glass-overlay-opacity: 0.56;
+  --mini-glass-overlay-opacity: 0.48;
   position: relative;
   z-index: 5;
   display: grid;
@@ -649,9 +649,9 @@
   }
 
   .panel {
-    --mini-glass-background: color-mix(in srgb, var(--ground) 56%, transparent);
+    --mini-glass-background: color-mix(in srgb, var(--ground) 50%, transparent);
     --mini-glass-blur: 16px;
-    --mini-glass-overlay-opacity: 0.48;
+    --mini-glass-overlay-opacity: 0.42;
     box-shadow:
       inset 1px 1px 0 rgb(255 255 255 / 52%),
       inset -1px -1px 0 color-mix(in srgb, var(--ink) 10%, transparent),
@@ -665,9 +665,9 @@
   }
 
   .panel {
-    --mini-glass-background: color-mix(in srgb, var(--ground) 64%, transparent);
+    --mini-glass-background: color-mix(in srgb, var(--ground) 58%, transparent);
     --mini-glass-blur: 10px;
-    --mini-glass-overlay-opacity: 0.4;
+    --mini-glass-overlay-opacity: 0.36;
     box-shadow:
       inset 1px 1px 0 rgb(255 255 255 / 46%),
       inset -1px -1px 0 color-mix(in srgb, var(--ink) 8%, transparent),

@@ -33,13 +33,16 @@ const INTEGRATION_STEPS = [
     story: "The governed result establishes only whether the submitted claim windows conflict. Policy and human review determine every next action.",
   },
   {
-    label: "Monad recourse",
+    label: "Onchain recourse",
     detail: "Bounded aUSDC rail",
     story: "In the separate hardened run, preconfigured demo policy opened the cure path and deployment configuration determined holders and payouts before settlement.",
   },
 ] as const;
 
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
+const INTEGRATION_ROUTE = "M150 120H380L470 40H660L750 120H1050";
+const INTEGRATION_TARGETS = [0.239, 0.365, 0.688, 1] as const;
+const INTEGRATION_REVEAL_LAG = 0.024;
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -61,11 +64,12 @@ export function PublicExperience({ liveCheckHolder }: {
   const heroRef = useRef<HTMLElement>(null);
   const integrationFlowRef = useRef<HTMLDivElement>(null);
   const integrationPathRef = useRef<SVGPathElement>(null);
+  const integrationRevealRef = useRef<SVGPathElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
   const integrationMotionFrame = useRef<number | null>(null);
-  const integrationMotionProgress = useRef(0);
+  const integrationMotionProgress = useRef<number>(INTEGRATION_TARGETS[0]);
   const integrationInteractionLockUntil = useRef(0);
 
   useEffect(() => {
@@ -98,7 +102,7 @@ export function PublicExperience({ liveCheckHolder }: {
       heroScrollFrame.current = null;
       const bounds = hero.getBoundingClientRect();
       const progress = Math.min(1, Math.max(0, -bounds.top / Math.max(1, bounds.height)));
-      hero.style.setProperty("--symbol-scroll-y", `${progress * -64}px`);
+      hero.style.setProperty("--symbol-scroll-y", `${progress * -88}px`);
       hero.style.setProperty("--symbol-scroll-rotation", `${progress * 12}deg`);
     };
 
@@ -156,17 +160,17 @@ export function PublicExperience({ liveCheckHolder }: {
 
   useEffect(() => {
     const path = integrationPathRef.current;
+    const reveal = integrationRevealRef.current;
     const signal = integrationSignalRef.current;
-    if (path === null || signal === null) return;
+    if (path === null || reveal === null || signal === null) return;
 
-    // Nodes on the restored narrative geometry: normal flow, private detour,
-    // governed return to the rail, then continued recourse.
-    const targets = [0, 0.343, 0.686, 1];
     const from = integrationMotionProgress.current;
-    const to = targets[integrationStep] ?? 0;
+    const to = INTEGRATION_TARGETS[integrationStep] ?? INTEGRATION_TARGETS[0];
     const length = path.getTotalLength();
     const placeSignal = (progress: number) => {
       const point = path.getPointAtLength(length * progress);
+      const revealProgress = Math.max(0, progress - INTEGRATION_REVEAL_LAG);
+      reveal.setAttribute("stroke-dashoffset", `${1 - revealProgress}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
       integrationMotionProgress.current = progress;
     };
@@ -175,8 +179,10 @@ export function PublicExperience({ liveCheckHolder }: {
       window.cancelAnimationFrame(integrationMotionFrame.current);
     }
 
+    signal.dataset.arrived = "false";
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || from === to) {
       placeSignal(to);
+      signal.dataset.arrived = "true";
       return;
     }
 
@@ -187,7 +193,10 @@ export function PublicExperience({ liveCheckHolder }: {
       const eased = 1 - Math.pow(1 - elapsed, 3);
       placeSignal(from + ((to - from) * eased));
       if (elapsed < 1) integrationMotionFrame.current = window.requestAnimationFrame(animate);
-      else integrationMotionFrame.current = null;
+      else {
+        signal.dataset.arrived = "true";
+        integrationMotionFrame.current = null;
+      }
     };
     integrationMotionFrame.current = window.requestAnimationFrame(animate);
 
@@ -250,7 +259,7 @@ export function PublicExperience({ liveCheckHolder }: {
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} href="#product">{LIVE_PRODUCT_CTA}</Link>
-            <Link className={styles.secondary} href="/protection?scenario=conflict">Inspect verified evidence</Link>
+            <Link className={styles.secondary} href="/protection/verified-run">Inspect verified evidence</Link>
           </div>
         </section>
 
@@ -271,18 +280,25 @@ export function PublicExperience({ liveCheckHolder }: {
           <div className={styles.flow} data-step={integrationStep} aria-label="Interactive integration path" ref={integrationFlowRef}>
             <div className={styles.flowCanvas}>
               <svg className={styles.flowGraphic} viewBox="0 0 1200 180" aria-hidden="true">
-                <path ref={integrationPathRef} className={styles.flowMotionPath} d="M150 120H350L450 40H650L750 120H1050" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} pathLength="1" d="M150 120H350" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRoutePolicy}`} pathLength="1" d="M350 120L450 40H650" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteGoverned}`} pathLength="1" d="M650 40L750 120" />
-                <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} pathLength="1" d="M750 120H1050" />
-                <g className={styles.flowNodes}>
-                  <rect x="138" y="108" width="24" height="24" />
-                  <rect x="438" y="28" width="24" height="24" />
-                  <rect x="738" y="108" width="24" height="24" />
-                  <rect x="1038" y="108" width="24" height="24" />
+                <defs>
+                  <mask id="integration-route-reveal" maskUnits="userSpaceOnUse" x="100" y="0" width="1000" height="180">
+                    <path
+                      ref={integrationRevealRef}
+                      className={styles.flowRouteReveal}
+                      d={INTEGRATION_ROUTE}
+                      pathLength="1"
+                      strokeDasharray="1"
+                      strokeDashoffset={1 - (INTEGRATION_TARGETS[0] - INTEGRATION_REVEAL_LAG)}
+                    />
+                  </mask>
+                </defs>
+                <path ref={integrationPathRef} className={styles.flowMotionPath} d={INTEGRATION_ROUTE} />
+                <g mask="url(#integration-route-reveal)">
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteInput}`} d="M150 120H380" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteDecision}`} d="M368 120H380L470 40H660L750 120H780" />
+                  <path className={`${styles.flowRouteSegment} ${styles.flowRouteAction}`} d="M768 120H1050" />
                 </g>
-                <g ref={integrationSignalRef} className={styles.integrationSignal} transform="translate(150 120)">
+                <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(380 120)">
                   <rect x="-18" y="-18" width="36" height="36" />
                 </g>
               </svg>

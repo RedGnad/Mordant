@@ -1522,12 +1522,20 @@
   stroke: none;
 }
 
+.flowRouteReveal {
+  fill: none;
+  stroke: white;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  stroke-width: 12;
+  vector-effect: non-scaling-stroke;
+}
+
 .flowRouteSegment {
   fill: none;
   stroke-linecap: butt;
   stroke-linejoin: miter;
   stroke-width: 8;
-  transition: stroke-dashoffset 520ms cubic-bezier(0.4, 0.14, 0.3, 1);
   vector-effect: non-scaling-stroke;
 }
 
@@ -1535,29 +1543,12 @@
   stroke: var(--receivable);
 }
 
-.flowRoutePolicy {
+.flowRouteDecision {
   stroke: var(--protection);
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-
-.flowRouteGoverned {
-  stroke: var(--protection);
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
 }
 
 .flowRouteAction {
   stroke: var(--action);
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-
-.flowNodes {
-  fill: var(--ground);
-  stroke: var(--rule);
-  stroke-width: 3;
-  vector-effect: non-scaling-stroke;
 }
 
 .integrationSignal {
@@ -1575,17 +1566,14 @@
   fill: var(--protection);
 }
 
-.flow[data-step="1"] .flowRoutePolicy,
-.flow[data-step="2"] :is(.flowRoutePolicy, .flowRouteGoverned),
-.flow[data-step="3"] :is(.flowRoutePolicy, .flowRouteGoverned, .flowRouteAction) {
-  stroke-dashoffset: 0;
+.flow[data-step="3"] .integrationSignal {
+  fill: var(--action);
 }
 
-.flow[data-step="3"] .integrationSignal {
+.flow[data-step="3"] .integrationSignal[data-arrived="true"] {
   fill: var(--ground);
   stroke: var(--action);
   stroke-width: 10px;
-  transition-delay: 400ms, 400ms, 400ms;
 }
 
 .integrationStages {
@@ -1691,7 +1679,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flowRouteSegment,
   .integrationSignal,
   .integrationStages button {
     transition: none;

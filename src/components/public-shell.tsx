@@ -15,7 +15,7 @@ export type PublicSurface = "landing" | "live" | "evidence" | "demo" | "pilot";
 
 const NAVIGATION = [
   { id: "how", href: "/#how", label: "How it works", short: "How" },
-  { id: "evidence", href: "/protection?scenario=conflict", label: "Evidence", short: "Evidence" },
+  { id: "evidence", href: "/protection/verified-run", label: "Evidence", short: "Evidence" },
   { id: "pilot", href: "/pilot", label: "Pilot", short: "Pilot" },
 ] as const;
 
@@ -102,7 +102,7 @@ export function PublicFooter() {
         <Link href="/#product">Run the landing experiment</Link>
         <Link href="/protection/verified-run">Verify completed recourse</Link>
         <Link href={LIVE_PRODUCT_HREF}>Advanced live product</Link>
-        <Link href="/protection?scenario=conflict">Verified evidence</Link>
+        <Link href="/protection?scenario=conflict">Retained case evidence</Link>
       </nav>
     </footer>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -13,7 +12,6 @@ import {
 import {
   CHRONOLOGY_PRESENTATION,
   PRIVATE_CONFLICT_STEPS,
-  PRODUCT_EXECUTION_LABELS,
   SOURCE_PRESENTATION,
   evidenceForDisplayedCase,
   isPublicProtectionCaseProjection,
@@ -34,6 +32,7 @@ import {
 } from "@/lib/protection/protection-browser-recovery";
 import type { ProtectionCaseView } from "@/lib/protection/governed-fhe-product-server";
 
+import { PublicHeader } from "./public-shell";
 import styles from "./protection-experience.module.css";
 
 const IMPORTED_ENDPOINT = "/api/protection/conflicting-pledge";
@@ -1190,7 +1189,9 @@ export function ProtectionExperience({
     : conflict === null ? "Private check in progress" : conflict ? "Conflict confirmed" : "No conflict found";
   const conclusionDetail = activeCase === null
     ? busy ? "Awaiting verified evidence" : "Verified evidence unavailable"
-    : `${recourse.label}${activeEvidence === null && localView !== null ? " · provisional backend state" : ""}`;
+    : activeEvidence !== null
+      ? "Case state established by the governed result"
+      : `${recourse.label}${localView !== null ? " · provisional backend state" : ""}`;
 
   return (
     <div
@@ -1202,34 +1203,14 @@ export function ProtectionExperience({
     >
       <div className={styles.pageContent} inert={drawerOpen ? true : undefined} aria-hidden={drawerOpen ? "true" : undefined}>
         <a className={styles.skip} href="#protection-main">Skip to protection case</a>
-        <header className={styles.chrome}>
-          <Link href="/" className={styles.brand} aria-label="Mordant home">
-            <svg viewBox="0 0 100 100" aria-hidden="true"><rect x="43" width="14" height="100" /><rect y="43" width="100" height="14" /><rect x="43" width="14" height="100" transform="rotate(45 50 50)" /><rect x="43" width="14" height="100" transform="rotate(-45 50 50)" /></svg>
-            <span>Mordant</span>
-            <small>Asset protection</small>
-          </Link>
-          <nav aria-label="Protection navigation">
-            <Link href="/">Public story</Link>
-            <span aria-current="page">Conflicting Pledge Protection</span>
-            <button type="button" disabled={activeEvidence === null} onClick={openEvidence}>Evidence</button>
-          </nav>
-        </header>
-
-        <div className={styles.boundaryBar}>
-          <span>{localMode ? PRODUCT_EXECUTION_LABELS.fhe : PRODUCT_EXECUTION_LABELS.web}</span>
-          <span>{PRODUCT_EXECUTION_LABELS.recourse}</span>
-        </div>
-
-        <section className={styles.truthBoundary} aria-label="MVP evidence and execution boundaries">
-          {TRUTH_FACTS.map((fact) => <p key={fact}>{fact}</p>)}
-        </section>
+        <PublicHeader surface="evidence" />
 
         <main id="protection-main" className={styles.main} tabIndex={-1}>
           <section className={styles.assetHeader}>
             <div className={styles.assetTitle}>
-              <p className={styles.eyebrow}>Cleanverse receivable provenance · Monad testnet observation</p>
-              <h1>Protect <span>MINV01</span> from conflicting pledges.</h1>
-              <p>The retained asset identity is the case root. Cleanverse did not detect this synthetic conflict; Mordant’s local off-chain BGV flow evaluates the controlled fixtures.</p>
+              <p className={styles.eyebrow}>Completed case · retained public readback</p>
+              <h1>Retained case evidence for <span>MINV01</span>.</h1>
+              <p>Review the governed result, source classifications and chronology for this completed case. Exact digests and signatures remain available in the evidence drawer.</p>
             </div>
             <div className={styles.outcome} data-conflict={conflict === null ? "pending" : conflict ? "true" : "false"}>
               <span>Current conclusion</span>
@@ -1491,13 +1472,19 @@ export function ProtectionExperience({
             </>
           )}
 
-          <section className={styles.claimBoundary}>
-            <p>{PRODUCT_CLAIM}</p>
-            <strong>{PRODUCT_DISCLOSURE}</strong>
-            {activeEvidence?.chronology.clockClass === "SIMULATED_PROTOCOL_CLOCK" ? (
-              <strong>Simulation disclosure: cure-window completion and recourse availability are simulated protocol time, not observed wall-clock chronology.</strong>
-            ) : null}
-          </section>
+          <details className={styles.technicalScope}>
+            <summary>Technical scope of this retained case</summary>
+            <div className={styles.technicalScopeFacts}>
+              {TRUTH_FACTS.map((fact) => <p key={fact}>{fact}</p>)}
+            </div>
+            <div className={styles.technicalScopeDisclosure}>
+              <p>{PRODUCT_CLAIM}</p>
+              <p>{PRODUCT_DISCLOSURE}</p>
+              {activeEvidence?.chronology.clockClass === "SIMULATED_PROTOCOL_CLOCK" ? (
+                <p>Simulation disclosure: cure-window completion and recourse availability are simulated protocol time, not observed wall-clock chronology.</p>
+              ) : null}
+            </div>
+          </details>
         </main>
       </div>
 
