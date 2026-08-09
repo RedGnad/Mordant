@@ -1570,6 +1570,10 @@
   vector-effect: non-scaling-stroke;
 }
 
+.flowRouteClip {
+  fill: #fff;
+}
+
 .flowStopInput {
   stop-color: var(--receivable);
 }

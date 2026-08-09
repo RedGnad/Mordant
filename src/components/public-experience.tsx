@@ -41,6 +41,11 @@ const INTEGRATION_STEPS = [
 ] as const;
 
 const SCROLL_DRIVEN_INTEGRATION = "(min-width: 901px) and (min-height: 620px)";
+// Scroll drives the route only through the viewport's central reading band.
+// Simply entering at the bottom is not a state change, and the final state
+// arrives near the upper third while the entire diagram remains visible.
+const INTEGRATION_SCROLL_START = 0.62;
+const INTEGRATION_SCROLL_END = 0.18;
 // The decision colour owns a short horizontal runway on both junctions.
 // Those few pixels keep a colour change and a direction change from collapsing
 // into the same sharp, visually broken corner.
@@ -63,7 +68,6 @@ const INTEGRATION_TARGETS = [
   (INTEGRATION_INPUT_LENGTH + INTEGRATION_DECISION_LENGTH) / INTEGRATION_ROUTE_LENGTH,
   1,
 ] as const;
-const INTEGRATION_INITIAL_REVEAL = INTEGRATION_TARGETS[0];
 
 function Symbol({ className }: { readonly className: string }) {
   return (
@@ -85,7 +89,7 @@ export function PublicExperience({ liveCheckHolder }: {
   const heroRef = useRef<HTMLElement>(null);
   const integrationFlowRef = useRef<HTMLDivElement>(null);
   const integrationPathRef = useRef<SVGPathElement>(null);
-  const integrationRevealRef = useRef<SVGPathElement>(null);
+  const integrationClipRef = useRef<SVGRectElement>(null);
   const integrationSignalRef = useRef<SVGGElement>(null);
   const heroScrollFrame = useRef<number | null>(null);
   const integrationScrollFrame = useRef<number | null>(null);
@@ -155,8 +159,8 @@ export function PublicExperience({ liveCheckHolder }: {
       // The state changes while the whole rail still occupies the viewport.
       // Basing this on the rail's top (rather than its full height) prevents the
       // final state from arriving only after the hardened-proof section appears.
-      const activeStart = window.innerHeight * 0.76;
-      const activeEnd = window.innerHeight * 0.34;
+      const activeStart = window.innerHeight * INTEGRATION_SCROLL_START;
+      const activeEnd = window.innerHeight * INTEGRATION_SCROLL_END;
       if (bounds.top > activeStart || bounds.top < activeEnd) return;
 
       const progress = Math.min(1, Math.max(0, (activeStart - bounds.top) / Math.max(1, activeStart - activeEnd)));
@@ -181,9 +185,9 @@ export function PublicExperience({ liveCheckHolder }: {
 
   useEffect(() => {
     const path = integrationPathRef.current;
-    const reveal = integrationRevealRef.current;
+    const clip = integrationClipRef.current;
     const signal = integrationSignalRef.current;
-    if (path === null || reveal === null || signal === null) return;
+    if (path === null || clip === null || signal === null) return;
 
     const from = integrationMotionProgress.current;
     const to = INTEGRATION_TARGETS[integrationStep] ?? INTEGRATION_TARGETS[0];
@@ -191,11 +195,11 @@ export function PublicExperience({ liveCheckHolder }: {
     const placeSignal = (progress: number) => {
       const distance = length * progress;
       const point = path.getPointAtLength(distance);
-      // The route and signal share one exact distance. The revealed line ends
-      // under the opaque square instead of relying on a separate co-moving
-      // segment, so reverse playback cannot expose a pivoting "tether", a gap,
-      // or any responsibility ahead of the signal.
-      reveal.setAttribute("stroke-dashoffset", `${1 - progress}`);
+      // This route is strictly monotonic on x. A clip edge tied to the signal's
+      // exact x-coordinate reveals the full continuous path beneath the square.
+      // Unlike dash-length animation, it stays attached under every SVG scale
+      // and retracts without exposing a segment ahead of the travelling signal.
+      clip.setAttribute("width", `${point.x}`);
       signal.setAttribute("transform", `translate(${point.x} ${point.y})`);
       const signalColour = progress <= INTEGRATION_TARGETS[0]
         ? "var(--receivable)"
@@ -330,14 +334,14 @@ export function PublicExperience({ liveCheckHolder }: {
                     <stop className={styles.flowStopAction} offset={INTEGRATION_ACTION_STOP} />
                     <stop className={styles.flowStopAction} offset="100%" />
                   </linearGradient>
+                  <clipPath id="integration-route-reveal" clipPathUnits="userSpaceOnUse">
+                    <rect ref={integrationClipRef} className={styles.flowRouteClip} x="0" y="0" width="415" height="180" />
+                  </clipPath>
                 </defs>
                 <path
-                  ref={integrationRevealRef}
                   className={styles.flowRoutePaint}
                   d={INTEGRATION_ROUTE}
-                  pathLength="1"
-                  strokeDasharray="1"
-                  strokeDashoffset={1 - INTEGRATION_INITIAL_REVEAL}
+                  clipPath="url(#integration-route-reveal)"
                 />
                 <path ref={integrationPathRef} className={styles.flowMotionPath} d={INTEGRATION_ROUTE} />
                 <g ref={integrationSignalRef} className={styles.integrationSignal} data-arrived="true" transform="translate(415 120)">
@@ -377,18 +381,18 @@ export function PublicExperience({ liveCheckHolder }: {
             data-proof="institutional-privacy"
             aria-labelledby="institutional-privacy-title"
           >
-            <p className={styles.eyebrowOnProof}>Qualified institutional privacy profile</p>
-            <h2 id="institutional-privacy-title">Private claims can originate encrypted.</h2>
+            <p className={styles.eyebrowOnProof}>Qualified institutional privacy</p>
+            <h2 id="institutional-privacy-title">Claims can arrive already encrypted.</h2>
             <p>
-              In the current opt-in native CLI profile, each participant encrypts its financing claim
-              in its own controlled environment before Mordant coordination receives it. This is separate
-              from both the managed public demo and direct wallet admission.
+              In the qualified native CLI profile, each participant encrypts its claim inside its own
+              environment before Mordant receives it. This is a separate institutional workflow—not the
+              managed check above.
             </p>
             <a
               className={styles.proofSecondary}
               href="https://github.com/RedGnad/Mordant/blob/main/docs/participant-originated-encryption.md"
             >
-              Review the qualified privacy profile
+              Read the technical qualification
             </a>
           </article>
           <article
@@ -396,11 +400,11 @@ export function PublicExperience({ liveCheckHolder }: {
             data-proof="historical-onchain"
             aria-labelledby="hardened-proof-title"
           >
-            <p className={styles.eyebrowOnProof}>Complementary proof · verified on-chain execution</p>
+            <p className={styles.eyebrowOnProof}>Verified on-chain execution · separate completed run</p>
             <h2 id="hardened-proof-title">See a completed recourse, on chain.</h2>
             <p>
-              Open a separate completed run to verify its on-chain actions and aUSDC settlement.
-              It is historical proof, not a continuation of the managed check above.
+              Review a separate completed run with verifiable on-chain actions and aUSDC settlement.
+              This historical evidence is independent from the managed check above.
             </p>
             <Link className={styles.proofPrimary} href="/protection/verified-run" data-testid="landing-to-verified-run">
               Verify the completed on-chain recourse

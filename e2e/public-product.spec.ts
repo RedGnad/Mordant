@@ -175,7 +175,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.locator('[data-proof="historical-onchain"]'))
     .toContainText("See a completed recourse, on chain.");
   await expect(page.locator('[data-proof="historical-onchain"]'))
-    .toContainText("historical proof, not a continuation of the managed check above");
+    .toContainText("historical evidence is independent from the managed check above");
   await expect(page.getByTestId("landing-to-verified-run"))
     .toHaveAttribute("href", "/protection/verified-run");
   await expect(page.locator("[class*='flowMotionPath']"))
@@ -214,7 +214,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
       return bounds.top + window.scrollY;
     });
     await page.evaluate(({ top, viewportHeight }) => {
-      window.scrollTo({ top: top - (viewportHeight * 0.42), behavior: "instant" });
+      window.scrollTo({ top: top - (viewportHeight * 0.27), behavior: "instant" });
     }, { top: flowTop, viewportHeight: viewport?.height ?? 800 });
   }
   const policyActionStage = integration.getByRole("button", { name: /Policy-authorized action/ });
@@ -244,15 +244,15 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expect(page.getByRole("heading", { name: "What this is, and what it is not." })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "What this is and is not" })).toHaveCount(0);
   await expect(page.locator("main > section").last())
-    .toContainText("Complementary proof · verified on-chain execution");
+    .toContainText("Verified on-chain execution · separate completed run");
   await expect(page.locator("main > section").last())
-    .toContainText("historical proof, not a continuation of the managed check above");
+    .toContainText("historical evidence is independent from the managed check above");
   const institutionalPrivacy = page.locator('[data-proof="institutional-privacy"]');
   await expect(institutionalPrivacy).toBeVisible();
-  await expect(institutionalPrivacy).toContainText("Qualified institutional privacy profile");
-  await expect(institutionalPrivacy).toContainText("before Mordant coordination receives it");
-  await expect(institutionalPrivacy).toContainText("separate from both the managed public demo and direct wallet admission");
-  await expect(institutionalPrivacy.getByRole("link", { name: "Review the qualified privacy profile" }))
+  await expect(institutionalPrivacy).toContainText("Qualified institutional privacy");
+  await expect(institutionalPrivacy).toContainText("before Mordant receives it");
+  await expect(institutionalPrivacy).toContainText("separate institutional workflow—not the managed check above");
+  await expect(institutionalPrivacy.getByRole("link", { name: "Read the technical qualification" }))
     .toHaveAttribute("href", /participant-originated-encryption\.md$/u);
   if ((viewport?.width ?? 0) > 760) {
     const proofActionBounds = await page.locator('[data-proof] a').evaluateAll((actions) => actions.map((action) => {
@@ -262,6 +262,13 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(proofActionBounds).toHaveLength(2);
     expect(Math.abs(proofActionBounds[0].bottom - proofActionBounds[1].bottom)).toBeLessThanOrEqual(1);
     expect(Math.abs(proofActionBounds[0].height - proofActionBounds[1].height)).toBeLessThanOrEqual(1);
+  }
+  if (testInfo.project.name === "1280x800") {
+    const complementaryProofs = page.getByRole("region", { name: "Complementary proofs" });
+    await complementaryProofs.evaluate((section) => { section.dataset.visible = "true"; });
+    await complementaryProofs.screenshot({
+      path: testInfo.outputPath("complementary-proofs-desktop.png"),
+    });
   }
   for (const technicalCaveat of [
     "native Monad FHE",
@@ -293,14 +300,45 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
   await expectNoHorizontalOverflow(page);
 });
 
+test("the responsibility route advances only through the central reading band", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "1280x800", "One deterministic desktop scroll qualification is sufficient.");
+  await page.goto("/");
+
+  const flow = page.locator('[aria-label="Interactive integration path"]');
+  const stages = page.locator('[aria-label="Integration stages"]').getByRole("button");
+  const flowTop = await flow.evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    return bounds.top + window.scrollY;
+  });
+  const placeFlowAt = async (viewportRatio: number, expectedStage: number) => {
+    await page.evaluate(({ top, ratio }) => {
+      window.scrollTo({ top: top - (window.innerHeight * ratio), behavior: "instant" });
+    }, { top: flowTop, ratio: viewportRatio });
+    await expect(stages.nth(expectedStage)).toHaveAttribute("aria-pressed", "true");
+  };
+
+  // Entering the lower viewport does not prematurely advance the story.
+  await placeFlowAt(0.58, 0);
+  await placeFlowAt(0.50, 1);
+  await placeFlowAt(0.39, 2);
+  await placeFlowAt(0.27, 3);
+  // The exact same reading band governs reverse playback.
+  await placeFlowAt(0.39, 2);
+  await placeFlowAt(0.50, 1);
+  await placeFlowAt(0.58, 0);
+});
+
 test("the responsibility route stays attached to its signal in both directions", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "1280x800", "One deterministic desktop motion qualification is sufficient.");
+  await page.setViewportSize({ width: 2048, height: 1152 });
   await page.goto("/");
+  await page.locator("#how").evaluate((section) => { section.dataset.visible = "true"; });
 
   const integration = page.locator('[aria-label="Integration stages"]');
   const reveal = page.locator("[class*='flowRoutePaint']");
+  const clip = page.locator("[class*='flowRouteClip']");
   const signal = page.locator("[class*='integrationSignal']");
-  const expectedOffsets = [0.726, 0.598, 0.274, 0];
+  const expectedClipEdges = [415, 505, 785, 1050];
   const expectedColours = [
     "var(--receivable)",
     "var(--protection)",
@@ -308,42 +346,78 @@ test("the responsibility route stays attached to its signal in both directions",
     "var(--action)",
   ];
 
-  for (let index = 0; index < expectedOffsets.length; index += 1) {
+  for (let index = 0; index < expectedClipEdges.length; index += 1) {
     const stage = integration.getByRole("button").nth(index);
     await stage.evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
     await expect(stage).toHaveAttribute("aria-pressed", "true");
     await expect(signal).toHaveAttribute("data-arrived", "true");
-    await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
-      .toBeCloseTo(expectedOffsets[index], 2);
+    await expect.poll(async () => Number(await clip.getAttribute("width")))
+      .toBeCloseTo(expectedClipEdges[index], 2);
     await expect.poll(() => signal.evaluate((node) => (
       (node as SVGElement).style.getPropertyValue("--integration-signal-colour")
     ))).toBe(expectedColours[index]);
 
     const connection = await signal.evaluate((node) => {
-      const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-      const reveal = document.querySelector<SVGPathElement>("[class*='flowRoutePaint']");
-      const signalMatrix = (node as SVGGElement).getScreenCTM();
-      const pathMatrix = path?.getScreenCTM();
-      if (path === null || reveal === null
-        || signalMatrix === null || pathMatrix === null) return null;
-      const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
-      const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
-      const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
-      const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
+      const clip = document.querySelector<SVGRectElement>("[class*='flowRouteClip']");
+      const transform = (node as SVGGElement).transform.baseVal.consolidate()?.matrix;
+      if (clip === null || transform === undefined) return null;
       return {
-        routeToSignal: Math.hypot(
-          routeScreenPoint.x - signalScreenPoint.x,
-          routeScreenPoint.y - signalScreenPoint.y,
-        ),
+        clipToSignal: Math.abs(Number(clip.getAttribute("width")) - transform.e),
       };
     });
     expect(connection).not.toBeNull();
-    expect(connection?.routeToSignal).toBeLessThanOrEqual(1);
+    expect(connection?.clipToSignal).toBeLessThanOrEqual(0.01);
+
+    if (index === 2 || index === 3) {
+      await page.locator('[aria-label="Interactive integration path"]').screenshot({
+        path: testInfo.outputPath(index === 2
+          ? "responsibility-continuity-governed.png"
+          : "responsibility-continuity-action.png"),
+      });
+    }
   }
+
+  // Sample every animation frame, not just the authored stops. The clip edge
+  // and the marker centre must remain the same coordinate throughout motion.
+  const firstStage = integration.getByRole("button").nth(0);
+  await firstStage.evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
+  await expect.poll(async () => Number(await clip.getAttribute("width"))).toBeCloseTo(415, 2);
+  await expect(signal).toHaveAttribute("data-arrived", "true");
+  const connectionSamples = signal.evaluate((node) => new Promise<number>((resolve, reject) => {
+    let frames = 0;
+    let maxGap = 0;
+    let sawMotion = false;
+    const sample = () => {
+      frames += 1;
+      const clip = document.querySelector<SVGRectElement>("[class*='flowRouteClip']");
+      const transform = (node as SVGGElement).transform.baseVal.consolidate()?.matrix;
+      if (clip === null || transform === undefined) {
+        reject(new Error("Integration route geometry is unavailable"));
+        return;
+      }
+      maxGap = Math.max(maxGap, Math.abs(Number(clip.getAttribute("width")) - transform.e));
+      if ((node as SVGGElement).dataset.arrived === "false") sawMotion = true;
+      if (sawMotion && (node as SVGGElement).dataset.arrived === "true") {
+        resolve(maxGap);
+        return;
+      }
+      if (frames > 120) {
+        reject(new Error("Integration route motion did not settle"));
+        return;
+      }
+      window.requestAnimationFrame(sample);
+    };
+    window.requestAnimationFrame(sample);
+  }));
+  await integration.getByRole("button").nth(3)
+    .evaluate((button) => (button as HTMLButtonElement).focus({ preventScroll: true }));
+  expect(await connectionSamples).toBeLessThanOrEqual(0.01);
 
   // One painted path owns every colour and corner. Separate painted segments
   // would be able to expose a seam even while their summed lengths look right.
-  await expect(page.locator("[class*='flowRoutePaint']")).toHaveCount(1);
+  await expect(reveal).toHaveCount(1);
+  await expect(reveal).not.toHaveAttribute("stroke-dasharray");
+  await expect(reveal).not.toHaveAttribute("stroke-dashoffset");
   await expect(page.locator("[class*='integrationTether']")).toHaveCount(0);
 
   const centering = await page.locator("[class*='flowGraphic']").evaluate((svg) => {
@@ -376,25 +450,16 @@ test("the responsibility route stays attached to its signal in both directions",
   await expect(signal).toHaveAttribute("data-arrived", "true");
   // Reverse playback retracts in exact lockstep: the line may never reveal a
   // responsibility ahead of the travelling marker.
-  await expect.poll(async () => Number(await reveal.getAttribute("stroke-dashoffset")))
-    .toBeCloseTo(expectedOffsets[1], 2);
+  await expect.poll(async () => Number(await clip.getAttribute("width")))
+    .toBeCloseTo(expectedClipEdges[1], 2);
   await expect.poll(() => signal.evaluate((node) => (
     (node as SVGElement).style.getPropertyValue("--integration-signal-colour")
   ))).toBe("var(--protection)");
   const reverseRouteToSignal = await signal.evaluate((node) => {
-    const path = document.querySelector<SVGPathElement>("[class*='flowMotionPath']");
-    const reveal = document.querySelector<SVGPathElement>("[class*='flowRoutePaint']");
-    const signalMatrix = (node as SVGGElement).getScreenCTM();
-    const pathMatrix = path?.getScreenCTM();
-    if (path === null || reveal === null || signalMatrix === null || pathMatrix === null) return null;
-    const progress = 1 - Number(reveal.getAttribute("stroke-dashoffset"));
-    const routePoint = path.getPointAtLength(path.getTotalLength() * progress);
-    const routeScreenPoint = new DOMPoint(routePoint.x, routePoint.y).matrixTransform(pathMatrix);
-    const signalScreenPoint = new DOMPoint(0, 0).matrixTransform(signalMatrix);
-    return Math.hypot(
-      routeScreenPoint.x - signalScreenPoint.x,
-      routeScreenPoint.y - signalScreenPoint.y,
-    );
+    const clip = document.querySelector<SVGRectElement>("[class*='flowRouteClip']");
+    const transform = (node as SVGGElement).transform.baseVal.consolidate()?.matrix;
+    if (clip === null || transform === undefined) return null;
+    return Math.abs(Number(clip.getAttribute("width")) - transform.e);
   });
   expect(reverseRouteToSignal).not.toBeNull();
   expect(reverseRouteToSignal).toBeLessThanOrEqual(1);
