@@ -5,8 +5,8 @@ import { VerifiedLiveRun } from "@/components/live-product/verified-live-run";
 import { loadVerifiedLiveRunReceipt } from "@/lib/protection/verified-live-run";
 
 export const metadata: Metadata = {
-  title: "Verified live run",
-  description: "A conflicting pledge decided privately and settled on Monad testnet, with every transaction linked.",
+  title: "Verified on-chain execution",
+  description: "A separate hardened historical Adapter V2 execution, with its Monad testnet aUSDC transactions linked.",
 };
 
 /**

@@ -10,8 +10,8 @@ import type { OnchainPhase, OnchainView } from "./live-product-view-model";
  * The on-chain half of the consequence.
  *
  * Every value arrives typed from the adapter. No contract address, ABI, amount
- * or event name is written here. A managed run that ends at governed result is
- * kept distinct from the separate completed hardened recourse run.
+ * or event name is written here. A managed run that ends after a bounded local
+ * operation is kept distinct from the separate completed hardened recourse run.
  */
 
 const PHASE_LABEL: Readonly<Record<OnchainPhase, string>> = Object.freeze({
@@ -102,19 +102,19 @@ function CureWindow({ deadlineIso }: { readonly deadlineIso: string }) {
     <div className={styles.cure} data-testid="cure-window">
       <p className={styles.eyebrow}>Cure window</p>
       <p className={styles.cureLine}>
-        Conflict confirmed, recourse opened. The facility has 10 real minutes to cure before this
-        case can be finalized by anyone.
+        After conflict confirmation, the historical policy opened recourse. The facility has 10 real
+        minutes to cure before this case can be finalized by anyone.
       </p>
       <p className={styles.cureDeadline} data-testid="cure-deadline">
         Deadline {deadlineIso}
         {nowMs === null ? null : <span className={styles.cureRemaining}> · {remainingLabel(deadlineMs, nowMs)}</span>}
       </p>
       <Link className={styles.cureLink} href="/protection/verified-run" data-testid="live-to-verified-run">
-        See a completed verified live run
+        See a separate verified on-chain execution
       </Link>
       <p className={styles.cureNote}>
-        That page is a different, already-completed real run on Monad. It shows the same path after
-        its deadline expired: finalize, entitlement opened, and both holder claims paid.
+        That page is a different, already-completed historical Adapter V2 run on Monad. After its
+        deadline expired, finalization opened entitlement and both holder claims were paid.
       </p>
     </div>
   );
@@ -126,7 +126,7 @@ export function OnchainPanel({ view }: { readonly view: OnchainView }) {
       <section className={styles.panel} data-connected="false" data-testid="onchain-panel">
         <p className={styles.eyebrow}>Managed run boundary</p>
         <p className={styles.disabled}>
-          {view.disabledReason ?? "This managed run ends at the governed result."}
+          {view.disabledReason ?? "This managed run ends after its policy-authorized local operation and sealed evidence."}
           {" "}It did not execute a new aUSDC settlement.
         </p>
         <Link className={styles.boundaryLink} href="/protection/verified-run" data-testid="live-to-verified-run">

@@ -1,25 +1,66 @@
-# Mordant v7.1 architecture
+# Mordant architecture — current product and verified execution profiles
 
 ## Product kernel
 
-Mordant is a programmable recourse kernel for tokenized receivables. The kernel turns an attested
-off-chain incident on a funded receivable into pre-funded, traceable recourse, attributable to the
-compliant investors who carry the exposure. Its lifecycle is: receive an incident attested by an
-authorized source, seal a record date before full disclosure, open a cure or dispute window,
-identify the compliant holders bearing the exposure, assign a pre-funded reserve to their
-protection, retain verifiable proof, and leave their original claim on the receivable intact.
+Mordant is the recourse layer for tokenized private credit. Its current kernel separates an
+authenticated private-credit case state from the policy, operation authorization and evidence that
+follow it:
 
-## First implemented policy: confirmed conflicting pledge
+```text
+private inputs
+  → governed result
+  → precommitted Governed Recourse Policy
+  → governed action plan
+  → durable operation authorization
+  → bounded operation
+  → verified outcome and operation-bound evidence
+```
 
-Exactly one policy is implemented. One buyer-accepted invoice is financed inside a mandatory
-multi-funder workflow. Part of an existing originator reserve is locked against an exclusive-pledge
-covenant. If another registered facility reveals a confirmed overlapping exclusive pledge, the
-still-required reserve becomes an entitlement of the beneficial holders at the hidden-commit record
-date. The invoice claim remains intact.
+The governed result does not independently authorize recourse, an operational action, settlement
+or legal judgment. The current policy is code/deployment committed before result exposure; it is
+not an institution-authored or cryptographically institution-approved policy.
 
-Other incident classes (buyer disputes, credit notes, invalid documents) are future extensions of
-the same kernel. They are **not implemented**, and the contracts below are deliberately specialised
-on the conflicting-pledge policy rather than generalised into a multi-incident engine.
+## First implemented workflow: Conflicting Pledge Protection
+
+Conflicting Pledge Protection is the first implemented workflow, not the generic Mordant category.
+It evaluates whether two submitted financing-claim windows against one receivable conflict. A fixed
+BGV circuit produces a governed conflict/no-conflict result; that result establishes no legal
+priority, responsibility, ownership, fraud, default, payout recipient or payout amount.
+
+The current managed V2 path selects
+`mordant.managed-demo.facility-protection@1` before result exposure. Conflict selects a 24-hour
+local protocol-double cure path; no conflict selects record-and-close. Both branches have settlement
+authorization `NOT_AUTHORIZED`. Exact semantics are documented in
+[Governed Recourse Policy](governed-recourse-policy.md).
+
+The public deployment uses managed combined intake. Direct participant admission separately proves
+two wallet authorizations, but not participant-local encryption. Participant-originated native-CLI
+encryption is a current qualified, opt-in capability: participants encrypt locally before the
+ciphertext-only coordinator receives their artifacts. It remains disabled by default and separate
+from both public managed intake and browser direct admission.
+
+## Current managed V2 authority layers
+
+| Layer | Authority and boundary |
+| --- | --- |
+| Private evaluation | Fixed BGV execution. Managed preparation may receive plaintext; the evaluator receives ciphertexts and has no decryption key. |
+| Governed result | Signed conflict/no-conflict status only. The designated decryptor is Mordant-controlled. |
+| Governed policy | Closed policy selected before result exposure. It consumes conflict status and produces a verified action plan. |
+| Operation authorization | Durable authorization derived from the exact selection, plan, result and operation parameters. |
+| Evidence | The terminal operation outcome is validated for action compatibility and bound back to the authority chain. |
+
+## Specialised historical settlement architecture
+
+The contracts below are the specialised vault and Adapter V2 architecture used by the separate
+hardened on-chain execution. That retained run proves a real 600-second cure, finalization and aUSDC
+claims under its historical configuration. It did not use the current managed V2 policy-authority
+chain, whose local cure is 24 hours and whose settlement authorization is `NOT_AUTHORIZED`.
+
+In the specialised historical architecture, confirmed conflict status entered a preconfigured demo
+policy that selected pre-funded, traceable recourse for the configured compliant holders while
+leaving their original receivable claim intact.
+Other incident classes (buyer disputes, credit notes, invalid documents) remain unimplemented future
+work rather than generic capabilities of these contracts.
 
 ## Contracts
 
@@ -219,3 +260,16 @@ not inline pushes. An expired buyer or originator therefore cannot block holder 
 protection close or default CVA release; only that account's own `claimSettlementCredit` waits for
 its A-Pass/aUSDC eligibility to recover. Activation remains atomic: net proceeds are paid to the
 originator inline, and a failure reverts the entire activation before funds can be left in the vault.
+
+## Execution scale and future topology
+
+The public deployment intentionally exposes one active BGV slot. That deployment limit is distinct
+from the qualified architectural proof in
+[`evidence/n2-isolated-execution-proof-2026-08-08.md`](evidence/n2-isolated-execution-proof-2026-08-08.md):
+two isolated instances of the existing worker ran opposite real BGV cases concurrently with
+separate durable roots and simultaneous evaluator processes. The supported conclusion is only that
+multiple isolated execution slots can run concurrently.
+
+Production routing, pooling, load balancing, autoscaling, high availability and N>2 capacity are
+not implemented or proven. N=3 Private Conflict Graph is a research direction for multi-funder
+conflict semantics; it is not part of the current workflow, capability list or product proof.

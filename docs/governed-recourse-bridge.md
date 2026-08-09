@@ -1,6 +1,11 @@
 # Governed recourse bridge V2
 
-Status: **the reviewed reference deployment and its pins.** A governed release has
+Status: **historical Adapter V2 architecture, reviewed reference deployment and pins.** This is the
+separate hardened on-chain proof surface, not the current managed V2 operation. The historical
+configuration uses a 600-second cure window; the current managed policy uses a 24-hour local
+protocol-double cure and settlement authorization `NOT_AUTHORIZED`.
+
+A governed release has
 since been submitted and consumed for real, on a case-specific deployment of this
 same reviewed contract: run `e618abc2-0ac7-4d79-b201-44959a54b68c` on adapter
 `0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`. See
@@ -105,3 +110,7 @@ The canonical vector has byte-identical Viem and Solidity release digests:
 `0xdac5763c3e0020e89d83351db246aa27766337176e2091e189a6d6c1100bb88f`.
 That proves encoding compatibility for the retained vector; it is not evidence
 that a live release was submitted.
+
+The later hardened run cited at the top did submit and settle. It predates the current managed V2
+Governed Recourse Policy selection, plan-derived authorization and operation-bound evidence chain;
+this document does not retroactively attribute those new authorities to the historical run.

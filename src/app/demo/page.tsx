@@ -5,8 +5,8 @@ import { TransactionDrivenExperience } from "@/components/transaction-driven-exp
 import { isRecordedCheckpointId, type LivingSurface, type RecordedCheckpointId } from "@/lib/dealroom/living-demo";
 
 export const metadata: Metadata = {
-  title: "Recorded conflict demo",
-  description: "Follow one retained Mordant run from funding through conflict, responsibility, consequence, and proof.",
+  title: "Recorded workflow evidence",
+  description: "Follow one retained first-workflow case through its historical policy, consequence and evidence.",
 };
 
 type Perspective = "workspace" | "participant" | "protocol";

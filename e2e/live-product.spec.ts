@@ -27,15 +27,16 @@ test.describe("the judge acceptance path", () => {
   test("the asset, the network and the division of responsibility are stated first", async ({ page }) => {
     await open(page, "conflict");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("MINV01");
-    await expect(page.locator("header").filter({ hasText: "Cleanverse provenance" })).toContainText("Monad testnet");
+    await expect(page.locator("header").filter({ hasText: "First workflow · Conflicting Pledge Protection" }))
+      .toContainText("Monad testnet");
 
     // The one line that names all three Cleanverse boundaries.
     const body = page.locator("body");
     await expect(body).toContainText("Cleanverse verifies asset provenance and identity plus participant eligibility");
     await expect(body).toContainText("not legal validity or enforceability");
     await expect(body).toContainText("governed result establishes only that conflict status");
-    await expect(body).toContainText("approved policy and human review determine recourse actions");
-    const scope = page.locator("details").filter({ hasText: "Mordant decides conflict only" });
+    await expect(body).toContainText("precommitted policy selects a bounded branch");
+    const scope = page.locator("details").filter({ hasText: "What the live workflow establishes" });
     await expect(scope.locator("summary")).toBeVisible();
     await expect(scope).not.toHaveAttribute("open", "");
   });
@@ -54,12 +55,23 @@ test.describe("the judge acceptance path", () => {
     await expect(body).toContainText("Participant A");
     await expect(body).toContainText("Participant B");
     await expect(body).toContainText("does not require either lender to disclose its pledge window to the counterparty");
-    await expect(body).toContainText("does not transfer funds");
+    await expect(body).toContainText("moves neither funds nor the receivable");
     await expect(page.getByTestId("claim-timeline")).toBeVisible();
     const scope = page.locator("details").filter({ hasText: "Privacy and execution scope" });
     await expect(scope).not.toHaveAttribute("open", "");
     await scope.locator("summary").click();
     await expect(page.getByTestId("intake-disclosure")).toBeVisible();
+  });
+
+  test("starting a managed check produces immediate, unmistakable feedback", async ({ page }) => {
+    await open(page, "starting");
+    const status = page.getByTestId("live-status");
+    await expect(status).toHaveAttribute("data-status", "active");
+    await expect(status).toContainText("Creating the case and preparing the secure execution.");
+    const action = page.getByRole("button", { name: "Starting now · preparing the secure execution" });
+    await expect(action).toBeDisabled();
+    await expect(action).toHaveAttribute("data-loading", "true");
+    await expect(action.locator("[class*='buttonLoader']")).toBeVisible();
   });
 
   test("A-Pass eligibility is named as the Cleanverse boundary it is", async ({ page }) => {
@@ -129,7 +141,7 @@ test.describe("no-conflict reveal", () => {
     const reveal = page.getByTestId("reveal");
     await expect(reveal).toHaveAttribute("data-outcome", "cleared");
     await expect(reveal).toContainText("No conflict");
-    await expect(reveal).toContainText("configured policy assigned no reserve");
+    await expect(reveal).toContainText("precommitted policy selects record and close");
     await expect(reveal).toContainText("This is not a credit approval");
     await expect(reveal.getByTestId("claim-timeline")).toBeVisible();
     await expect(reveal.getByTestId("claim-timeline")).toHaveAttribute("data-reveal", "none");
@@ -153,7 +165,7 @@ test.describe("settlement", () => {
     await open(page, "conflict");
     const panel = page.getByTestId("onchain-panel").first();
     await expect(panel).toHaveAttribute("data-connected", "false");
-    await expect(panel).toContainText("This managed run ends at the governed result");
+    await expect(panel).toContainText("ends after its policy-authorized local operation and sealed evidence");
     await expect(panel).toContainText("It did not execute a new aUSDC settlement");
     await expect(panel.getByRole("link", { name: "Verify the separate completed on-chain recourse" }))
       .toHaveAttribute("href", "/protection/verified-run");
@@ -199,11 +211,19 @@ test.describe("receipt drawer", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer).toContainText("Layer 1 · Decision");
     await expect(drawer).toContainText("Layer 2 · Verification");
+    const verification = drawer.locator("details").filter({ hasText: "Technical verification values" });
+    await expect(verification).not.toHaveAttribute("open", "");
+    const verificationHelp = verification.getByText(/You do not need to enter them anywhere\./u);
+    await expect(verificationHelp).toBeHidden();
+    await verification.locator("summary").click();
+    await expect(verification).toHaveAttribute("open", "");
+    await expect(verificationHelp).toBeVisible();
+    await expect(verification).toContainText("Governed result digest");
     await expect(drawer).toContainText("Layer 3 · Raw evidence");
     await expect(drawer).toContainText("conflict/no-conflict between the submitted windows only");
-    await expect(drawer).toContainText("Configured demo policy determines the path");
+    await expect(drawer).toContainText("precommitted policy selects the bounded branch");
     await expect(drawer.getByTestId("raw-receipt-context"))
-      .toContainText("approved policy or human review determine action ownership, deadlines and escalation");
+      .toContainText("not an authorization for recourse or settlement by itself");
     await expect(drawer).not.toContainText("sole authority for the terminal outcome");
 
     // Opaque: the previous drawer resolved to a transparent background and the
@@ -285,7 +305,7 @@ test.describe("participant admission, behind a disabled capability", () => {
     await expect(page.getByTestId("handoff")).toHaveCount(0);
     // The production disclosure is the managed one, and only that one.
     await expect(page.getByTestId("intake-disclosure"))
-      .toContainText("submits both demo claims to Mordant's managed execution service");
+      .toContainText("submits both synthetic claim windows to Mordant's managed service");
     await expect(page.locator("body")).not.toContainText("independently authorize role-bound");
   });
 

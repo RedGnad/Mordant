@@ -119,8 +119,8 @@ const OPERATION: Readonly<Record<string, Readonly<{ api: string; label: string; 
   },
   openRecourseCase: {
     api: "openRecourseCase",
-    label: "Apply governed result",
-    support: "Verifies trusted pins and either opens the cure record or refuses recourse.",
+    label: "Apply retained local rule",
+    support: "Verifies the historical retained-case pins and records its local protocol-double branch.",
     waiting: "The local recourse protocol double is verifying the signed-result pins.",
   },
   completeCureChronology: {
@@ -395,8 +395,17 @@ function operationLabel(operation: string): string {
 
 function focusableElements(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(
-    "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-  )).filter((element) => !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true");
+    "button:not([disabled]), a[href], summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+  )).filter((element) => {
+    const closedDetails = element.closest<HTMLDetailsElement>("details:not([open])");
+    const isClosedSummary = closedDetails !== null
+      && element.tagName === "SUMMARY"
+      && element.parentElement === closedDetails;
+    return !element.hasAttribute("hidden")
+      && element.getAttribute("aria-hidden") !== "true"
+      && element.getClientRects().length > 0
+      && (closedDetails === null || isClosedSummary);
+  });
 }
 
 function EvidenceValue({ label, value, copyable = true }: {
@@ -460,7 +469,7 @@ function EvidenceDrawer({ evidence, onClose, returnFocus }: {
   }
 
   const refusal = "ABSENT — signed false Boolean refused recourse; no recourse record was created.";
-  const rows = [
+  const summaryRows = [
     ["Evidence verification", "VERIFIED", true],
     ["Final incident state", evidence.recourseAttestation.attestation.finalIncidentState, true],
     ["Final recourse state", evidence.recourseAttestation.attestation.finalRecourseState, true],
@@ -470,6 +479,8 @@ function EvidenceDrawer({ evidence, onClose, returnFocus }: {
       "VERIFIED — participant, governed-result and recourse-attestation signatures",
       true,
     ],
+  ] as const;
+  const technicalRows = [
     ["Source commit", evidence.sourceCommit, true],
     ["Governed-FHE commit", evidence.governedFheCommit, true],
     ["Asset record", evidence.cleanverseAssetDigest, true],
@@ -512,16 +523,32 @@ function EvidenceDrawer({ evidence, onClose, returnFocus }: {
       >
         <header className={styles.drawerHeader}>
           <div>
-            <p>Public evidence · full digest view</p>
+            <p>Public evidence · verified case</p>
             <h2 id="evidence-title">Case evidence</h2>
           </div>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close evidence drawer">Close</button>
         </header>
         <div className={styles.drawerBody}>
-          <p id="evidence-description" className={styles.drawerNotice}>Only the verified public projection is shown. Values wrap in full and each copy action writes the exact displayed value.</p>
+          <p id="evidence-description" className={styles.drawerNotice}>
+            Start with the verified case status below. Technical fingerprints remain available for
+            independent comparison, but no user needs to enter them anywhere.
+          </p>
           <dl className={styles.evidenceList}>
-            {rows.map(([label, value, copyable]) => <EvidenceValue key={label} label={label} value={value} copyable={copyable} />)}
+            {summaryRows.map(([label, value, copyable]) => <EvidenceValue key={label} label={label} value={value} copyable={copyable} />)}
           </dl>
+          <details className={styles.technicalEvidence}>
+            <summary>
+              <strong>Technical verification values</strong>
+              <span>SHA-256 fingerprints, signatures and exact source references</span>
+            </summary>
+            <p>
+              These values let a technical reviewer confirm that each retained artifact still matches
+              the verified case. Copy is provided for comparison with another receipt or verification tool.
+            </p>
+            <dl className={styles.evidenceList}>
+              {technicalRows.map(([label, value, copyable]) => <EvidenceValue key={label} label={label} value={value} copyable={copyable} />)}
+            </dl>
+          </details>
           <section className={styles.classifications}>
             <h3>Source classifications</h3>
             {evidence.sourceClassifications.map((sourceId) => {
@@ -1447,7 +1474,7 @@ export function ProtectionExperience({
               </div>
 
               <section className={styles.timeline} aria-labelledby="timeline-heading">
-                <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → recourse</h2></header>
+                <header><p>Case chronology</p><h2 id="timeline-heading">Asset → private result → retained local rule</h2></header>
                 <ol>
                   {activeEvidence === null ? (
                     <li><time>Provisional</time><i aria-hidden="true" /><div><strong>{provisionalStage?.stageLabel ?? "Canonical chronology pending"}</strong><span>BACKEND STAGE · NOT FINAL SIGNED CHRONOLOGY</span></div></li>
@@ -1496,5 +1523,5 @@ export function ProtectionExperience({
 }
 
 const FHE_PROFILE_LABEL = "BGV · IdentityFullFHE256 · N15";
-const PRODUCT_CLAIM = "Mordant’s fixed local BGV circuit evaluates two synthetic pledge fixtures and releases one governed Boolean into a local recourse protocol double.";
+const PRODUCT_CLAIM = "This historical retained case evaluates two synthetic pledge fixtures, releases governed conflict status, then applies its retained local rule to record a protocol-double recourse artifact. It predates the current managed V2 Governed Recourse Policy authority chain.";
 const PRODUCT_DISCLOSURE = "The Cleanverse / Monad testnet identity is retained real observed provenance. No real lender funds or submissions are used. The designated decryptor is trusted; threshold release, native Monad FHE, live settlement and production custody isolation are not claimed.";

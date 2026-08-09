@@ -1,4 +1,10 @@
-# Frozen product decision
+# Historical product decision — superseded
+
+This file preserves the original funded-protection thesis. It is not the current product hierarchy.
+The current category is **Mordant — the recourse layer for tokenized private credit**; Conflicting
+Pledge Protection is its first implemented workflow. See the [README](../README.md).
+
+## Original frozen decision
 
 - Name: **Mordant**
 - Track: **RWA — CVI and CVA from issuance**

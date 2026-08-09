@@ -37,6 +37,17 @@
   background: var(--protection);
 }
 
+.context {
+  max-width: 52rem;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-proof);
+  font-size: 0.72rem;
+  letter-spacing: 0.055em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
 .title {
   max-width: 22ch;
   font-size: clamp(2rem, 5vw, 3.6rem);

@@ -24,6 +24,8 @@ import {
 import {
   CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
   LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
   currentCustomReceiptDisclosures,
 } from "../src/lib/custom-supervised-receipt-disclosures";
 
@@ -95,6 +97,14 @@ function legacyDisclosures(): readonly string[] {
   return [
     ...currentCustomReceiptDisclosures("OPERATOR").slice(0, 3),
     LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+  ];
+}
+
+function prePolicyDisclosures(): readonly string[] {
+  return [
+    ...currentCustomReceiptDisclosures("OPERATOR").slice(0, 3),
+    PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE,
+    PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE,
   ];
 }
 
@@ -177,7 +187,7 @@ test.describe("live product presentation model", () => {
     const model = adapt(RUNNING_VIEW);
     expect(model.intake).toBe("MANAGED_COMBINED");
     expect(model.intakeDisclosure).toBe(INTAKE_DISCLOSURE.MANAGED_COMBINED);
-    expect(model.intakeDisclosure).toContain("managed execution service");
+    expect(model.intakeDisclosure).toContain("managed service");
     // The two-wallet sentence may never appear under the managed capability.
     expect(model.intakeDisclosure).not.toContain("independently authorize");
   });
@@ -242,7 +252,8 @@ test.describe("live product presentation model", () => {
     expect(model.onchain.phase).toBe("NOT_CONNECTED");
     expect(model.onchain.entitlement).toBeNull();
     expect(model.onchain.evidence.contractAddress).toBeNull();
-    expect(model.onchain.disabledReason).toBe("This managed run ends at the governed result.");
+    expect(model.onchain.disabledReason)
+      .toBe("This managed run ends after its policy-authorized local operation and sealed evidence.");
   });
 
   test("the receipt is layered and keeps raw evidence last", () => {
@@ -254,9 +265,10 @@ test.describe("live product presentation model", () => {
     for (const row of model.receipt!.summary) expect(row.value).not.toMatch(/^sha256:/u);
   });
 
-  test("the browser receipt parser accepts only exact current or exact legacy disclosures", () => {
+  test("the browser receipt parser accepts exact current and immutable historical disclosures", () => {
     const current = currentCustomReceiptDisclosures("OPERATOR");
     expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), current))).not.toBeNull();
+    expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), prePolicyDisclosures()))).not.toBeNull();
     expect(parseManagedWorkerView(withReceiptDisclosures(conflictView(), legacyDisclosures()))).not.toBeNull();
 
     const malformed = [
@@ -278,8 +290,8 @@ test.describe("live product presentation model", () => {
     expect(model.receipt?.summary.find((row) => row.label === "Result authority")?.value)
       .toContain("conflict/no-conflict between the submitted windows only");
     expect(model.receipt?.summary.find((row) => row.label === "Recourse authority")?.value)
-      .toContain("Configured demo policy");
-    expect(model.receipt?.rawContext).toContain("Immutable legacy receipt");
+      .toContain("precommitted policy selects the bounded branch");
+    expect(model.receipt?.rawContext).toContain("Immutable historical receipt");
     expect(model.receipt?.rawContext).toContain("not the current product boundary");
     expect(model.receipt?.rawContext).not.toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);
     expect(JSON.stringify(model.receipt?.raw)).toContain(LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE);

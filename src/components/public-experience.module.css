@@ -156,7 +156,7 @@
    * visibly green. This slightly magenta source compensates the inversion so
    * the overlap reads as the same quiet violet-white as the selection accent.
    */
-  fill: #fdf0ff;
+  fill: #ffe9ff;
   transform-origin: center;
   will-change: transform, opacity;
 }
@@ -1052,7 +1052,7 @@
   }
 
   .heroLine:last-child {
-    width: min-content;
+    width: max-content;
     max-width: 100%;
     margin-top: 8px;
     margin-left: 0;
@@ -1060,24 +1060,25 @@
 
   .heroPhrase {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 0.18em;
+    font-size: clamp(37px, 10.2vw, 41px);
+    letter-spacing: -0.055em;
   }
 
   .heroLine > .heroPhrase {
-    width: min-content;
+    width: max-content;
   }
 
   /*
-   * The one correction to the earlier geometry. At this width the mark's hard
-   * vertical edge cut through the middle of "became" and "recourse.", leaving
-   * half-inverted glyphs. Pushing it out clears the type while keeping the mark
-   * the same size, in the same corner, still blended and still overlapping the
-   * composition.
+   * The phrase becomes one deliberate line on phones and the mark intersects
+   * its right-hand word, preserving the desktop typography/symbol relationship
+   * instead of becoming an unrelated cropped icon beside a three-line title.
    */
   .heroSymbolField {
-    top: 17%;
-    right: -118px;
-    width: 210px;
+    top: 18%;
+    right: -66px;
+    width: 232px;
   }
 
   .heroSupport {
@@ -1316,9 +1317,9 @@
   padding: clamp(52px, 7vw, 92px) clamp(22px, 5vw, 76px);
   background: var(--proof);
   color: var(--ground);
-  gap: clamp(28px, 5vw, 72px);
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.38fr);
-  align-items: end;
+  gap: clamp(18px, 2.4vw, 34px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 .hardenedProof h2 {
@@ -1331,7 +1332,7 @@
   text-wrap: balance;
 }
 
-.hardenedProof div > p:last-child {
+.hardenedProof .complementaryProof > p:last-of-type {
   max-width: 66ch;
   margin: 24px 0 0;
   color: color-mix(in srgb, var(--ground) 70%, transparent);
@@ -1339,9 +1340,29 @@
   line-height: 1.55;
 }
 
-.hardenedProof .proofPrimary {
+.complementaryProof {
+  display: grid;
+  align-content: start;
+  padding: clamp(24px, 3vw, 38px);
+  border: 1px solid color-mix(in srgb, var(--ground) 30%, transparent);
+  border-top: 4px solid var(--receivable);
+  gap: 0;
+}
+
+.complementaryProof p {
+  margin: 0;
+}
+
+.complementaryProof .proofPrimary,
+.complementaryProof .proofSecondary {
   align-self: end;
+  justify-self: start;
+  margin-top: clamp(24px, 3vw, 36px);
   border-color: var(--ground);
+}
+
+.onchainProof {
+  border-top-color: var(--action);
 }
 
 /* ---------------------------------------------------------------- 2. problem */
@@ -1574,14 +1595,6 @@
   transition:
     stroke 160ms ease-out,
     stroke-width 160ms ease-out;
-}
-
-.integrationTether {
-  fill: none;
-  stroke: var(--integration-signal-colour);
-  stroke-linecap: butt;
-  stroke-width: 8;
-  vector-effect: non-scaling-stroke;
 }
 
 .flow[data-step="3"] .integrationSignal[data-arrived="true"] {

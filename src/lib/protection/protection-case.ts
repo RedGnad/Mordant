@@ -20,11 +20,11 @@ export const GOVERNED_RELEASE_MODE = "governed-decryptor-v1" as const;
 export const FHE_PARAMETER_PROFILE = "mordant.bgv.identity-full-fhe-256.n15/v1" as const;
 export const FHE_CIRCUIT = "mordant.identity-full-fhe-256" as const;
 export const PROTECTION_PRODUCT_CLAIM =
-  "Mordant protects a tokenized receivable with a private conflict check and governed recourse. " +
-  "The parties’ pledge records are evaluated under BGV fully homomorphic encryption. The evaluator " +
-  "cannot inspect the inputs or dictate the released result. A designated governed decryptor " +
-  "independently recomputes the fixed circuit, decrypts the final Boolean, and signs it into the " +
-  "recourse workflow.";
+  "Mordant is the recourse layer for tokenized private credit. In its first implemented workflow, " +
+  "Conflicting Pledge Protection, the parties’ pledge records are evaluated under BGV fully " +
+  "homomorphic encryption. The evaluator cannot inspect the inputs or dictate the released result. " +
+  "A designated governed decryptor independently recomputes the fixed circuit, decrypts the final " +
+  "Boolean, and signs conflict status for the precommitted policy.";
 export const PROTECTION_PRODUCT_DISCLOSURE =
   "The MVP uses a designated trusted decryptor and local single-host execution. Threshold output " +
   "release and production custody isolation remain post-MVP upgrades.";

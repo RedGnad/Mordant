@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
  * The completed real Monad journey, as a judge sees it.
  *
  * These assertions are deliberately about truthfulness rather than styling: the
- * page must badge itself as a verified live run, must never call itself a demo,
+ * page must badge itself as a separate verified on-chain execution, must never call itself a demo,
  * must link real transactions to the real explorer, and must show the exact
  * six-decimal settlement rather than a rounded one.
  */
@@ -17,31 +17,33 @@ const CLAIM_B_TX = "0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb8143
 const ADAPTER = "0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1";
 const EXPLORER = "https://testnet.monadexplorer.com";
 
-test.describe("verified live run", () => {
+test.describe("verified historical on-chain execution", () => {
   test("attributes conflict, policy, cure and payouts to their real sources", async ({ page }) => {
     await page.goto("/protection/verified-run");
     const run = page.getByTestId("verified-live-run");
     await expect(run).toContainText("governed result established that their windows conflicted");
     await expect(run).toContainText("preconfigured demo recourse policy");
     await expect(run).toContainText("deployment configuration—not the Boolean—determined holders and payout amounts");
-    await expect(run).toContainText("Boolean established no legal responsibility, priority, ownership, deadline or payout amount");
+    await expect(run).toContainText("established no legal responsibility, priority, ownership, deadline or payout amount");
     await expect(run).not.toContainText("amounts the signed result carried");
     await expect(run).not.toContainText("governed result opened recourse");
   });
 
   test("the transition back to live names the managed public profile", async ({ page }) => {
     await page.goto("/protection/verified-run");
-    const transition = page.getByText(/The live check starts a new managed case/iu);
-    await expect(transition).toContainText("under the published eligible test context");
+    const transition = page.getByText(/The current live proof starts a new managed case/iu);
+    await expect(transition).toContainText("published eligible test context");
     await expect(transition).not.toContainText("two eligible wallets");
   });
 
-  test("badges itself as a verified live run and never as a demo or fixture", async ({ page }) => {
+  test("badges itself as a separate verified on-chain execution and never as a fixture", async ({ page }) => {
     await page.goto(PATH);
     const run = page.getByTestId("verified-live-run");
     await expect(run).toBeVisible();
     await expect(run).toHaveAttribute("data-provenance", "VERIFIED_LIVE_RUN");
-    await expect(page.getByTestId("verified-live-run-badge")).toHaveText(/verified live run/iu);
+    await expect(page.getByTestId("verified-live-run-badge"))
+      .toHaveText(/verified on-chain execution · separate hardened run/iu);
+    await expect(run).toContainText("Separate hardened execution · historical Adapter V2 configuration");
 
     // No part of this surface may describe the completed run as sample data.
     const body = (await page.locator("body").innerText()).toLowerCase();

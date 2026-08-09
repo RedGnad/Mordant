@@ -160,6 +160,17 @@ export function LiveProduct({
     return () => window.cancelAnimationFrame(frame);
   }, [chapter]);
 
+  useEffect(() => {
+    if (!busy || chapter !== "AUTHORIZE") return;
+    const frame = window.requestAnimationFrame(() => {
+      statusRef.current?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [busy, chapter]);
+
   const claimRange = (from: string, until: string): readonly [number, number] | null => {
     const start = Number(from);
     const end = Number(until);
@@ -183,7 +194,7 @@ export function LiveProduct({
           before anything else. */}
       <header className={styles.caseBar}>
         <div className={styles.caseAsset}>
-          <p className={styles.eyebrow}>Cleanverse provenance</p>
+          <p className={styles.eyebrow}>First workflow · Conflicting Pledge Protection</p>
           <h1>{model.assetLabel}</h1>
         </div>
         <dl className={styles.caseFacts}>
@@ -197,7 +208,7 @@ export function LiveProduct({
       </header>
 
       <details className={styles.productScope}>
-        <summary>Cleanverse verifies provenance and eligibility. Mordant decides conflict only.</summary>
+        <summary>What the live workflow establishes</summary>
         <p>{CLEANVERSE_LINE}</p>
       </details>
 
@@ -414,19 +425,28 @@ export function LiveProduct({
           {formError === null ? null : <p className={styles.error} role="alert">{formError}</p>}
 
           <details className={styles.scopeDetails}>
-            <summary>Privacy and execution scope · no funds or receivable move</summary>
+            <summary>Privacy and execution scope</summary>
             <p className={styles.disclosure} data-testid="intake-disclosure">{model.intakeDisclosure}</p>
-            {model.intake !== "MANAGED_COMBINED" ? null : (
+            {model.intake === "MANAGED_COMBINED" ? null : (
               <p className={styles.privacy}>{model.claimA.privacyNote}</p>
             )}
-            <p className={styles.privacy}>
-              Authorizing a claim does not transfer funds and does not move the receivable.
-            </p>
+            {model.intake === "MANAGED_COMBINED" ? null : (
+              <p className={styles.privacy}>
+                Authorizing a claim does not transfer funds and does not move the receivable.
+              </p>
+            )}
           </details>
 
           {model.intake !== "MANAGED_COMBINED" || managedDraft === null ? null : (
-            <button type="button" className={styles.primary} disabled={busy} onClick={actions.onStart}>
-              {busy ? "Starting the confidential check" : "Run the confidential check"}
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={busy}
+              data-loading={busy}
+              onClick={actions.onStart}
+            >
+              {busy ? <span className={styles.buttonLoader} aria-hidden="true" /> : null}
+              <span>{busy ? "Starting now · preparing the secure execution" : "Run the confidential check"}</span>
             </button>
           )}
         </section>
@@ -492,7 +512,7 @@ export function LiveProduct({
           <p className={styles.revealLede}>
             {conflict
               ? "The governed result establishes only that the private claim windows conflict. The original receivable remains outstanding and intact."
-              : "The governed result establishes only that the private claim windows do not conflict. The configured policy assigned no reserve."}
+              : "The governed result establishes only that the private claim windows do not conflict. The precommitted policy selects record and close."}
           </p>
 
           {managedDraft === null ? null : (
@@ -509,25 +529,33 @@ export function LiveProduct({
               <dl className={styles.decisionRail} data-testid="governed-policy">
                 <div>
                   <dt>Committed policy</dt>
-                  <dd>{model.governedPolicy.policyId} · v{model.governedPolicy.policyVersion}</dd>
+                  <dd>Managed facility protection · v{model.governedPolicy.policyVersion}</dd>
                 </div>
                 <div>
-                  <dt>Audit binding</dt>
-                  <dd><code>{shorten(model.governedPolicy.policyHash)}</code> · selected before result exposure</dd>
+                  <dt>Commitment</dt>
+                  <dd>Selected before result exposure</dd>
                 </div>
                 <div>
-                  <dt>Selected action</dt>
-                  <dd>{model.governedPolicy.actionPlan?.selectedGovernedAction ?? "No action plan released"}</dd>
+                  <dt>Selected branch</dt>
+                  <dd>{model.governedPolicy.actionPlan === null
+                    ? "No action plan released"
+                    : model.governedPolicy.actionPlan.selectedGovernedAction === "OPEN_LOCAL_CURE_PATH"
+                      ? "Open a 24-hour local cure path"
+                      : "Record and close"}</dd>
                 </div>
                 <div>
-                  <dt>Settlement authority</dt>
-                  <dd>Not authorized</dd>
+                  <dt>Bound evidence</dt>
+                  <dd>{model.governedPolicy.actionEvidenceDigest === null ? "Pending" : "Operation outcome verified"}</dd>
                 </div>
               </dl>
               <p className={styles.privacy}>
-                This policy consumes conflict status only. It establishes no legal priority, responsibility,
-                ownership, fraud, default, payout recipient, payout amount, or legally correct action.
+                The governed result supplies conflict status only. The policy selects a bounded managed action;
+                neither establishes legal truth or authorizes settlement.
               </p>
+              <details className={styles.policyProof}>
+                <summary>Policy proof identifiers</summary>
+                <p><code>{model.governedPolicy.policyId}</code> · <code>{shorten(model.governedPolicy.policyHash)}</code></p>
+              </details>
             </>
           )}
 
@@ -538,7 +566,9 @@ export function LiveProduct({
                 <dd>{model.decisionRail.nextDecision}</dd>
               </div>
               <div>
-                <dt>Action owner</dt>
+                <dt>{model.governedPolicy === null || model.governedPolicy.actionPlan === null
+                  ? "Action owner"
+                  : "Managed executor"}</dt>
                 <dd>{model.decisionRail.responsibleNow ?? "No action owner required."}</dd>
               </div>
               <div>

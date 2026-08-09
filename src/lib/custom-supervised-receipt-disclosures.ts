@@ -13,15 +13,21 @@ export const CUSTOM_RECEIPT_OPERATOR_DISCLOSURE =
 export const CUSTOM_RECEIPT_DECRYPTOR_DISCLOSURE =
   "Designated trusted decryptor; no threshold release and no native Monad FHE.";
 export const CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE =
-  "The governed signed Boolean is the sole authority for the conflict/no-conflict result.";
+  "The governed Boolean establishes conflict status. It is an authenticated input to the precommitted policy, not an authorization for recourse or settlement by itself.";
 export const CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE =
+  "The precommitted policy selects a bounded managed action branch; it establishes no legal truth and does not authorize settlement.";
+
+/** Exact pre-policy wording retained so already-digested five-line receipts remain readable. */
+export const PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE =
+  "The governed signed Boolean is the sole authority for the conflict/no-conflict result.";
+export const PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE =
   "Configured demo policy determines the recourse path; the Boolean does not assign legal responsibility, action ownership, deadline or payout amount.";
 
 /** Exact historical wording retained only so already-digested receipts remain readable. */
 export const LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE =
   "The governed signed Boolean is the sole authority for the terminal outcome.";
 
-export type CustomReceiptDisclosureVersion = "CURRENT" | "LEGACY";
+export type CustomReceiptDisclosureVersion = "CURRENT" | "PRE_POLICY" | "LEGACY";
 export type CustomReceiptIntake = "PARTICIPANT" | "OPERATOR";
 
 function isIntakeDisclosure(value: unknown): boolean {
@@ -58,6 +64,10 @@ export function classifyCustomReceiptDisclosures(
   if (value.length === 5
     && value[3] === CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE
     && value[4] === CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE) return "CURRENT";
+
+  if (value.length === 5
+    && value[3] === PRE_POLICY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE
+    && value[4] === PRE_POLICY_CUSTOM_RECEIPT_RECOURSE_BOUNDARY_DISCLOSURE) return "PRE_POLICY";
 
   if (value.length === 4
     && value[3] === LEGACY_CUSTOM_RECEIPT_BOOLEAN_AUTHORITY_DISCLOSURE) return "LEGACY";

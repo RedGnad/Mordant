@@ -8,7 +8,7 @@
 > to end on Monad testnet**: `ReleaseConsumed`, a real 600-second cure window,
 > permissionless finalization, and both holder claims paid and reconciled exactly.
 >
-> - Current status: [`README.md` → Current state](../README.md#current-state-verified-live-run-on-monad)
+> - Current status: [`README.md` → Separate verified historical on-chain execution](../README.md#separate-verified-historical-on-chain-execution)
 > - The correction: [`direct-participant-bridge-evidence.md`](./direct-participant-bridge-evidence.md)
 > - **Authoritative run: `e618abc2-0ac7-4d79-b201-44959a54b68c`** on adapter
 >   `0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1`

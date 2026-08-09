@@ -6,7 +6,7 @@ import type { ProductScenario } from "@/lib/protection/protection-case";
 
 export const metadata: Metadata = {
   title: "Retained case evidence",
-  description: "Inspect the governed result, chronology and public evidence for a retained Mordant protection case.",
+  description: "Inspect the chronology and public evidence for a retained historical Mordant protection case.",
 };
 
 type ProtectionSearchParams = Readonly<Record<string, string | string[] | undefined>>;

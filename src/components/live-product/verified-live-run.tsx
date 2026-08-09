@@ -14,9 +14,9 @@ import styles from "./verified-live-run.module.css";
  *
  * Product language leads and digests are disclosed, not paraded. Everything on
  * screen came from the verified receipt: this component computes no outcome,
- * invents no amount and has no fixture branch. It is badged VERIFIED LIVE RUN
- * because that is what the receipt's provenance says, and there is no code path
- * here that can print a live badge for anything else.
+ * invents no amount and has no fixture branch. It is badged as a separate
+ * verified on-chain execution because that is what the retained hardened
+ * receipt proves, and no other provenance can print that badge.
  */
 
 function Explorer({ kind, value, label }: {
@@ -92,9 +92,11 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
         <span className={styles.badge} data-testid="verified-live-run-badge">
           {RUN_PROVENANCE_BADGE.VERIFIED_LIVE_RUN}
         </span>
+        <p className={styles.context}>Separate hardened execution · historical Adapter V2 configuration</p>
         <h1 className={styles.title}>A conflicting pledge, decided privately and settled on Monad</h1>
         <p className={styles.standfirst}>
-          Two eligible wallets submitted claims against the same tokenized receivable identity. The
+          This retained run predates the current managed V2 policy-authority chain. Two eligible wallets
+          submitted claims against the same tokenized receivable identity. The
           governed result established that their windows conflicted; preconfigured demo recourse policy
           then applied, and the deployment configuration—not the Boolean—determined holders and payout
           amounts. Every transaction below happened on {receipt.network.name} and is linked publicly.
@@ -115,7 +117,7 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
         <ol className={styles.verificationRail}>
           <li><span aria-hidden="true">✓</span><div><strong>Provenance observed</strong><small>{receipt.verify.assetLabel}</small></div></li>
           <li><span aria-hidden="true">✓</span><div><strong>Eligibility verified</strong><small>Two distinct wallets</small></div></li>
-          <li><span aria-hidden="true">✓</span><div><strong>Private decision verified</strong><small>Signed Boolean</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>Private decision verified</strong><small>Signed conflict status</small></div></li>
           <li><span aria-hidden="true">✓</span><div><strong>Recourse finalized</strong><small>Configured path</small></div></li>
           <li><span aria-hidden="true">✓</span><div><strong>Settlement reconciled</strong><small>Reserve cleared</small></div></li>
         </ol>
@@ -178,7 +180,8 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
           The counterparty-facing workflow did not disclose either pledge window. A fixed BGV circuit
           evaluated them under encryption, and the designated decryptor recomputed the circuit and signed
           exactly one Boolean: <strong>{receipt.decidePrivately.conflict ? "a conflict was confirmed" : "no conflict"}</strong>.
-          That Boolean established no legal responsibility, priority, ownership, deadline or payout amount.
+          That Boolean established conflict status only; it did not authorize recourse or settlement and
+          established no legal responsibility, priority, ownership, deadline or payout amount.
         </p>
         <div className={styles.facts}>
           <Fact label="Circuit">{receipt.decidePrivately.circuitId}</Fact>
@@ -314,13 +317,14 @@ export function VerifiedLiveRun({ receipt }: { readonly receipt: VerifiedLiveRun
       </section>
 
       <div className={styles.transition}>
-        <h2 className={styles.transitionTitle}>Run the check yourself</h2>
+        <h2 className={styles.transitionTitle}>Run the current managed proof</h2>
         <p className={styles.transitionBody}>
-          This page is a completed run. The live check starts a new managed case under the published
-          eligible test context and produces a new governed result.
+          This page is a separate completed hardened run. The current live proof starts a new managed
+          case under the published eligible test context and follows conflict status through its
+          precommitted policy and bounded local action.
         </p>
         <Link className={styles.cta} href="/protection/live" data-testid="verified-run-to-live">
-          Run live check
+          Run fresh managed proof
         </Link>
       </div>
 

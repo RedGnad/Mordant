@@ -388,6 +388,35 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect.poll(() => runningTimeline.locator("[class*='timelineContent']").evaluate((node) => (
     getComputedStyle(node).filter
   ))).toContain("blur(1.6px)");
+  const privacyOptics = await runningTimeline.evaluate((timeline) => {
+    const overlay = timeline.querySelector<HTMLElement>("[data-testid='mini-timeline-privacy']");
+    const icon = overlay?.querySelector<SVGElement>("svg");
+    const label = overlay?.querySelector<HTMLElement>("span");
+    if (overlay === null || icon === undefined || icon === null || label === undefined || label === null) return null;
+    const timelineStyle = getComputedStyle(timeline);
+    const overlayBounds = overlay.getBoundingClientRect();
+    const iconBounds = icon.getBoundingClientRect();
+    const labelBounds = label.getBoundingClientRect();
+    return {
+      border: Number.parseFloat(timelineStyle.borderTopWidth),
+      timelineFilter: timelineStyle.filter,
+      overlayInset: overlayBounds.top - timeline.getBoundingClientRect().top,
+      iconWidth: iconBounds.width,
+      iconStroke: Number.parseFloat(getComputedStyle(icon).strokeWidth),
+      labelBelowIcon: labelBounds.top >= iconBounds.bottom,
+      centerDelta: Math.abs(
+        (iconBounds.left + (iconBounds.width / 2)) - (overlayBounds.left + (overlayBounds.width / 2)),
+      ),
+    };
+  });
+  expect(privacyOptics).not.toBeNull();
+  expect(privacyOptics?.border).toBeGreaterThanOrEqual(1);
+  expect(privacyOptics?.timelineFilter).toBe("none");
+  expect(privacyOptics?.overlayInset).toBeGreaterThanOrEqual(privacyOptics?.border ?? 1);
+  expect(privacyOptics?.iconWidth).toBeGreaterThanOrEqual(44);
+  expect(privacyOptics?.iconStroke).toBeGreaterThanOrEqual(2.3);
+  expect(privacyOptics?.labelBelowIcon).toBe(true);
+  expect(privacyOptics?.centerDelta).toBeLessThanOrEqual(1);
   await expect(runningTimeline).toContainText("Claim A");
   await expect(runningTimeline).toContainText("120–420");
   await expect(runningTimeline).toContainText("Claim B");
@@ -427,20 +456,21 @@ test("real worker evidence appears, and no verdict exists before governed releas
   await expect(proof).toContainText("Completed");
   await expect(proof).toContainText("sha256:66666666");
 
-  await expect(page.getByTestId("mini-status")).toContainText("establishes only that these windows conflict");
-  await expect(page.getByTestId("mini-status")).toContainText("does not authorize legal judgment or settlement");
+  await expect(page.getByTestId("mini-status")).toContainText("entered the precommitted policy");
+  await expect(page.getByTestId("mini-status")).toContainText("authorizes no legal judgment or settlement");
   await expect(page.getByTestId("mini-status")).not.toContainText("names who is responsible");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByTestId("mini-to-verified-run")).toHaveText("Verify the completed on-chain recourse");
   await expect(page.getByTestId("mini-try-another")).toHaveText("Try another case");
   await expect(page.getByRole("link", { name: "Inspect this managed run" }))
     .toHaveAttribute("href", `/protection/live?runId=${RUN_ID}`);
-  await expect(page.getByTestId("mini-live-check")).toContainText("experiment ends at governed result");
-  await expect(page.getByTestId("mini-live-check")).toContainText("separate completed two-wallet Monad testnet recourse run");
+  await expect(page.getByTestId("mini-live-check"))
+    .toContainText("ends after its policy-authorized local operation and evidence");
+  await expect(page.getByTestId("mini-live-check")).toContainText("separate completed historical on-chain run");
   if (["1280x800", "390x844"].includes(testInfo.project.name)) {
     for (const section of [
       page.locator("#how"),
-      page.getByRole("region", { name: "Verify the consequence, not a claim about it." }),
+      page.getByRole("region", { name: "Complementary proofs" }),
     ]) {
       await section.scrollIntoViewIfNeeded();
       await expect(section).toHaveAttribute("data-visible", "true");
@@ -464,7 +494,7 @@ test("Try another case starts a fresh draft while retaining exactly one complete
     .evaluate((node) => node.getBoundingClientRect().height);
   await page.getByTestId("mini-try-another").click();
 
-  await expect(page.getByTestId("mini-run")).toHaveText("Run live check");
+  await expect(page.getByTestId("mini-run")).toHaveText("Run encrypted check");
   await expect(page.getByTestId("claim-a-from")).toBeEnabled();
   const nextDraftPanelHeight = await page.getByTestId("mini-panel")
     .evaluate((node) => node.getBoundingClientRect().height);
@@ -524,14 +554,14 @@ test("a restored managed run never reconstructs private geometry from defaults",
   await expect(page.locator("body")).not.toContainText("Private claim windows are not retained in this public projection.");
   await expect(page.locator("#live-aFrom, #live-aUntil, #live-bFrom, #live-bUntil")).toHaveCount(0);
   const policy = page.getByTestId("governed-policy");
-  await expect(policy).toContainText("mordant.managed-demo.facility-protection · v1");
-  await expect(policy).toContainText("selected before result exposure");
-  await expect(policy).toContainText("OPEN_LOCAL_CURE_PATH");
-  await expect(policy).toContainText("Not authorized");
-  await expect(reveal).toContainText("establishes no legal priority, responsibility");
+  await expect(policy).toContainText("Managed facility protection · v1");
+  await expect(policy).toContainText("Selected before result exposure");
+  await expect(policy).toContainText("Open a 24-hour local cure path");
+  await expect(policy).toContainText("Pending");
+  await expect(reveal).toContainText("neither establishes legal truth or authorizes settlement");
   await expect(page.getByTestId("decision-rail").last()).toContainText("local protocol double");
   await expect(page.getByTestId("decision-rail").last()).toContainText("Settlement is not authorized");
-  await expect(reveal).toContainText("This managed run ends at the governed result");
+  await expect(reveal).toContainText("ends after its policy-authorized local operation and sealed evidence");
   expect(tokenHolders).toEqual([]);
 });
 
@@ -671,9 +701,9 @@ test("mobile, desktop, reduced motion and keyboard semantics remain usable", asy
   expect(tabTransitionSeconds).toBeLessThanOrEqual(0.001);
 
   const integration = page.locator('[aria-label="Integration stages"]');
-  const governed = integration.getByRole("button", { name: /Governed result/ });
-  await governed.focus();
-  await expect(governed).toHaveAttribute("aria-pressed", "true");
+  const governedPolicy = integration.getByRole("button", { name: /Governed policy/ });
+  await governedPolicy.focus();
+  await expect(governedPolicy).toHaveAttribute("aria-pressed", "true");
 
   await page.getByTestId("mini-run").click();
   const spinner = page.locator("[class*='spinner']");

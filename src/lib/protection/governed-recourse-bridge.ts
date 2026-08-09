@@ -127,7 +127,7 @@ export type VerifiedGovernedRelease = Readonly<{
   parameterFingerprint: Sha256Digest;
   releaseAuthorityId: Sha256Digest;
   releaseMode: "governed-decryptor-v1";
-  /** The signed Boolean. The only source of a terminal outcome. */
+  /** The signed Boolean. The only source of governed conflict status. */
   conflict: boolean;
 }>;
 

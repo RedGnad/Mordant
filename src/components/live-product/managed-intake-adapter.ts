@@ -574,7 +574,7 @@ function decisionRailFor(
       responsibleNow: "Mordant managed execution · local protocol double",
       deadlineIso: recourse?.cureDeadlineIso ?? null,
       deadlineNote: recourse?.cureDeadlineIso == null
-        ? "The ten-minute demo window starts only if the local cure path opens."
+        ? "The 24-hour local demo window starts only if the local cure path opens."
         : null,
       consequence: "If unresolved, manual review happens outside this managed run. Settlement is not authorized.",
       receiptAvailable: governedPolicy !== null && governedPolicy.actionEvidence !== null,
@@ -635,7 +635,7 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
     },
     {
       label: "Recourse authority",
-      value: "Configured demo policy determines the path; approved policy or human review determine action owner, deadline and escalation.",
+      value: "The precommitted policy selects the bounded branch; the Boolean is not recourse or settlement authorization.",
     },
     { label: "Asset", value: ASSET_LABEL },
     { label: "Participants", value: "Participant A and Participant B" },
@@ -659,9 +659,9 @@ function layeredReceipt(receipt: Readonly<Record<string, unknown>> | null, relea
     { label: "Receipt digest", value: text(receipt.receiptDigest) ?? "not present" },
   ];
 
-  const rawContext = disclosureVersion === "LEGACY"
-    ? "Immutable legacy receipt: its digest covers the original wording shown below. That wording is not the current product boundary; the governed signed Boolean is authoritative only for conflict/no-conflict. Configured demo policy determines recourse, while approved policy or human review determine action ownership, deadlines and escalation."
-    : "The raw projection is preserved exactly as covered by its receipt digest. The governed signed Boolean is authoritative only for conflict/no-conflict; configured demo policy determines recourse, while approved policy or human review determine action ownership, deadlines and escalation.";
+  const rawContext = disclosureVersion !== "CURRENT"
+    ? "Immutable historical receipt: its digest covers the original wording shown below. That wording is not the current product boundary. The governed Boolean establishes conflict status; it is an authenticated input to the precommitted policy, not an authorization for recourse or settlement by itself."
+    : "The raw projection is preserved exactly as covered by its receipt digest. The governed Boolean establishes conflict status; it is an authenticated input to the precommitted policy, not an authorization for recourse or settlement by itself.";
 
   return Object.freeze({
     summary: Object.freeze(summary),

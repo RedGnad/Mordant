@@ -29,7 +29,7 @@ export type RunProvenance = (typeof RUN_PROVENANCES)[number];
 
 /** The exact badge each provenance is allowed to print. Nothing else may label a run. */
 export const RUN_PROVENANCE_BADGE: Readonly<Record<RunProvenance, string>> = Object.freeze({
-  VERIFIED_LIVE_RUN: "Verified live run",
+  VERIFIED_LIVE_RUN: "Verified on-chain execution · separate hardened run",
   LIVE_SESSION: "Live session",
   DEMO_FIXTURE: "Demo fixture",
 });

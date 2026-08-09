@@ -46,7 +46,7 @@ const WALLET_B = "0x1111111111111111111111111111111111111111";
 /** Never reachable in production: the harness is the only place this is on. */
 const WITH_ONCHAIN = capabilities("MANAGED_COMBINED_INTAKE", "ONCHAIN_RECOURSE_CONNECTED");
 
-function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDraft | null } {
+function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDraft | null; busy?: boolean } {
   const base = {
     capabilitySet: MANAGED,
     eligibility: VERIFIED,
@@ -67,6 +67,13 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
     return {
       model: adaptManagedIntake({ ...base, view: null, claimsAuthored: false, elapsedSeconds: null }),
       draft: DRAFT,
+    };
+  }
+  if (scenario === "starting") {
+    return {
+      model: adaptManagedIntake({ ...base, view: null, claimsAuthored: false, elapsedSeconds: null }),
+      draft: DRAFT,
+      busy: true,
     };
   }
   if (scenario === "running") {
@@ -199,7 +206,7 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
 }
 
 export function LiveProductHarness({ scenario }: { readonly scenario: string }) {
-  const [{ model, draft }] = useState(() => build(scenario));
+  const [{ model, draft, busy = false }] = useState(() => build(scenario));
 
   return (
     <PublicShell surface="live">
@@ -226,6 +233,7 @@ export function LiveProductHarness({ scenario }: { readonly scenario: string }) 
         holderDraft={model.eligibility.holderAddress ?? ""}
         publicTestHolder="0x911F99f424D47F08a15fcC771e94dcc2f7252B02"
         actions={{}}
+        busy={busy}
       />
     </PublicShell>
   );
