@@ -204,7 +204,7 @@ a continuation of a fresh managed run.
 | Release consumed | [`0x09b9bbfb…3936d651`](https://testnet.monadexplorer.com/tx/0x09b9bbfbab53f1782506850654fe0c7be1e81bf8a1eff692c5b43e0e3936d651) |
 | Cure window | **600 seconds**, allowed to expire uncured |
 | Finalization | [`0xc74051d8…45e4fc34`](https://testnet.monadexplorer.com/tx/0xc74051d892a0e2f971e744ac45b159dd19f23b8ff7f649192ab77f2345e4fc34), permissionless |
-| Holder claims | [`0x4831b0a7…ecbea819`](https://testnet.monadexplorer.com/tx/0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819) 0.002400 aUSDC · [`0x36296bf9…430bfc50`](https://testnet.monadexplorer.com/tx/0x36296bf9db21123fcd155ec95c8f7a4db31b5158dd42139b79bb81430bfc50) 0.001600 aUSDC |
+| Holder claims | [`0x4831b0a7…ecbea819`](https://testnet.monadexplorer.com/tx/0x4831b0a7aa5bb6c030a6651e3112ee806f0c0d7c61ecbdf376d096b6ecbea819) 0.002400 aUSDC · [`0x36296bf9…430bfc50`](https://testnet.monadexplorer.com/tx/0x36296bf9db21123fcd155ec95c8f7a4db31cbb5158dd42139b79bb81430bfc50) 0.001600 aUSDC |
 | Reconciliation | Reserve cleared, both configured claims paid, adapter solvent, MINV01 unchanged |
 
 In this historical run, the governed result established conflict, the preconfigured historical demo
