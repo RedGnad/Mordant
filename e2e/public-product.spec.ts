@@ -92,8 +92,8 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(mobileComposition.intersectionWidth).toBeGreaterThan(12);
     expect(mobileComposition.intersectionHeight).toBeGreaterThan(8);
   }
-  // On the landing, both primary entry points move to its one real experiment.
-  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
+  // The header opens the full managed proof; the hero starts with the landing experiment.
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
   await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" }).first())
     .toHaveAttribute("href", "#product");
   await expect(page.getByRole("navigation", { name: "Product navigation" })
