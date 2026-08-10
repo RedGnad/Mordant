@@ -801,3 +801,48 @@ precisely because two green per-side suites could not see their own disagreement
 case creation rather than before admission", was closed by F4 and is no longer accurate. Keys are
 minted by `readParticipantAdmissionContext`, before the wallet signs. The testnet deployment of
 `MordantCoalitionAdapter` remains outstanding.
+
+## D35 — Re-audit of e89336a: the F-05 guard had broken the live product
+
+The external re-audit returned NOT READY: one new BLOCKER, and F-03 still failing. Both were
+reproduced here before being touched, and both were mine.
+
+**N1 (BLOCKER) — a guard that refused a legitimate absence.** The real order is: A is challenged,
+admitted, and *submits*; only then is B challenged. Submission deletes A's signing key on purpose
+(`rmSync(state.participantKeys[role])`), because that key is consumed. But
+`readParticipantAdmissionContextRuntime` materialised *both* roles' keys on every challenge, so B's
+challenge met A's legitimate absence and the F-05 guard answered 409. The live product was dead at
+B's admission.
+
+The bug predates the guard. Before F-05 this path silently re-minted A's consumed key, which is
+exactly the unauthorized substitution F-05 exists to forbid; the guard only turned a silent
+vulnerability into a loud failure. So the fix is not to loosen the guard. The admission context is
+now per-role: a challenge materialises its own role's key and touches nothing else. Both consumers
+only ever read `[role]`, so nothing needed the second key.
+
+**F-03 (HIGH) — the terminal size pin never learned about enrollments.** Measured here, not taken on
+report: a real managed run publishes `participant-enrollment-{a,b}.json` at 940 bytes each, and
+`governedFheEvidence.measurements.publicArtifactBytes` is 391,686,234 against a pin of 391,684,354.
+The delta is exactly the two enrollments. Every new managed run died at `exportProtectionEvidence`.
+
+The pins are now written as a pre-enrollment baseline plus `EXPECTED_ENROLLMENT_BYTES * 2`, so one
+number governs both scenarios. Retained documents predate V5 and published no enrollment, so the
+addend is conditional on the same marker the field list already uses: the presence of
+`enrollmentBytes` in the submission measurement. The marker is read, never the value, because the
+value is currently zeroed on the way through `measurements.json` while the files exist regardless.
+
+**N2 (MEDIUM) — the only e2e covering this path never ran.** `e2e/direct-participant.spec.ts` had a
+config but no script and no workflow referencing it. Run by hand it failed: the mock still served
+`domain.version: "1"`, and, unreported, its message was missing `participantSigningKeyDigest`, which
+F-01 had made mandatory. The mock now takes version, schema and primary type from the client's own
+exported constants, so it cannot drift again, and the spec is chained into `test:e2e`, which is what
+CI runs.
+
+**What this says about the pass.** CI was 8/8 green and the product was broken at two separate
+points. The export is not exercised by any CI job (`protection:smoke:*` is local-only), and the one
+e2e that covers the two-wallet path was not wired in. Green meant less than it appeared to.
+
+**Method note.** The F-05 controls each drove one damaged key through one call and passed. None
+walked the real sequence, which is where the damage was. Isolated refusals are not a substitute for
+the order the product actually runs in; the N1 regression test now walks it and fails against the
+previous behaviour.
