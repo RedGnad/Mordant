@@ -11,8 +11,10 @@ import {
   LIVE_WORKER_SCHEMA,
   parseParticipantChallengeResponse,
 } from "../../components/live-product/participant-admission-client";
+import { admissionFailure } from "./participant-admission-service";
 import { SUBMISSION_MEASUREMENT_FIELDS } from "./protection-evidence";
 import {
+  ParticipantAdmissionV2Error,
   PARTICIPANT_ADMISSION_V2_PRIMARY_TYPE,
   PARTICIPANT_ADMISSION_V2_SALT,
   PARTICIPANT_ADMISSION_V2_TYPES,
@@ -154,4 +156,37 @@ test("the TypeScript verifier accepts the submission report Go actually emits", 
     const value = report[field];
     ok(typeof value === "number" && Number.isInteger(value) && value > 0, `${field} must be a positive integer`);
   }
+});
+
+// -------------------------------------------------- diagnostics at the edge
+
+/**
+ * A refusal a participant can act on.
+ *
+ * The worker's top-level handler forwards a typed admission refusal and collapses
+ * everything else to a generic message, deliberately, so an internal error can
+ * never reach a visitor. A V2 refusal was landing in the "everything else" branch,
+ * so someone whose admission named the wrong signing key was told only that the
+ * service refused the request.
+ */
+test("a V2 refusal reaches the edge with its own code and status", () => {
+  for (const [reason, thrown] of [
+    ["a key the case does not publish", new ParticipantAdmissionV2Error("SIGNING_KEY_NOT_ADMITTED", 409, "wrong key")],
+    ["an admission outside its window", new ParticipantAdmissionV2Error("ADMISSION_EXPIRED", 409, "expired")],
+    ["a malformed field", new ParticipantAdmissionV2Error("ADMISSION_FIELD", 400, "bad field")],
+  ] as const) {
+    const surfaced = admissionFailure(thrown);
+    strictEqual(surfaced.code, thrown.code, `${reason} must keep its code`);
+    strictEqual(surfaced.status, thrown.status, `${reason} must keep its status`);
+    // The worker discards anything coded ADMISSION, so a generic mapping would
+    // be indistinguishable from an internal failure.
+    ok(surfaced.code !== "ADMISSION", `${reason} must not collapse to the generic refusal`);
+  }
+});
+
+test("an unrecognised failure still collapses, so internals never reach a visitor", () => {
+  const surfaced = admissionFailure(new Error("ENOENT: /srv/mordant/private/participant_a.ed25519"));
+  strictEqual(surfaced.code, "ADMISSION");
+  strictEqual(surfaced.status, 500);
+  ok(!surfaced.message.includes("participant_a.ed25519"), "an internal path must never be surfaced");
 });

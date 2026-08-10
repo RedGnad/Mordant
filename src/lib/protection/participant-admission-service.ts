@@ -39,6 +39,7 @@ import {
 import { hashTypedData } from "viem";
 
 import {
+  ParticipantAdmissionV2Error,
   assertParticipantAdmissionV2Message,
   participantAdmissionV2TypedData,
   participantSigningKeyDigest,
@@ -581,7 +582,13 @@ export function admittedWallets(runRoot: string, runId: string): Readonly<Record
 export function admissionFailure(error: unknown): Readonly<{ status: number; code: string; message: string }> {
   if (error instanceof ParticipantAdmissionError
     || error instanceof ParticipantAuthorizationError
-    || error instanceof ParticipantAdmissionStoreError) {
+    || error instanceof ParticipantAdmissionStoreError
+    // A V2 refusal is as diagnosable as the others and says nothing private: it
+    // names a schema, a role, a window or a key binding. Leaving it out made
+    // every V2 refusal reach the browser as an opaque 500, so a participant
+    // whose admission named the wrong key was told only that the service
+    // refused the request.
+    || error instanceof ParticipantAdmissionV2Error) {
     return { status: error.status, code: error.code, message: error.message };
   }
   if (error instanceof SupervisedPledgeWindowsError) {
