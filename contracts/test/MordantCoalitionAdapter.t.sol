@@ -8,6 +8,7 @@ import { MordantCoalitionAdapter } from "../src/recourse/MordantCoalitionAdapter
 import { ICviVerifier } from "../src/interfaces/ICviVerifier.sol";
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 import { MockEligibility } from "../src/mocks/MockEligibility.sol";
+import { CoalitionSettlementFixture } from "./fixtures/CoalitionSettlementFixture.sol";
 
 /// @dev The settlement path for a coalition release, driven by the digests a real 2-of-3 release
 /// of the Go spine actually produced.
@@ -73,22 +74,25 @@ contract MordantCoalitionAdapterTest is Test {
         token.approve(address(adapter), type(uint256).max);
     }
 
-    function _loadSpineRelease() private view returns (SpineRelease memory loaded) {
-        string memory raw = vm.readFile("./test/fixtures/coalition-settlement.json");
-        loaded.fheCaseId = vm.parseJsonBytes32(raw, ".fheCaseId");
-        loaded.caseBindingDigest = vm.parseJsonBytes32(raw, ".caseBindingDigest");
-        loaded.assetIdentityDigest = vm.parseJsonBytes32(raw, ".assetIdentityDigest");
-        loaded.coalitionResultDigest = vm.parseJsonBytes32(raw, ".coalitionResultDigest");
-        loaded.releaseTranscript = vm.parseJsonBytes32(raw, ".releaseTranscript");
-        loaded.participantArtifactDigestA = vm.parseJsonBytes32(raw, ".participantArtifactDigestA");
-        loaded.participantArtifactDigestB = vm.parseJsonBytes32(raw, ".participantArtifactDigestB");
-        loaded.coalitionAuthorityId = vm.parseJsonBytes32(raw, ".coalitionAuthorityId");
-        loaded.releaseMode = vm.parseJsonBytes32(raw, ".releaseMode");
-        loaded.circuitDigest = vm.parseJsonBytes32(raw, ".circuitDigest");
-        loaded.parameterFingerprint = vm.parseJsonBytes32(raw, ".parameterFingerprint");
-        loaded.servingQuorum = uint16(vm.parseJsonUint(raw, ".servingQuorum"));
-        loaded.sameEconomicAsset = vm.parseJsonBool(raw, ".sameEconomicAsset");
-        loaded.policyConflict = vm.parseJsonBool(raw, ".policyConflict");
+    /// @dev The fixture is a generated Solidity library rather than a JSON file read at
+    /// runtime. Foundry grants filesystem access only through foundry.toml, and that file is a
+    /// frozen source: the reviewed build configuration of the contracts must not drift to make a
+    /// test convenient. The values are still mechanical, emitted by the Go run that produced them.
+    function _loadSpineRelease() private pure returns (SpineRelease memory loaded) {
+        loaded.fheCaseId = CoalitionSettlementFixture.FHE_CASE_ID;
+        loaded.caseBindingDigest = CoalitionSettlementFixture.CASE_BINDING_DIGEST;
+        loaded.assetIdentityDigest = CoalitionSettlementFixture.ASSET_IDENTITY_DIGEST;
+        loaded.coalitionResultDigest = CoalitionSettlementFixture.COALITION_RESULT_DIGEST;
+        loaded.releaseTranscript = CoalitionSettlementFixture.RELEASE_TRANSCRIPT;
+        loaded.participantArtifactDigestA = CoalitionSettlementFixture.PARTICIPANT_ARTIFACT_DIGEST_A;
+        loaded.participantArtifactDigestB = CoalitionSettlementFixture.PARTICIPANT_ARTIFACT_DIGEST_B;
+        loaded.coalitionAuthorityId = CoalitionSettlementFixture.COALITION_AUTHORITY_ID;
+        loaded.releaseMode = CoalitionSettlementFixture.RELEASE_MODE;
+        loaded.circuitDigest = CoalitionSettlementFixture.CIRCUIT_DIGEST;
+        loaded.parameterFingerprint = CoalitionSettlementFixture.PARAMETER_FINGERPRINT;
+        loaded.servingQuorum = CoalitionSettlementFixture.SERVING_QUORUM;
+        loaded.sameEconomicAsset = CoalitionSettlementFixture.SAME_ECONOMIC_ASSET;
+        loaded.policyConflict = CoalitionSettlementFixture.POLICY_CONFLICT;
     }
 
     function _deploy() private returns (MordantCoalitionAdapter) {

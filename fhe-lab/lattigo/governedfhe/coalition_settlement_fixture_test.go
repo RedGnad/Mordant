@@ -3,6 +3,7 @@ package governedfhe
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,7 +125,43 @@ func TestEmitCoalitionSettlementFixture(t *testing.T) {
 	if err := os.WriteFile(evidencePath, append(evidenceEncoded, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("wrote coalition settlement fixture to %s and evidence to %s", destination, evidencePath)
+	// A Solidity library of the same values, so the on-chain test consumes them
+	// without reading a file. Foundry only grants filesystem access through
+	// foundry.toml, and that file is a frozen source: the reviewed build
+	// configuration of the contracts must not drift to make a test convenient.
+	solidity := fmt.Sprintf(`// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+/// @dev Generated from a real 2-of-3 coalition release of the Go spine. Do not edit by hand.
+///
+/// Regenerate with:
+///   MORDANT_COALITION_FIXTURE_OUT=<abs path to test/fixtures/coalition-settlement.json> ///     go test -run TestEmitCoalitionSettlementFixture ./governedfhe/
+library CoalitionSettlementFixture {
+    bytes32 internal constant FHE_CASE_ID = %s;
+    bytes32 internal constant CASE_BINDING_DIGEST = %s;
+    bytes32 internal constant ASSET_IDENTITY_DIGEST = %s;
+    bytes32 internal constant COALITION_RESULT_DIGEST = %s;
+    bytes32 internal constant RELEASE_TRANSCRIPT = %s;
+    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_A = %s;
+    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_B = %s;
+    bytes32 internal constant COALITION_AUTHORITY_ID = %s;
+    bytes32 internal constant RELEASE_MODE = %s;
+    bytes32 internal constant CIRCUIT_DIGEST = %s;
+    bytes32 internal constant PARAMETER_FINGERPRINT = %s;
+    uint16 internal constant SERVING_QUORUM = %d;
+    bool internal constant SAME_ECONOMIC_ASSET = %t;
+    bool internal constant POLICY_CONFLICT = %t;
+}
+`,
+		emitted.CaseID, emitted.CaseBindingDigest, emitted.AssetIdentityDigest, emitted.CoalitionResultDigest,
+		emitted.ReleaseTranscript, emitted.ParticipantArtifactDigestA, emitted.ParticipantArtifactDigestB,
+		emitted.CoalitionAuthorityID, emitted.ReleaseMode, emitted.CircuitDigest, emitted.ParameterFingerprint,
+		emitted.ServingQuorum, emitted.SameEconomicAsset, emitted.PolicyConflict)
+	solidityPath := filepath.Join(filepath.Dir(destination), "CoalitionSettlementFixture.sol")
+	if err := os.WriteFile(solidityPath, []byte(solidity), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("wrote coalition settlement fixture to %s, evidence to %s and %s", destination, evidencePath, solidityPath)
 }
 
 func hexOfDigest(value Digest) string {
