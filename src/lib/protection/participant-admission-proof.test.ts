@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+
+import { hashTypedData } from "viem";
+
+import { participantAdmissionV2TypedData } from "./participant-admission-v2";
 import { test } from "node:test";
 
 import { privateKeyToAccount } from "viem/accounts";
@@ -231,7 +235,14 @@ test("F-03: a verified proof retains no private pledge window and no key", async
   for (const forbidden of ["activeFrom", "activeUntil", "privateKey", KEY_A, KEY_B, "1786000000", "1786900000"]) {
     assert.equal(encoded.includes(forbidden), false, `proof leaked ${forbidden}`);
   }
-  assert.deepEqual(Object.keys(proof).sort(), ["authorizationDigest", "recoveredSigner", "role", "wallet"]);
+  // A V1 proof keeps its minimal shape, plus the schema it re-proved: a reader
+  // must be able to tell which admission was verified rather than assume.
+  assert.deepEqual(
+    Object.keys(proof).sort(),
+    ["admissionSchema", "authorizationDigest", "recoveredSigner", "role", "wallet"],
+  );
+  assert.equal(proof.admissionSchema, "ParticipantAdmissionV1");
+  assert.equal(proof.participantSigningKeyDigest, undefined, "a V1 admission binds no signing key");
 });
 
 test("F-03: the admission stays verifiable after the private artifacts are pruned", async () => {
@@ -242,4 +253,57 @@ test("F-03: the admission stays verifiable after the private artifacts are prune
   const rehydrated = JSON.parse(JSON.stringify(survived)) as DirectParticipantAdmissionFact;
   const proof = await assertParticipantAdmissionProof(rehydrated, expected());
   assert.equal(proof.recoveredSigner, WALLET_A);
+});
+
+// -------------------------------------------------------- V2 at the bridge
+
+/**
+ * Settlement must re-prove the admissions the product actually persists. Since
+ * the live server issues V2, a bridge that only understood V1 would either
+ * refuse every real admission or, worse, verify it as a V1 and drop the binding
+ * between the wallet and the key that signs its enrollments.
+ */
+async function v2Admission(key: `0x${string}`, signingKeyDigest: `0x${string}`) {
+  const payload = { ...message(), participantSigningKeyDigest: signingKeyDigest };
+  const typed = participantAdmissionV2TypedData(payload, CHAIN_ID);
+  const account = privateKeyToAccount(key);
+  const signature = await account.signTypedData({
+    domain: typed.domain,
+    types: typed.types,
+    primaryType: typed.primaryType,
+    message: typed.message as never,
+  });
+  return {
+    role: payload.role,
+    participantWallet: payload.participantWallet,
+    authorizationDigest: hashTypedData(typed as never) as `0x${string}`,
+    claimCommitment: `0x${"ab".repeat(32)}` as `0x${string}`,
+    authorizationNonce: payload.authorizationNonce,
+    chainId: CHAIN_ID,
+    eligibilityBlock: 51_516_302,
+    authorization: { ...payload },
+    signature,
+  } as unknown as DirectParticipantAdmissionFact;
+}
+
+test("F-02: the bridge re-proves a V2 admission and keeps its key binding", async () => {
+  const signingKeyDigest = `0x${"7c".repeat(32)}` as const;
+  const proof = await assertParticipantAdmissionProof(await v2Admission(KEY_A, signingKeyDigest), expected());
+  assert.equal(proof.admissionSchema, "ParticipantAdmissionV2");
+  assert.equal(proof.participantSigningKeyDigest, signingKeyDigest,
+    "settlement is the last place able to see which key the admitted wallet authorized");
+  assert.equal(proof.recoveredSigner.toLowerCase(), WALLET_A.toLowerCase());
+});
+
+test("F-02: a V2 admission signed over the V1 struct is refused", async () => {
+  // The same fields, signed as a V1 message. Recovering it against the V2 typed
+  // data must not yield the wallet, so the proof fails rather than passing a
+  // downgraded admission through settlement.
+  const signingKeyDigest = `0x${"7d".repeat(32)}` as const;
+  const v1Signed = await admission(KEY_A);
+  const downgraded = {
+    ...v1Signed,
+    authorization: { ...(v1Signed.authorization as object), participantSigningKeyDigest: signingKeyDigest },
+  } as unknown as DirectParticipantAdmissionFact;
+  await assert.rejects(() => assertParticipantAdmissionProof(downgraded, expected()));
 });

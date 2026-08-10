@@ -10,10 +10,11 @@ import { parseManagedWorkerView, type ManagedWorkerView } from "./managed-intake
 export const PARTICIPANT_CASE_SCHEMA = "mordant.participant-case/1" as const;
 export const PARTICIPANT_CHALLENGE_SCHEMA = "mordant.participant-admission-challenge/1" as const;
 export const LIVE_WORKER_SCHEMA = "mordant.live-worker/1" as const;
-export const PARTICIPANT_ADMISSION_PRIMARY_TYPE = "ParticipantAdmissionV1" as const;
-/** `keccak256(toHex("mordant.participant-admission/1"))`, pinned by the worker contract. */
+export const PARTICIPANT_ADMISSION_PRIMARY_TYPE = "ParticipantAdmissionV2" as const;
+export const PARTICIPANT_ADMISSION_DOMAIN_VERSION = "2" as const;
+/** `keccak256(toHex("mordant.participant-admission/2"))`, pinned by the worker contract. */
 export const PARTICIPANT_ADMISSION_DOMAIN_SALT =
-  "0x140e0c549c6e2bee1578dce11133296086e105ae9861f1935a89a6df0710cf15" as const;
+  "0x8908b747a05e69594a7185c1a1c26bc5d939a09a7a7440656794096d46bc0313" as const;
 
 export type DirectParticipantRole = "A" | "B";
 export type WorkerParticipantRole = "PARTICIPANT_A" | "PARTICIPANT_B";
@@ -59,8 +60,20 @@ export type ParticipantCaseResponse = Readonly<{
   progress: string;
 }>;
 
+/**
+ * The V2 struct, field for field.
+ *
+ * The browser pins this rather than echoing whatever the worker sent: a wallet
+ * must not be asked to sign a shape the UI cannot itself account for. V2 differs
+ * from V1 by one field, `participantSigningKeyDigest`, which is the Ed25519 key
+ * this wallet authorizes to sign its enrollments.
+ *
+ * There is deliberately no V1 acceptance path. A V1 challenge reaching this
+ * client now means the worker and the UI disagree about the protocol, and
+ * signing it anyway would produce an admission the server will refuse.
+ */
 export const PARTICIPANT_ADMISSION_TYPES = Object.freeze({
-  ParticipantAdmissionV1: Object.freeze([
+  ParticipantAdmissionV2: Object.freeze([
     Object.freeze({ name: "verifyingService", type: "string" }),
     Object.freeze({ name: "runId", type: "string" }),
     Object.freeze({ name: "fheCaseId", type: "bytes32" }),
@@ -73,6 +86,7 @@ export const PARTICIPANT_ADMISSION_TYPES = Object.freeze({
     Object.freeze({ name: "authorizationNonce", type: "bytes32" }),
     Object.freeze({ name: "issuedAt", type: "uint64" }),
     Object.freeze({ name: "expiresAt", type: "uint64" }),
+    Object.freeze({ name: "participantSigningKeyDigest", type: "bytes32" }),
   ]),
 });
 
@@ -89,13 +103,15 @@ export type ParticipantAuthorization = Readonly<{
   authorizationNonce: `0x${string}`;
   issuedAt: number;
   expiresAt: number;
+  /** The Ed25519 key digest this wallet authorizes for its enrollments. */
+  participantSigningKeyDigest: `0x${string}`;
 }>;
 
 export type ParticipantChallenge = Readonly<{
   schemaVersion: typeof PARTICIPANT_CHALLENGE_SCHEMA;
   domain: Readonly<{
     name: "Mordant Participant Admission";
-    version: "1";
+    version: typeof PARTICIPANT_ADMISSION_DOMAIN_VERSION;
     chainId: number;
     salt: `0x${string}`;
   }>;
@@ -264,21 +280,25 @@ function validClaim(value: unknown): value is AdmissionClaim {
 function expectedTypes(value: unknown): boolean {
   if (!exactRecord(value, [PARTICIPANT_ADMISSION_PRIMARY_TYPE])) return false;
   const fields = value[PARTICIPANT_ADMISSION_PRIMARY_TYPE];
-  if (!Array.isArray(fields) || fields.length !== PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1.length) return false;
+  if (!Array.isArray(fields) || fields.length !== PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2.length) return false;
   return fields.every((field, index) => exactRecord(field, ["name", "type"])
-    && field.name === PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1[index].name
-    && field.type === PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1[index].type);
+    && field.name === PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2[index].name
+    && field.type === PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2[index].type);
 }
 
 function authorization(value: unknown): ParticipantAuthorization | null {
   if (!exactRecord(value, [
     "verifyingService", "runId", "fheCaseId", "protectionBindingDigest", "assetIdentityDigest", "role",
     "activeFrom", "activeUntil", "participantWallet", "authorizationNonce", "issuedAt", "expiresAt",
+    "participantSigningKeyDigest",
   ])) return null;
   if (typeof value.verifyingService !== "string" || value.verifyingService.length === 0 || value.verifyingService.length > 255) return null;
   if (typeof value.runId !== "string" || !RUN_ID.test(value.runId)) return null;
   if (value.role !== "PARTICIPANT_A" && value.role !== "PARTICIPANT_B") return null;
-  for (const digest of [value.fheCaseId, value.protectionBindingDigest, value.assetIdentityDigest, value.authorizationNonce]) {
+  for (const digest of [
+    value.fheCaseId, value.protectionBindingDigest, value.assetIdentityDigest, value.authorizationNonce,
+    value.participantSigningKeyDigest,
+  ]) {
     if (typeof digest !== "string" || !BYTES32.test(digest)) return null;
   }
   const activeFrom = value.activeFrom;
@@ -303,6 +323,7 @@ function authorization(value: unknown): ParticipantAuthorization | null {
     authorizationNonce: value.authorizationNonce as `0x${string}`,
     issuedAt,
     expiresAt,
+    participantSigningKeyDigest: value.participantSigningKeyDigest as `0x${string}`,
   });
 }
 
@@ -322,7 +343,7 @@ export function parseParticipantChallengeResponse(value: unknown, expected: Read
   if (!exactRecord(raw, ["schemaVersion", "domain", "primaryType", "types", "message"])) return null;
   if (raw.schemaVersion !== PARTICIPANT_CHALLENGE_SCHEMA || raw.primaryType !== PARTICIPANT_ADMISSION_PRIMARY_TYPE || !expectedTypes(raw.types)) return null;
   if (!exactRecord(raw.domain, ["name", "version", "chainId", "salt"])) return null;
-  if (raw.domain.name !== "Mordant Participant Admission" || raw.domain.version !== "1"
+  if (raw.domain.name !== "Mordant Participant Admission" || raw.domain.version !== PARTICIPANT_ADMISSION_DOMAIN_VERSION
     || raw.domain.chainId !== expected.expectedChainId || raw.domain.salt !== PARTICIPANT_ADMISSION_DOMAIN_SALT) return null;
   const message = authorization(raw.message);
   if (message === null) return null;
@@ -335,7 +356,7 @@ export function parseParticipantChallengeResponse(value: unknown, expected: Read
     schemaVersion: PARTICIPANT_CHALLENGE_SCHEMA,
     domain: Object.freeze({
       name: "Mordant Participant Admission",
-      version: "1",
+      version: PARTICIPANT_ADMISSION_DOMAIN_VERSION,
       chainId: raw.domain.chainId,
       salt: raw.domain.salt as `0x${string}`,
     }),

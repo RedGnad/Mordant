@@ -1,8 +1,12 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 import {
+  LIVE_WORKER_SCHEMA,
   PARTICIPANT_ADMISSION_DOMAIN_SALT,
+  PARTICIPANT_ADMISSION_DOMAIN_VERSION,
+  PARTICIPANT_ADMISSION_PRIMARY_TYPE,
   PARTICIPANT_ADMISSION_TYPES,
+  PARTICIPANT_CHALLENGE_SCHEMA,
 } from "../src/components/live-product/participant-admission-client";
 
 const PORT = Number(process.env.MORDANT_DIRECT_E2E_PORT ?? "3222");
@@ -189,16 +193,16 @@ class DeterministicParticipantWorker {
         const expiresAt = this.defect === "expired" ? now - 1 : now + 600;
         const activeUntil = Number(claim.activeUntil) + (this.defect === "changed-payload" ? 1 : 0);
         await json(route, 200, {
-          schemaVersion: "mordant.live-worker/1",
+          schemaVersion: LIVE_WORKER_SCHEMA,
           challenge: {
-            schemaVersion: "mordant.participant-admission-challenge/1",
+            schemaVersion: PARTICIPANT_CHALLENGE_SCHEMA,
             domain: {
               name: "Mordant Participant Admission",
-              version: "1",
+              version: PARTICIPANT_ADMISSION_DOMAIN_VERSION,
               chainId: CHAIN_ID,
               salt: PARTICIPANT_ADMISSION_DOMAIN_SALT,
             },
-            primaryType: "ParticipantAdmissionV1",
+            primaryType: PARTICIPANT_ADMISSION_PRIMARY_TYPE,
             types: PARTICIPANT_ADMISSION_TYPES,
             message: {
               verifyingService: APP_ORIGIN,
@@ -213,6 +217,7 @@ class DeterministicParticipantWorker {
               authorizationNonce: bytes32(role === "PARTICIPANT_A" ? "1" : "2"),
               issuedAt,
               expiresAt,
+              participantSigningKeyDigest: bytes32(role === "PARTICIPANT_A" ? "c" : "d"),
             },
           },
         });
@@ -417,10 +422,10 @@ test.describe("direct participant browser integration", () => {
     const signedA = calls.filter((call) => call.provider === "Canonical Participant A" && call.method === "eth_signTypedData_v4");
     expect(signedA).toHaveLength(1);
     const typedA = typedPayload(signedA[0]);
-    expect(typedA.primaryType).toBe("ParticipantAdmissionV1");
-    expect(asRecord(typedA.types).ParticipantAdmissionV1).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1);
+    expect(typedA.primaryType).toBe(PARTICIPANT_ADMISSION_PRIMARY_TYPE);
+    expect(asRecord(typedA.types).ParticipantAdmissionV2).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2);
     expect(asRecord(typedA.domain).name).toBe("Mordant Participant Admission");
-    expect(asRecord(typedA.domain).version).toBe("1");
+    expect(asRecord(typedA.domain).version).toBe(PARTICIPANT_ADMISSION_DOMAIN_VERSION);
     expect(numeric(asRecord(typedA.domain).chainId)).toBe(BigInt(CHAIN_ID));
     expect(asRecord(typedA.domain).salt).toBe(PARTICIPANT_ADMISSION_DOMAIN_SALT);
     const messageA = asRecord(typedA.message);
@@ -477,8 +482,8 @@ test.describe("direct participant browser integration", () => {
     const signedB = calls.filter((call) => call.provider === "Canonical Participant B" && call.method === "eth_signTypedData_v4");
     expect(signedB).toHaveLength(1);
     const typedB = typedPayload(signedB[0]);
-    expect(typedB.primaryType).toBe("ParticipantAdmissionV1");
-    expect(asRecord(typedB.types).ParticipantAdmissionV1).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1);
+    expect(typedB.primaryType).toBe("ParticipantAdmissionV2");
+    expect(asRecord(typedB.types).ParticipantAdmissionV2).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2);
     const messageB = asRecord(typedB.message);
     expect(messageB.role).toBe("PARTICIPANT_B");
     expect(String(messageB.participantWallet).toLowerCase()).toBe(HOLDER_B.toLowerCase());

@@ -1,13 +1,13 @@
 {
   "schemaVersion": "mordant.coalition-settlement-fixture/1",
   "fheCaseId": "0xb11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
-  "caseBindingDigest": "0x52ce837ddc12b06579f49cad1ec68498aa99d8e8b6b2aaa07183b36626fb0e15",
+  "caseBindingDigest": "0xafd0da308701c48d674ec91008b078ec96158d64b69e2da5e5f8a68aeb861f00",
   "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
-  "coalitionResultDigest": "0xd23fd3887e93ffd73801d8c7caddb851a135591647a48d663f768bd91ef0b126",
-  "releaseTranscript": "0xee83158d1fa65993ca7cfca9271ff695c24c2183bba66331eb995ccfb6891cb4",
-  "participantArtifactDigestA": "0x0803f02de1385d7e14a04a2f5dcf364bb20fe19d1c6f3d24272ce912d88d49cf",
-  "participantArtifactDigestB": "0x6bf16e3acef1e25812abe241ba77864b34796924289c4103b3bf2916408dc673",
-  "coalitionAuthorityId": "0xebebb8eeca335ab615de36bfcd90ffe8e8abd7821e10198ff30836f9f67e87ec",
+  "coalitionResultDigest": "0xa966c86106d165b65ce2c967b8ea529731bbd0424ceb1817d0898b1c32f8203a",
+  "releaseTranscript": "0x068ac5752f10bcc7d4c1b4155ca837a603a7cc5ed82aa272681d863d5d520d84",
+  "participantArtifactDigestA": "0x0631043b143864a7efaafe5dda0daedd725d9459a752bb7ace07322e68b7f489",
+  "participantArtifactDigestB": "0x7dd15145ef8f5387d471b09176f1745271f8cfa3ccfa5b55698a32dc7eeba4ca",
+  "coalitionAuthorityId": "0x836c3f867326538e22e17f69563091b97159f7c15023055390da6d4629c65cfc",
   "servingQuorum": 2,
   "coalition": [
     1,
@@ -22,11 +22,11 @@
   "participantA": {
     "id": "sha256:0cf5d0870db048e948835f5face04ca71a380a4948f710e818697ae6761e36c9",
     "role": "PARTICIPANT_A",
-    "signingPublicKey": "9HS45DwVNjbdfXseFUkMd7CHDn6ZKv8h3hgO1UPrL4w="
+    "signingPublicKey": "iF1yuwVw4zCJOWmxpxn9QDmT61DY4gdl64lrhJmu17Q="
   },
   "participantB": {
     "id": "sha256:e9c940b5104adebb21db75aa07043560be6c363d124eb4d4e568e64e3313af91",
     "role": "PARTICIPANT_B",
-    "signingPublicKey": "Fc6hjI113LqEmKyoGdFKwpR5yoH+luX3HrcKN+qPExs="
+    "signingPublicKey": "Jqgoo9ovcUuwFr+TrHSxfMqZa6DNB6nIGnBhsfcPF9w="
   }
 }

@@ -115,6 +115,7 @@ const TEST_FILES = Object.freeze([
   ".product-test-dist/src/lib/protection/coalition-evidence.test.js",
   ".product-test-dist/src/lib/protection/participant-admission-v2.test.js",
   ".product-test-dist/src/lib/protection/cleanverse-native-scenario.test.js",
+  ".product-test-dist/src/lib/protection/admission-v2-seam.test.js",
   ".product-test-dist/src/lib/protection/protection-product.test.js",
   ".product-test-dist/src/lib/protection/protection-reconciliation.test.js",
   ".product-test-dist/src/lib/protection/supervised-pledge-windows.test.js",

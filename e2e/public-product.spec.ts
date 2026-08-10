@@ -92,10 +92,13 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(mobileComposition.intersectionWidth).toBeGreaterThan(12);
     expect(mobileComposition.intersectionHeight).toBeGreaterThan(8);
   }
-  // The header opens the full managed proof; the hero starts with the landing experiment.
+  // The primary call to action lives in the shell header and opens the live
+  // product directly, from every surface including the landing. There is no
+  // second copy of it in the page body: this file asserts elsewhere that the
+  // live product "is never duplicated as a second navigation destination", and a
+  // hero link repeating it would be exactly that duplicate.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
-  await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" }).first())
-    .toHaveAttribute("href", "#product");
+  await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Product navigation" })
     .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByRole("main").getByRole("link", { name: "Inspect verified evidence" }).first())
@@ -735,7 +738,7 @@ test("the public shell exposes one hierarchy and one primary action", async ({ p
   // The live product is the only primary action, and it is never duplicated as a
   // second navigation destination.
   await expect(navigation.getByRole("link", { name: /live check|Run the live check/u })).toHaveCount(0);
-  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/#product");
+  await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
 
   // Old destinations must not reappear anywhere in the public chrome.
   for (const retired of ["/workspace", "/participant", "/protocol", "/design-system"]) {
