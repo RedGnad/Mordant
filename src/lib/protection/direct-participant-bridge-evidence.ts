@@ -27,10 +27,17 @@ import { recoverTypedDataAddress } from "viem";
 import { canonicalJson, type Sha256Digest } from "./cleanverse-asset";
 import {
   assertParticipantAdmissionMessage,
+  type ParticipantAdmissionMessage,
   digestToBytes32,
   participantAdmissionDigest,
   participantAdmissionTypedData,
 } from "./participant-authorization";
+import { hashTypedData } from "viem";
+import {
+  assertParticipantAdmissionV2Message,
+  participantAdmissionV2TypedData,
+  type ParticipantAdmissionV2Message,
+} from "./participant-admission-v2";
 import { CUSTOM_SUPERVISED_EXECUTION_VARIANT } from "./custom-supervised-v2";
 import {
   assertReleaseAuthorityIdentity,
@@ -75,6 +82,16 @@ export type VerifiedAdmissionProof = Readonly<{
   wallet: string;
   recoveredSigner: string;
   authorizationDigest: string;
+  /** Which admission schema was actually re-proved, never assumed. */
+  admissionSchema: "ParticipantAdmissionV1" | "ParticipantAdmissionV2";
+  /**
+   * The Ed25519 key the wallet authorized, present only for V2.
+   *
+   * Carried rather than dropped: it is the binding between the admitted wallet
+   * and the key that signs that participant's enrollments, and settlement is the
+   * last place able to check it before value moves.
+   */
+  participantSigningKeyDigest?: `0x${string}`;
 }>;
 
 /**
@@ -95,7 +112,16 @@ export async function assertParticipantAdmissionProof(
   if (!/^0x[0-9a-fA-F]{130}$/u.test(fact.signature)) {
     fail("ADMISSION_PROOF_SIGNATURE", `${fact.role} admission signature has an unexpected shape`);
   }
-  const message = assertParticipantAdmissionMessage(fact.authorization);
+  // The schema is recognised explicitly, from the presence of the one field that
+  // distinguishes them, and the matching typed data is used to re-prove the
+  // signature. Guessing, or trying V1 and falling back to V2, would let a
+  // malformed V2 be re-proved as a V1 with its key binding quietly dropped.
+  const raw = fact.authorization as Record<string, unknown>;
+  const looksV2 = Object.hasOwn(raw, "participantSigningKeyDigest");
+  const message = looksV2
+    ? assertParticipantAdmissionV2Message(fact.authorization)
+    : assertParticipantAdmissionMessage(fact.authorization);
+  const admissionSchema = looksV2 ? "ParticipantAdmissionV2" : "ParticipantAdmissionV1";
 
   // Every field the wallet signed must be the field this run is acting on.
   if (message.role !== fact.role) fail("ADMISSION_PROOF_ROLE", "The signed admission is for a different role");
@@ -114,7 +140,11 @@ export async function assertParticipantAdmissionProof(
   }
   if (fact.chainId !== 10_143) fail("ADMISSION_PROOF_CHAIN", "The admission is not bound to Monad testnet");
 
-  const digest = participantAdmissionDigest(message, fact.chainId);
+  const digest = looksV2
+    ? (hashTypedData(
+        participantAdmissionV2TypedData(message as ParticipantAdmissionV2Message, fact.chainId) as never,
+      ) as `0x${string}`)
+    : participantAdmissionDigest(message as ParticipantAdmissionMessage, fact.chainId);
   if (digest.toLowerCase() !== fact.authorizationDigest.toLowerCase()) {
     fail("ADMISSION_PROOF_DIGEST", "The retained authorization digest is not the digest of the signed struct");
   }
@@ -123,8 +153,11 @@ export async function assertParticipantAdmissionProof(
   try {
     // Exactly the struct the server built for signing, so the browser and the
     // verifier cannot disagree about what was authorized.
+    const typedData = looksV2
+      ? participantAdmissionV2TypedData(message as ParticipantAdmissionV2Message, fact.chainId)
+      : participantAdmissionTypedData(message as ParticipantAdmissionMessage, fact.chainId);
     recovered = await recoverTypedDataAddress({
-      ...participantAdmissionTypedData(message, fact.chainId),
+      ...(typedData as never as Parameters<typeof recoverTypedDataAddress>[0]),
       signature: fact.signature as `0x${string}`,
     });
   } catch {
@@ -133,12 +166,21 @@ export async function assertParticipantAdmissionProof(
   if (recovered.toLowerCase() !== fact.participantWallet.toLowerCase()) {
     fail("ADMISSION_PROOF_SIGNER", "The admission was signed by a different wallet");
   }
-  return Object.freeze({
+  const base = {
     role: fact.role,
     wallet: fact.participantWallet,
     recoveredSigner: recovered,
     authorizationDigest: fact.authorizationDigest,
-  });
+    admissionSchema,
+  } as const;
+  // The projection stays minimal. The key digest appears only where it exists,
+  // so a V1 proof keeps exactly the shape it had, and a V2 proof carries the one
+  // binding settlement needs. Both are digests of public material.
+  return Object.freeze(
+    looksV2
+      ? { ...base, participantSigningKeyDigest: (message as ParticipantAdmissionV2Message).participantSigningKeyDigest }
+      : base,
+  );
 }
 
 /** The fresh FHE case binding fields the governed result must agree with. */
