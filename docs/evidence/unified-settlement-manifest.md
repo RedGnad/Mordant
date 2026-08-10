@@ -34,7 +34,7 @@ refused once any result-bearing artifact exists for the run.
 |---|---|
 | Run | `369ed70e-64e1-4427-9fc6-b899051a78a8` |
 | Case code | `8AAE11AYNY95XND1` |
-| Participant configuration | `docs/evidence/case-participant-config.json` |
+| Participant configuration | `docs/evidence/fresh-case-participant-config.json` |
 | Configuration sha256 | `3b80cffa91fd251574198dde930defc0c2a0dc324c87195bdeb893494d857833` |
 | Holder A | `0xDebC4C4BEF9B70008A9B043f8f6334401147634E` |
 | Holder B | `0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0` |

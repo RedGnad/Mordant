@@ -51,7 +51,7 @@ export const CANONICAL_RECOURSE_CONFIG_SHA256 =
  * exactly as they were.
  */
 export const CASE_PARTICIPANT_CONFIG_PATH =
-  "docs/evidence/case-participant-config.json" as const;
+  "docs/evidence/fresh-case-participant-config.json" as const;
 export const CASE_PARTICIPANT_CONFIG_SHA256 =
   "3b80cffa91fd251574198dde930defc0c2a0dc324c87195bdeb893494d857833" as const;
 export const CANONICAL_RECOURSE_HANDOFF_SHA256 =

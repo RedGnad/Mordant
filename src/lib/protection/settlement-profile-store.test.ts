@@ -46,7 +46,7 @@ function profile(overrides: Partial<SettlementProfile> = {}): SettlementProfile 
       protectionBindingDigest: `sha256:${"56".repeat(32)}`,
       releaseMode: "governed-decryptor-v1",
     },
-    participantConfig: { path: "docs/evidence/case-participant-config.json", sha256: "78".repeat(32) },
+    participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "78".repeat(32) },
     committedAtUnix: 1_786_000_000,
     chainId: 10_143,
     adapter: "0x1111111111111111111111111111111111111111",
@@ -180,10 +180,10 @@ test("a committed profile records which pinned participant configuration the cas
   const runRoot = root();
   try {
     const committed = commitSettlementProfile(runRoot, RUN, profile());
-    assert.equal(committed.profile.participantConfig.path, "docs/evidence/case-participant-config.json");
+    assert.equal(committed.profile.participantConfig.path, "docs/evidence/fresh-case-participant-config.json");
     // Changing the recorded configuration digest changes the commitment digest,
     // so a profile cannot be reused across participant configurations.
-    const other = profile({ participantConfig: { path: "docs/evidence/case-participant-config.json", sha256: "99".repeat(32) } });
+    const other = profile({ participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "99".repeat(32) } });
     assert.notEqual(settlementProfileDigest(other), committed.committedDigest);
   } finally {
     rmSync(runRoot, { recursive: true, force: true });
