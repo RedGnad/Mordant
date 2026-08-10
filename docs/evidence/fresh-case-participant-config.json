@@ -1,0 +1,271 @@
+{
+  "schemaVersion": "mordant.recourse-v2-demo-config/1",
+  "generatedAt": "2026-08-10",
+  "verifiedBy": "scripts/verify-recourse-v2-demo-config.mjs",
+  "contractCommit": "3ca9da71f0fd083d665b5a6f2614b9d82bbf4979",
+  "contractBranch": "feat/autonomous-recourse-contract-v2",
+  "network": {
+    "name": "monad-testnet",
+    "chainId": 10143
+  },
+  "observation": {
+    "liveBlock": 52380491,
+    "pinnedBlock": 52380491,
+    "note": "Fresh participant configuration for the post-deadline settlement run. The reviewed reference adapter, verifier, settlement token and facility are unchanged from the historical canonical configuration; only the participants differ."
+  },
+  "contracts": {
+    "adapter": {
+      "address": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "deploymentTx": "0xe99e9e984c1fecac69fbbb8413b0780f237622a6d5482085d9a92135a446e50e",
+      "deploymentBlock": 51386299,
+      "deployedCodeHash": "0x244c372d9896c267289555b2ebede9ae02ceb6f3d7f42186877088df8bd0099f",
+      "runtimeBytes": 10088
+    },
+    "verifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "settlementToken": {
+      "address": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+      "symbol": "aUSDC",
+      "decimals": 6
+    },
+    "apassRegistry": "0xbA82D189540CaC9DC6FF46B6837CaC1BFdEC58B9",
+    "aUsdcPolicy": "0x36489bE45fa84f70a0c2BDB11D824Be608CB12Dd",
+    "minv01": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "note": "verifier, settlementToken, facility, owner and attestor are read from the adapter's own immutables at run time, never from a literal."
+  },
+  "participants": {
+    "holderA": {
+      "address": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "provenance": "Fresh EOA generated for the post-deadline settlement run; A-Pass issued through /generate_apass after the Cleanverse Monad minter was refunded.",
+      "apassRequest": {
+        "customerId": "mordantcaseDebC4C4BEF9B",
+        "observedAtBlock": 52380491
+      },
+      "isValidAPassOnChain": true,
+      "apassTier": 50,
+      "apassStatus": 1,
+      "apassExpirationUnix": 1817574110,
+      "apassExpirationIso": "2027-08-06T17:41:50.000Z",
+      "verifyApassForAUsdc": "code 0000 \"ok\"",
+      "roleHolderEligible": true,
+      "keyControlled": true,
+      "keyCustody": "Operator-held for this run only; never written to any artifact."
+    },
+    "holderB": {
+      "address": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+      "provenance": "Fresh EOA generated for the post-deadline settlement run; A-Pass issued through /generate_apass after the Cleanverse Monad minter was refunded.",
+      "apassRequest": {
+        "customerId": "mordantcase3efa4046012D",
+        "observedAtBlock": 52380491
+      },
+      "isValidAPassOnChain": true,
+      "apassTier": 50,
+      "apassStatus": 1,
+      "apassExpirationUnix": 1817573293,
+      "apassExpirationIso": "2027-08-06T17:28:13.000Z",
+      "verifyApassForAUsdc": "code 0000 \"ok\"",
+      "roleHolderEligible": true,
+      "keyCustody": "Operator-held for this run only; never written to any artifact.",
+      "keyControlled": true
+    },
+    "negativeControl": {
+      "address": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "role": "NEGATIVE CONTROL: must never qualify",
+      "isValidAPassOnChain": false,
+      "roleHolderEligible": false,
+      "adapterToControlPermitted": false,
+      "preservedUnqualified": true,
+      "note": "No A-Pass was requested for this address. It was previously misused as holderB in docs/evidence/runtime-contract-handoff-2026-08-06.json; that is the defect this artifact corrects, not a state to restore."
+    },
+    "distinct": true
+  },
+  "facility": {
+    "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "source": "read from the deployed adapter's facility() immutable",
+    "isValidAPassOnChain": true,
+    "roleCorrection": {
+      "method": "CleanverseAPassVerifier.setRoleEligibility(account, role, eligible), onlyOwner, account-specific",
+      "caller": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+      "callerIsVerifierOwner": true,
+      "role": "ROLE_FACILITY (3)",
+      "txHash": "0xc20718d25256b2af1239bc9823c6460d35723af56bf051f9e98e8971cf68af8e",
+      "blockNumber": 51443358,
+      "status": "success",
+      "gasUsed": 61401,
+      "grantedRoleMaskBefore": "0",
+      "grantedRoleMaskAfter": "8",
+      "openRoleMaskBefore": "16",
+      "openRoleMaskAfter": "16",
+      "globalPolicyWidened": false,
+      "note": "openRoleMask is immutable in the verifier constructor and remains 16, that is ROLE_HOLDER only. The grant is account-specific and confers ROLE_FACILITY on this one address. No adapter redeployment was required."
+    },
+    "isEligibleForRoleFacility": true,
+    "cureAuthorizationWillPass": true,
+    "cureAuthorizationProof": {
+      "method": "eth_call simulation of cure(bytes32) against a run id that does not exist. No transaction was sent.",
+      "facilityCaller": {
+        "from": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+        "revertSelector": "0xe37d4aeb",
+        "revertSignature": "WrongState(uint8)",
+        "reading": "The call cleared both authorization checks, msg.sender == facility and _requireEligible(msg.sender, ROLE_FACILITY), and stopped only on the absent case. Before the grant this same call reverted on eligibility."
+      },
+      "nonFacilityCaller": {
+        "from": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+        "revertSelector": "0x0ba78f6e",
+        "revertSignature": "NotFacility()",
+        "reading": "The facility check still refuses everyone else, so the grant did not widen who may cure."
+      },
+      "ineligibleSelectorForReference": "0x2959c92c"
+    },
+    "cureWindowSeconds": 600
+  },
+  "settlement": {
+    "payoutAAtomic": "2400",
+    "payoutBAtomic": "1600",
+    "totalAtomic": "4000",
+    "decimals": 6,
+    "payoutAHuman": "0.0024 aUSDC",
+    "payoutBHuman": "0.0016 aUSDC",
+    "totalHuman": "0.004 aUSDC",
+    "allocationBps": {
+      "holderA": 6000,
+      "holderB": 4000
+    },
+    "fitsAvailableReserve": true,
+    "note": "Bounded to what the adapter can actually pay. The superseded fixture carried 600000/400000 atomic units, that is 1.0 aUSDC, which is 250 times the funded reserve and would revert with InsufficientReserve.",
+    "reserve": {
+      "availableReserve": "4000",
+      "openReserved": "0",
+      "entitledUnpaid": "0",
+      "tokenBalance": "4000",
+      "solvent": true,
+      "approveTx": "0xf5e8e49f945adac903775b71a38857035121192f050af3dd149a186c604b18ef",
+      "fundTx": "0x5bbca1d2398a031e7f0472c426e1d3144bcfafa7854135bd1ba0383a27add625"
+    }
+  },
+  "aUsdcTransferPolicyReadbacks": {
+    "method": "CleanverseAPassVerifier.isAssetTransferAllowed(asset, from, to, amount), which delegates to the live Cleanverse policy canTransfer",
+    "observedAtBlock": 51447925,
+    "funderToAdapter": {
+      "from": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "to": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "amount": "4000",
+      "allowed": true
+    },
+    "adapterToHolderA": {
+      "from": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "to": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "amount": "2400",
+      "allowed": true
+    },
+    "adapterToHolderB": {
+      "from": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "to": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+      "amount": "1600",
+      "allowed": true
+    },
+    "adapterToNegativeControl": {
+      "from": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
+      "to": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+      "amount": "1600",
+      "allowed": false
+    },
+    "supersededClaimCorrection": "docs/evidence/recourse-adapter-v2-deployment-2026-08-06.json and docs/evidence/p1-recourse-adapter-deployment-2026-08-06.json both state adapterToHolderB: true with no generator, no addresses and no readback behind it. For the address those files' holderB then resolved to, 0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0, that claim was false live and false at the V2 deployment block 51386299. The true reading above is for the new holderB only."
+  },
+  "minv01": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "adapterBalance": "0",
+    "touched": false
+  },
+  "gates": {
+    "holderA A-Pass valid": true,
+    "holderB A-Pass valid": true,
+    "holderA holder role": true,
+    "holderB holder role": true,
+    "holderA and holderB distinct": true,
+    "funder to adapter permitted": true,
+    "adapter to holderA permitted": true,
+    "adapter to holderB permitted": true,
+    "facility A-Pass valid": true,
+    "facility ROLE_FACILITY": true,
+    "cure authorization will pass": true,
+    "payouts fit available reserve": true,
+    "adapter solvent": true,
+    "MINV01 untouched by the adapter": true,
+    "negative control still refused": true,
+    "holders separate from privileged roles": true,
+    "holders are not the uncontrolled A-Pass wallet": true
+  },
+  "notDone": [
+    "no governed release transaction was submitted",
+    "no bridge attestation was signed",
+    "no EIP-712 handoff fixture was regenerated; that is the runtime agent's bounded deployment-binding correction"
+  ],
+  "containsNoSecrets": true,
+  "walletControl": {
+    "principle": "An address plus a valid A-Pass is not custody. Control means a locally held private key that derives exactly to the address and can produce a ParticipantAdmissionV1 signature.",
+    "keyNaming": "The recourse wallets use MORDANT_KEY_RECOURSE_HOLDER_A and MORDANT_KEY_RECOURSE_HOLDER_B, deliberately not the M-05 vault runner's MORDANT_KEY_HOLDER_A/B role slots. That overlap is what disguised the owner key as holderA.",
+    "holderA": {
+      "address": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "keyControlled": true,
+      "envVar": "MORDANT_KEY_RECOURSE_HOLDER_A",
+      "participantAdmissionV1SignatureVerified": true,
+      "role": "PARTICIPANT_A",
+      "signatureDigest": "0xfe3488a1ec2a28dd6325f684eae6b2e06def0f20e0c0076d5de4b780918d7202",
+      "verifiesAsOtherHolder": false
+    },
+    "holderB": {
+      "address": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+      "keyControlled": true,
+      "envVar": "MORDANT_KEY_RECOURSE_HOLDER_B",
+      "participantAdmissionV1SignatureVerified": true,
+      "role": "PARTICIPANT_B",
+      "signatureDigest": "0x5cf9a51a736b178db7e9e0f791824fdc8c8f80242cb612b6a1a4923200391e52",
+      "verifiesAsOtherHolder": false
+    },
+    "signingMethod": "viem signTypedData over ParticipantAdmissionV1, verified with viem verifyTypedData, the same path the server uses. Wagmi signTypedData in the browser produces the same EIP-712 encoding, and either key can be imported into a browser wallet.",
+    "gasNote": "EIP-712 signing consumes no gas. Each holder was funded with a bounded 0.02 MON only so the account is operable in a browser wallet.",
+    "monFunding": [
+      {
+        "to": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+        "amountWei": "20000000000000000",
+        "amountMon": "0.02",
+        "txHash": "0x0158b1e2d8d62adab1dbdd41abc8b49f8442027744c0a0175cabf2b01b8591fa",
+        "blockNumber": 51447698,
+        "status": "success"
+      },
+      {
+        "to": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+        "amountWei": "20000000000000000",
+        "amountMon": "0.02",
+        "txHash": "0x6d5e915b6a6c03dddf3eee6f667655c35c750218cf4cf3178977bcb5ef267467",
+        "blockNumber": 51447700,
+        "status": "success"
+      }
+    ],
+    "supersededHolderA": {
+      "address": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+      "isValidAPassOnChain": true,
+      "passesEveryPolicyGate": true,
+      "keyControlled": false,
+      "reason": "No locally held key derives to it. It is the Cleanverse-issued public UAT holder, so it could never have signed ParticipantAdmissionV1 in the browser demonstration. Retained in the script as UNCONTROLLED_APASS_WALLET and gated against, never as a participant."
+    }
+  },
+  "privilegedAddressesKeptSeparate": {
+    "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "bridgeAttestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "negativeControl": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
+    "uncontrolledApassWallet": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
+    "noneIsAHolder": true
+  },
+  "bridgeAttestor": {
+    "address": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "curve": "secp256k1",
+    "adapterImmutableMatches": true,
+    "locallyDerivedMatchesExactly": true,
+    "derivationCheck": "The locally held key derives to exactly this address, and that address equals the attestor immutable read from Adapter V2. Verified by derivation only; the secret was never printed, serialized or committed.",
+    "runtimeVariableName": "MORDANT_BRIDGE_ATTESTOR_PRIVATE_KEY",
+    "integrationNote": "The integration environment may supply this same secret under MORDANT_BRIDGE_ATTESTOR_PRIVATE_KEY. It is not copied between files and no env file is committed. It currently sits in the gitignored .env under a legacy validator name.",
+    "wiredIntoRuntime": false
+  }
+}

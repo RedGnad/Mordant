@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "mordant.post-deadline-reserve-funding/1",
+  "adapter": "0xd2e20EED9e93ad03D1c9F89c5c3d149408FDf836",
+  "token": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+  "committedTotal": "2",
+  "receipts": {
+    "withdrawFromSuperseded": {
+      "hash": "0x50fd1ca9aab6a6450c20419cfb189449056d9c6ef294f5130da5d4e4f2b39600",
+      "status": "success",
+      "blockNumber": "52386384",
+      "gasUsed": "355090"
+    },
+    "approve": {
+      "hash": "0x2398182f34629bf65483b8a653fd1b6e0939cabac2854ba092ef39f53189a55f",
+      "status": "success",
+      "blockNumber": "52386385",
+      "gasUsed": "71629"
+    },
+    "fundReserve": {
+      "hash": "0x63b8e5d5ade11af8b99bf6b14bb4c48b110afacb95b8e712126232023463f97c",
+      "status": "success",
+      "blockNumber": "52386386",
+      "gasUsed": "383815"
+    }
+  },
+  "availableReserve": "2",
+  "adapterTokenBalance": "2"
+}

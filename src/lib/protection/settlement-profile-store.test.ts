@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 
 import { DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE } from "./bridge-executor";
+import {
+  PINNED_PARTICIPANT_CONFIGS,
+  loadCanonicalRecourseConfiguration,
+  readParticipantConfigSelection,
+} from "./adapter-compatibility";
 import { bridgeRunId } from "./governed-recourse-bridge";
 import { digestToBytes32 } from "./participant-authorization";
 import {
@@ -13,6 +18,7 @@ import {
   SETTLEMENT_PROFILE_SCHEMA,
   SettlementAuthorityError,
   settlementPlanHash,
+  settlementProfileDigest,
   type GovernedResultFacts,
   type SettlementProfile,
 } from "./settlement-authority";
@@ -20,6 +26,7 @@ import {
   SettlementProfileStoreError,
   commitSettlementProfile,
   readCommittedSettlementProfile,
+  existingResultArtifact,
   settlementAuthorityForRun,
   settlementProfilePath,
 } from "./settlement-profile-store";
@@ -32,6 +39,14 @@ function profile(overrides: Partial<SettlementProfile> = {}): SettlementProfile 
     schemaVersion: SETTLEMENT_PROFILE_SCHEMA,
     profileId: "mordant.fresh-settlement.minimal",
     profileVersion: 1,
+    caseBinding: {
+      runId: "10f6b34f-2189-4efb-91c2-1b7f4f372a4d",
+      caseId: `sha256:${"12".repeat(32)}`,
+      caseBindingDigest: `sha256:${"34".repeat(32)}`,
+      protectionBindingDigest: `sha256:${"56".repeat(32)}`,
+      releaseMode: "governed-decryptor-v1",
+    },
+    participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "78".repeat(32) },
     committedAtUnix: 1_786_000_000,
     chainId: 10_143,
     adapter: "0x1111111111111111111111111111111111111111",
@@ -55,6 +70,8 @@ const result: GovernedResultFacts = Object.freeze({
   runId: `0x${"ef".repeat(32)}`,
   releaseAuthorityId: AUTHORITY,
   conflict: true,
+  caseId: `sha256:${"12".repeat(32)}`,
+  caseBindingDigest: `sha256:${"34".repeat(32)}`,
 });
 
 function root(): string {
@@ -88,12 +105,86 @@ test("a committed profile round-trips and yields a plan-bound authorization", ()
   }
 });
 
-test("a profile cannot be committed once the governed result exists", () => {
+/**
+ * The temporal boundary, checked against every artifact that reveals an outcome.
+ *
+ * The first version of this guard only knew the bridge evidence, which is
+ * written last. In an observed run the outcome landed at 00:50:18 and the bridge
+ * evidence at 00:50:26, so a commitment in that gap passed a guard it should
+ * have failed. Each artifact below must independently close the window.
+ */
+test("a profile cannot be committed once any result-bearing artifact exists", () => {
+  for (const relative of [
+    join("public", "evaluated-conflict.json"),
+    join("public", "governed-conflict-result.json"),
+    join("public", "result-conflict.bin"),
+    join("public", "recourse-record.json"),
+    join("public", "product-recourse-attestation.json"),
+    "recourse-outcome.json",
+    DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE,
+  ]) {
+    const runRoot = root();
+    try {
+      mkdirSync(dirname(join(runRoot, RUN, relative)), { recursive: true });
+      writeFileSync(join(runRoot, RUN, relative), "{}");
+      assert.equal(
+        storeCode(() => commitSettlementProfile(runRoot, RUN, profile())),
+        "RESULT_ALREADY_EXPOSED",
+        `${relative} must close the commitment window`,
+      );
+      assert.equal(existingResultArtifact(runRoot, RUN), relative);
+    } finally {
+      rmSync(runRoot, { recursive: true, force: true });
+    }
+  }
+});
+
+test("a result from another case cannot borrow this profile's economics", () => {
   const runRoot = root();
   try {
-    mkdirSync(join(runRoot, RUN), { recursive: true });
-    writeFileSync(join(runRoot, RUN, DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE), "{}");
-    assert.equal(storeCode(() => commitSettlementProfile(runRoot, RUN, profile())), "RESULT_ALREADY_EXPOSED");
+    commitSettlementProfile(runRoot, RUN, profile());
+    for (const [overrides, code] of [
+      [{ caseId: `sha256:${"99".repeat(32)}` }, "CASE_MISMATCH"],
+      [{ caseBindingDigest: `sha256:${"99".repeat(32)}` }, "CASE_BINDING_MISMATCH"],
+      [{ releaseAuthorityId: `0x${"99".repeat(32)}` }, "AUTHORITY_MISMATCH"],
+    ] as const) {
+      try {
+        settlementAuthorityForRun(runRoot, RUN, { ...result, ...overrides });
+        assert.fail(`expected ${code}`);
+      } catch (error) {
+        assert.ok(error instanceof SettlementAuthorityError);
+        assert.equal(error.code, code);
+      }
+    }
+  } finally {
+    rmSync(runRoot, { recursive: true, force: true });
+  }
+});
+
+test("the two pinned participant configurations are never interchangeable", () => {
+  // Each is accepted only against its own reviewed bytes, so naming one and
+  // serving the other is a refusal rather than a silent substitution.
+  const historical = loadCanonicalRecourseConfiguration(process.cwd(), "historical");
+  const fresh = loadCanonicalRecourseConfiguration(process.cwd(), "fresh-case");
+  assert.notEqual(historical.participants.holderA.toLowerCase(), fresh.participants.holderA.toLowerCase());
+  assert.notEqual(historical.participants.holderB.toLowerCase(), fresh.participants.holderB.toLowerCase());
+  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.historical.sha256, PINNED_PARTICIPANT_CONFIGS["fresh-case"].sha256);
+  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.historical.path, PINNED_PARTICIPANT_CONFIGS["fresh-case"].path);
+
+  // A selection that names no pinned artifact is refused, never defaulted.
+  assert.throws(() => readParticipantConfigSelection({ MORDANT_PARTICIPANT_CONFIG: "not-a-config" }));
+  assert.equal(readParticipantConfigSelection({}), "historical");
+});
+
+test("a committed profile records which pinned participant configuration the case ran under", () => {
+  const runRoot = root();
+  try {
+    const committed = commitSettlementProfile(runRoot, RUN, profile());
+    assert.equal(committed.profile.participantConfig.path, "docs/evidence/fresh-case-participant-config.json");
+    // Changing the recorded configuration digest changes the commitment digest,
+    // so a profile cannot be reused across participant configurations.
+    const other = profile({ participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "99".repeat(32) } });
+    assert.notEqual(settlementProfileDigest(other), committed.committedDigest);
   } finally {
     rmSync(runRoot, { recursive: true, force: true });
   }

@@ -211,6 +211,14 @@ function settlementFor(
     schemaVersion: SETTLEMENT_PROFILE_SCHEMA,
     profileId: "mordant.test-settlement.canonical-fixture",
     profileVersion: 1,
+    caseBinding: {
+      runId: canonical.release.runId,
+      caseId: canonical.release.fheCaseId,
+      caseBindingDigest: canonical.release.caseBindingDigest,
+      protectionBindingDigest: canonical.release.caseBindingDigest,
+      releaseMode: canonical.release.releaseMode,
+    },
+    participantConfig: { path: "docs/evidence/recourse-v2-demo-config-2026-08-06.json", sha256: "00".repeat(32) },
     committedAtUnix: 1_784_000_000,
     chainId: canonical.adapter.chainId,
     adapter: canonical.adapter.address,
@@ -235,6 +243,8 @@ function settlementFor(
     runId: bridgeRunId(canonical.release.runId),
     releaseAuthorityId: profile.releaseAuthorityId,
     conflict: canonical.release.conflict,
+    caseId: profile.caseBinding.caseId,
+    caseBindingDigest: profile.caseBinding.caseBindingDigest,
   });
   return { plan, authorization: deriveSettlementAuthorization(plan) };
 }

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "mordant.post-deadline-settlement-terminal/1",
+  "adapter": "0xd2e20EED9e93ad03D1c9F89c5c3d149408FDf836",
+  "runId": "0x758937d83e79e5b83c04218b5ba635662d628b926c3b51809a29b04a9255654c",
+  "balancesBefore": {
+    "adapter": "2",
+    "holderA": "0",
+    "holderB": "0"
+  },
+  "balancesAfter": {
+    "adapter": "0",
+    "holderA": "1",
+    "holderB": "1"
+  },
+  "receipts": {
+    "finalize": {
+      "hash": "0x0d159297b6220240a10233e18348e9036f2e91ad3c336fb34b5bcded4d81f44a",
+      "status": "success",
+      "blockNumber": "52388660",
+      "blockTimestamp": "1786325275",
+      "gasUsed": "104458"
+    },
+    "claimA": {
+      "hash": "0x984649dfa3ff24ddfc36dec2be484581cf76a17d652afea7944808f3bfc07c52",
+      "status": "success",
+      "blockNumber": "52388662",
+      "blockTimestamp": "1786325276",
+      "gasUsed": "390153"
+    },
+    "claimB": {
+      "hash": "0x1153f1e263e6fbb09526804adbdc0b8220c560fe47d3267b5ccc73b7a89f9078",
+      "status": "success",
+      "blockNumber": "52388663",
+      "blockTimestamp": "1786325276",
+      "gasUsed": "398507"
+    }
+  },
+  "reconciliation": {
+    "committedPayoutA": "1",
+    "committedPayoutB": "1",
+    "holderADelta": "1",
+    "holderBDelta": "1",
+    "adapterDelta": "-2",
+    "availableReserve": "0",
+    "openReserved": "0",
+    "entitledUnpaid": "0",
+    "caseState": 4,
+    "paidA": true,
+    "paidB": true,
+    "exact": true
+  }
+}

@@ -23,7 +23,22 @@ import type { Hex } from "viem";
  * money.
  */
 
-export const SETTLEMENT_PROFILE_SCHEMA = "mordant.settlement-profile/1" as const;
+/**
+ * Version 2 exists because the semantics are stronger, not because a field moved.
+ *
+ * v1 (submitted at ee8d4628) commits economics plus the governing authority, and
+ * leaves "committed before the result" as a discipline the caller is trusted to
+ * follow. v2 additionally commits:
+ *
+ *   - the case binding the governed result must carry, so a profile cannot be
+ *     replayed against a different case;
+ *   - the digest of the pinned participant configuration the case ran under;
+ *
+ * and it is only reachable through a durable store that refuses to write once
+ * any result-bearing artifact exists. The temporal property stops being a
+ * promise and becomes a precondition the filesystem enforces.
+ */
+export const SETTLEMENT_PROFILE_SCHEMA = "mordant.settlement-profile/2" as const;
 export const SETTLEMENT_PLAN_SCHEMA = "mordant.settlement-plan/1" as const;
 export const SETTLEMENT_AUTHORIZATION_SCHEMA = "mordant.settlement-authorization/1" as const;
 
@@ -50,6 +65,7 @@ function fail(code: string, message: string): never {
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/u;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/u;
+const SHA256_DIGEST = /^sha256:[0-9a-fA-F]{64}$/u;
 
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
@@ -68,10 +84,33 @@ function sameDigest(left: string, right: string): boolean {
  * adapter or the cure window after the fact produces a different digest, and a
  * different digest cannot authorize a plan built against the original.
  */
+/**
+ * The case a profile is willing to settle, as it is known before any result.
+ *
+ * Every field here is readable from the durable case artifacts at preparation
+ * time, and every one of them reappears inside the governed result, so a
+ * mismatch later is a refusal rather than an interpretation.
+ */
+export type CommittedCaseBinding = Readonly<{
+  runId: string;
+  caseId: string;
+  caseBindingDigest: string;
+  protectionBindingDigest: string;
+  releaseMode: string;
+}>;
+
+/** The pinned participant configuration the case ran under. */
+export type CommittedParticipantConfig = Readonly<{
+  path: string;
+  sha256: string;
+}>;
+
 export type SettlementProfile = Readonly<{
   schemaVersion: typeof SETTLEMENT_PROFILE_SCHEMA;
   profileId: string;
   profileVersion: number;
+  caseBinding: CommittedCaseBinding;
+  participantConfig: CommittedParticipantConfig;
   /** Wall-clock commitment time. Evidence, not a gate: the digest is the gate. */
   committedAtUnix: number;
   chainId: number;
@@ -99,6 +138,17 @@ function canonicalProfile(profile: SettlementProfile): string {
     schemaVersion: profile.schemaVersion,
     profileId: profile.profileId,
     profileVersion: profile.profileVersion,
+    caseBinding: {
+      runId: profile.caseBinding.runId,
+      caseId: profile.caseBinding.caseId.toLowerCase(),
+      caseBindingDigest: profile.caseBinding.caseBindingDigest.toLowerCase(),
+      protectionBindingDigest: profile.caseBinding.protectionBindingDigest.toLowerCase(),
+      releaseMode: profile.caseBinding.releaseMode,
+    },
+    participantConfig: {
+      path: profile.participantConfig.path,
+      sha256: profile.participantConfig.sha256.toLowerCase(),
+    },
     committedAtUnix: profile.committedAtUnix,
     chainId: profile.chainId,
     adapter: profile.adapter.toLowerCase(),
@@ -117,7 +167,7 @@ function canonicalProfile(profile: SettlementProfile): string {
 }
 
 export function settlementProfileDigest(profile: SettlementProfile): Hex {
-  return `0x${createHash("sha256").update(`MordantSettlementProfile/v1\0${canonicalProfile(profile)}`).digest("hex")}`;
+  return `0x${createHash("sha256").update(`MordantSettlementProfile/v2\0${canonicalProfile(profile)}`).digest("hex")}`;
 }
 
 function atomic(value: string, label: string): bigint {
@@ -154,7 +204,10 @@ export function assertWellFormedSettlementProfile(profile: SettlementProfile): v
   if (!Number.isSafeInteger(profile.cureWindowSeconds) || profile.cureWindowSeconds <= 0) {
     fail("PROFILE_CURE_WINDOW", "The committed cure window must be a positive number of seconds");
   }
-  if (!BYTES32.test(profile.releaseAuthorityId)) {
+  // The ceremony emits authority and binding identifiers as `sha256:<hex>`; the
+  // adapter's release message carries the same 32 bytes as `0x<hex>`. Both are
+  // the same identifier, so both are accepted and compared case-insensitively.
+  if (!BYTES32.test(profile.releaseAuthorityId) && !SHA256_DIGEST.test(profile.releaseAuthorityId)) {
     fail("PROFILE_AUTHORITY", "The committed release authority must be a 32-byte identifier");
   }
   if (profile.settlementAuthorization !== SETTLEMENT_AUTHORIZED
@@ -187,6 +240,12 @@ export type GovernedResultFacts = Readonly<{
   releaseAuthorityId: string;
   /** The terminal governed Boolean, and the only thing the result contributes. */
   conflict: boolean;
+  /**
+   * The case the result declares itself bound to. Checked against the committed
+   * binding, so a result from another case cannot borrow this profile's economics.
+   */
+  caseId: string;
+  caseBindingDigest: string;
 }>;
 
 export type SettlementPlan = Readonly<{
@@ -250,6 +309,14 @@ export function deriveSettlementPlan(
   }
   if (!sameDigest(profile.releaseAuthorityId, result.releaseAuthorityId)) {
     fail("AUTHORITY_MISMATCH", "The governed result comes from an authority this profile did not commit to");
+  }
+  // The authority alone is not identity: bind the case too, so a result carrying
+  // the right authority but produced for another case is refused.
+  if (!sameDigest(profile.caseBinding.caseId, result.caseId)) {
+    fail("CASE_MISMATCH", "The governed result belongs to a different case than the one committed");
+  }
+  if (!sameDigest(profile.caseBinding.caseBindingDigest, result.caseBindingDigest)) {
+    fail("CASE_BINDING_MISMATCH", "The governed result carries a different case binding than the one committed");
   }
   // The Boolean alone is never enough, but a false Boolean is always enough to stop.
   if (result.conflict !== true) {

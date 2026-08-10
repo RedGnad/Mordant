@@ -40,6 +40,20 @@ export const BRIDGE_ATTESTOR_ENVIRONMENT_NAME = "MORDANT_BRIDGE_ATTESTOR_PRIVATE
 /** Exact bytes reviewed for the public V2 artifacts. */
 export const CANONICAL_RECOURSE_CONFIG_SHA256 =
   "c9dd3cec8bad266afd985c5f80d357ee3ab79a3f32cdf20c2d5cb826af2a3126" as const;
+
+/**
+ * Participant configuration for the post-deadline settlement run.
+ *
+ * Same reviewed reference adapter, verifier, settlement token and facility as
+ * the historical artifact; the participants differ, because the historical
+ * holders are not key-controlled and cannot sign a fresh admission. It is a
+ * separate pinned artifact rather than an edit, so the historical configuration
+ * and every proof that depends on its bytes stay exactly as they were.
+ */
+export const FRESH_CASE_PARTICIPANT_CONFIG_PATH =
+  "docs/evidence/fresh-case-participant-config.json" as const;
+export const FRESH_CASE_PARTICIPANT_CONFIG_SHA256 =
+  "5a83f3e87fcd7a3c0b66e0f6772418a3a352500a0a822cc5a3a834a617e2dac5" as const;
 export const CANONICAL_RECOURSE_HANDOFF_SHA256 =
   "464667775a871324bac88677d5564f6dc4ea871458a10407ad13caa2504a723f" as const;
 
@@ -349,12 +363,57 @@ function parseJson(raw: string, label: string): unknown {
  * Loads only the committed public config. No environment variable, signer, or
  * network read is involved, so admission code can use this as its authority.
  */
-export function loadCanonicalRecourseConfiguration(repositoryRoot: string = process.cwd()): CanonicalRecourseConfiguration {
-  const raw = readArtifact(repositoryRoot, RECOURSE_V2_DEMO_CONFIG_PATH);
-  if (artifactHash(raw) !== CANONICAL_RECOURSE_CONFIG_SHA256) {
+/**
+ * Every participant configuration this build will accept, each pinned to its own
+ * reviewed bytes.
+ *
+ * Adding a configuration does not loosen anything: a candidate is still refused
+ * unless its bytes hash to the value pinned for it here, and the historical
+ * entry keeps the exact hash it has always had. What the selector chooses is
+ * which reviewed artifact to load, never whether to check one.
+ */
+export const PINNED_PARTICIPANT_CONFIGS = Object.freeze({
+  historical: Object.freeze({
+    path: RECOURSE_V2_DEMO_CONFIG_PATH,
+    sha256: CANONICAL_RECOURSE_CONFIG_SHA256,
+  }),
+  "fresh-case": Object.freeze({
+    path: FRESH_CASE_PARTICIPANT_CONFIG_PATH,
+    sha256: FRESH_CASE_PARTICIPANT_CONFIG_SHA256,
+  }),
+});
+
+export type PinnedParticipantConfigName = keyof typeof PINNED_PARTICIPANT_CONFIGS;
+
+export const PARTICIPANT_CONFIG_ENVIRONMENT_NAME = "MORDANT_PARTICIPANT_CONFIG" as const;
+
+/**
+ * Absent selection stays on the historical configuration, so every existing
+ * caller keeps its exact behaviour. An unrecognised selection is refused rather
+ * than falling back, because a typo must never silently settle a different case.
+ */
+export function readParticipantConfigSelection(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): PinnedParticipantConfigName {
+  const requested = environment[PARTICIPANT_CONFIG_ENVIRONMENT_NAME];
+  if (requested === undefined || requested.trim() === "") return "historical";
+  const name = requested.trim();
+  if (!Object.hasOwn(PINNED_PARTICIPANT_CONFIGS, name)) {
+    fail("CANONICAL_CONFIG_SELECTION", `${PARTICIPANT_CONFIG_ENVIRONMENT_NAME} names no pinned participant configuration`);
+  }
+  return name as PinnedParticipantConfigName;
+}
+
+export function loadCanonicalRecourseConfiguration(
+  repositoryRoot: string = process.cwd(),
+  selection: PinnedParticipantConfigName = readParticipantConfigSelection(),
+): CanonicalRecourseConfiguration {
+  const pinned = PINNED_PARTICIPANT_CONFIGS[selection];
+  const raw = readArtifact(repositoryRoot, pinned.path);
+  if (artifactHash(raw) !== pinned.sha256) {
     fail("CANONICAL_CONFIG_BYTES", "The canonical V2 config bytes do not match the reviewed artifact");
   }
-  return parseCanonicalRecourseConfiguration(parseJson(raw, RECOURSE_V2_DEMO_CONFIG_PATH));
+  return parseCanonicalRecourseConfiguration(parseJson(raw, pinned.path));
 }
 
 export type CanonicalAdapterV2 = Readonly<{

@@ -33,6 +33,14 @@ function profile(overrides: Partial<SettlementProfile> = {}): SettlementProfile 
     schemaVersion: SETTLEMENT_PROFILE_SCHEMA,
     profileId: "mordant.fresh-settlement.minimal",
     profileVersion: 1,
+    caseBinding: {
+      runId: "10f6b34f-2189-4efb-91c2-1b7f4f372a4d",
+      caseId: `sha256:${"12".repeat(32)}`,
+      caseBindingDigest: `sha256:${"34".repeat(32)}`,
+      protectionBindingDigest: `sha256:${"56".repeat(32)}`,
+      releaseMode: "governed-decryptor-v1",
+    },
+    participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "78".repeat(32) },
     committedAtUnix: 1_786_000_000,
     chainId: 10_143,
     adapter: ADAPTER,
@@ -56,6 +64,8 @@ const conflictResult: GovernedResultFacts = Object.freeze({
   runId: RUN_ID,
   releaseAuthorityId: AUTHORITY,
   conflict: true,
+  caseId: `sha256:${"12".repeat(32)}`,
+  caseBindingDigest: `sha256:${"34".repeat(32)}`,
 });
 
 function release(overrides: Partial<AuthorizedReleaseFacts> = {}): AuthorizedReleaseFacts {

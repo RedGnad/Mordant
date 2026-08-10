@@ -59,8 +59,32 @@ export function settlementProfilePath(runRoot: string, runId: string): string {
   return join(runRoot, runId, SETTLEMENT_PROFILE_FILE);
 }
 
-function governedResultPath(runRoot: string, runId: string): string {
-  return join(runRoot, runId, DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE);
+/**
+ * Every artifact whose existence means a result already exists for this run.
+ *
+ * The first version of this store used the direct-participant bridge evidence as
+ * the boundary. That was wrong, and provably so: in one observed run the outcome
+ * landed at 00:50:18 and the bridge evidence only at 00:50:26, so a commitment
+ * written between them would have passed the guard while the result was already
+ * on disk. The boundary has to be the earliest artifact that reveals anything
+ * about the outcome, not the last one written.
+ */
+const RESULT_BEARING_ARTIFACTS = Object.freeze([
+  join("public", "evaluated-conflict.json"),
+  join("public", "governed-conflict-result.json"),
+  join("public", "result-conflict.bin"),
+  join("public", "recourse-record.json"),
+  join("public", "product-recourse-attestation.json"),
+  "recourse-outcome.json",
+  DIRECT_PARTICIPANT_BRIDGE_EVIDENCE_FILE,
+]);
+
+/** Returns the first result-bearing artifact present, or null when none is. */
+export function existingResultArtifact(runRoot: string, runId: string): string | null {
+  for (const relative of RESULT_BEARING_ARTIFACTS) {
+    if (existsSync(join(runRoot, runId, relative))) return relative;
+  }
+  return null;
 }
 
 /**
@@ -76,10 +100,11 @@ export function commitSettlementProfile(
   profile: SettlementProfile,
 ): CommittedSettlementProfile {
   assertWellFormedSettlementProfile(profile);
-  if (existsSync(governedResultPath(runRoot, runId))) {
+  const exposed = existingResultArtifact(runRoot, runId);
+  if (exposed !== null) {
     fail(
       "RESULT_ALREADY_EXPOSED",
-      "A governed result already exists for this run, so no settlement profile can still be committed for it",
+      `A result-bearing artifact already exists for this run (${exposed}), so no settlement profile can still be committed for it`,
     );
   }
   const committedDigest = settlementProfileDigest(profile);
