@@ -37,6 +37,18 @@ canonical absolute path string on every host. The runner publishes and reads bac
 each operator independently installs and verifies those exact public bytes at its locally fixed
 root. Requests cannot supply a filesystem path, process instance, boot session, or storage root.
 
+The publication, evidence and export roots must each be a real directory, not a symlink, whose
+permissions are **exactly `0700`**. A root created at the shell's default umask is `0755` and is
+rejected. Create them explicitly:
+
+```sh
+install -d -m 700 /srv/mordant/oneshot/publication /var/lib/mordant/oneshot/evidence /var/lib/mordant/oneshot/verified-export
+```
+
+`oneshot-runner configure` checks all three before anything else runs and reports the offending
+root on stderr as `ONESHOT_RUNNER_PRECONDITION`. Without that check the mode is only rejected much
+later, from inside the ceremony, behind the deliberately opaque `ONESHOT_RUNNER_FAILED`.
+
 ## Transport authentication
 
 Transport is HTTPS with TLS 1.3, exact leaf-certificate SHA-256 pinning, hostname/IP verification,

@@ -196,6 +196,14 @@ func (enrollment CiphertextEnrollmentV5) SigningDigest() [32]byte {
 	return legacyKeccak(encoded)
 }
 
+// EnrollmentAuthorizationCommitment is the value an issuer must bind into
+// AuthorizationCommitment, and the value VerifyEnrollmentV5 recomputes and
+// compares. It is exported so an issuer outside this package derives it with
+// the same code the verifier uses, rather than reimplementing the encoding.
+func EnrollmentAuthorizationCommitment(claim AuthorizationClaim, keyID [32]byte) ([32]byte, error) {
+	return enrollmentAuthorizationCommitment(claim, keyID)
+}
+
 // SignEnrollmentV5 is used by the authorized ingress issuer once it has checked
 // the private source facts and the authorization claim.
 func SignEnrollmentV5(enrollment CiphertextEnrollmentV5, issuerPrivateKey ed25519.PrivateKey) (*SignedCiphertextEnrollmentV5, error) {

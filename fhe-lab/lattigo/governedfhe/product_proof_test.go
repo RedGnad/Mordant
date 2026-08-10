@@ -12,7 +12,7 @@ func validProductBinding(t *testing.T) MordantProtectionBinding {
 		t.Fatal(err)
 	}
 	binding := MordantProtectionBinding{
-		SchemaVersion: ProtectionBindingSchema, CleanverseAssetRecordDigest: DigestBytes([]byte("cleanverse-asset")),
+		SchemaVersion: ProtectionBindingSchema, CleanverseAssetRecordDigest: DeployedCaseAdapterAssets()[0],
 		ProtectionService: ProtectionService, ProtectionServiceVersion: ProtectionServiceVersion,
 		PolicyID: policy, PolicyVersion: ProtectionPolicyVersion, ProductScenario: "conflict",
 		FixtureClassification: ProtectionFixtureClass,

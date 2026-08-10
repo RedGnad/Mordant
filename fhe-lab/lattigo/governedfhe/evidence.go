@@ -59,6 +59,9 @@ func expectedPublicFiles(includeRecourse, includeEvidence bool) map[string]bool 
 		caseCryptoObject: true, caseBindingObject: true, caseManifestObject: true,
 		bindingSignatureAObject: true, bindingSignatureBObject: true,
 		submissionAObject: true, submissionBObject: true, submissionAManifest: true, submissionBManifest: true,
+		enrollmentAObject: true, enrollmentBObject: true,
+		thresholdManifestObject: true, coalitionResultObject: true,
+		coalitionAdmissionObject: true, coalitionConsumedObject: true,
 		evaluationAdmissionObject: true, evaluationCompletedObject: true,
 		resultCiphertextObject: true, evaluatedArtifactObject: true, releaseAuthorityObject: true, publicResultObject: true,
 		protectionBindingObject: true, protectionSignatureAObject: true, protectionSignatureBObject: true,
@@ -172,7 +175,9 @@ func ExportPublicEvidence(publicRoot string, measurements SmokeMeasurements, now
 		}
 	}
 	for _, name := range []string{caseCryptoObject, caseBindingObject, caseManifestObject, bindingSignatureAObject, bindingSignatureBObject,
-		submissionAManifest, submissionBManifest, evaluationAdmissionObject, evaluationCompletedObject, evaluatedArtifactObject,
+		submissionAManifest, submissionBManifest, enrollmentAObject, enrollmentBObject,
+		thresholdManifestObject, coalitionResultObject,
+		evaluationAdmissionObject, evaluationCompletedObject, evaluatedArtifactObject,
 		releaseAuthorityObject, publicResultObject, recourseClockObject, recourseRecordObject, protectionBindingObject, protectionSignatureAObject,
 		protectionSignatureBObject, productAttestationObject} {
 		if !publicStore.exists(name) {

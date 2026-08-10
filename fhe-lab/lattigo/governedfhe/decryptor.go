@@ -223,6 +223,20 @@ func (d *GovernedDecryptor) prepareVerifiedRecomputation(manifest FHECaseManifes
 	if err != nil || participants.pledgeA.KeyID != runtime.KeyID() || participants.pledgeB.KeyID != runtime.KeyID() {
 		return nil, recomputeVerified{}, ErrBinding
 	}
+	// The two ciphertexts about to be compared must be the two halves of one
+	// bilateral session, each enrolled by the participant that produced it. This
+	// is external audit finding H-01's gate: without it, two enrollments from
+	// different sessions are pairable by whoever assembles the case.
+	//
+	// It runs before the recomputation, and it fails closed. There is no path
+	// that releases a pair the enrollments do not authorize.
+	recordA, recordB, err := loadCaseEnrollmentsV5(d.publicStore)
+	if err != nil {
+		return nil, recomputeVerified{}, err
+	}
+	if _, err := verifyCaseEnrollmentsV5(runtime, manifest.Binding, participants, recordA, recordB, d.now); err != nil {
+		return nil, recomputeVerified{}, err
+	}
 	recomputationExecutionCount.Add(1)
 	outputs, err := runtime.RecomputeCircuitV5(fhe.CircuitInputsV5{
 		PolicyBitsA: participants.pledgeA.PolicyBits, PolicyBitsB: participants.pledgeB.PolicyBits,

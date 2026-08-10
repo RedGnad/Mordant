@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
 	fhe "mordant.dev/fhe-lab/lattigo"
 )
 
@@ -94,40 +95,58 @@ func loadParticipantArtifact(store *objectStore, manifest FHECaseManifest, role 
 	return artifact, pledge, digest, err
 }
 
-func loadEvaluationRuntime(store *objectStore, manifest FHECaseManifest) (*fhe.Runtime, error) {
-	params, publicKey, err := loadPublicEncryptionMaterial(store, manifest.Crypto)
-	if err != nil {
-		return nil, err
-	}
+func loadEvaluationKeyMaterial(store *objectStore, manifest FHECaseManifest, params bgv.Parameters) (*rlwe.RelinearizationKey, []*rlwe.GaloisKey, error) {
 	relinearizationBytes, err := store.read(manifest.Crypto.EvaluationKeys.RelinearizationKey, 96<<20)
 	if err != nil || manifest.Crypto.EvaluationKeys.RelinearizationKey.Path != relinearizationKeyObject {
-		return nil, ErrArtifact
+		return nil, nil, ErrArtifact
 	}
 	relinearizationKey := rlwe.NewRelinearizationKey(params)
 	if relinearizationKey.UnmarshalBinary(relinearizationBytes) != nil {
-		return nil, ErrArtifact
+		return nil, nil, ErrArtifact
 	}
 	expectedElements, err := GaloisElements(params)
 	if err != nil || len(manifest.Crypto.EvaluationKeys.GaloisKeys) != len(expectedElements) {
-		return nil, ErrBinding
+		return nil, nil, ErrBinding
 	}
 	galoisKeys := make([]*rlwe.GaloisKey, len(expectedElements))
 	for index, expectedElement := range expectedElements {
 		entry := manifest.Crypto.EvaluationKeys.GaloisKeys[index]
 		if entry.Index != uint32(index) || entry.Step != rotationSteps[index] || entry.Element != expectedElement || entry.Object.Path != galoisObject(index) {
-			return nil, ErrBinding
+			return nil, nil, ErrBinding
 		}
 		encoded, err := store.read(entry.Object, 96<<20)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		key := rlwe.NewGaloisKey(params)
 		if key.UnmarshalBinary(encoded) != nil || key.GaloisElement != expectedElement {
-			return nil, ErrArtifact
+			return nil, nil, ErrArtifact
 		}
 		galoisKeys[index] = key
 	}
-	runtime, err := fhe.NewGovernedEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys)
+	return relinearizationKey, galoisKeys, nil
+}
+
+// loadEvaluationRuntime builds the case's evaluator. The constructor is chosen
+// by release mode, because the key id advertises how the key was produced: a
+// governed case key is generated for that one case, a coalition case key comes
+// out of the ceremony and no single party ever held it.
+func loadEvaluationRuntime(store *objectStore, manifest FHECaseManifest) (*fhe.Runtime, error) {
+	params, publicKey, err := loadPublicEncryptionMaterial(store, manifest.Crypto)
+	if err != nil {
+		return nil, err
+	}
+	relinearizationKey, galoisKeys, err := loadEvaluationKeyMaterial(store, manifest, params)
+	if err != nil {
+		return nil, err
+	}
+	var runtime *fhe.Runtime
+	switch manifest.Binding.ReleaseMode {
+	case ReleaseModeCoalitionV5:
+		runtime, err = fhe.NewCoalitionEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys)
+	default:
+		runtime, err = fhe.NewGovernedEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys)
+	}
 	if err != nil || runtime.HoldsThresholdParties() || Digest(runtime.KeyIDBytes()) != manifest.Binding.PublicKeyDigest ||
 		Digest(runtime.ParameterFingerprint()) != manifest.Binding.ParameterFingerprint {
 		return nil, ErrBinding

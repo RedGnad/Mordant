@@ -1,0 +1,568 @@
+# Decision log — network 2-of-3 release path
+
+Tech lead: integrator. Working clone only, `main` untouched.
+
+---
+
+## D1 — Build the endpoint on `ReleaseOperatorV5`, not on `ThresholdOperator`
+
+**Hypothesis going in:** `/v1/release-share` receives a ciphertext plus a `ReleaseDescriptor`,
+the operator calls `ValidateReleaseRequest` then `GenerateReleaseShare`, the client combines
+with `CombineZeroKeySwitchShares`.
+
+**Code read:** `operator_release_v5.go` header records **external audit finding H-03**: in V4 the
+operator's only check was that the ciphertext matched a digest *written by the evaluator*, so the
+operator "decrypted whatever the evaluator chose, including a re-encryption of a private input.
+The quorum was a signing service, not a check."
+
+**Decision:** wrap `ReleaseOperatorV5`. The operator recomputes the circuit locally from the
+enrollments and releases only against the ciphertext it produced.
+
+**Reason:** the agreed spec was the V4 design. Negative control "participant ciphertext as target
+must be refused" is literally the H-03 attack; it could not have passed.
+
+**Rejected:** raw `ThresholdOperator.GenerateReleaseShare` behind an HTTP handler.
+
+---
+
+## D2 — No new target authority; the operator derives it
+
+**Question:** how does the operator know the presented target is the authorized result without a
+post-result administrative signature?
+
+**Code read:** `OperatorReleaseRequestV5` carries "no plaintext, no result, no claim about what the
+circuit evaluated to, and no digest the operator is expected to take on trust". Session facts are
+chain-admitted (`v5-session` `chainInputs`: session commitment and nullifier already admitted on
+chain, source-record commitments, governance records). `VerifyAndRecompute` emits a named check
+list into the evidence.
+
+**Decision:** no new authority. Authority = chain-admitted session + local recomputation.
+
+**Reason:** there is no caller-supplied target, so there is nothing to substitute.
+
+---
+
+## D3 — The Shamir share never leaves the operator
+
+**Code read:** `oneshotceremony/bundle.go:56` — "privateBundle and its thresholdShare field
+deliberately remain internal to the completed operator boundary. Public callers can neither parse
+nor hold a usable threshold share." And `clearCryptographicSecretsExceptThreshold()` proves the
+share is deliberately retained after the ceremony to serve later releases.
+
+**Decision:** add a method on the completed `Participant` that builds a `*ThresholdOperator`
+**in memory** from its retained share, then wraps it in `ReleaseOperatorV5`. Nothing serialised.
+
+**Rejected:** exporting a release-compatible operator bundle. Empirically the two formats are
+disjoint (`NewThresholdOperator` on a real `completed-*.bin` returns
+`invalid threshold operator material`), and bridging by export would breach a documented boundary.
+
+---
+
+## D4 — Import edge `oneshotceremony -> root`
+
+**Code read:** the root package imports no subpackage of the module; nothing imports
+`oneshotceremony` except `internal/oneshotruntime` and `cmd/oneshot-provenance`.
+
+**Decision:** `oneshotceremony` may import the root package. No cycle.
+
+---
+
+## D5 — Wire format: compose existing serialisations, invent nothing
+
+**Code read:** `ReleaseDescriptorV5` is 13 fixed-width fields and already has `Digest()`.
+`CircuitInputsV5` is six `*rlwe.Ciphertext`, each with lattigo `MarshalBinary`.
+`writeSized`/`readSized` already exist in `distributed_threshold.go`.
+
+**Decision:** canonical bounded encoding by composition. No new primitive. ~3-4h.
+
+---
+
+## D6 — Keep the integrator role in one head
+
+**Decision:** no parallel agents until the server interface is frozen. The H-03 trap is subtle
+enough that a cold agent would plausibly rebuild the V4 path.
+
+---
+
+## Verified facts underpinning the above
+
+- Dealerless 3-process ceremony runs for real: 243 operations, 33.8 s, evidence bundle exported
+  and verified (`success-2aa4b29c074f595e`).
+- Roots must be mode `0700` exactly (`runner.go:741`, `evidence.go:217`). Undocumented; cost one
+  full cycle. To be documented in bootstrap.
+- `MaximumReleaseQueries` and `ReleaseLayout` are sealed into the ceremony context and the private
+  bundle, validated non-zero, and **never read by any logic**. Reserved semantics, enforcement to
+  be built here.
+- Audit finding **H-02** also already fixed in V5: two independently released bits
+  (`SameEconomicAsset`, `PolicyConflict`) instead of one conjunction.
+- Obsolete under `//go:build obsolete_recoverable_ceremony`: all `cmd/ceremony-*`,
+  `thresholdnet/ceremony*.go`. Current in `thresholdnet`: `service.go`, `store.go`.
+
+---
+
+## FLAGGED FOR THE PRINCIPAL — ordering / ROI
+
+`v5-session` already runs the full institutional lifecycle in-process, and it is stronger than the
+product spine on every security property: dealerless ceremony, 2-of-3, recomputation-verified
+release (H-03), two-bit release (H-02), session ledger, runtime identity pinning.
+
+The product's public run uses none of it. It uses the single-party `mordant-fhe-decryptor`.
+
+Two orderings:
+
+- **Process-split first** (agreed): proves institutional separation. Does not change the product.
+- **Spine connection first**: the public run gains recomputation-verified quorum release
+  immediately, with zero new crypto and no process work. The
+  "designated and Mordant-controlled decryptor" sentence disappears from the documentation.
+
+This is an explicit escalation condition (sophistication vs pilotability), so it is flagged rather
+than decided unilaterally. Recommendation below.
+
+---
+
+## D7 — Land the coalition ON the spine, in three increments (decided after scoping)
+
+**Scoping result that decided it:** `governedfhe/decryptor.go` already implements the H-03 defence.
+`prepareVerifiedRecomputation` calls `runtime.RecomputeCircuitV5(...)` on the participants' own
+pledge ciphertexts and writes a terminal `recomputeMismatch` if the evaluator's result differs.
+`release()` also already enforces the canonical release vector (`decoded[0] <= 1` and every other
+slot zero), admission, exact retry and consumption markers.
+
+**Therefore the spine is not the naive design.** It differs from the institutional path in exactly
+two ways:
+
+1. the decryption step reads the whole secret key and calls
+   `rlwe.NewDecryptor(params, secretKey).DecryptNew(ciphertext)` — single party;
+2. it releases only `outputs.PolicyConflict` and discards `outputs.SameEconomicAsset`, so H-02's
+   two-bit separation exists in the circuit but not in the product.
+
+**Insertion point (exact):** `governedfhe/decryptor.go`, inside `release()`, between the
+`releaseAdmission` write and the result signing. Everything before and after is unchanged.
+
+**Switch:** `profile.go:24` holds `ReleaseModeGovernedDecryptor = "governed-decryptor-v1"` as a
+single constant, and `release()` already rejects anything else. Adding
+`ReleaseModeThresholdCoalition` alongside it is the same union pattern used for
+`settlementAuthorization`: the published mode is never weakened, a stronger sibling is added.
+
+**Increment ladder. Each step leaves the spine working and strictly better; no parallel branch is
+created at any point.**
+
+| # | Increment | h | What the product gains |
+|---|---|---|---|
+| 1 | keygen provisions 3 operators (`ProvisionThresholdOperators` + `DetachThresholdParties`); release gains the coalition mode using `ReleaseOperatorV5` x2 + `CombineReleaseBitV5` | ~13 | 2-of-3 recomputation-verified release. **No party holds the whole key.** Both bits released |
+| 2 | replace dealer provisioning with the dealerless network ceremony (needs the in-memory Participant -> ThresholdOperator bridge, D3) | ~8 | key never existed whole, anywhere |
+| 3 | split the two release operators into separate processes over mTLS | ~10 | institutional separation, not just logical |
+
+**Why this order:** increment 1 is the highest value per hour and the only one that changes the
+product. It removes "the governed decryptor is currently designated and Mordant-controlled" from
+the documentation. Increments 2 and 3 then upgrade a path that is already on the spine, rather
+than perfecting a fourth parallel branch.
+
+**Rejected:** building the network release endpoint first. It would have produced a fourth
+architectural branch, unconnected to the spine, while the product kept its single-party decryptor.
+That is the failure mode already diagnosed in this codebase (strong pieces never assembled in the
+same run) and it trips the "sophistication over pilotability" escalation.
+
+**Honest limit of increment 1:** dealer-based provisioning means the keygen process transiently
+holds all three parties before `DetachThresholdParties()`. That is strictly better than one party
+holding the whole secret key permanently, and strictly weaker than the dealerless ceremony. The
+classification must say exactly that and nothing more.
+
+---
+
+## D8 — Three implementation invariants (principal, accepted without reservation)
+
+**I1. No silent fallback.** If the coalition mode is selected and two operators are unavailable or
+do not agree, the run fails closed. There is never a fallback to the central governed decryptor.
+Otherwise the trust property degrades from an invariant into an execution preference.
+
+**I2. Claim discipline, per increment.**
+
+| After | May claim | May NOT claim |
+|---|---|---|
+| #1 | "online release requires 2 of 3 shares; no single provisioned operator can release the result" | "the key never existed whole" — the dealer keygen existed before `DetachThresholdParties` |
+| #2 | "no full key ever existed" | |
+| #3 | process separation, or host separation | "institutional separation" — that requires genuinely independent administrative domains |
+
+**I3. H-02 preservation.** `SameEconomicAsset` is kept in the evidence and in the canonical result
+even though the current policy engine consumes only `PolicyConflict`. It is preserved as a
+verifiable fact. **No business consequence is invented for it** and the policy engine is not
+changed to act on it. Compressing two distinct properties into one bit is the H-02 mistake.
+
+---
+
+## D9 — Make the 0700 precondition an explicit preflight
+
+**Why:** `runner.go:741` and `evidence.go:217` require the publication, evidence and export roots
+to have permission exactly `0700`. The requirement is deliberate and correct, but undocumented. It
+cost a full ceremony run to diagnose from an intentionally opaque `ONESHOT_RUNNER_FAILED`. Tribal
+knowledge that costs a run costs a pilot.
+
+**Decision:** validate the three roots at `oneshot-runner configure` time, which is the step that
+receives them as arguments and runs before anything else, and emit an actionable message naming
+the offending path and the required mode. Document it in the runtime README.
+
+**Not changed:** the requirement itself, nor the opaque failure of the ceremony proper. Only the
+configuration step gains a useful diagnostic.
+
+**D9 status: DONE.** `cmd/oneshot-runner/main.go` gains `requireExclusiveDirectory` and a preflight
+loop in `runConfigure`; `examples/oneshot-runtime/README.md` documents the mode and the
+`install -d -m 700` command. Four cases exercised: missing, not-a-directory, symlink, mode 0755,
+plus the pass case. Regression: full three-process ceremony re-run green
+(`ONESHOT_SUCCESS ceremony=51be169e…`, evidence exported); `go vet` clean; `internal/oneshotruntime`
+and all `cmd/...` suites pass.
+
+---
+
+## D10 — Increment 1 has a hidden dependency: the product has no enrollment layer
+
+**Measured, not guessed:**
+
+- `SignedCiphertextEnrollment` (V4) appears **zero** times in `governedfhe/`. The product never
+  adopted the V4 enrollment layer either.
+- The product's participant model is `CipherPledge` only: 11 occurrences across 4 non-test files
+  (`ciphertext_validation.go`, `client.go`, `evaluator.go`, `participant_originated_artifact.go`).
+- The product is **V5 on the circuit** (`RecomputeCircuitV5`, `CircuitInputsV5/OutputsV5`) and has
+  **no enrollment/issuer-signature layer at all**.
+
+**Why it matters:** `ReleaseOperatorV5.VerifyAndRecompute` runs 14 named checks, of which
+`enrollment-a-signature`, `enrollment-b-signature`, `bilateral-pairing`, `input-digests` and
+`descriptor-session-binding` are all built on `CiphertextEnrollmentV5` / `SessionBindingV5`. Without
+issuer-signed V5 enrollments those checks cannot pass, so `ReleaseOperatorV5` cannot be dropped into
+the product's release path as scoped.
+
+**The mapping is favourable, though.** `CipherPledge` already carries exactly the three ciphertexts
+the V5 circuit reads (`PolicyBits`, `CurrencyBits`, `ReceivableIDBits`), and the product already has
+a participant admission authority: the EIP-712 `ParticipantAdmissionV1` gated on Cleanverse A-Pass.
+The V5 enrollment issuer role maps onto that existing authority rather than introducing a new one.
+
+**Consequence:** increment 1 is larger than scoped (~13h assumed a drop-in). Escalated separately.
+
+---
+
+## D11 — A, in two deliverables. B eliminated.
+
+**B eliminated on principle, not on cost.** It returns the authority to choose the ciphertext to the
+spine and turns the operators into an execution quorum. That is the shape of H-03, which V5 exists
+to remove by making every operator recompute. Saving 8-10 hours by buying a largely cosmetic
+"2-of-3" is not a trade worth making.
+
+**Corrected conceptual model** (my earlier phrasing "A-Pass signs the enrollment" was wrong):
+
+```
+Cleanverse-gated participant admission
+  -> existing participant authorization (wallet, run, FHE case, asset identity,
+     policy, role, participant signing key, encryption intent, claim commitment,
+     exact encrypted artifact digest)
+  -> durable V5 enrollment
+  -> operator independently verifies the enrollment
+  -> operator independently recomputes the circuit
+  -> 2-of-3 release
+```
+
+Cleanverse gates admission. The existing signatures and commitments authenticate the participant and
+its artifact. The V5 enrollment **transports that truth into the release boundary**. No new authority
+is introduced; an existing one is expressed in the format the release operators can verify.
+
+**Deliverable 1:** issue and verify durable V5 enrollments on the existing path. The product keeps
+releasing through its current decryptor. Enrollments are real, stored and verified. Has standalone
+value and de-risks deliverable 2.
+
+**Deliverable 2:** the 2-of-3 coalition release consuming those enrollments.
+
+**Why the surcharge is worth it:** today Cleanverse gates admission in TypeScript. After this, the
+admission it gates becomes a cryptographic precondition consumed by the parties able to release the
+result. That is the 30-point axis, and it is the only path that makes the sentence true rather than
+staged.
+
+---
+
+## D12 — Field-by-field delta: the product does have a session, bilaterally signed
+
+I revised increment 1's scope twice by discovery. Rather than revise a third time, here is the
+complete delta between the product's session model and `SessionBindingV5`.
+
+The product's session is `FHECaseManifest`: an `FHECaseBinding` plus `SignatureA` and `SignatureB`.
+**Both participants sign it.** It is a real bilateral commitment; it is simply not chain-published
+in the managed profile.
+
+| `SessionBindingV5` field | Product source | Status |
+|---|---|---|
+| `SessionCommitment` | `FHECaseManifest.Digest()` | derivable; genuine commitment, locally bilateral rather than chain-admitted |
+| `SessionNullifier` | `Binding.CaseNonce` | derivable |
+| `OwnScopeCommitment` / `CounterpartyScopeCommitment` | `ParticipantA` / `ParticipantB` identity digests | derivable |
+| `GovernanceRecord` | participant admission verification digest | derivable |
+| `SourceRecordCommitment` | participant `ClaimCommitment` | derivable |
+| `AuthorizationEpoch` / `SubmissionBudgetEpoch` | absent | fixed at 1 for the managed profile, documented |
+| `InputSlot` | role: A = 0, B = 1 | trivial |
+
+And for `CiphertextEnrollmentV5` the mapping is near-total from
+`ParticipantOriginatedArtifactVerification`: `CiphertextDigest`, `FHEPublicKeyDigest` -> `KeyID`,
+`ParameterFingerprint`, `ClaimCommitment` -> `AuthorizationCommitment`, `SubmissionNonce` -> `Nonce`,
+`VerifiedAtUnix` -> `IssuedAt`, `ExpiresAtUnix` -> `ValidUntil`, `ParticipantID` -> `SubjectCommitment`,
+`Role`, plus `PolicyID`/`PolicyVersion` from the case manifest.
+
+**Decision:** populate `SessionBindingV5` from the bilaterally signed case binding. No chain work,
+no new authority: the two participant signatures already are the authority. The evidence must state
+explicitly that in the managed profile the session commitment is **locally bilateral, not
+chain-admitted**.
+
+**Forward-compatible, not a shortcut:** when the product later runs against a chain-admitted session
+(the `v5-session` `chainInputs` model), the same code path takes chain values instead. Same
+structure, different provenance.
+
+**Estimate stabilised.** Deliverable 1 (issue, store and verify durable V5 enrollments on the
+existing path): ~10h. Deliverable 2 (2-of-3 coalition release consuming them): ~13h. No third
+revision expected: every field of every V5 structure now has a named source.
+
+---
+
+## D13 — The enrollment issuer is the participant, not a new authority
+
+`SignEnrollmentV5`'s doc says the issuer is "the authorized ingress issuer". The product has no
+such role, and inventing one would have added an administrative authority the invariants forbid.
+
+Enumerating every `signCanonical` call site showed the product has exactly two signing identities:
+the two participants, and the release authority. What a V5 enrollment asserts is a fact about one
+participant's own submission, and both participants already sign the case binding that names each
+other's keys.
+
+**Decision:** each participant issues its own enrollment with the key the binding admitted for its
+role. The release-side trust store is built by registering those two keys, read from the signed
+binding, for exactly the session window. Nothing is configured.
+
+This makes `PairEnrollmentsV5` meaningful here: each side independently names the counterparty it
+consents to be compared against, which the product previously had only implicitly through a shared
+binding signature.
+
+## D14 — `AuthorizationClaim.Vault` is the deployed case adapter, verified on chain
+
+`Vault` is `address vault` inside the EIP-712 type string `ConfidentialSubmitterAuthorization`.
+Filling it from a truncated digest would put a non-address into a signed field that says it is one.
+The product carries no 20-byte value anywhere, so there was no in-repo source.
+
+Read at primary source (Monad testnet, chain 10143, `eth_getCode` + `eth_call`): the hardened case
+adapter at `0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1` is live, 10088 runtime bytes, keccak
+`0x3fe60ba9…`, matching `docs/evidence/hardened-case-adapter-deployment-2026-08-07.json` exactly.
+Its immutables read back as `assetIdentityDigest 0x7613136e…`, `parameterFingerprint 0xd0f85e99…`,
+`circuitHash 0x2c166039…` — the same values the FHE case computes.
+
+**Decision:** a small asset-keyed table in `governedfhe/enrollment_v5.go` maps asset to deployed
+adapter, with one on-chain-verified entry. Issuance refuses an asset with no deployed adapter
+rather than inventing an address. Release requires both participants to have named the same vault.
+
+**Correction to D12:** the chain admits more than D12 credited. Parameters, circuit and asset are
+immutable on a live contract. What is *not* chain-admitted before the FHE runs is the per-case
+session commitment: the adapter is per-asset, and the case binding digest reaches the chain only
+when a result is settled. That is the honest statement, and it is stronger than "locally bilateral".
+
+**Flagged for increment 3:** `expectedGovernedReleaseAuthorityId` is a single immutable authority
+ID. A threshold coalition cannot satisfy it without a contract change. This blocks the end-to-end
+"institutionally decentralized" story, not increments 1 or 2.
+
+## D15 — Enrollments are derived, never re-serialized; issuance time is the session's own
+
+Two decisions that removed wire surface rather than adding it.
+
+The stored record carries the signature plus audit-legible facts, never a parallel encoding of
+`fhe.CiphertextEnrollmentV5`. The enrollment is a pure function of the case facts, the artifact and
+the role, so it is re-derived on every read and each stored field is compared against the
+re-derivation. An edited record is refused even where the edit would not have changed the signature.
+
+`IssuedAt` is the session's creation time, not a wall-clock reading. The participant and the
+coordinator then derive identical bytes without agreeing on a clock, and no issuance timestamp has
+to travel. When the participant actually signed is recorded by the artifact and the import journal.
+
+`EnrollmentCaseFacts` is the intersection of what the two producers hold: the coordinator reads the
+signed binding, a direct participant only ever receives its ceremony bundle. `CaseNonce` is in the
+binding but not the bundle, so the session nullifier is derived from the binding digest under its
+own domain. A test asserts both constructors produce identical facts for one case.
+
+Consequence stated honestly: with no salt on the binding digest, the nullifier carries the same
+information as the session commitment and adds no independent double-submission detection. The
+code says so.
+
+## D16 — Increment 1 delivered: what is true and what is not
+
+**True, and tested.** Both product paths issue durable V5 enrollments signed by the participant.
+The release boundary loads both, verifies each against a binding-derived trust store, pairs them
+(the H-01 gate), and checks the pair authorizes the ciphertexts this case actually holds. It runs
+before recomputation and fails closed: there is no path that releases a pair the enrollments do not
+authorize. On the direct-participant path the enrollment is written before the manifest, so
+manifest-last remains the single marker of a complete releasable input.
+
+Negative controls, all passing: missing enrollment (either role) · six record edits including a
+foreign ciphertext, a foreign vault, an extended validity and a restated signing digest · swapped
+A/B records · a cross-session enrollment that is valid where it was issued and authorizes nothing
+here · the counterparty's key · a key the binding never admitted · an asset with no deployed
+adapter · the vault resolving to the on-chain-verified adapter.
+
+**Not true yet, and not claimed.** Release is still performed by the single governed decryptor
+holding the secret key. Enrollments authorize *which pair may be released*; they do not yet
+distribute *who can release it*. That is deliverable 2. Nothing here is evidence of threshold
+release, operator independence, or institutional decentralization.
+
+## D17 — Deferred: recording enrollment digests in the public evidence bundle
+
+The enrollments now gate release, so an evidence bundle that does not mention them under-describes
+what authorized the result. Recording their digests in `PublicEvidence` is the right end state.
+
+It is deferred rather than done, because the blast radius is cross-stack and unrelated to the
+release path: `EvidenceSchema` is `mordant.governed-fhe-public-evidence/2`, pinned in two published
+evidence documents under `docs/evidence/conflicting-pledge-protection/` and compared with strict
+equality by `src/lib/protection/protection-evidence.ts` and `protection-evidence-metadata.ts`.
+Bumping to /3 means regenerating both documents and updating the TypeScript verifier and its tests.
+
+Done now instead, at no schema cost: both enrollment objects are in `expectedPublicFiles`, so an
+unexpected file still fails the export, and both are in the secret-leak scan that every public
+object passes before evidence is written.
+
+Estimate for the deferred item: ~4h including regenerated documents and TypeScript verifier tests.
+It should ride with the next change that already touches the evidence schema rather than alone.
+
+---
+
+## D18 — Pre-existing flake found while establishing the L2 baseline (not fixed, logged)
+
+`TestParticipantOriginatedNonceClaimIsAtomicAcrossRoles` fails intermittently under load and
+reproducibly at `-count=300`. It reproduces identically on a pristine tree, so it is not introduced
+by L1.
+
+Diagnosed rather than guessed. Over 400 races: 400 winners, 398 losers whose exclusive create fails
+and whose subsequent read succeeds (so they correctly report a replay), and **2 failures coming from
+`openObjectStore` itself** when two goroutines create the same not-yet-existing root at the same
+time. The test sends open errors and claim errors down one channel, so its message blames the claim.
+
+**Fail-closed, not a security finding.** Exclusivity is never at risk: the exclusive create still
+admits exactly one winner. The loser is told the wrong reason for losing, and a first-time
+concurrent open can fail where a retry would succeed.
+
+I first "fixed" the claim path by letting the read decide instead of a separate existence probe.
+The measurement showed that path was not the cause, so **the change was reverted**: an unjustified
+edit to a security-sensitive journal path is not worth carrying, and a fix that fixes nothing
+measurable is not a fix.
+
+Left for a dedicated change, because the real fix touches `openObjectStore`'s root creation, pinning
+and path-identity checks, which are security-sensitive and unrelated to the release path:
+- make root creation idempotent under concurrent first open, or
+- require the root to pre-exist, as the oneshot runtime already does (see D9).
+
+Reachable in the product: two roles publishing concurrently on a journal root's first use.
+Reproduction: `go test -run TestParticipantOriginatedNonceClaimIsAtomicAcrossRoles -count=300`.
+
+---
+
+# L2 — coalition release in the product spine
+
+## D19 — SECURITY FINDING in L1, corrected: the enrollment bound the wrong digest
+
+L2 surfaced a real defect in what L1 shipped, and it is a security finding rather than a
+refinement, so the "do not revisit L1" instruction does not cover it.
+
+L1 set `CiphertextEnrollmentV5.CiphertextDigest` to the sha256 of the stored submission object.
+The V5 release operator compares that field against `CircuitSideDigestV5`, a keccak over exactly
+the three ciphertexts the circuit reads for that side. The operator refused every release with
+`input-digests: received ciphertexts are not the ones the enrollments authorize`.
+
+The operator's definition is the correct one, and the reason is written in its own source: the
+submission object also carries amount and obligation ciphertexts the circuit never reads, so its
+digest cannot answer the question an operator has to answer, "are these the inputs this enrollment
+authorized me to evaluate?". An enrollment binding the whole object leaves the operator trusting
+whoever extracted the circuit inputs from it. That is the V4 weakness V5 exists to remove, and L1
+had reintroduced it.
+
+**Corrected.** The enrollment now binds `ParticipantCircuitSideDigest`, computed from the three
+circuit ciphertexts. Both producers compute it from the ciphertext they just encrypted; the release
+boundary recomputes it from the ciphertext the case holds and never reads it from the record. The
+stored record keeps the submission-object digest as an audit field and adds `circuitInputsDigest`
+as the value actually signed; both are compared against the re-derivation.
+
+## D20 — Decisions taken while building the coalition path
+
+**The ceremony driver is shared, not copied.** `runCeremony` lived in `cmd/v5-session`. Rather than
+carry a second copy into the product, it moved to the library as `RunColocatedCeremony` and the
+reference runner now calls it. One round sequence, two callers.
+
+**`CreateCase` is parameterised, not forked.** A coalition case is `CreateCase` with
+`ReleaseMode: ReleaseModeCoalitionV5` and three operator roots. It runs the ceremony instead of
+generating a case secret key, publishes the threshold manifest, and writes one sealed share per
+root. **No secret key object is created**, so "no fallback" is a property of the case, not a rule
+someone has to remember to follow.
+
+**The coalition has no authority key.** `FHECaseBinding.validate` is now mode-dependent: a governed
+case carries one ed25519 authority key, a coalition case carries none and its authority identity is
+the digest of the published threshold manifest. A key here would recreate the single signer the
+coalition exists to remove, so one is refused rather than ignored.
+
+**Custody labels follow the mode.** A ceremony key advertised as a governed ephemeral case key
+would claim a single-party origin it does not have. Added `NewCeremonyExternalClient` and
+`NewCoalitionEvaluationRuntime` as siblings of the governed constructors, and routed every client
+construction through one mode-aware helper.
+
+**Each operator has its own evaluator and derives its own trust store.** They do not share one
+runtime object, and none is handed a list of issuers: each derives the enrollment trust store from
+the signed case binding for itself. An operator told whom to trust is trusting the teller. This
+also required the deterministic public circuit constant, otherwise two honest operators produce
+different bytes and comparing their digests would be meaningless.
+
+**The coalition is named before verification, and there is one attempt per session.** Each operator
+checks that it is a member of the coalition it is asked to serve, so the coalition cannot be chosen
+after the fact from whoever happened to accept. Its members are drawn from the operators that are
+reachable, which is how the case survives losing one of three. A refusal is terminal for the
+session because an operator's ledger admits a session once, so a second coalition sharing a member
+could not be tried afterwards. This is stated in the code rather than worked around.
+
+**Operator refusals are readable.** The fourteen named checks existed but their outcomes were
+discarded. A quorum failure now names the failing check per operator, which is how each of the
+three integration defects above was found in one run each instead of by bisection.
+
+## D21 — The released result carries the operators' signatures, not just their digests
+
+The first version of `CoalitionConflictResult` recorded `OperatorStatements` as bare digests. The
+release path verified the real ed25519 signatures during share combination, but the published
+result did not carry them, so a third party had to take the coordinator's word that the coalition
+had attested. That is the gap between an auditable result and an assertion.
+
+`ThresholdReleaseResponse` already carries a signature over the statement digest, from the key the
+threshold manifest publishes for that operator's point. The result now records, per released bit
+per serving operator: the point, the slot, the statement digest and the signature. A verifier reads
+the threshold manifest for the public keys and checks them directly.
+
+Done now rather than deferred because the schema is new and unpublished, so it cost nothing; the
+same change against a published schema would have been D17's problem.
+
+## D22 — L2 status
+
+Delivered and tested: a 2-of-3 coalition releases both V5 bits on the canonical product path, each
+operator verifying the L1 enrollments and recomputing the circuit on its own evaluator with a trust
+store it derives itself. One operator is not enough. Losing one of three is survivable; losing two
+fails closed. There is no secret key, no authority key and no private case manifest anywhere in a
+coalition case, so there is nothing to fall back to rather than a rule not to.
+
+Not delivered, and not claimed: operator process independence, institutional decentralization, and
+any settlement of a coalition result on chain.
+
+## D21 — The released result carries the operators' signatures, not just their digests
+
+`ThresholdReleaseResponse` carries a real ed25519 signature over each statement digest, from the
+operator's own key, and that key is in the published threshold manifest. The first version of
+`CoalitionConflictResult` recorded only the digests.
+
+The release path verified the signatures during combination, so the release itself was sound. But
+the published result did not carry them, which means a third party had to take the coordinator's
+word that the coalition attested. That is the difference between an auditable result and an
+assertion, and the schema was new and unpublished, so fixing it cost nothing.
+
+`OperatorStatements` is now one record per released bit per serving operator, carrying the point,
+the slot, the statement digest and the signature. A verifier can check each signature against the
+manifest's key for that point without trusting us.
+
+## D22 — Operator unavailability is diagnosable, and a foreign share is refused by name
+
+`openOperators` silently skipped any operator it could not load. An unavailable quorum caused by
+three corrupt bundles then read exactly like one caused by three offline hosts, and those need
+different responses. Each skip now records its reason and the quorum error reports them.
+
+Added while doing it: a loaded share is checked against the case's published threshold manifest by
+point, operator id and signing key together. A share from another ceremony is refused by name
+rather than incidentally failing later.

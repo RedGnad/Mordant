@@ -300,15 +300,17 @@ func runParticipantPrepare(bundleRoot, expectationsPath, outputRoot, pledgePath,
 		EncryptedArtifactDigest string                                               `json:"encryptedArtifactDigest"`
 		CiphertextObjectDigest  string                                               `json:"ciphertextObjectDigest"`
 		CiphertextObjectLength  int64                                                `json:"ciphertextObjectLength"`
+		EnrollmentSignature     string                                               `json:"enrollmentSignature"`
 		ExpiresAtUnix           int64                                                `json:"expiresAtUnix"`
 		ArtifactObject          governedfhe.ObjectRef                                `json:"artifactObject"`
 		CiphertextObject        governedfhe.ObjectRef                                `json:"ciphertextObject"`
 		Report                  governedfhe.SubmissionReport                         `json:"report"`
 	}{
-		"mordant.participant-originated-preparation-result/1", bundle.RunID, bundle.Role,
+		"mordant.participant-originated-preparation-result/2", bundle.RunID, bundle.Role,
 		digest0x(bundleDigest), prepared.EncryptionIntentDigest, digest0x(prepared.ClaimCommitment),
 		digest0x(prepared.Artifact.SubmissionNonce), digest0x(prepared.ArtifactDigest), digest0x(prepared.CiphertextDigest),
-		prepared.CiphertextObject.Length, prepared.Artifact.ExpiresAtUnix, prepared.ArtifactObject,
+		prepared.CiphertextObject.Length, "0x" + hex.EncodeToString(prepared.EnrollmentSignature),
+		prepared.Artifact.ExpiresAtUnix, prepared.ArtifactObject,
 		prepared.CiphertextObject, prepared.Report,
 	})
 }

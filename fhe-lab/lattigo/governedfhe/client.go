@@ -24,6 +24,7 @@ type SubmissionReport struct {
 	Duration        time.Duration `json:"duration"`
 	CiphertextBytes int64         `json:"ciphertextBytes"`
 	ArtifactBytes   int64         `json:"artifactBytes"`
+	EnrollmentBytes int64         `json:"enrollmentBytes"`
 }
 
 func loadPublicEncryptionMaterial(store *objectStore, cryptoManifest CaseCryptoManifest) (bgv.Parameters, *rlwe.PublicKey, error) {
@@ -111,8 +112,8 @@ func SubmitParticipant(options ParticipantSubmissionOptions) (EncryptedParticipa
 	if err != nil {
 		return EncryptedParticipantArtifact{}, report, err
 	}
-	client, err := fhe.NewGovernedExternalClient(params, publicKey)
-	if err != nil || client.CustodyModel() != fhe.CustodyGovernedEphemeral || Digest(client.KeyIDBytes()) != binding.PublicKeyDigest ||
+	client, expectedCustody, err := caseExternalClient(params, publicKey, binding.ReleaseMode)
+	if err != nil || client.CustodyModel() != expectedCustody || Digest(client.KeyIDBytes()) != binding.PublicKeyDigest ||
 		Digest(client.ParameterFingerprint()) != binding.ParameterFingerprint {
 		return EncryptedParticipantArtifact{}, report, ErrBinding
 	}
@@ -147,9 +148,33 @@ func SubmitParticipant(options ParticipantSubmissionOptions) (EncryptedParticipa
 	if err != nil {
 		return EncryptedParticipantArtifact{}, report, err
 	}
+	// The participant enrolls its own ciphertext into the bilateral session with
+	// the same key that just signed the artifact. Issuance is not optional: a
+	// submission the release boundary cannot pair is a submission that can never
+	// be released, so failing here is better than failing at release.
+	enrollmentName, err := enrollmentObjectForRole(identity.Role)
+	if err != nil {
+		return EncryptedParticipantArtifact{}, report, err
+	}
+	circuitInputs, err := ParticipantCircuitSideDigest(cipherPledge)
+	if err != nil {
+		return EncryptedParticipantArtifact{}, report, err
+	}
+	enrollment, err := IssueParticipantEnrollmentV5(IssueParticipantEnrollmentV5Options{
+		Binding: binding, Artifact: artifact, Role: identity.Role,
+		CircuitInputsDigest: circuitInputs, SigningKey: options.SigningKey,
+	})
+	if err != nil {
+		return EncryptedParticipantArtifact{}, report, err
+	}
+	enrollmentRef, _, err := store.createJSON(enrollmentName, enrollment)
+	if err != nil {
+		return EncryptedParticipantArtifact{}, report, err
+	}
 	report.Duration = time.Since(started)
 	report.CiphertextBytes = ciphertextRef.Length
 	report.ArtifactBytes = artifactRef.Length
+	report.EnrollmentBytes = enrollmentRef.Length
 	_ = artifactBytes
 	return artifact, report, nil
 }

@@ -115,8 +115,7 @@ func (b FHECaseBinding) validate() error {
 		b.PolicyVersion != fhe.PolicyVersion || b.CircuitID != CircuitID || b.CircuitVersion != fhe.CircuitV5Version ||
 		b.CircuitDigest != FixedCircuitDigest() || b.ParameterProfile != ParameterProfile || b.ParameterFingerprint != expectedFingerprint ||
 		b.InputSchema != InputSchema || b.ResultSchema != ResultSchema || !nonzero(b.CaseID, b.AssetIdentity, b.PolicyID, b.PublicKeyDigest, b.EvaluationKeyManifestDigest, b.CaseNonce) ||
-		b.ReleaseMode != ReleaseModeGovernedDecryptor || !nonzero(b.ReleaseAuthorityID) || len(b.ReleaseAuthorityPublicKey) != ed25519.PublicKeySize ||
-		releaseAuthorityIdentity(b.ReleaseMode, ed25519.PublicKey(b.ReleaseAuthorityPublicKey)) != b.ReleaseAuthorityID ||
+		!knownReleaseMode(b.ReleaseMode) || !validReleaseAuthority(b) ||
 		b.ParticipantA.validate(RoleA) != nil || b.ParticipantB.validate(RoleB) != nil || len(b.ParticipantOrder) != 2 ||
 		b.ParticipantA.ID == b.ParticipantB.ID || slices.Equal(b.ParticipantA.SigningPublicKey, b.ParticipantB.SigningPublicKey) ||
 		b.ParticipantOrder[0] != b.ParticipantA.ID || b.ParticipantOrder[1] != b.ParticipantB.ID || b.CreatedAtUnix <= 0 || b.ExpiresAtUnix <= b.CreatedAtUnix {
@@ -229,7 +228,30 @@ func (a ReleaseAuthorityManifest) signingValue() ReleaseAuthorityManifest {
 }
 
 func knownReleaseMode(mode string) bool {
-	return mode == ReleaseModeGovernedDecryptor
+	return mode == ReleaseModeGovernedDecryptor || mode == ReleaseModeCoalitionV5
+}
+
+// validReleaseAuthority checks the authority shape a release mode calls for.
+//
+// A governed case's authority is one ed25519 key, and the identity is derived
+// from it. A coalition case has no key: its authority is the published
+// threshold manifest, and the identity is that manifest's digest, checked
+// against the manifest itself when the case is loaded. Carrying a key here for
+// a coalition case would recreate the single signer the coalition exists to
+// remove, so an authority key is refused rather than ignored.
+func validReleaseAuthority(b FHECaseBinding) bool {
+	if !nonzero(b.ReleaseAuthorityID) {
+		return false
+	}
+	switch b.ReleaseMode {
+	case ReleaseModeCoalitionV5:
+		return len(b.ReleaseAuthorityPublicKey) == 0
+	case ReleaseModeGovernedDecryptor:
+		return len(b.ReleaseAuthorityPublicKey) == ed25519.PublicKeySize &&
+			releaseAuthorityIdentity(b.ReleaseMode, ed25519.PublicKey(b.ReleaseAuthorityPublicKey)) == b.ReleaseAuthorityID
+	default:
+		return false
+	}
 }
 
 func releaseAuthorityIdentity(mode string, publicKey ed25519.PublicKey) Digest {

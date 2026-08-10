@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -15,194 +14,12 @@ import (
 	fhe "mordant.dev/fhe-lab/lattigo"
 )
 
-type ceremonyMaterial struct {
-	publicKey  *rlwe.PublicKey
-	relinKey   *rlwe.RelinearizationKey
-	galoisKeys []*rlwe.GaloisKey
-	bundles    [][]byte
-	manifest   fhe.ThresholdManifest
-}
+// ceremonyMaterial is the reference runner's view of the single ceremony
+// driver in the library. The round sequence lives there, not here.
+type ceremonyMaterial = fhe.ColocatedCeremonyMaterial
 
-// runCeremony performs the dealerless t-out-of-N ceremony. No party ever holds
-// the collective secret, and every operator erases its transient secret before
-// sealing.
 func runCeremony(params bgv.Parameters) (*ceremonyMaterial, error) {
-	parameterBytes, err := params.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	var ceremonyID [32]byte
-	if _, err := rand.Read(ceremonyID[:]); err != nil {
-		return nil, err
-	}
-
-	const count = 3
-	signingKeys := make([]ed25519.PrivateKey, count)
-	identities := make([]fhe.CeremonyOperatorIdentity, count)
-	for index := range signingKeys {
-		_, secret, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			return nil, err
-		}
-		signingKeys[index] = secret
-		identities[index] = fhe.CeremonyOperatorIdentity{Point: uint64(index + 1)}
-		copy(identities[index].SigningPublicKey[:], secret.Public().(ed25519.PublicKey))
-	}
-	roster := fhe.CeremonyRoster{
-		ParameterFingerprint: sha256.Sum256(parameterBytes),
-		Threshold:            2,
-		CeremonyID:           ceremonyID,
-		KeyEpoch:             1,
-		Operators:            identities,
-	}
-
-	states := make([]*fhe.CeremonyOperatorState, count)
-	for index := range states {
-		state, err := fhe.NewCeremonyOperatorState(params, roster, uint64(index+1), signingKeys[index])
-		if err != nil {
-			return nil, err
-		}
-		states[index] = state
-	}
-	aggregator, err := fhe.NewCeremonyAggregator(params, roster)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, source := range states {
-		for _, target := range states {
-			if err := target.AcceptCRSContribution(source.Point(), source.CRSContribution()); err != nil {
-				return nil, err
-			}
-		}
-		if err := aggregator.AcceptCRSContribution(source.Point(), source.CRSContribution()); err != nil {
-			return nil, err
-		}
-	}
-	for _, state := range states {
-		if err := state.SealCRS(); err != nil {
-			return nil, err
-		}
-	}
-	if err := aggregator.SealCRS(); err != nil {
-		return nil, err
-	}
-	for _, source := range states {
-		for _, target := range states {
-			share, err := source.PrivateShareFor(target.Point())
-			if err != nil {
-				return nil, err
-			}
-			if err := target.AcceptPrivateShare(share); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for _, state := range states {
-		if err := state.SealThresholdShare(); err != nil {
-			return nil, err
-		}
-	}
-	for _, state := range states {
-		wire, err := state.PublicKeyShare()
-		if err != nil {
-			return nil, err
-		}
-		if err := aggregator.AcceptPublicKeyShare(state.Point(), wire); err != nil {
-			return nil, err
-		}
-	}
-	for _, state := range states {
-		wire, err := state.RelinearizationShareRoundOne()
-		if err != nil {
-			return nil, err
-		}
-		if err := aggregator.AcceptRelinearizationShareRoundOne(state.Point(), wire); err != nil {
-			return nil, err
-		}
-	}
-	combined, err := aggregator.AggregatedRelinearizationRoundOne()
-	if err != nil {
-		return nil, err
-	}
-	for _, state := range states {
-		wire, err := state.RelinearizationShareRoundTwo(combined)
-		if err != nil {
-			return nil, err
-		}
-		if err := aggregator.AcceptRelinearizationShareRoundTwo(state.Point(), wire); err != nil {
-			return nil, err
-		}
-	}
-	for {
-		element, pending := aggregator.CurrentGaloisElement()
-		if !pending {
-			break
-		}
-		for _, state := range states {
-			wire, err := state.GaloisShare(element)
-			if err != nil {
-				return nil, err
-			}
-			if err := aggregator.AcceptGaloisShare(state.Point(), wire); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if !aggregator.Complete() {
-		return nil, fmt.Errorf("ceremony did not complete")
-	}
-
-	publicKey, relinKey, galoisKeys, err := aggregator.CollectiveKeys()
-	if err != nil {
-		return nil, err
-	}
-	policyID := sha256.Sum256([]byte("mordant-v5-session"))
-	digests, err := aggregator.KeyDigests(policyID, fhe.PolicyVersion)
-	if err != nil {
-		return nil, err
-	}
-	keyID, err := fhe.CollectiveKeyID(publicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	bundles := make([][]byte, 0, count)
-	publics := make([]fhe.ThresholdOperatorPublic, 0, count)
-	attestations := make([]fhe.CeremonyAttestation, 0, count)
-	for _, state := range states {
-		attestation, err := state.Seal(digests)
-		if err != nil {
-			return nil, err
-		}
-		if state.HoldsLocalSecretKey() {
-			return nil, fmt.Errorf("operator %d retained its RLWE secret after seal", state.Point())
-		}
-		attestations = append(attestations, attestation)
-		bundle, err := state.SealedOperatorBundle(keyID)
-		if err != nil {
-			return nil, err
-		}
-		bundles = append(bundles, bundle)
-		imported, err := fhe.NewThresholdOperator(bundle)
-		if err != nil {
-			return nil, err
-		}
-		publics = append(publics, imported.Public())
-	}
-	if err := fhe.VerifyCeremonyAttestations(roster, digests, attestations); err != nil {
-		return nil, fmt.Errorf("manifest attestations: %w", err)
-	}
-
-	return &ceremonyMaterial{
-		publicKey: publicKey, relinKey: relinKey, galoisKeys: galoisKeys, bundles: bundles,
-		manifest: fhe.ThresholdManifest{
-			KeyID:                keyID,
-			ParameterFingerprint: roster.ParameterFingerprint,
-			Threshold:            roster.Threshold,
-			Operators:            publics,
-		},
-	}, nil
+	return fhe.RunColocatedCeremony(params, 2, 3, sha256.Sum256([]byte("mordant-v5-session")))
 }
 
 var sessionVault = [20]byte{0xA1, 0xB2, 0xC3, 0xD4, 0xE5}
@@ -365,11 +182,11 @@ func combineBit(
 	shares []fhe.ThresholdReleaseResponse,
 	slot uint8,
 ) (bool, error) {
-	descriptor, err := fhe.ReleaseDescriptorForSlot(request.Descriptor, ciphertext, request.Coalition, slot, material.manifest.KeyID)
+	descriptor, err := fhe.ReleaseDescriptorForSlot(request.Descriptor, ciphertext, request.Coalition, slot, material.Manifest.KeyID)
 	if err != nil {
 		return false, err
 	}
-	confirmed, transcript, err := fhe.CombineReleaseBitV5(params, descriptor, material.manifest, ciphertext, shares)
+	confirmed, transcript, err := fhe.CombineReleaseBitV5(params, descriptor, material.Manifest, ciphertext, shares)
 	if err != nil {
 		return false, err
 	}

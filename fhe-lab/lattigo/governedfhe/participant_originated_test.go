@@ -130,7 +130,8 @@ func newParticipantOriginatedFixture(t *testing.T, label string) *participantOri
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	protection := v2Binding(t)
-	protection.CleanverseAssetRecordDigest = testDigest(label + "/asset")
+	// The deployed case adapter binds this asset; enrollment refuses any other.
+	protection.CleanverseAssetRecordDigest = DeployedCaseAdapterAssets()[0]
 	protection.HolderRecordDate = now.Add(-time.Minute).Format(time.RFC3339Nano)
 	protection.CaseNonce = testDigest(label + "/case-nonce")
 	protection.HolderAllocationDigest, err = protectionHolderAllocationDigest(protection)
@@ -367,6 +368,7 @@ func participantOriginatedExpectationsForPrepared(t *testing.T, fixture *partici
 		SigningKeyDigest: keyDigest, BundleDigest: bundleDigest, EncryptionIntentDigest: prepared.EncryptionIntentDigest,
 		ClaimCommitment: prepared.ClaimCommitment, SubmissionNonce: prepared.Artifact.SubmissionNonce,
 		ArtifactDigest: prepared.ArtifactDigest, CiphertextDigest: prepared.CiphertextDigest,
+		EnrollmentSignature:           prepared.EnrollmentSignature,
 		FinalEncryptedAdmissionDigest: ParticipantOriginatedAuthorizationDigest(testDigest("final-wallet-admission/" + role + "/" + fixture.bundleA.RunID)), Now: fixture.now,
 	}
 }
