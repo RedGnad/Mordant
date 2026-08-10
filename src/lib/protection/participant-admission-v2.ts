@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { keccak256, toHex } from "viem";
 
 import {
-  digestToBytes32,
   isParticipantRole,
   participantAdmissionDomain,
   PARTICIPANT_AUTHORIZATION_MAX_LIFETIME_SECONDS,
@@ -241,4 +240,76 @@ export function assertCoalitionCaseKeysAreAdmitted(
   if (wallets.size !== admissions.length) {
     fail("WALLET_COLLISION", 409, "One wallet cannot hold both sides of a bilateral case");
   }
+}
+
+/**
+ * Verifies a V2 admission, including the one thing V1 cannot check.
+ *
+ * The signing-key digest is compared against the key the server already holds
+ * for that role, not against a value the request supplied. Emitting the digest
+ * in the challenge without checking it on the way back would leave a wallet free
+ * to sign a different key, and the whole join would be decorative.
+ */
+export async function verifyParticipantAdmissionV2(
+  message: ParticipantAdmissionV2Message,
+  signature: unknown,
+  expected: Readonly<{
+    verifyingService: string;
+    runId: string;
+    fheCaseId: Bytes32;
+    protectionBindingDigest: Bytes32;
+    assetIdentityDigest: Bytes32;
+    role: ParticipantRole;
+    /** The key this server will publish for the role. Never taken from the request. */
+    participantSigningKeyBase64: string;
+    activeFrom: number;
+    activeUntil: number;
+    chainId?: number;
+    now: number;
+  }>,
+  verifyTypedData: (input: Readonly<{
+    address: `0x${string}`;
+    typedData: ReturnType<typeof participantAdmissionV2TypedData>;
+    signature: `0x${string}`;
+  }>) => Promise<boolean>,
+): Promise<Readonly<{ message: ParticipantAdmissionV2Message; signingKeyDigest: Bytes32 }>> {
+  if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/u.test(signature) || signature.length % 2 !== 0) {
+    fail("SIGNATURE_FORMAT", 400, "A 0x signature is required");
+  }
+  if (message.verifyingService !== expected.verifyingService) {
+    fail("SERVICE_MISMATCH", 400, "This admission was not issued for this service");
+  }
+  if (message.role !== expected.role) fail("ROLE_MISMATCH", 409, "This admission was signed for a different role");
+  if (message.runId !== expected.runId) fail("CASE_MISMATCH", 409, "This admission was signed for a different case");
+  if (message.fheCaseId !== expected.fheCaseId) {
+    fail("FHE_CASE_MISMATCH", 409, "This admission was signed for a different FHE case");
+  }
+  if (message.protectionBindingDigest !== expected.protectionBindingDigest) {
+    fail("BINDING_MISMATCH", 409, "This admission was signed against a different protection binding");
+  }
+  if (message.assetIdentityDigest !== expected.assetIdentityDigest) {
+    fail("ASSET_MISMATCH", 409, "This admission was signed for a different asset");
+  }
+  if (message.activeFrom !== expected.activeFrom || message.activeUntil !== expected.activeUntil) {
+    fail("CLAIM_MISMATCH", 409, "This admission was signed for a different claim window");
+  }
+  if (expected.now < message.issuedAt || expected.now > message.expiresAt) {
+    fail("ADMISSION_EXPIRED", 409, "The admission is outside its validity window");
+  }
+  // The join. The digest is derived from the server's own key for this role.
+  const derived = participantSigningKeyDigest(expected.participantSigningKeyBase64);
+  if (message.participantSigningKeyDigest !== derived) {
+    fail(
+      "SIGNING_KEY_NOT_ADMITTED",
+      409,
+      "The admission authorizes a signing key other than the one this case will publish",
+    );
+  }
+  const authentic = await verifyTypedData({
+    address: message.participantWallet,
+    typedData: participantAdmissionV2TypedData(message, expected.chainId),
+    signature: signature as `0x${string}`,
+  });
+  if (!authentic) fail("SIGNATURE_INVALID", 401, "The admission signature did not verify for that wallet");
+  return Object.freeze({ message, signingKeyDigest: derived });
 }

@@ -1,4 +1,10 @@
 import assert from "node:assert/strict";
+
+import {
+  participantAdmissionV2TypedData,
+  participantSigningKeyDigest,
+  type ParticipantAdmissionV2Message,
+} from "./participant-admission-v2";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,6 +48,9 @@ const SERVICE = "https://mordant.example";
 const FHE_CASE_ID = `sha256:${"a".repeat(64)}` as const;
 const BINDING_DIGEST = `sha256:${"b".repeat(64)}` as const;
 const ASSET_DIGEST = `sha256:${"c".repeat(64)}` as const;
+const STUB_KEY_A = Buffer.alloc(32, 7).toString("base64");
+const STUB_KEY_B = Buffer.alloc(32, 9).toString("base64");
+
 const NOW = 1_800_000_000;
 const CANONICAL_PARTICIPANTS = loadCanonicalRecourseConfiguration().participants;
 
@@ -333,6 +342,7 @@ function harness(root: string, options: Partial<{ apass: (wallet: string) => Pro
     createNeutralParticipantCase: async () => ({ runId: RUN_ID }),
     readCustomSupervisedCase: async () => view(stage.value),
     readParticipantAdmissionContext: async () => ({
+      participantSigningKeys: { PARTICIPANT_A: STUB_KEY_A, PARTICIPANT_B: STUB_KEY_B },
       runId: RUN_ID,
       stage: stage.value as never,
       fheCaseId: FHE_CASE_ID,
@@ -370,9 +380,9 @@ async function signedRequest(
   role: ParticipantRole,
   account: typeof accountA,
   claim: { activeFrom: number; activeUntil: number },
-  overrides: Partial<ParticipantAdmissionMessage> = {},
+  overrides: Partial<ParticipantAdmissionV2Message> = {},
 ) {
-  const authorization: ParticipantAdmissionMessage = {
+  const authorization: ParticipantAdmissionV2Message = {
     verifyingService: SERVICE,
     runId: RUN_ID,
     fheCaseId: `0x${"a".repeat(64)}`,
@@ -387,14 +397,19 @@ async function signedRequest(
     authorizationNonce: `0x${role === "PARTICIPANT_A" ? "3" : "4"}${"0".repeat(63)}`,
     issuedAt: NOW - 10,
     expiresAt: NOW + 600,
+    // The wallet names the key the server materialised for this role before the
+    // challenge was issued. Without it the admission is not a V2 admission.
+    participantSigningKeyDigest: participantSigningKeyDigest(
+      role === "PARTICIPANT_A" ? STUB_KEY_A : STUB_KEY_B,
+    ),
     ...overrides,
-  } as ParticipantAdmissionMessage;
-  const typedData = participantAdmissionTypedData(authorization, CHAIN_ID);
+  } as unknown as ParticipantAdmissionV2Message;
+  const typedData = participantAdmissionV2TypedData(authorization, CHAIN_ID);
   const signature = await account.signTypedData({
     domain: typedData.domain,
     types: typedData.types,
     primaryType: typedData.primaryType,
-    message: typedData.message,
+    message: typedData.message as never,
   });
   return { caseCode, role, authorization, signature, claim };
 }
@@ -615,10 +630,23 @@ test("the challenge is server-issued and carries no operator input", async () =>
     const challenge = await participantAdmissionChallenge(
       dependencies, code, "PARTICIPANT_A", CANONICAL_PARTICIPANTS.holderA, { activeFrom: 100, activeUntil: 400 },
     );
-    assert.equal(challenge.primaryType, "ParticipantAdmissionV1");
+    assert.equal(challenge.primaryType, "ParticipantAdmissionV2");
     assert.equal(challenge.domain.chainId, CHAIN_ID);
     assert.equal(challenge.message.runId, RUN_ID);
     assert.equal(challenge.message.participantWallet, CANONICAL_PARTICIPANTS.holderA);
+    // The wallet is asked to authorize a key that already exists. Without this
+    // the admission and the enrollments would remain two unlinked identities.
+    const context = await dependencies.orchestrator.readParticipantAdmissionContext(RUN_ID);
+    assert.equal(
+      challenge.message.participantSigningKeyDigest,
+      participantSigningKeyDigest(context.participantSigningKeys.PARTICIPANT_A),
+      "the challenge must name the key the case will publish for this role",
+    );
+    assert.notEqual(
+      challenge.message.participantSigningKeyDigest,
+      participantSigningKeyDigest(context.participantSigningKeys.PARTICIPANT_B),
+      "each role authorizes its own key",
+    );
     assert.match(challenge.message.authorizationNonce as string, /^0x[0-9a-f]{64}$/u);
     assert.equal(challenge.message.expiresAt, (challenge.message.issuedAt as number) + 600);
     // Two challenges never share a nonce.

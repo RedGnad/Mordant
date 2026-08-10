@@ -125,6 +125,7 @@ import {
   buildDirectParticipantBridgeEvidence,
   type DirectParticipantAdmissionFact,
 } from "./direct-participant-bridge-evidence";
+import { participantSigningKeyDigest } from "./participant-admission-v2";
 
 const execFileAsync = promisify(execFile);
 
@@ -1506,6 +1507,14 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
     runtime.failpoint("after-participant-key-a");
     const participantB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation);
     runtime.failpoint("after-both-participant-keys");
+    // A key can be re-minted between admission and here: `rawParticipantKey`
+    // replaces a truncated file pre-foundation. If that happened, the case would
+    // publish a key no wallet ever authorized, and the admission's binding to it
+    // would be silently void. Refuse rather than publish.
+    assertPublishedKeysWereAdmitted(runtime, state, {
+      PARTICIPANT_A: participantA.publicBase64,
+      PARTICIPANT_B: participantB.publicBase64,
+    });
     const specPath = join(state.paths.participantPrivateRoot, "case-spec.json");
     const createdAtUnix = unix(state.protectionCase.createdAt);
     const spec = {
@@ -1578,12 +1587,50 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
  * against the same binding the engine enforces, without widening the audited
  * custom view or introducing a second derivation of it.
  */
+/**
+ * Refuses to publish a signing key that the admitted wallet did not authorize.
+ *
+ * Admissions that predate V2 carry no key digest; those cases are left as they
+ * were, because retro-applying a rule they were never admitted under would only
+ * break retained runs.
+ */
+function assertPublishedKeysWereAdmitted(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+  published: Readonly<Record<"PARTICIPANT_A" | "PARTICIPANT_B", string>>,
+): void {
+  for (const role of ["PARTICIPANT_A", "PARTICIPANT_B"] as const) {
+    const record = readAdmission(runtime.runRoot, state.runId, role);
+    const admitted = record?.participantSigningKeyDigest;
+    if (admitted === undefined) continue;
+    if (admitted !== participantSigningKeyDigest(published[role])) {
+      throw new ProtectionProductError(
+        `The case would publish a signing key ${role} never authorized`,
+        409,
+      );
+    }
+  }
+}
+
 export type ParticipantAdmissionContext = Readonly<{
   runId: string;
   stage: ExecutionStage;
   fheCaseId: Sha256Digest;
   assetIdentityDigest: Sha256Digest;
   protectionBindingDigest: Sha256Digest;
+  /**
+   * The Ed25519 keys the case will publish, base64, one per role.
+   *
+   * They are materialised here rather than at case creation because a wallet
+   * cannot authorize a key that does not exist yet, and ParticipantAdmissionV2
+   * has the wallet name exactly the key that will sign its enrollments. Minting
+   * them at creation, after the admission was already signed, is what left the
+   * two identities unlinked.
+   *
+   * `rawParticipantKey` returns a retained key when one exists, so calling it
+   * here and again at creation yields the same key rather than a second one.
+   */
+  participantSigningKeys: Readonly<Record<"PARTICIPANT_A" | "PARTICIPANT_B", string>>;
 }>;
 
 function assertDirectParticipantAdmissionEnabled(runtime: ProtectionRuntime): void {
@@ -1610,12 +1657,23 @@ async function readParticipantAdmissionContextRuntime(
   if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
     throw new ProtectionProductError("This case does not admit participants", 409);
   }
+  // Materialise both keys before either wallet is asked to sign. The directory
+  // is the same one case creation reads from, so the key a wallet authorizes is
+  // the key the case binding publishes.
+  mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
+  const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
+  const keyA = rawParticipantKey("PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation);
+  const keyB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation);
   return Object.freeze({
     runId: state.runId,
     stage: state.stage,
     fheCaseId: state.protectionCase.fheCaseId,
     assetIdentityDigest: state.protectionCase.cleanverseAssetDigest,
     protectionBindingDigest: protectionAuthorizationBindingDigest(state),
+    participantSigningKeys: Object.freeze({
+      PARTICIPANT_A: keyA.publicBase64,
+      PARTICIPANT_B: keyB.publicBase64,
+    }),
   });
 }
 
