@@ -64,6 +64,11 @@ export type ParticipantAdmissionRecord = Readonly<{
   chainId: number;
   issuedAt: number;
   expiresAt: number;
+  /**
+   * The Ed25519 key digest this wallet authorized, retained so case creation can
+   * refuse to publish a key no admission named. Absent on V1 records.
+   */
+  participantSigningKeyDigest?: Bytes32;
   /** The Monad block at which the active Cleanverse policy admitted this wallet. */
   eligibilityBlock: number;
   admittedAtUnix: number;

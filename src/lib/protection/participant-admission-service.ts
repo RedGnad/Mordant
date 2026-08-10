@@ -29,17 +29,21 @@ import {
   type CanonicalRecourseConfiguration,
 } from "./adapter-compatibility";
 import {
-  PARTICIPANT_ADMISSION_PRIMARY_TYPE,
-  PARTICIPANT_ADMISSION_TYPES,
   ParticipantAuthorizationError,
-  assertParticipantAdmissionMessage,
   digestToBytes32,
   isParticipantRole,
-  participantAdmissionDomain,
-  verifyParticipantAuthorization,
+  participantClaimCommitment,
   type ParticipantRole,
   type TypedDataVerifier,
 } from "./participant-authorization";
+import { hashTypedData } from "viem";
+
+import {
+  assertParticipantAdmissionV2Message,
+  participantAdmissionV2TypedData,
+  participantSigningKeyDigest,
+  verifyParticipantAdmissionV2,
+} from "./participant-admission-v2";
 import {
   ParticipantAdmissionStoreError,
   admissionAbandoned,
@@ -354,26 +358,32 @@ export async function participantAdmissionChallenge(
   if (context.stage !== expectedStage) {
     fail("ADMISSION_OUT_OF_ORDER", 409, `Participant ${role} admission is out of order`);
   }
+  // The key this wallet is about to authorize. It already exists: the context
+  // materialises both keys before either wallet is asked to sign, so a wallet
+  // never names a key the case has yet to choose.
+  const signingKeyDigest = participantSigningKeyDigest(context.participantSigningKeys[role]);
   const issuedAt = dependencies.now();
+  const typed = participantAdmissionV2TypedData({
+    verifyingService: dependencies.verifyingService,
+    runId,
+    fheCaseId: digestToBytes32(context.fheCaseId),
+    protectionBindingDigest: digestToBytes32(context.protectionBindingDigest),
+    assetIdentityDigest: digestToBytes32(context.assetIdentityDigest),
+    role,
+    activeFrom: window.activeFrom,
+    activeUntil: window.activeUntil,
+    participantWallet: canonicalWallet as `0x${string}`,
+    authorizationNonce: `0x${randomBytes(32).toString("hex")}`,
+    issuedAt,
+    expiresAt: issuedAt + PARTICIPANT_CHALLENGE_LIFETIME_SECONDS,
+    participantSigningKeyDigest: signingKeyDigest,
+  }, dependencies.chainId);
   return Object.freeze({
     schemaVersion: PARTICIPANT_CHALLENGE_SCHEMA,
-    domain: participantAdmissionDomain(dependencies.chainId),
-    primaryType: PARTICIPANT_ADMISSION_PRIMARY_TYPE,
-    types: PARTICIPANT_ADMISSION_TYPES,
-    message: Object.freeze({
-      verifyingService: dependencies.verifyingService,
-      runId,
-      fheCaseId: digestToBytes32(context.fheCaseId),
-      protectionBindingDigest: digestToBytes32(context.protectionBindingDigest),
-      assetIdentityDigest: digestToBytes32(context.assetIdentityDigest),
-      role,
-      activeFrom: window.activeFrom,
-      activeUntil: window.activeUntil,
-      participantWallet: canonicalWallet,
-      authorizationNonce: `0x${randomBytes(32).toString("hex")}`,
-      issuedAt,
-      expiresAt: issuedAt + PARTICIPANT_CHALLENGE_LIFETIME_SECONDS,
-    }),
+    domain: typed.domain,
+    primaryType: typed.primaryType,
+    types: typed.types,
+    message: Object.freeze(typed.message as Readonly<Record<string, unknown>>),
   });
 }
 
@@ -462,23 +472,43 @@ export async function admitParticipant(
   if (readAdmission(dependencies.runRoot, runId, request.role) === null && context.stage !== expectedStage) {
     fail("ADMISSION_OUT_OF_ORDER", 409, `Participant ${request.role} admission is out of order`);
   }
-  const message = assertParticipantAdmissionMessage(request.authorization);
-  const verified = await verifyParticipantAuthorization(
+  // V2 is verified here, and the signing-key digest is compared against the key
+  // this server already holds for the role. The challenge emits that digest; a
+  // wallet that signed a different one is refused rather than admitted.
+  const message = assertParticipantAdmissionV2Message(request.authorization);
+  const admitted = await verifyParticipantAdmissionV2(
     message,
     request.signature,
     {
       verifyingService: dependencies.verifyingService,
       runId,
-      fheCaseId: context.fheCaseId,
-      protectionBindingDigest: context.protectionBindingDigest,
-      assetIdentityDigest: context.assetIdentityDigest,
+      fheCaseId: digestToBytes32(context.fheCaseId),
+      protectionBindingDigest: digestToBytes32(context.protectionBindingDigest),
+      assetIdentityDigest: digestToBytes32(context.assetIdentityDigest),
       role: request.role,
-      claim,
+      participantSigningKeyBase64: context.participantSigningKeys[request.role],
+      activeFrom: claim.activeFrom,
+      activeUntil: claim.activeUntil,
       chainId: dependencies.chainId,
       now: dependencies.now(),
     },
-    dependencies.verifyTypedData,
+    async (input) => dependencies.verifyTypedData({
+      address: input.address,
+      typedData: input.typedData as never,
+      digest: hashTypedData(input.typedData as never),
+      signature: input.signature,
+    }),
   );
+  const verified = Object.freeze({
+    message: admitted.message,
+    role: admitted.message.role,
+    authorizationDigest: hashTypedData(
+      participantAdmissionV2TypedData(admitted.message, dependencies.chainId) as never,
+    ) as `0x${string}`,
+    signature: request.signature as `0x${string}`,
+    participantWallet: admitted.message.participantWallet,
+    claimCommitment: participantClaimCommitment({ runId, role: admitted.message.role, claim }),
+  });
   assertCanonicalParticipantWallet(canonical, request.role, verified.participantWallet);
 
   // The active Cleanverse policy decides on the verified signing address, never
@@ -496,6 +526,7 @@ export async function admitParticipant(
     role: request.role,
     participantWallet: verified.participantWallet,
     authorizationDigest: verified.authorizationDigest,
+    participantSigningKeyDigest: admitted.signingKeyDigest,
     claimCommitment: verified.claimCommitment,
     authorizationNonce: message.authorizationNonce,
     chainId: canonical.adapter.chainId,

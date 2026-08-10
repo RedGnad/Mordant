@@ -170,6 +170,10 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
     error AlreadyPaid();
     error NothingToPay();
     error Ineligible(address account, uint8 role);
+    /// @dev Kept distinct from Ineligible: an identity that is still valid can
+    /// still be refused by the asset's policy, and the two failures call for
+    /// different responses.
+    error TransferPolicyDenied(address holder, uint256 amount);
     error PayoutOnNoConflict();
     error Insolvent();
 
@@ -342,7 +346,23 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
         uint256 amount = holderIsA ? entry.payoutA : entry.payoutB;
         if (holderIsA ? entry.paidA : entry.paidB) revert AlreadyPaid();
         if (amount == 0) revert NothingToPay();
+        // Two independent Cleanverse authorities are consulted at the only moment
+        // value actually moves, and both are read live rather than remembered
+        // from admission time.
+        //
+        // The first is the holder's identity: `isEligible` resolves the A-Pass
+        // through the CVI verifier, so an entitlement opened months ago stops
+        // being claimable the moment that identity ceases to be valid.
+        //
+        // The second is the asset's own policy, which the settlement token
+        // resolves for itself and which can refuse a transfer the identity gate
+        // would allow. MordantInvoiceVault consults it at its own release, and
+        // this is the same boundary for the same reason: an entitlement is not a
+        // permission to move the token.
         _requireEligible(holder, ROLE_HOLDER);
+        if (!cviVerifier.isAssetTransferAllowed(address(settlementToken), address(this), holder, amount)) {
+            revert TransferPolicyDenied(holder, amount);
+        }
 
         if (holderIsA) entry.paidA = true;
         else entry.paidB = true;

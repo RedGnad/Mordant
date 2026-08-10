@@ -1,6 +1,7 @@
 package governedfhe
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,17 @@ type CoalitionSettlementFixture struct {
 	SameEconomicAsset          bool     `json:"sameEconomicAsset"`
 	PolicyConflict             bool     `json:"policyConflict"`
 	OperatorTopology           string   `json:"operatorTopology"`
+	// The two identities the case binding publishes. The canonical scenario needs
+	// them because a V2 admission names the exact key the case will accept
+	// enrollments from.
+	ParticipantA CoalitionFixtureIdentity `json:"participantA"`
+	ParticipantB CoalitionFixtureIdentity `json:"participantB"`
+}
+
+type CoalitionFixtureIdentity struct {
+	ID               string `json:"id"`
+	Role             string `json:"role"`
+	SigningPublicKey string `json:"signingPublicKey"`
 }
 
 func TestEmitCoalitionSettlementFixture(t *testing.T) {
@@ -97,6 +109,14 @@ func TestEmitCoalitionSettlementFixture(t *testing.T) {
 		SameEconomicAsset:          result.SameEconomicAsset,
 		PolicyConflict:             result.PolicyConflict,
 		OperatorTopology:           result.OperatorTopology,
+		ParticipantA: CoalitionFixtureIdentity{
+			ID: fixture.manifest.Binding.ParticipantA.ID.String(), Role: RoleA,
+			SigningPublicKey: base64.StdEncoding.EncodeToString(fixture.manifest.Binding.ParticipantA.SigningPublicKey),
+		},
+		ParticipantB: CoalitionFixtureIdentity{
+			ID: fixture.manifest.Binding.ParticipantB.ID.String(), Role: RoleB,
+			SigningPublicKey: base64.StdEncoding.EncodeToString(fixture.manifest.Binding.ParticipantB.SigningPublicKey),
+		},
 	}
 	encoded, err := json.MarshalIndent(emitted, "", "  ")
 	if err != nil {

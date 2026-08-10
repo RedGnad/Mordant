@@ -1,13 +1,13 @@
 {
   "schemaVersion": "mordant.coalition-settlement-fixture/1",
   "fheCaseId": "0xb11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
-  "caseBindingDigest": "0xa264f827a9056d9a34c3d1cc240a907f018fa8d4e6f91f88f2b33052d3162e04",
+  "caseBindingDigest": "0x3d2c9860bf6f67408b79bbe95d59d0c7a75eb1da2d9c048863b3c5974d9695ce",
   "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
-  "coalitionResultDigest": "0x292c7c49077f76d7fb832da5845cf19bb1c57f766f77183e9485f80500c36fec",
-  "releaseTranscript": "0x01538576ae35ab26d9ba0a1d364167952df0b9577033e465476956c0bc97b6c5",
-  "participantArtifactDigestA": "0xd8101b1261b686db17e14c3885ffee002a18dea944a5c16ecef4be4c98d45df4",
-  "participantArtifactDigestB": "0x1a9f8f7f3a5fe3956257432f6c9309ee157294a10336f4f070dfc18e61d08dd9",
-  "coalitionAuthorityId": "0xc2fc334829cbd5f8c15b45b93548cc628e32cc8bdc433ea718baa70fa3a40a65",
+  "coalitionResultDigest": "0x4a66528c51feb72331bb1a9599c43a3476623995f7c542f5a3ba476116da1e02",
+  "releaseTranscript": "0x55a7307d80d98276b02211a28f4eb099a075b9b6987aa55b6f2d10234d558c79",
+  "participantArtifactDigestA": "0x5eb150540e2d21d42748075e18a1f104a075a0a4b83f002348eccac7a62c6429",
+  "participantArtifactDigestB": "0xfa956064d8e15ce5ffbeb1299a9c2c0ea311fc4c61eef0c20ab1486e1b3ec789",
+  "coalitionAuthorityId": "0x0316321eb90f06f557b8d0326f309c5ab3aeedad3844fbc7e1965d22a8dbb8b3",
   "servingQuorum": 2,
   "coalition": [
     1,
@@ -18,5 +18,15 @@
   "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
   "sameEconomicAsset": true,
   "policyConflict": true,
-  "operatorTopology": "colocated-single-process"
+  "operatorTopology": "colocated-single-process",
+  "participantA": {
+    "id": "sha256:0cf5d0870db048e948835f5face04ca71a380a4948f710e818697ae6761e36c9",
+    "role": "PARTICIPANT_A",
+    "signingPublicKey": "L5F1zPWappT6pOf5YzZ6vrIPG6asxabxKublaiS81xg="
+  },
+  "participantB": {
+    "id": "sha256:e9c940b5104adebb21db75aa07043560be6c363d124eb4d4e568e64e3313af91",
+    "role": "PARTICIPANT_B",
+    "signingPublicKey": "TV+9O6dxQe7UjR7LFCtlBAk+5UvgYxewcLG71AvRBT4="
+  }
 }

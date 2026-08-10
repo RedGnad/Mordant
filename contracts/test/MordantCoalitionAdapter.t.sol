@@ -372,6 +372,53 @@ contract MordantCoalitionAdapterTest is Test {
         assertTrue(adapter.solvent(), "solvent while the liability is open");
     }
 
+    // ------------------------------------------- Cleanverse is load-bearing
+
+    /// @notice An entitlement is not a permanent permission. The holder's identity is resolved
+    /// live at the claim, so an eligibility that lapses between the release and the payout stops
+    /// the payout.
+    function testIdentityLapsingAfterTheReleaseStopsThePayout() public {
+        _fund(RESERVE);
+        MordantCoalitionAdapter.CoalitionRelease memory r = _release(keccak256("run/identity-lapse"));
+        adapter.consumeCoalitionRelease(r, _sign(r, ATTESTOR_KEY));
+        vm.warp(block.timestamp + CURE_WINDOW + 1);
+        adapter.finalize(r.runId);
+
+        // The A-Pass behind holder A stops being valid after the result existed.
+        eligibility.setEligible(holderA, 4, false);
+        vm.expectRevert(abi.encodeWithSelector(MordantCoalitionAdapter.Ineligible.selector, holderA, uint8(4)));
+        adapter.claim(r.runId, true);
+
+        // The other holder, still eligible, is unaffected: the refusal is per identity.
+        adapter.claim(r.runId, false);
+        assertEq(token.balanceOf(holderB), PAY_B, "holder B paid");
+        assertEq(token.balanceOf(holderA), 0, "holder A not paid");
+        assertTrue(adapter.solvent(), "solvent with one entitlement unclaimed");
+    }
+
+    /// @notice The asset's own policy is a second, independent authority. A holder whose identity
+    /// is still valid is still refused when the token's policy turns against the transfer.
+    function testAssetPolicyTurningAgainstTheTransferStopsThePayout() public {
+        _fund(RESERVE);
+        MordantCoalitionAdapter.CoalitionRelease memory r = _release(keccak256("run/policy-turn"));
+        adapter.consumeCoalitionRelease(r, _sign(r, ATTESTOR_KEY));
+        vm.warp(block.timestamp + CURE_WINDOW + 1);
+        adapter.finalize(r.runId);
+
+        // Identity stays valid; only the asset policy refuses.
+        eligibility.setAssetTransferAllowed(holderA, false);
+        assertTrue(eligibility.isEligible(holderA, 4), "the identity gate still passes");
+        vm.expectRevert(
+            abi.encodeWithSelector(MordantCoalitionAdapter.TransferPolicyDenied.selector, holderA, PAY_A)
+        );
+        adapter.claim(r.runId, true);
+
+        // And it is recoverable: the entitlement is not destroyed, only unclaimable while refused.
+        eligibility.setAssetTransferAllowed(holderA, true);
+        adapter.claim(r.runId, true);
+        assertEq(token.balanceOf(holderA), PAY_A, "holder A paid once the policy allows again");
+    }
+
     /// @notice The circuit and parameters the adapter pins are the ones the spine ran.
     function testTheSpinePinsMatchTheDeployedReviewedValues() public view {
         assertEq(

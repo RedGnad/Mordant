@@ -694,3 +694,68 @@ Three existing tests then failed, which was the fix working: they mutated the bi
 breaks the signatures. Two were rebuilt on a genuinely released non-conflicting branch rather than an
 edited one, which is stronger evidence anyway. The canonical-vector check stays as defence in depth,
 now unreachable from an authentically signed result.
+
+---
+
+# Cleanverse-native path
+
+## D30 — Why the two identities were unlinked, and where the join goes
+
+`governed-fhe-product-server.ts:1128` mints the participant's Ed25519 key **server-side**, and the
+wallet never sees it. `ParticipantAdmissionV1` proves a CVI-eligible wallet consented to a case; the
+enrollments are signed by that server-minted key. Nothing tied them, so "the participant" was two
+unrelated identities.
+
+`ParticipantAdmissionV2` adds one field: the digest of the key authorized to sign that wallet's
+enrollments. The digest is **derived from the key the case binding publishes**, never compared
+between two supplied values, so an admission cannot name a key the case does not publish.
+
+A new EIP-712 type rather than a field on V1: changing V1 would move its type hash and invalidate
+every retained admission, and the governed path still uses V1 and gains nothing from a rule it was
+not built under.
+
+**Ordering consequence, not yet wired into the live server**: for a wallet to name the key, the key
+must exist before the admission is signed. Today the server mints it during case creation. The
+canonical scenario exercises the correct order with the real modules; moving the live server's key
+minting ahead of admission is the remaining wiring.
+
+## D31 — Live revalidation at the only boundary where value moves
+
+`claim()` now consults two independent Cleanverse authorities, both read live:
+
+- the holder's identity, through `isEligible` -> the CVI verifier -> the A-Pass;
+- the asset's own policy, through `isAssetTransferAllowed`, which the settlement token resolves for
+  itself and which can refuse what the identity gate allows.
+
+`MordantInvoiceVault` already consults the second at its own release. This is the same boundary for
+the same reason, so it is the repo's idiom rather than a new compliance layer. The two failures have
+distinct errors because they call for different responses.
+
+The checks are at `claim` only. `cure` and `finalize` move no value, and `fundReserve` /
+`withdrawAvailable` are administrative transfers the token enforces for itself.
+
+## D32 — A measurement I nearly reported as a finding, wrongly
+
+Probing `isEligible(0xdEaD, ROLE_HOLDER)` returned true and I was about to report that the deployed
+A-Pass admits everyone, which would have emptied this milestone of meaning.
+
+It is false. `0x…0001` and `0x1111…` are refused; `0xdEaD` passes because it **holds a real A-Pass**
+(`balanceOf` = 1). I generalised from one unlucky probe. The verified position is the opposite and
+better: the A-Pass gate genuinely refuses arbitrary addresses, and `openRoleMask = 16` opens the
+holder role to any address that holds a valid A-Pass.
+
+**Claim discipline on the asset policy.** `canTransfer(aUSDC, adapter, …)` returned true for both
+recipients tested. The policy is consulted and enforceable, and the adapter fails closed when it
+refuses. It is **not** claimed that the currently deployed configuration has refused any recipient.
+
+## D33 — Milestone status
+
+One case demonstrates: eligible wallets -> V2 admissions naming the exact published keys -> real
+enrollments -> 2-of-3 coalition -> released result -> settlement plan whose identity is the coalition
+and whose economics are the pre-committed profile -> payout, with live identity and policy checks at
+the claim. The negative controls run on the same path: a key no wallet admitted, a lapsed admission,
+a profile committed to another coalition, an identity that lapses after the result, and a policy that
+turns against a pending transfer.
+
+Remaining, and not claimed: the live server still mints the signing key during case creation rather
+than before admission; the adapter is executed locally, not deployed to testnet.
