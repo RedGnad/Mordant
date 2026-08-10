@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import {
   type ProtectionRuntimeOptions,
 } from "./governed-fhe-product-server";
 import { admitParticipantRole } from "./participant-admission-store";
+import { participantSigningKeyDigest } from "./participant-admission-v2";
 import { participantClaimCommitment } from "./participant-authorization";
 import { loadCanonicalRecourseConfiguration } from "./adapter-compatibility";
 import { customSupervisedBindingDigestV2, type MordantCustomSupervisedBindingV2 } from "./custom-supervised-v2";
@@ -458,4 +460,78 @@ test("the two creation paths stay separate on the public surface", async () => {
   assert.equal(created.stage, "CASE_CREATED");
   // Replaying the same creation request is the lost-response retry, not a second case.
   assert.equal((await orchestrator.createNeutralParticipantCase(RUN_ID)).runId, created.runId);
+});
+
+/**
+ * F-05: an admitted key is committed, and no fault silently replaces it.
+ *
+ * The danger these cover is not a crash. It is the quiet success: the key file
+ * goes missing, the server mints a fresh one, the case publishes it, and every
+ * enrollment that follows is signed by a key no eligible wallet ever authorized.
+ * Nothing downstream would report an error, because each individual signature
+ * verifies. So each case below asserts a refusal AND that the key on disk was
+ * not replaced.
+ */
+
+/** Creates a case, then records an admission naming the key it actually minted. */
+async function admittedKeyCase() {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  // Reading the context is what mints the keys: under the V2 ordering the key
+  // has to exist before the wallet can name it in a signature.
+  await orchestrator.readParticipantAdmissionContext(RUN_ID);
+  const keyPath = join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519");
+  const minted = readFileSync(keyPath);
+  writeVerifiedDurableAdmission(base, "PARTICIPANT_A", admission({
+    participantSigningKeyDigest: participantSigningKeyDigest(minted.subarray(32).toString("base64")),
+  }));
+  return { base, orchestrator, keyPath, minted };
+}
+
+test("an admitted key that has gone missing fails closed instead of being reminted", async () => {
+  const { orchestrator, keyPath } = await admittedKeyCase();
+  unlinkSync(keyPath);
+  await assert.rejects(
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
+  );
+  assert.equal(existsSync(keyPath), false, "the refusal must not have minted a replacement");
+});
+
+test("an admitted key that has been truncated fails closed instead of being reminted", async () => {
+  const { orchestrator, keyPath, minted } = await admittedKeyCase();
+  writeFileSync(keyPath, minted.subarray(0, 31));
+  await assert.rejects(
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
+  );
+  assert.equal(readFileSync(keyPath).length, 31, "the refusal must not have overwritten the damaged key");
+});
+
+test("a well-formed key substituted for the admitted one is refused", async () => {
+  const { orchestrator, keyPath } = await admittedKeyCase();
+  // The exact shape a silent remint used to produce: a valid, freshly generated
+  // key that simply is not the one the wallet signed for.
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const substituted = Buffer.concat([
+    Buffer.from(String(privateKey.export({ format: "jwk" }).d), "base64url"),
+    Buffer.from(String(publicKey.export({ format: "jwk" }).x), "base64url"),
+  ]);
+  assert.equal(substituted.length, 64);
+  writeFileSync(keyPath, substituted);
+  await assert.rejects(
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    (error: unknown) => error instanceof Error && /not the key that role's wallet admitted/.test(error.message),
+  );
+});
+
+test("a role with no admission yet is still free to have its key minted", async () => {
+  // The refusal must be scoped to what a wallet committed to. A case that nobody
+  // has admitted yet must remain creatable, or F-05 would break the normal path.
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.readParticipantAdmissionContext(RUN_ID);
+  assert.ok(existsSync(join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519")));
 });

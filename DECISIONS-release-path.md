@@ -759,3 +759,45 @@ turns against a pending transfer.
 
 Remaining, and not claimed: the live server still mints the signing key during case creation rather
 than before admission; the adapter is executed locally, not deployed to testnet.
+
+## D34 — Stabilisation pass: an admitted key is committed (F-05)
+
+Branch `fix/admission-v2-stabilisation`, one commit per audit finding: F1 `6d63d52` (browser parser
+pinned to V2, with a seam test that drives the real server challenge into the real browser parser),
+F2 `2e9ce09` (per-schema projection in the bridge evidence), F3 `ca55425` (named measurement field
+sets, both shapes recognised so retained evidence keeps its pinned digests), `19e8cef` (two stale e2e
+assertions realigned on the shell header), F4 `6705233` (the live server itself follows the V2 order).
+
+F-05 closed three holes in `rawParticipantKey`, not the one reported:
+
+1. A **truncated** key was reminted whenever `recoverTruncated` was set. That flag is
+   `preFoundation`, and under the V2 ordering admissions now happen before foundation, so the flag
+   no longer means "nobody has committed to this key".
+2. A **missing** key file was reminted unconditionally, ignoring `recoverTruncated` entirely. This
+   was the wider hole and it was not in the finding as written.
+3. A **substituted** well-formed key was accepted, because only the length was checked.
+
+The fix does not tighten the flag; it changes what the decision is keyed on. The question is no
+longer "are we before foundation" but "has a wallet already signed for this key", read from
+`ParticipantAdmissionRecord.participantSigningKeyDigest`. Once one has, the key file must exist, be
+64 bytes, and hash to the admitted digest; any other state is a fault reported at 409, never a mint.
+Absence past foundation now also fails closed even with no admission digest, which covers V1-era
+records that never named a key.
+
+Recovery is deliberately not automatic. Reminting would publish a key no eligible wallet authorized,
+and nothing downstream would notice, because every enrollment signed by it verifies on its own. Only
+a fresh admission can authorize a new key, and that is the participant's decision, not the server's.
+
+`assertPublishedKeysWereAdmitted` stays as a second lock on the publication itself. Its comment
+claimed the remint as the threat it existed for; that comment was corrected rather than left to
+mislead the next reader.
+
+**Method note.** The four negative controls were run against a deliberately neutralised guard before
+being trusted: the three refusals fail without it, the positive control passes in both states. A
+negative control that also passes against the unfixed code proves nothing, and this pass exists
+precisely because two green per-side suites could not see their own disagreement.
+
+**Correction to D33.** Its remaining limitation, "the live server still mints the signing key during
+case creation rather than before admission", was closed by F4 and is no longer accurate. Keys are
+minted by `readParticipantAdmissionContext`, before the wallet signs. The testnet deployment of
+`MordantCoalitionAdapter` remains outstanding.

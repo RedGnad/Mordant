@@ -1113,18 +1113,57 @@ function readRegularNoFollow(path: string): Buffer {
   }
 }
 
+/**
+ * Returns this role's signing key, minting it only while it is still free to mint.
+ *
+ * @param admittedDigest the key digest a wallet has already authorized for this
+ *   role, or undefined when no admission exists yet. Once a wallet has signed an
+ *   admission naming a key, that key is committed: a missing or truncated file
+ *   is a fault to report, never a reason to mint a different one. Reminting
+ *   there would publish a key no eligible wallet ever authorized, and every
+ *   enrollment signed by it would verify against an unadmitted identity.
+ *
+ *   Recovering from that state is deliberately not automatic. It requires a new
+ *   admission for the new key, which is a decision for the participant and their
+ *   wallet, not for this function.
+ */
 function rawParticipantKey(
   role: "PARTICIPANT_A" | "PARTICIPANT_B",
   root: string,
   recoverTruncated: boolean,
+  admittedDigest?: string,
 ) {
   const path = join(root, `${role.toLowerCase()}.ed25519`);
   if (existsSync(path)) {
     const retained = readRegularNoFollow(path);
-    if (retained.length === 64) return { path, publicBase64: retained.subarray(32).toString("base64") };
+    if (retained.length === 64) {
+      const publicBase64 = retained.subarray(32).toString("base64");
+      if (admittedDigest !== undefined && participantSigningKeyDigest(publicBase64) !== admittedDigest) {
+        throw new ProtectionProductError(
+          `The retained ${role} key is not the key that role's wallet admitted`,
+          409,
+        );
+      }
+      return { path, publicBase64 };
+    }
+    if (admittedDigest !== undefined) {
+      throw new ProtectionProductError(
+        `The ${role} key is truncated and that role is already admitted; it cannot be reminted without a new admission`,
+        409,
+      );
+    }
     if (!recoverTruncated) throw new ProtectionProductError("Truncated participant key after foundation admission", 500);
     unlinkSync(path);
     fsyncDirectory(root);
+  } else if (admittedDigest !== undefined) {
+    throw new ProtectionProductError(
+      `The ${role} key is missing and that role is already admitted; it cannot be reminted without a new admission`,
+      409,
+    );
+  } else if (!recoverTruncated) {
+    // Past foundation the case has already published this role's key, even if no
+    // admission names it. Its disappearance is a fault, not a mint trigger.
+    throw new ProtectionProductError(`Missing participant key after foundation admission`, 500);
   }
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const publicJwk = publicKey.export({ format: "jwk" });
@@ -1503,14 +1542,20 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
     mkdirSync(state.paths.decryptorPrivateRoot, { recursive: true, mode: 0o700 });
     mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
     const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
-    const participantA = rawParticipantKey("PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation);
+    const participantA = rawParticipantKey(
+      "PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation,
+      admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_A"),
+    );
     runtime.failpoint("after-participant-key-a");
-    const participantB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation);
+    const participantB = rawParticipantKey(
+      "PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation,
+      admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_B"),
+    );
     runtime.failpoint("after-both-participant-keys");
-    // A key can be re-minted between admission and here: `rawParticipantKey`
-    // replaces a truncated file pre-foundation. If that happened, the case would
-    // publish a key no wallet ever authorized, and the admission's binding to it
-    // would be silently void. Refuse rather than publish.
+    // `rawParticipantKey` already refuses to mint over an admitted key, so this
+    // is the second of two locks rather than the only one. It stays because it
+    // guards the publication itself: whatever produced these two values, a key
+    // the admitted wallet did not authorize must not reach the case binding.
     assertPublishedKeysWereAdmitted(runtime, state, {
       PARTICIPANT_A: participantA.publicBase64,
       PARTICIPANT_B: participantB.publicBase64,
@@ -1577,6 +1622,15 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
     return publicView(state, runtime);
   });
+}
+
+/** The key digest a wallet has already authorized for this role, if any. */
+function admittedSigningKeyDigest(
+  runtime: ProtectionRuntime,
+  runId: string,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
+): string | undefined {
+  return readAdmission(runtime.runRoot, runId, role)?.participantSigningKeyDigest;
 }
 
 /**
@@ -1662,8 +1716,14 @@ async function readParticipantAdmissionContextRuntime(
   // the key the case binding publishes.
   mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
   const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
-  const keyA = rawParticipantKey("PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation);
-  const keyB = rawParticipantKey("PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation);
+  const keyA = rawParticipantKey(
+    "PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation,
+    admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_A"),
+  );
+  const keyB = rawParticipantKey(
+    "PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation,
+    admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_B"),
+  );
   return Object.freeze({
     runId: state.runId,
     stage: state.stage,
