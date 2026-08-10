@@ -71,8 +71,22 @@ function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
 
+/**
+ * The ceremony writes 32-byte identifiers as `sha256:<hex>` and the adapter
+ * carries the same bytes as `0x<hex>`. Comparing the prefixes would make two
+ * spellings of one identifier look different, so both are reduced to their hex
+ * before comparison. Anything that is not one of those two spellings is compared
+ * verbatim and therefore still has to match exactly.
+ */
+function normalizeDigest(value: string): string {
+  const lower = value.toLowerCase();
+  if (lower.startsWith("sha256:")) return lower.slice("sha256:".length);
+  if (lower.startsWith("0x")) return lower.slice(2);
+  return lower;
+}
+
 function sameDigest(left: string, right: string): boolean {
-  return left.toLowerCase() === right.toLowerCase();
+  return normalizeDigest(left) === normalizeDigest(right);
 }
 
 /**

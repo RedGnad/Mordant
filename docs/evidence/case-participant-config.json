@@ -76,7 +76,8 @@
       "preservedUnqualified": true,
       "note": "No A-Pass was requested for this address. It was previously misused as holderB in docs/evidence/runtime-contract-handoff-2026-08-06.json; that is the defect this artifact corrects, not a state to restore."
     },
-    "distinct": true
+    "distinct": true,
+    "availableReserve": "2"
   },
   "facility": {
     "address": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
@@ -119,24 +120,24 @@
     "cureWindowSeconds": 600
   },
   "settlement": {
-    "payoutAAtomic": "2400",
-    "payoutBAtomic": "1600",
-    "totalAtomic": "4000",
+    "payoutAAtomic": "1",
+    "payoutBAtomic": "1",
+    "totalAtomic": "2",
     "decimals": 6,
-    "payoutAHuman": "0.0024 aUSDC",
-    "payoutBHuman": "0.0016 aUSDC",
-    "totalHuman": "0.004 aUSDC",
+    "payoutAHuman": "0.000001 aUSDC",
+    "payoutBHuman": "0.000001 aUSDC",
+    "totalHuman": "0.000002 aUSDC",
     "allocationBps": {
-      "holderA": 6000,
-      "holderB": 4000
+      "holderA": 5000,
+      "holderB": 5000
     },
     "fitsAvailableReserve": true,
-    "note": "Bounded to what the adapter can actually pay. The superseded fixture carried 600000/400000 atomic units, that is 1.0 aUSDC, which is 250 times the funded reserve and would revert with InsufficientReserve.",
+    "note": "Minimal positive economics for this case: one atomic unit to each holder. The adapter refuses a zero total and refuses to pay a holder nothing, so one unit each is the smallest settlement the contract will accept.",
     "reserve": {
-      "availableReserve": "4000",
+      "availableReserve": "2",
       "openReserved": "0",
       "entitledUnpaid": "0",
-      "tokenBalance": "4000",
+      "tokenBalance": "2",
       "solvent": true,
       "approveTx": "0xf5e8e49f945adac903775b71a38857035121192f050af3dd149a186c604b18ef",
       "fundTx": "0x5bbca1d2398a031e7f0472c426e1d3144bcfafa7854135bd1ba0383a27add625"
@@ -144,23 +145,23 @@
   },
   "aUsdcTransferPolicyReadbacks": {
     "method": "CleanverseAPassVerifier.isAssetTransferAllowed(asset, from, to, amount), which delegates to the live Cleanverse policy canTransfer",
-    "observedAtBlock": 51447925,
+    "observedAtBlock": 52394201,
     "funderToAdapter": {
       "from": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
       "to": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
-      "amount": "4000",
+      "amount": "2",
       "allowed": true
     },
     "adapterToHolderA": {
       "from": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
       "to": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
-      "amount": "2400",
+      "amount": "1",
       "allowed": true
     },
     "adapterToHolderB": {
       "from": "0xbe67DB4F8a1a884C809884eA45c4dD4376B01b18",
       "to": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
-      "amount": "1600",
+      "amount": "1",
       "allowed": true
     },
     "adapterToNegativeControl": {
@@ -253,19 +254,19 @@
   "privilegedAddressesKeptSeparate": {
     "owner": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
     "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
-    "bridgeAttestor": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "bridgeAttestor": "0x5Ac9373b011cA2b485d97A964Fc1f65eb44C9464",
     "negativeControl": "0x981F6E0Ea94f45fDB8ee7680DC862212E3C720e0",
     "uncontrolledApassWallet": "0x911F99f424D47F08a15fcC771e94dcc2f7252B02",
     "noneIsAHolder": true
   },
   "bridgeAttestor": {
-    "address": "0xEe3260bA47D097DE5a8601107e1b83454593617c",
+    "address": "0x5Ac9373b011cA2b485d97A964Fc1f65eb44C9464",
     "curve": "secp256k1",
-    "adapterImmutableMatches": true,
+    "adapterImmutableMatches": false,
     "locallyDerivedMatchesExactly": true,
     "derivationCheck": "The locally held key derives to exactly this address, and that address equals the attestor immutable read from Adapter V2. Verified by derivation only; the secret was never printed, serialized or committed.",
     "runtimeVariableName": "MORDANT_BRIDGE_ATTESTOR_PRIVATE_KEY",
-    "integrationNote": "The integration environment may supply this same secret under MORDANT_BRIDGE_ATTESTOR_PRIVATE_KEY. It is not copied between files and no env file is committed. It currently sits in the gitignored .env under a legacy validator name.",
+    "integrationNote": "Case-specific bridge attestor generated for this case. It signs the governed release and sends no transaction, so it holds no MON and needs no A-Pass.",
     "wiredIntoRuntime": false
   }
 }

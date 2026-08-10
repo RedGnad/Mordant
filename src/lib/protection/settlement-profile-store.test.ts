@@ -46,7 +46,7 @@ function profile(overrides: Partial<SettlementProfile> = {}): SettlementProfile 
       protectionBindingDigest: `sha256:${"56".repeat(32)}`,
       releaseMode: "governed-decryptor-v1",
     },
-    participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "78".repeat(32) },
+    participantConfig: { path: "docs/evidence/case-participant-config.json", sha256: "78".repeat(32) },
     committedAtUnix: 1_786_000_000,
     chainId: 10_143,
     adapter: "0x1111111111111111111111111111111111111111",
@@ -164,26 +164,26 @@ test("a result from another case cannot borrow this profile's economics", () => 
 test("the two pinned participant configurations are never interchangeable", () => {
   // Each is accepted only against its own reviewed bytes, so naming one and
   // serving the other is a refusal rather than a silent substitution.
-  const historical = loadCanonicalRecourseConfiguration(process.cwd(), "historical");
-  const fresh = loadCanonicalRecourseConfiguration(process.cwd(), "fresh-case");
-  assert.notEqual(historical.participants.holderA.toLowerCase(), fresh.participants.holderA.toLowerCase());
-  assert.notEqual(historical.participants.holderB.toLowerCase(), fresh.participants.holderB.toLowerCase());
-  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.historical.sha256, PINNED_PARTICIPANT_CONFIGS["fresh-case"].sha256);
-  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.historical.path, PINNED_PARTICIPANT_CONFIGS["fresh-case"].path);
+  const retained = loadCanonicalRecourseConfiguration(process.cwd(), "retained");
+  const fresh = loadCanonicalRecourseConfiguration(process.cwd(), "case");
+  assert.notEqual(retained.participants.holderA.toLowerCase(), fresh.participants.holderA.toLowerCase());
+  assert.notEqual(retained.participants.holderB.toLowerCase(), fresh.participants.holderB.toLowerCase());
+  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.retained.sha256, PINNED_PARTICIPANT_CONFIGS["case"].sha256);
+  assert.notEqual(PINNED_PARTICIPANT_CONFIGS.retained.path, PINNED_PARTICIPANT_CONFIGS["case"].path);
 
   // A selection that names no pinned artifact is refused, never defaulted.
   assert.throws(() => readParticipantConfigSelection({ MORDANT_PARTICIPANT_CONFIG: "not-a-config" }));
-  assert.equal(readParticipantConfigSelection({}), "historical");
+  assert.equal(readParticipantConfigSelection({}), "retained");
 });
 
 test("a committed profile records which pinned participant configuration the case ran under", () => {
   const runRoot = root();
   try {
     const committed = commitSettlementProfile(runRoot, RUN, profile());
-    assert.equal(committed.profile.participantConfig.path, "docs/evidence/fresh-case-participant-config.json");
+    assert.equal(committed.profile.participantConfig.path, "docs/evidence/case-participant-config.json");
     // Changing the recorded configuration digest changes the commitment digest,
     // so a profile cannot be reused across participant configurations.
-    const other = profile({ participantConfig: { path: "docs/evidence/fresh-case-participant-config.json", sha256: "99".repeat(32) } });
+    const other = profile({ participantConfig: { path: "docs/evidence/case-participant-config.json", sha256: "99".repeat(32) } });
     assert.notEqual(settlementProfileDigest(other), committed.committedDigest);
   } finally {
     rmSync(runRoot, { recursive: true, force: true });

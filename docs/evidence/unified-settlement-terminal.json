@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "mordant.activation-terminal-recourse/1",
+  "runId": "369ed70e-64e1-4427-9fc6-b899051a78a8",
+  "adapter": "0x41AA168FD1A288a7Ec63C5c886DD469E96F7c2Aa",
+  "bridgeRunId": "0x04aee1589bb089e9583add2b090f009ec876600cc441be2052d6bf35b7e0c3dc",
+  "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+  "cured": false,
+  "cureDeadlineUnix": 1786328183,
+  "finalizedAtChainTime": 1786328243,
+  "permissionlessCaller": "0x79C53151315FaD9163f75a65A8Bd4D04a10e1e45",
+  "callerIsHolder": false,
+  "finalize": {
+    "transactionHash": "0xee16381c920134fb4c3e8815625ebb5f129232c6cce95b8c0dff69c21b25e7e2",
+    "blockNumber": 52398372,
+    "adapterLogs": 1,
+    "entitlementOpened": true,
+    "entitledUnpaidAfterFinalize": "2",
+    "stateAfter": "Entitled"
+  },
+  "claims": {
+    "holderA": {
+      "address": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "transactionHash": "0x7e0924d6c3f593bbf9bf06e029c8bb208fa074152153cae1912824a7e9393b9c",
+      "blockNumber": 52398375,
+      "amount": "1"
+    },
+    "holderB": {
+      "address": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+      "transactionHash": "0x652b718e335454874c3ca7928a1eff16a9b06367a3cfa16f8ec9acaaac36f995",
+      "blockNumber": 52398377,
+      "amount": "1"
+    }
+  },
+  "balances": {
+    "before": {
+      "adapter": "2",
+      "holderA": "1",
+      "holderB": "1"
+    },
+    "after": {
+      "adapter": "0",
+      "holderA": "2",
+      "holderB": "2"
+    }
+  },
+  "reconciliation": {
+    "holderADelta": "1",
+    "holderBDelta": "1",
+    "adapterDelta": "-2",
+    "expectedHolderADelta": "1",
+    "expectedHolderBDelta": "1",
+    "expectedAdapterDelta": "-2",
+    "exact": true
+  },
+  "terminal": {
+    "state": "Claimed",
+    "paidA": true,
+    "paidB": true,
+    "availableReserve": "0",
+    "openReserved": "0",
+    "entitledUnpaid": "0",
+    "solvent": true,
+    "reservedLiabilityCleared": true,
+    "unpaidEntitlementCleared": true
+  },
+  "minv01": {
+    "address": "0x66F706D1Dc820CF09EBA5359cE9acd0D290bC17b",
+    "adapterBalanceBefore": "0",
+    "adapterBalanceAfter": "0",
+    "touched": false
+  }
+}

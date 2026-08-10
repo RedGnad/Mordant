@@ -24,8 +24,8 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ROLE_KEY_NAME = Object.freeze({
-  PARTICIPANT_A: "MORDANT_FRESH_KEY_HOLDER_A",
-  PARTICIPANT_B: "MORDANT_FRESH_KEY_HOLDER_B",
+  PARTICIPANT_A: "MORDANT_CASE_KEY_HOLDER_A",
+  PARTICIPANT_B: "MORDANT_CASE_KEY_HOLDER_B",
 });
 
 const argument = (name, fallback = null) => {
@@ -140,7 +140,25 @@ async function main() {
   const owner = privateKeyToAccount(required("DEPLOYER_PRIVATE_KEY"));
   const nonce = await pub.getTransactionCount({ address: owner.address });
   const futureAdapter = getContractAddress({ from: owner.address, nonce: BigInt(nonce) });
-  const attestor = privateKeyToAccount(required("MORDANT_FRESH_KEY_ATTESTOR")).address;
+
+  // The committed adapter address is only meaningful if the deployment is the
+  // very next transaction this account sends. Funding the reserve beforehand
+  // would move the nonce and silently invalidate the commitment, so the balance
+  // has to be in place before anything is committed.
+  const settlementBalance = await pub.readContract({
+    address: cfg.adapter.settlementToken,
+    abi: [{ type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }],
+    functionName: "balanceOf",
+    args: [owner.address],
+  });
+  const committedTotal = BigInt(cfg.participants.payoutA) + BigInt(cfg.participants.payoutB);
+  if (settlementBalance < committedTotal) {
+    throw new Error(
+      `the operator holds ${settlementBalance} settlement units and the profile commits ${committedTotal};`
+      + " fund before committing so the deployment can be the next transaction",
+    );
+  }
+  const attestor = privateKeyToAccount(required("MORDANT_CASE_KEY_ATTESTOR")).address;
 
   // The binding's own digest is recorded by keygen, and is exactly the value the
   // governed result later carries as caseBindingDigest.
@@ -154,7 +172,7 @@ async function main() {
 
   const profile = Object.freeze({
     schemaVersion: "mordant.settlement-profile/2",
-    profileId: "mordant.post-deadline-settlement.minimal",
+    profileId: "mordant.unified-settlement.minimal",
     profileVersion: 1,
     caseBinding: {
       runId,

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "mordant.participant-admission-record/3",
+  "runId": "68f91d48-534f-4583-851e-7d9b880ce0dc",
+  "role": "PARTICIPANT_A",
+  "participantWallet": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+  "authorizationDigest": "0xc004b85683ad8d7cba7047c415dfc4556441e3e1fb37a4c4765d9ad85281ab14",
+  "claimCommitment": "0xb1f57a882c6d289a1a9b76a8c3827101439446e629f973fe0bf4d6ad78f7b073",
+  "authorizationNonce": "0xcd92fa83b3c2086d98841f372f7c894eb2abe51c6f9d8dc6014fcc618ea2d68f",
+  "chainId": 10143,
+  "issuedAt": 1786326143,
+  "expiresAt": 1786326743,
+  "eligibilityBlock": 52391495,
+  "admittedAtUnix": 1786326143,
+  "authorization": {
+    "verifyingService": "http://127.0.0.1:8791",
+    "runId": "68f91d48-534f-4583-851e-7d9b880ce0dc",
+    "fheCaseId": "0xbca8a5ebaa1dc7c1fd1c2c9c48e64ffc0b5b35a99f131efa30475483d13a27bc",
+    "protectionBindingDigest": "0xec79baf9e952559ba7d98a24a24011a74b721d85a6e70b4ff79624557c037bd4",
+    "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "role": "PARTICIPANT_A",
+    "activeFrom": 1786326143,
+    "activeUntil": 1788918143,
+    "participantWallet": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+    "authorizationNonce": "0xcd92fa83b3c2086d98841f372f7c894eb2abe51c6f9d8dc6014fcc618ea2d68f",
+    "issuedAt": 1786326143,
+    "expiresAt": 1786326743
+  },
+  "signature": "0x977c0d564e458fd8660869408604266805d73c207d965f5e983b2b2aa550e550174a7811d410d173be3129e7deb8bdb4326d5342e8dba594a1e7e1fffeec66131c"
+}

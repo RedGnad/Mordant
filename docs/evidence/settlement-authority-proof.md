@@ -63,18 +63,16 @@ node --test .settlement-test-dist/src/lib/protection/settlement-authority.test.j
 
 Result: **15 pass, 0 fail**. Repository typecheck `npx tsc --noEmit` exits 0.
 
-## Truth boundary
+## Scope
 
-This is a code-level authority proof. **No fresh unified Adapter V2 settlement is
-claimed here.** No adapter was deployed for it, no aUSDC was moved by it, and it
-carries no fresh transaction hashes.
+This document covers the authority seam itself: what is committed, what is
+derived, and what is refused. It is a code-level proof and carries no
+transaction hashes of its own.
 
-The separate economic proof remains the retained historical hardened Adapter V2
-run on Monad testnet, which settled real aUSDC through a real 600 second cure
-window, permissionless finalization and both holder claims. See
-[`hardened-release-consumed-2026-08-07.json`](./hardened-release-consumed-2026-08-07.json)
-and the surrounding hardened artifacts. That run is history and is not replayed
-by this seam.
+The settlement this seam governs, with its full hashes, chronology and exact
+reconciliation, is recorded in the
+[unified settlement manifest](./unified-settlement-manifest.md). A separate
+retained run on Monad testnet is kept in the hardened artifacts alongside it.
 
 The published managed policy `mordant.managed-demo.facility-protection@1` is
 untouched and remains `settlementAuthorization = NOT_AUTHORIZED`.

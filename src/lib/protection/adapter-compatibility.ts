@@ -42,18 +42,18 @@ export const CANONICAL_RECOURSE_CONFIG_SHA256 =
   "c9dd3cec8bad266afd985c5f80d357ee3ab79a3f32cdf20c2d5cb826af2a3126" as const;
 
 /**
- * Participant configuration for the post-deadline settlement run.
+ * Participant configuration for a case Mordant settles itself.
  *
- * Same reviewed reference adapter, verifier, settlement token and facility as
- * the historical artifact; the participants differ, because the historical
- * holders are not key-controlled and cannot sign a fresh admission. It is a
- * separate pinned artifact rather than an edit, so the historical configuration
- * and every proof that depends on its bytes stay exactly as they were.
+ * Same reviewed reference adapter, verifier and settlement token as the retained
+ * configuration; the participants, the bridge attestor and the economics are the
+ * ones this case runs under. It is a separate pinned artifact rather than an
+ * edit, so the retained configuration and every proof resting on its bytes stay
+ * exactly as they were.
  */
-export const FRESH_CASE_PARTICIPANT_CONFIG_PATH =
-  "docs/evidence/fresh-case-participant-config.json" as const;
-export const FRESH_CASE_PARTICIPANT_CONFIG_SHA256 =
-  "5a83f3e87fcd7a3c0b66e0f6772418a3a352500a0a822cc5a3a834a617e2dac5" as const;
+export const CASE_PARTICIPANT_CONFIG_PATH =
+  "docs/evidence/case-participant-config.json" as const;
+export const CASE_PARTICIPANT_CONFIG_SHA256 =
+  "3b80cffa91fd251574198dde930defc0c2a0dc324c87195bdeb893494d857833" as const;
 export const CANONICAL_RECOURSE_HANDOFF_SHA256 =
   "464667775a871324bac88677d5564f6dc4ea871458a10407ad13caa2504a723f" as const;
 
@@ -373,13 +373,13 @@ function parseJson(raw: string, label: string): unknown {
  * which reviewed artifact to load, never whether to check one.
  */
 export const PINNED_PARTICIPANT_CONFIGS = Object.freeze({
-  historical: Object.freeze({
+  retained: Object.freeze({
     path: RECOURSE_V2_DEMO_CONFIG_PATH,
     sha256: CANONICAL_RECOURSE_CONFIG_SHA256,
   }),
-  "fresh-case": Object.freeze({
-    path: FRESH_CASE_PARTICIPANT_CONFIG_PATH,
-    sha256: FRESH_CASE_PARTICIPANT_CONFIG_SHA256,
+  "case": Object.freeze({
+    path: CASE_PARTICIPANT_CONFIG_PATH,
+    sha256: CASE_PARTICIPANT_CONFIG_SHA256,
   }),
 });
 
@@ -396,7 +396,7 @@ export function readParticipantConfigSelection(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): PinnedParticipantConfigName {
   const requested = environment[PARTICIPANT_CONFIG_ENVIRONMENT_NAME];
-  if (requested === undefined || requested.trim() === "") return "historical";
+  if (requested === undefined || requested.trim() === "") return "retained";
   const name = requested.trim();
   if (!Object.hasOwn(PINNED_PARTICIPANT_CONFIGS, name)) {
     fail("CANONICAL_CONFIG_SELECTION", `${PARTICIPANT_CONFIG_ENVIRONMENT_NAME} names no pinned participant configuration`);

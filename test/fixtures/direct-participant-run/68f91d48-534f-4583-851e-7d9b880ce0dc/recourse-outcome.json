@@ -1,0 +1,21 @@
+{
+  "opened": true,
+  "record": {
+    "schemaVersion": "mordant.fhe-recourse-adapter-record/1",
+    "caseId": "sha256:bca8a5ebaa1dc7c1fd1c2c9c48e64ffc0b5b35a99f131efa30475483d13a27bc",
+    "caseBindingDigest": "sha256:7e2914de384621980f810dd45fb4ef6420e3df2e2d6c3680a5b66a70ef79c4eb",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "policyVersion": 1,
+    "resultDigest": "sha256:b4c925031bdc83d4088be971f005f41a224127385e7bbf2950a9bfaedb1fc17f",
+    "releaseMode": "governed-decryptor-v1",
+    "releaseAuthorityId": "sha256:a2f2b4364e29b067229b0daa7266b7f4710fc5a77b3d6547c9a6b211952b953b",
+    "recordDateUnix": 1786326078,
+    "boundAtUnix": 1786326182,
+    "cureDeadlineUnix": 1786412582,
+    "reserveBasisPoints": 1000,
+    "holderAllocationDigest": "sha256:838d0ea9aa16bdd82144aac9ee172ea3a7b042aed593886403a4551651888b19",
+    "originalReceivableIntact": true,
+    "open": true
+  }
+}

@@ -60,8 +60,10 @@ async function main() {
   const settlement = storeModule.settlementAuthorityForRun(runRoot, runId, {
     governedResultDigest: authorizationModule.digestToBytes32(evidence.governedResultDigest),
     runId: bridgeModule.bridgeRunId(evidence.runId),
-    releaseAuthorityId: authorizationModule.digestToBytes32(governed.releaseAuthorityId),
+    releaseAuthorityId: governed.releaseAuthorityId,
     conflict: governed.conflict,
+    caseId: governed.caseId,
+    caseBindingDigest: governed.caseBindingDigest,
   });
   process.stdout.write(
     `settlement authority derived from the committed profile\n`
