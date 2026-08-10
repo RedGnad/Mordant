@@ -846,3 +846,31 @@ e2e that covers the two-wallet path was not wired in. Green meant less than it a
 walked the real sequence, which is where the damage was. Isolated refusals are not a substitute for
 the order the product actually runs in; the N1 regression test now walks it and fails against the
 previous behaviour.
+
+## D36 — Known LOW carried past the merge, deliberately
+
+Two findings are documented rather than fixed in `3c7ccfa`. Both were confirmed here at the source,
+and neither is fixed now because changing the branch would invalidate the SHA the external re-audit
+passed. They are the next increment, not a merge condition.
+
+**LOW-1, the enrollment measurement is zeroed.** Go measures it (`client.go`, `report.EnrollmentBytes
+= enrollmentRef.Length`), but the value does not survive into `SubmissionOutput`, so `measurements`
+carries `enrollmentBytes: 0` while the files on disk are 940 bytes each. Closing it properly means
+extending `ProductSubmissionInspection` in Go as well, otherwise a crash-recovered run reports a
+different shape than a straight-through one. Until then the terminal size check reads the presence of
+the field, never its value.
+
+**LOW-2, before any admission a challenge trusts the file, not the binding.** `rawParticipantKey`
+compares the on-disk key against the admitted digest only once an admission exists. Between
+foundation and the first admission the case binding already publishes a key for the role, and nothing
+compares the file to it, so a key substituted on disk in that window would be named in the challenge
+and signed for by a wallet.
+
+It stays LOW on two verified grounds. The exposure requires write access to the server's private
+run directory, which is the custodian's own trust domain. And it fails closed downstream:
+`RegisterCaseEnrollmentIssuers` derives the issuer set from the signed case binding, never from
+disk, so an enrollment signed by the substituted key does not verify at release. The damage is a
+wallet signing for a key that can never be used, not a key that can.
+
+The fix is small and belongs with LOW-1: post-foundation, compare the retained key against the key
+the binding publishes, so the binding is the authority in that window too rather than the filesystem.
