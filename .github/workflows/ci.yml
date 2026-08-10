@@ -121,6 +121,46 @@ jobs:
       - name: Feature flags default to off and the chain allow-list is testnet only
         run: pnpm test:unit
 
+  # The one seam a green board could not see: a real Go-produced evidence object
+  # traversing exportProtectionEvidence and being accepted by the TypeScript
+  # verifier. F-03 survived an 8/8 board because nothing here ever ran an export,
+  # so a size pin that V5 had made stale failed only on a developer's machine.
+  #
+  # It is its own job, in parallel, so the wall clock of a pull request does not
+  # move; and it runs one scenario, not both, because schema and size drift show
+  # up identically in either and a second run buys ~20 minutes of nothing.
+  export-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: fhe-lab/lattigo/go.sum
+      - run: pnpm install --frozen-lockfile
+
+      - name: A real managed run survives the export verifier
+        env:
+          # The runtime compares this against its own build pin; both read this
+          # variable, so any well-formed commit satisfies the shape check that
+          # guards the export.
+          MORDANT_PROTECTION_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          # Never the repository's retained-evidence directory: those envelopes
+          # are byte-pinned by another job, and retention writes <scenario>.json.
+          export MORDANT_PROTECTION_RETENTION_ROOT="$RUNNER_TEMP/retained-evidence"
+          export MORDANT_PROTECTION_RUN_ROOT="$RUNNER_TEMP/protection-runs"
+          mkdir -p "$MORDANT_PROTECTION_RETENTION_ROOT" "$MORDANT_PROTECTION_RUN_ROOT"
+          pnpm protection:smoke:conflict
+
   # The deployed live-protection release surface, run as its own check from a full
   # checkout. The retained-evidence provenance gate reads the A8 artifact commit and its
   # parent, so shallow history would fail it for the wrong reason: fetch-depth 0 and tags
