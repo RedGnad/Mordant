@@ -27,7 +27,12 @@ import { privateKeyToAccount } from "viem/accounts";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACT = join(ROOT, "contracts", "out", "MordantRecourseAdapter.sol", "MordantRecourseAdapter.json");
 const DEPLOYMENT = join(ROOT, "docs", "evidence", "recourse-adapter-v2-deployment-2026-08-06.json");
-const CONFIG = join(ROOT, "docs", "evidence", "recourse-v2-demo-config-2026-08-06.json");
+// The participant configuration is selected the same way the runtime selects it,
+// so the adapter is planned against the same reviewed bytes the case ran under.
+const artifacts = await import("../.product-test-dist/src/lib/protection/reviewed-adapter-artifacts.js");
+const { PINNED_PARTICIPANT_CONFIGS, readParticipantConfigSelection } =
+  await import("../.product-test-dist/src/lib/protection/adapter-compatibility.js");
+const CONFIG = join(ROOT, PINNED_PARTICIPANT_CONFIGS[readParticipantConfigSelection(process.env)].path);
 
 const CHAIN_ID = 10_143;
 const RPC_MIN_INTERVAL_MS = 90;
@@ -149,15 +154,25 @@ async function plan() {
     artifact.deployedBytecode.object,
     artifact.deployedBytecode.immutableReferences,
   );
-  const reviewedMasked = deployment.deployed.artifactMaskedHash;
+  // The built runtime must be one of the explicitly reviewed artifacts. The
+  // registry is an allowlist: an unpinned build is refused even when its
+  // executable region matches, so a new metadata variant needs a review first.
+  const reviewedArtifact = artifacts.assertReviewedAdapterArtifact(
+    Buffer.from(artifact.deployedBytecode.object.replace(/^0x/u, ""), "hex"),
+    artifact.deployedBytecode.immutableReferences ?? {},
+  );
+  const reviewedMasked = reviewedArtifact.maskedRuntimeHash;
   const matchesReviewed = masked.hash.toLowerCase() === reviewedMasked.toLowerCase();
 
   const result = verified.governedResult;
   const pins = {
-    settlementToken: getAddress(deployment.immutables.settlementToken),
-    cviVerifier: getAddress(deployment.immutables.cviVerifier),
-    attestor: getAddress(deployment.immutables.attestor),
-    facility: getAddress(deployment.immutables.facility),
+    // Case-scoped: taken from the participant configuration this case ran under,
+    // so a case with its own attestor deploys with its own attestor rather than
+    // inheriting the one a previous deployment happened to use.
+    settlementToken: getAddress(config.contracts.settlementToken.address),
+    cviVerifier: getAddress(config.contracts.verifier),
+    attestor: getAddress(config.bridgeAttestor.address),
+    facility: getAddress(config.facility.address),
     owner: getAddress(deployment.immutables.owner),
     // Run-specific: every one derived from the verified signed governed result.
     assetIdentityDigest: digestToBytes32(result.assetIdentity),

@@ -48,9 +48,39 @@ async function main() {
   const reader = executorModule.createAdapterReader(configuration);
   const executor = executorModule.createBridgeExecutor({ configuration, reader, runRoot });
 
+  // Settlement authority. It is DERIVED, never fabricated: the profile was
+  // committed to this run before any governed result existed, and the store
+  // refuses a profile that no longer hashes to its committed digest. The only
+  // things taken from the governed result are its identity and its Boolean, so
+  // no economic term can originate from having seen the outcome.
+  const storeModule = await import("../.product-test-dist/src/lib/protection/settlement-profile-store.js");
+  const authorizationModule = await import("../.product-test-dist/src/lib/protection/participant-authorization.js");
+  const bridgeModule = await import("../.product-test-dist/src/lib/protection/governed-recourse-bridge.js");
+  const governed = evidence.governedResult ?? {};
+  const settlement = storeModule.settlementAuthorityForRun(runRoot, runId, {
+    governedResultDigest: authorizationModule.digestToBytes32(evidence.governedResultDigest),
+    runId: bridgeModule.bridgeRunId(evidence.runId),
+    releaseAuthorityId: governed.releaseAuthorityId,
+    conflict: governed.conflict,
+    caseId: governed.caseId,
+    caseBindingDigest: governed.caseBindingDigest,
+  });
+  process.stdout.write(
+    `settlement authority derived from the committed profile\n`
+    + `  settlementProfileDigest      ${settlement.committedDigest}\n`
+    + `  planHash                     ${settlement.authorization.planHash}\n`
+    + `  payoutA/payoutB (committed)  ${settlement.plan.payoutA} / ${settlement.plan.payoutB}\n`,
+  );
+
   const issuedAt = Math.floor(Date.now() / 1_000) - 60;
   const expiry = issuedAt + 3_600;
-  const prepared = await executor.prepareDirect({ runId, nonce: 1n, issuedAt, expiry });
+  const prepared = await executor.prepareDirect({
+    runId,
+    nonce: 1n,
+    issuedAt,
+    expiry,
+    settlement: { plan: settlement.plan, authorization: settlement.authorization },
+  });
   process.stdout.write(
     `prepared adapter=${prepared.adapter.address} signer=${prepared.signerAddress}\n`
     + `  typedDataDigest ${prepared.typedDataDigest}\n`

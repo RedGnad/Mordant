@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "mordant.settlement-profile-commitment/1",
+  "profile": {
+    "schemaVersion": "mordant.settlement-profile/2",
+    "profileId": "mordant.post-deadline-settlement.minimal",
+    "profileVersion": 1,
+    "caseBinding": {
+      "runId": "369ed70e-64e1-4427-9fc6-b899051a78a8",
+      "caseId": "sha256:2938dd9cbff02a47b36f6506d69f9d70270f60098452be6efb82440e8fd1bbb6",
+      "caseBindingDigest": "sha256:1054a779e4cdb903afad3476a240375f837c8d4a2fd30c11e9ce3c99b79ce904",
+      "protectionBindingDigest": "sha256:5238301dc8902656b3bdc55d2244da92916d87a42d9a4bb48c16e75e79e1306f",
+      "releaseMode": "governed-decryptor-v1"
+    },
+    "participantConfig": {
+      "path": "docs/evidence/fresh-case-participant-config.json",
+      "sha256": "3b80cffa91fd251574198dde930defc0c2a0dc324c87195bdeb893494d857833"
+    },
+    "committedAtUnix": 1786327238,
+    "chainId": 10143,
+    "adapter": "0x41AA168FD1A288a7Ec63C5c886DD469E96F7c2Aa",
+    "settlementToken": "0xaC0893567D43C3E7e6e35a72803df05416C1f20D",
+    "cviVerifier": "0xCFFA4cbF5117718EB7fC0dE2E13E07ce75B840aB",
+    "facility": "0x344412229B3b581C19572f9BF1F5d08d4Ae897E6",
+    "attestor": "0x5Ac9373b011cA2b485d97A964Fc1f65eb44C9464",
+    "holderA": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+    "holderB": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+    "payoutA": "1",
+    "payoutB": "1",
+    "cureWindowSeconds": 600,
+    "releaseAuthorityId": "sha256:55b7b86af18120998d7d9dcb8c4f287737188ee4250a32e49c5df3c1efe125f6",
+    "settlementAuthorization": "AUTHORIZED"
+  },
+  "committedDigest": "0x4c35cf9d2cfdd2bd4879bee85ad2780e231854971085509061e227bf639465db"
+}

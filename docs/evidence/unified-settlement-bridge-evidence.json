@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "mordant.direct-participant-bridge-evidence/1",
+  "sourceCommit": "c4c38d67ff5aa1da218271916318f68cfaebadad",
+  "runId": "369ed70e-64e1-4427-9fc6-b899051a78a8",
+  "executionVariant": "CUSTOM_SUPERVISED",
+  "fheCaseId": "sha256:2938dd9cbff02a47b36f6506d69f9d70270f60098452be6efb82440e8fd1bbb6",
+  "protectionBindingDigest": "sha256:5238301dc8902656b3bdc55d2244da92916d87a42d9a4bb48c16e75e79e1306f",
+  "caseBindingDigest": "sha256:1054a779e4cdb903afad3476a240375f837c8d4a2fd30c11e9ce3c99b79ce904",
+  "caseBinding": {
+    "caseId": "sha256:2938dd9cbff02a47b36f6506d69f9d70270f60098452be6efb82440e8fd1bbb6",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "releaseMode": "governed-decryptor-v1",
+    "releaseAuthorityId": "sha256:55b7b86af18120998d7d9dcb8c4f287737188ee4250a32e49c5df3c1efe125f6",
+    "releaseAuthorityPublicKey": "AmzZzGKrAPaaLAnWYuPOWyS5aXg0dCYj+dyCU6ou6RU="
+  },
+  "participants": [
+    {
+      "role": "PARTICIPANT_A",
+      "participantWallet": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+      "authorizationDigest": "0x7125072aeac23ff8b773747e99bcabc6d80de28ea98454342939d6c557211312",
+      "claimCommitment": "0xc85a44b94ddaf6dc9f928bc2899ef5933a261b1e0332ff6109a163c8bd7961e6",
+      "authorizationNonce": "0xdef273e98fa2731fcc74e8b6a0507cd951335cd8dcbf9616a99ab10ebafd3dd7",
+      "chainId": 10143,
+      "eligibilityBlock": 52395083
+    },
+    {
+      "role": "PARTICIPANT_B",
+      "participantWallet": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+      "authorizationDigest": "0x0c762a536d7afa926ffcf081c0193bc8d128412f63001d642c9c5e13fa5ec168",
+      "claimCommitment": "0x1eba9454e610870690ac82f8212e348edd818f4dff8d4034a0d0128a426c6492",
+      "authorizationNonce": "0x7497e82b8daa844398946cfd7f52d7994f8ed8ebcf26c23335514b0850da108e",
+      "chainId": 10143,
+      "eligibilityBlock": 52395083
+    }
+  ],
+  "participantArtifactDigestA": "sha256:909a4442ac31a386abc09f2f05358ee017f575c3d00062d8702421ee98ffe7f6",
+  "participantArtifactDigestB": "sha256:87ccf7ac0e03e5640e39e84c8446b2f63757ef35fb783aacd6a65978c0c742ae",
+  "evaluatedArtifactDigest": "sha256:742862d8cd044bf6fdab3ee39f1cd43148c4203f5e3f350dadb36da0934813eb",
+  "governedResultDigest": "sha256:5038c492d31aff8c301f0e33667808afd1ed5da000fd6a8658f0ec26ab94a626",
+  "governedResult": {
+    "schemaVersion": "mordant.governed-conflict-result/1",
+    "caseId": "sha256:2938dd9cbff02a47b36f6506d69f9d70270f60098452be6efb82440e8fd1bbb6",
+    "caseBindingDigest": "sha256:1054a779e4cdb903afad3476a240375f837c8d4a2fd30c11e9ce3c99b79ce904",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "serviceId": "mordant.private-pledge-matching",
+    "serviceVersion": 1,
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "policyVersion": 1,
+    "circuitId": "mordant.identity-full-fhe-256",
+    "circuitVersion": 5,
+    "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "participantArtifactDigests": [
+      "sha256:909a4442ac31a386abc09f2f05358ee017f575c3d00062d8702421ee98ffe7f6",
+      "sha256:87ccf7ac0e03e5640e39e84c8446b2f63757ef35fb783aacd6a65978c0c742ae"
+    ],
+    "evaluatedArtifactDigest": "sha256:742862d8cd044bf6fdab3ee39f1cd43148c4203f5e3f350dadb36da0934813eb",
+    "resultCiphertextDigest": "sha256:7a027f602a1569fa44e3290d5ac4a63c523f5fe99b7e226c9051b34aeffe3ebb",
+    "resultCiphertextCommitment": "sha256:52560c8c565e836508041561783e8ccb30197ba95f73f9afe7a5f8433c34045d",
+    "conflict": true,
+    "releaseOrdinal": 1,
+    "releaseMode": "governed-decryptor-v1",
+    "releaseAuthorityId": "sha256:55b7b86af18120998d7d9dcb8c4f287737188ee4250a32e49c5df3c1efe125f6",
+    "releaseAuthorityPublicKey": "AmzZzGKrAPaaLAnWYuPOWyS5aXg0dCYj+dyCU6ou6RU=",
+    "releasedAtUnix": 1786327260,
+    "sourceProvenance": "sha256:4b00461d255875108022b91df29ae5c36445d683f9ff5f52228ff41436387b80",
+    "signature": "NhFei9py/pD//E4R7o4KaEjnxrTgBY1ylZvj2CZ8olCtwMbKiaTdylYeepClb+UymKNmgKM7kKLO+IRGJjHUAQ=="
+  },
+  "customReceiptDigest": "sha256:fbe683dc85f876c57e211f8e37be22d81bc12367a2e6abd1b5db02592e011bef",
+  "evidenceDigest": "sha256:9daca6366d9bf69e398315c03d1c0932bc2b1479efb65d32134f93d4a7fa945f"
+}

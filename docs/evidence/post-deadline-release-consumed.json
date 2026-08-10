@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "mordant.post-deadline-release-consumed/1",
+  "adapter": "0xd2e20EED9e93ad03D1c9F89c5c3d149408FDf836",
+  "bridgeRunId": "0x758937d83e79e5b83c04218b5ba635662d628b926c3b51809a29b04a9255654c",
+  "settlementProfileDigest": "0xd80c76fc728abc1c1b741ea60dc76fd983095e92d625c0a6476f27f7a72adf2d",
+  "planHash": "0xdce5077ced4051b77bdeaefc28f6ab3dc551d56898a77c79dd4fb2f6e41141c6",
+  "settlementAuthorizationHash": "0x87d8b7e69b05e58b6f9be381854cf7668748d1352e5008bdd06f954ac09a3d7d",
+  "typedDataDigest": "0xf680f9ca92a7b3b145bdd913f6cf0a16110f193f0f171d29225a5c2922ec360c",
+  "attestor": "0x5Ac9373b011cA2b485d97A964Fc1f65eb44C9464",
+  "transactionHash": "0xd31708bc1871ed5eb241dba1b59df4a466b26c02e8d34e2db924f6bc789b8bb4",
+  "blockNumber": "52386596",
+  "cureDeadlineUnix": 1786325247,
+  "cureWindowSeconds": 600,
+  "holderA": "0xDebC4C4BEF9B70008A9B043f8f6334401147634E",
+  "holderB": "0x3efa4046012Da8DaBfb3145693f7B58e04e86eD0",
+  "payoutA": "1",
+  "payoutB": "1"
+}

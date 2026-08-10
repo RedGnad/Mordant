@@ -32,7 +32,16 @@ import {
   retryReadOnly,
   type CanonicalRecourseBridgeArtifacts,
 } from "./adapter-compatibility";
-import type { GovernedBridgePayload } from "./governed-recourse-bridge";
+import { bridgeRunId, type GovernedBridgePayload } from "./governed-recourse-bridge";
+import { digestToBytes32 } from "./participant-authorization";
+import {
+  SETTLEMENT_AUTHORIZED,
+  SETTLEMENT_PROFILE_SCHEMA,
+  deriveSettlementAuthorization,
+  deriveSettlementPlan,
+  settlementProfileDigest,
+  type SettlementProfile,
+} from "./settlement-authority";
 
 const CONFIG = JSON.parse(readFileSync("docs/evidence/recourse-v2-demo-config-2026-08-06.json", "utf8")) as Record<string, unknown>;
 const HANDOFF = JSON.parse(readFileSync("docs/evidence/runtime-contract-handoff-2026-08-06.json", "utf8")) as Record<string, unknown>;
@@ -182,12 +191,71 @@ function reader(
   };
 }
 
+/**
+ * The settlement authority the canonical fixture's paying release requires.
+ *
+ * Built the way a real operator must build it: a profile committing every
+ * economic term, its digest taken before the result is consulted, then a plan
+ * and an authorization derived from that digest and the governed Boolean. The
+ * fixture's own participants and payouts are used, so the authorization matches
+ * the release the executor will actually be asked to sign.
+ */
+function settlementFor(
+  canonical: CanonicalRecourseBridgeArtifacts = TEST_CANONICAL,
+  overrides: Partial<SettlementProfile> = {},
+) {
+  const participants = (canonical.configuration as unknown as {
+    participants: { holderA: `0x${string}`; holderB: `0x${string}`; payoutA: string; payoutB: string };
+  }).participants;
+  const profile: SettlementProfile = Object.freeze({
+    schemaVersion: SETTLEMENT_PROFILE_SCHEMA,
+    profileId: "mordant.test-settlement.canonical-fixture",
+    profileVersion: 1,
+    caseBinding: {
+      runId: canonical.release.runId,
+      caseId: canonical.release.fheCaseId,
+      caseBindingDigest: canonical.release.caseBindingDigest,
+      protectionBindingDigest: canonical.release.caseBindingDigest,
+      releaseMode: canonical.release.releaseMode,
+    },
+    participantConfig: { path: "docs/evidence/recourse-v2-demo-config-2026-08-06.json", sha256: "00".repeat(32) },
+    committedAtUnix: 1_784_000_000,
+    chainId: canonical.adapter.chainId,
+    adapter: canonical.adapter.address,
+    settlementToken: canonical.adapter.settlementToken,
+    cviVerifier: canonical.adapter.cviVerifier,
+    facility: canonical.adapter.facility,
+    attestor: canonical.adapter.attestor,
+    holderA: participants.holderA,
+    holderB: participants.holderB,
+    // The adapter state carries chain-read numerics as bigint at run time even
+    // where the type says number, so every committed term is normalised here.
+    payoutA: String(participants.payoutA),
+    payoutB: String(participants.payoutB),
+    cureWindowSeconds: Number(canonical.adapter.cureWindowSeconds),
+    releaseAuthorityId: digestToBytes32(canonical.release.releaseAuthorityId),
+    settlementAuthorization: SETTLEMENT_AUTHORIZED,
+    ...overrides,
+  });
+  const committedDigest = settlementProfileDigest(profile);
+  const plan = deriveSettlementPlan(profile, committedDigest, {
+    governedResultDigest: digestToBytes32(canonical.release.governedResultDigest),
+    runId: bridgeRunId(canonical.release.runId),
+    releaseAuthorityId: profile.releaseAuthorityId,
+    conflict: canonical.release.conflict,
+    caseId: profile.caseBinding.caseId,
+    caseBindingDigest: profile.caseBinding.caseBindingDigest,
+  });
+  return { plan, authorization: deriveSettlementAuthorization(plan) };
+}
+
 function input(overrides: Partial<PrepareInput> = {}): PrepareInput {
   return {
     evidence: TEST_EVIDENCE,
     nonce: 1n,
     issuedAt: 1_785_000_000,
     expiry: 1_785_003_600,
+    settlement: settlementFor(),
     ...overrides,
   };
 }
@@ -456,6 +524,39 @@ test("caller literals cannot replace verified release, canonical participants, o
 });
 
 // ------------------------------------------------------------------ opaque state, simulation, and persistence
+
+test("a paying release is refused before any key access when settlement authority is absent", async () => {
+  const root = temporaryRoot();
+  try {
+    const fixture = fixtureExecutor(root);
+    const prepared = await fixture.executor.prepare(input({ settlement: undefined }));
+    await rejectsCode(fixture.executor.simulate(prepared), "SETTLEMENT_NOT_AUTHORIZED");
+    // The refusal precedes the signer, so no candidate signature can exist.
+    assert.equal(fixture.signatures(), 0, "the attestor is never reached without settlement authority");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a paying release is refused when the settlement authority does not match it", async () => {
+  const root = temporaryRoot();
+  try {
+    const attacker = "0x9999999999999999999999999999999999999999" as const;
+    const other = "0x1111111111111111111111111111111111111111" as const;
+    for (const [overrides, code] of [
+      [{ holderB: attacker }, "SETTLEMENT_HOLDER_MISMATCH"],
+      [{ payoutA: "4000" }, "SETTLEMENT_PAYOUT_MISMATCH"],
+      [{ adapter: other }, "SETTLEMENT_ADAPTER_MISMATCH"],
+    ] as const) {
+      const fixture = fixtureExecutor(root);
+      const prepared = await fixture.executor.prepare(input({ settlement: settlementFor(TEST_CANONICAL, overrides) }));
+      await rejectsCode(fixture.executor.simulate(prepared), code);
+      assert.equal(fixture.signatures(), 0, `${code} must be refused before signing`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("only a fresh executor-issued simulation can release an authorization", async () => {
   const root = temporaryRoot();

@@ -161,15 +161,22 @@ receivable. The original receivable stays intact through both demonstrated outco
 
 ## Proof surfaces
 
-### Settlement authority seam
+### Unified governed settlement
 
-A governed Boolean cannot authorize payment on its own. The settlement profile is
-committed and digest-bound before any result exists, the plan takes only the
-Boolean from the governed result, and `BridgeExecutor` refuses to sign a paying
-release without a matching authorization. Code-level proof, 15 focused tests,
-ten negative controls: [settlement authority proof](docs/evidence/settlement-authority-proof.md).
-No fresh Adapter V2 settlement is claimed there.
+A governed Boolean cannot authorize payment on its own. Every economic term, the
+case binding and the governing authority are committed and digest-bound before
+the case produces a result, and the durable store refuses to commit once any
+result-bearing artifact exists. `BridgeExecutor` then refuses to sign a paying
+release without an authorization that matches it exactly, before the attestor key
+is loaded.
 
+One case settled end to end on Monad testnet under this discipline: real BGV
+conflict, case-specific Adapter V2, `fundReserve`, `ReleaseConsumed`, a real
+600-second cure window, permissionless finalization, both holder claims and exact
+reconciliation. Full hashes and the strict chronology are in the
+[unified settlement manifest](docs/evidence/unified-settlement-manifest.md); the
+authority seam and its negative controls are in the
+[settlement authority proof](docs/evidence/settlement-authority-proof.md).
 
 ### Current managed V2 proof
 
