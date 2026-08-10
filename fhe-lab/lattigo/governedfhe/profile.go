@@ -24,10 +24,10 @@ const (
 	ReleaseModeGovernedDecryptor = "governed-decryptor-v1"
 	// ReleaseModeCoalitionV5 names a case whose key is held as a t-of-n threshold
 	// and which therefore has no secret key to fall back to.
-	ReleaseModeCoalitionV5 = "coalition-v5"
-	ReleaseModeThreshold2Of3     = "threshold-2of3-v1"
-	ReleaseOrdinal               = uint32(1)
-	ResultSlot                   = uint32(0)
+	ReleaseModeCoalitionV5   = "coalition-v5"
+	ReleaseModeThreshold2Of3 = "threshold-2of3-v1"
+	ReleaseOrdinal           = uint32(1)
+	ResultSlot               = uint32(0)
 
 	CaseBindingSchema         = "mordant.fhe-case-binding/1"
 	CaseCryptoSchema          = "mordant.fhe-case-crypto/1"
