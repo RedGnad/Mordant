@@ -192,7 +192,19 @@ library CoalitionSettlementFixture {
 	if err := os.WriteFile(solidityPath, []byte(solidity), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("wrote coalition settlement fixture to %s, evidence to %s and %s", destination, evidencePath, solidityPath)
+	// A real SubmissionReport, so the TypeScript verifier is checked against the
+	// object Go actually emits rather than against a hand-written copy of it. A
+	// field added here and not there made every Go bundle unverifiable once.
+	reportPath := filepath.Join(filepath.Dir(destination), "submission-report.json")
+	reportBytes, err := json.MarshalIndent(fixture.reportA, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(reportPath, append(reportBytes, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("wrote coalition settlement fixture to %s, evidence to %s, %s and %s",
+		destination, evidencePath, solidityPath, reportPath)
 }
 
 func hexOfDigest(value Digest) string {

@@ -34,6 +34,7 @@ type coalitionFixture struct {
 	binding       FHECaseBinding
 	manifest      FHECaseManifest
 	artifact      EvaluatedConflictArtifact
+	reportA       SubmissionReport
 }
 
 func newCoalitionFixture(t *testing.T, conflict bool) *coalitionFixture {
@@ -89,11 +90,15 @@ func newCoalitionFixture(t *testing.T, conflict bool) *coalitionFixture {
 		key   ed25519.PrivateKey
 		value fhe.PlainPledge
 	}{{RoleA, privateA, pledgeA}, {RoleB, privateB, pledgeB}} {
-		if _, _, err := SubmitParticipant(ParticipantSubmissionOptions{
+		_, report, err := SubmitParticipant(ParticipantSubmissionOptions{
 			PublicRoot: fixture.publicRoot, Role: side.role, SigningKey: side.key, Pledge: side.value,
 			SubmissionNonce: testDigest(label + "/nonce/" + side.role), ExpiresAtUnix: expiry, Now: fixture.now,
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatalf("submit %s: %v", side.role, err)
+		}
+		if side.role == RoleA {
+			fixture.reportA = report
 		}
 	}
 	manifest, err := FinalizeCase(fixture.publicRoot)

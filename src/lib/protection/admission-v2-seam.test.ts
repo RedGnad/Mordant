@@ -1,4 +1,6 @@
 import { ok, strictEqual } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import {
@@ -9,6 +11,7 @@ import {
   LIVE_WORKER_SCHEMA,
   parseParticipantChallengeResponse,
 } from "../../components/live-product/participant-admission-client";
+import { SUBMISSION_MEASUREMENT_FIELDS } from "./protection-evidence";
 import {
   PARTICIPANT_ADMISSION_V2_PRIMARY_TYPE,
   PARTICIPANT_ADMISSION_V2_SALT,
@@ -121,4 +124,34 @@ test("a challenge missing the signing key is refused", () => {
     null,
     "an admission that names no key cannot bind one",
   );
+});
+
+// -------------------------------------------------- Go to TypeScript evidence
+
+/**
+ * The public evidence seam.
+ *
+ * Go writes the submission measurements; this verifier reads them with an exact
+ * key set, so a field added on one side and not the other makes every real
+ * bundle unverifiable. That is what happened when `enrollmentBytes` was added to
+ * the Go report: both sides' own tests stayed green while nothing Go produced
+ * could be verified here.
+ *
+ * The fixture is a real `SubmissionReport`, emitted by the same Go run that
+ * produces the coalition fixtures, so this compares against what Go actually
+ * writes rather than a copy of it kept in step by hand.
+ */
+test("the TypeScript verifier accepts the submission report Go actually emits", () => {
+  const report = JSON.parse(
+    readFileSync(join(process.cwd(), "contracts/test/fixtures/submission-report.json"), "utf8"),
+  ) as Record<string, unknown>;
+  strictEqual(
+    Object.keys(report).sort().join(","),
+    [...SUBMISSION_MEASUREMENT_FIELDS].sort().join(","),
+    "the Go submission report and the field set this verifier enforces have diverged",
+  );
+  for (const field of ["ciphertextBytes", "artifactBytes", "enrollmentBytes"] as const) {
+    const value = report[field];
+    ok(typeof value === "number" && Number.isInteger(value) && value > 0, `${field} must be a positive integer`);
+  }
 });

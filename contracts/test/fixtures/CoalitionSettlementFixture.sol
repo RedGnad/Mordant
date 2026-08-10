@@ -9,19 +9,19 @@ library CoalitionSettlementFixture {
     bytes32 internal constant FHE_CASE_ID =
         0xb11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62;
     bytes32 internal constant CASE_BINDING_DIGEST =
-        0x52ce837ddc12b06579f49cad1ec68498aa99d8e8b6b2aaa07183b36626fb0e15;
+        0xafd0da308701c48d674ec91008b078ec96158d64b69e2da5e5f8a68aeb861f00;
     bytes32 internal constant ASSET_IDENTITY_DIGEST =
         0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c;
     bytes32 internal constant COALITION_RESULT_DIGEST =
-        0xd23fd3887e93ffd73801d8c7caddb851a135591647a48d663f768bd91ef0b126;
+        0xa966c86106d165b65ce2c967b8ea529731bbd0424ceb1817d0898b1c32f8203a;
     bytes32 internal constant RELEASE_TRANSCRIPT =
-        0xee83158d1fa65993ca7cfca9271ff695c24c2183bba66331eb995ccfb6891cb4;
+        0x068ac5752f10bcc7d4c1b4155ca837a603a7cc5ed82aa272681d863d5d520d84;
     bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_A =
-        0x0803f02de1385d7e14a04a2f5dcf364bb20fe19d1c6f3d24272ce912d88d49cf;
+        0x0631043b143864a7efaafe5dda0daedd725d9459a752bb7ace07322e68b7f489;
     bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_B =
-        0x6bf16e3acef1e25812abe241ba77864b34796924289c4103b3bf2916408dc673;
+        0x7dd15145ef8f5387d471b09176f1745271f8cfa3ccfa5b55698a32dc7eeba4ca;
     bytes32 internal constant COALITION_AUTHORITY_ID =
-        0xebebb8eeca335ab615de36bfcd90ffe8e8abd7821e10198ff30836f9f67e87ec;
+        0x836c3f867326538e22e17f69563091b97159f7c15023055390da6d4629c65cfc;
     bytes32 internal constant RELEASE_MODE =
         0x3e9aa502ff816920edf9c2ccd76b26b04c99aa481ff8977d681068163943ff11;
     bytes32 internal constant CIRCUIT_DIGEST =

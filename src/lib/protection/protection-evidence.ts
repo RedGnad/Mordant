@@ -558,6 +558,33 @@ export function governedResultDigest(result: GovernedSignedResult): Sha256Digest
   return sha256Raw(JSON.stringify(governedResultValue(result, false)));
 }
 
+/**
+ * The exact fields a Go `SubmissionReport` carries.
+ *
+ * Exported so there is one list rather than two. The verifier and the Go-to-TS
+ * compatibility proof read the same constant, which is what makes a field added
+ * on one side fail loudly instead of silently rejecting real evidence: adding
+ * `enrollmentBytes` in Go without this list knowing about it made every
+ * Go-produced bundle unverifiable here.
+ */
+export const SUBMISSION_MEASUREMENT_FIELDS = Object.freeze([
+  "duration", "ciphertextBytes", "artifactBytes", "enrollmentBytes",
+] as const);
+
+/**
+ * The shape retained evidence carries, from before submissions issued a V5
+ * enrollment.
+ *
+ * Both shapes are recognised explicitly rather than by relaxing the exact-key
+ * check to "at least these fields". Published evidence documents cannot be
+ * regenerated without moving digests that are already pinned, and an exact set
+ * is what stops an unexpected field riding along; keeping two named sets
+ * preserves both properties.
+ */
+export const LEGACY_SUBMISSION_MEASUREMENT_FIELDS = Object.freeze([
+  "duration", "ciphertextBytes", "artifactBytes",
+] as const);
+
 export function verifyGovernedResultSignature(result: GovernedSignedResult): void {
   const expectedFields = [
     "schemaVersion", "caseId", "caseBindingDigest", "assetIdentity", "serviceId", "serviceVersion", "policyId",
@@ -984,7 +1011,10 @@ function assertExactPublicEvidenceShape(evidence: MordantProtectionEvidence): vo
   exactArray(keyGeneration.galoisKeyBytes, 9, "GALOIS_KEY_MEASUREMENT_FIELDS");
   exactArray(measurements.submissions, 2, "SUBMISSION_MEASUREMENT_FIELDS");
   for (const submission of measurements.submissions) {
-    exactKeys(submission, ["duration", "ciphertextBytes", "artifactBytes"], "SUBMISSION_MEASUREMENT_FIELDS");
+    const fields = Object.hasOwn(submission as object, "enrollmentBytes")
+      ? SUBMISSION_MEASUREMENT_FIELDS
+      : LEGACY_SUBMISSION_MEASUREMENT_FIELDS;
+    exactKeys(submission, fields, "SUBMISSION_MEASUREMENT_FIELDS");
   }
   exactKeys(measurements.evaluation, [
     "duration", "resultCiphertextBytes", "artifactBytes",

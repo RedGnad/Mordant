@@ -2,7 +2,7 @@
   "coalitionResult": {
     "schemaVersion": "mordant.coalition-conflict-result/1",
     "caseId": "sha256:b11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
-    "caseBindingDigest": "sha256:52ce837ddc12b06579f49cad1ec68498aa99d8e8b6b2aaa07183b36626fb0e15",
+    "caseBindingDigest": "sha256:afd0da308701c48d674ec91008b078ec96158d64b69e2da5e5f8a68aeb861f00",
     "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
     "serviceId": "mordant.private-pledge-matching",
     "serviceVersion": 1,
@@ -14,16 +14,16 @@
     "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
     "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
     "participantArtifactDigests": [
-      "sha256:0803f02de1385d7e14a04a2f5dcf364bb20fe19d1c6f3d24272ce912d88d49cf",
-      "sha256:6bf16e3acef1e25812abe241ba77864b34796924289c4103b3bf2916408dc673"
+      "sha256:0631043b143864a7efaafe5dda0daedd725d9459a752bb7ace07322e68b7f489",
+      "sha256:7dd15145ef8f5387d471b09176f1745271f8cfa3ccfa5b55698a32dc7eeba4ca"
     ],
-    "enrollmentDigestA": "0x63598c66193ca25d72a856a8f156ac71de2fc9a767941987878f3ec92f5fa08e",
-    "enrollmentDigestB": "0xbb42254c806433845616d472b902a1d087b14e2a3aae31e23e61d86935a6f891",
-    "evaluatedArtifactDigest": "sha256:96db3d9357200626a8673e088d667937a6e8629d1b1eaee9ead3fca7afcf46cf",
+    "enrollmentDigestA": "0x1c15afe901e0353d3dfa013820fff8b645bf549dfe948cd2f9e83761b88486f8",
+    "enrollmentDigestB": "0x26da82ceb6576a7852a7c2cd00608dc71873afdcd8cfd35f5d6ed27367f3fd37",
+    "evaluatedArtifactDigest": "sha256:1d0da0076fd11e46602d124e406b587b7a1918fb9234417e8b58b8ee306a239b",
     "sameEconomicAsset": true,
     "policyConflict": true,
     "releaseMode": "coalition-v5",
-    "releaseAuthorityId": "sha256:ebebb8eeca335ab615de36bfcd90ffe8e8abd7821e10198ff30836f9f67e87ec",
+    "releaseAuthorityId": "sha256:836c3f867326538e22e17f69563091b97159f7c15023055390da6d4629c65cfc",
     "threshold": 2,
     "coalition": [
       1,
@@ -34,65 +34,65 @@
       {
         "point": 1,
         "slot": 0,
-        "statementDigest": "0x66f8d2fe68d8c70aea35241bfbed961e686f68f22b6fb53c9b65cd5a95c6a751",
-        "signature": "0xf2a125202d7219766bbf367665c74f89b7fc417d9fd93cc1c0374bf68ecb3922ec9c5632144f8cc7167e9e6f0609d82f69c99fb7b2469034e3aaee7ef8990e01"
+        "statementDigest": "0xd6f1693bbe6f0620501c4b3b0476fa34cb9a659e41497e8304259ec2e42bfe75",
+        "signature": "0x44dffafd45ee4613a828cdaf8c54a1a20b4e5499b98fddf673c1cf8f1c4c9ba628b46abf21b8c48896144d93dbcb24ac8ea7582d667f8529d880e36c3310610b"
       },
       {
         "point": 1,
         "slot": 1,
-        "statementDigest": "0x1339330b2dc951070575bec830fde7ab8c6611504a1ef90d7100441f190a235c",
-        "signature": "0x97b2cfccf3be32a29a8ab4e6edd3c3a25bfe71026cf4702a8c60da1cfda734481253fd25e3485704d78c535732247883a52caf55350f320725fce41c95a7490f"
+        "statementDigest": "0x6faf8f3a9689a5049e4ab18f00bea70f5124961361a1bcee33f7877eadec4aeb",
+        "signature": "0xf533fd9c4aa0fe958a7ec766d602ad064391b4c294d143e5366ffcf0f29355be80042a327eb40ae1d9d40617322b734e12c25d21361a2880145b4cae813cdb01"
       },
       {
         "point": 2,
         "slot": 0,
-        "statementDigest": "0xf007479acd032c22f2bc45a4ff9cbaea09f4c7aad2e63239415567c2556bf4f0",
-        "signature": "0x7dfa6cae8f575ddd2c6aa51b25e328254db09422e4bd399e82944edc431429556bd61ad046d8032a6b53329534ce091ca63017d8940c1049627e7b320e0c6902"
+        "statementDigest": "0x29535520ca4837312cc80608658d74a162f0ab3e6f6e13704b1eceeba096aab8",
+        "signature": "0xb1b41f856ea97a081d1b8a2ad4f07836db5290f012b82484350b522bc08a0b0d6c47008141c7090c41b784c196de8701ecbf1436253ace14e0a61219e15adf05"
       },
       {
         "point": 2,
         "slot": 1,
-        "statementDigest": "0x7cc802b103cc7320a86062c7662c4725a28efd938b37a6d732a8f2dd11dbb622",
-        "signature": "0x0eafcc76d823f9b08589f76814f0fe8e04746a32fe2b2cf6819e86c0548e7aa0f6c4c7439807c66f0511ff52df87763f9b5a3f59e19c46c95b1c574b4d992d09"
+        "statementDigest": "0x58beb0f0cf728bab4624d3cb685c56cf7356556b7b1d2402ac179102fd6662cc",
+        "signature": "0xe167d3253a5452ddb84359c3e5f1424752eac795e6d64eeca522b9f896f79336133c2a142669e08b082d5f0a169a854c65717a122b6e5046ce8bdd295749700d"
       }
     ],
-    "releaseTranscript": "0xee83158d1fa65993ca7cfca9271ff695c24c2183bba66331eb995ccfb6891cb4",
+    "releaseTranscript": "0x068ac5752f10bcc7d4c1b4155ca837a603a7cc5ed82aa272681d863d5d520d84",
     "settlementAttestations": [
       {
         "point": 1,
-        "signature": "wvW9TIVH2W566CfoAI/ggHqmrCA0g73OKh6UxWxOgKObYKhN+uyFVAFGSXyzrPu5xcBcBqhAHE0yrzR3nt82DQ=="
+        "signature": "3ooumj14YXnpc+Z1qBHlhpJwuTatVLGWVBd8RA5uIO3TTu2jkGZWKIL6JjcUMHkJGlylQCm2bhuaAv7vBE7qCQ=="
       },
       {
         "point": 2,
-        "signature": "9QsK5KAVvBXcfCc9jswOq3tJy5iIgUIOl2aWf5f43INRtPrGZD0nzJNLRGz/1YK3zRdG0+vzAtnIAvXjBK24AA=="
+        "signature": "4pAmtdf4TYl619Vyfi516N8mAW/31j69MhMdf4yPnHkkMJeJTC/qp9ZToc+8jppkIcNm5zgQM45z1ceY734gDw=="
       }
     ],
-    "runtimeFingerprint": "0xa7b24fdca8bb4c0b7f02d49135fdc84954afb6e8509f66a607629c2747ff8ef7",
+    "runtimeFingerprint": "0xc4b017cf290c0ea8d63fb2050a1c6389543da964cf616a968540672eefc0b2be",
     "recomputedByAllOfQuorum": true,
-    "releasedAtUnix": 1786391946,
+    "releasedAtUnix": 1786394682,
     "sourceProvenance": "sha256:f98a250a4afefd7108fe88d35b34b9893bc07213cc26f045a216de51e557416b"
   },
   "thresholdManifest": {
     "schemaVersion": "mordant.fhe-coalition-threshold-manifest/1",
     "caseId": "sha256:b11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
-    "keyId": "sha256:5b11e54c8b8c9493ba49d6635276f84dec38112905810a4e522c9308081aa473",
+    "keyId": "sha256:6226212bc00d43d14d9c006b97dc26d3b81c0c5585af7f81e6623e5deee05ce9",
     "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
     "threshold": 2,
     "operators": [
       {
-        "operatorId": "sha256:0073f11b90d4ab637eab3079f2426f6fb316004029025f9ae49271b7e6840a6f",
+        "operatorId": "sha256:c0f096de0c41e4e543c670336a3b63483aa55aaa2a04fe69c6eaa32b0ff4d4af",
         "point": 1,
-        "signingPublicKey": "8oo1/VQZRzQw+lUh7RjNpR75kvOnGEvYepvhPvvBTCs="
+        "signingPublicKey": "vW4YWjpWuvaQG1pG5BO+oIRQjGCRIbQxznkgGCzbxlk="
       },
       {
-        "operatorId": "sha256:611cc17b55bff16e0ea477b85a20ab14e95a08f29793ebd956023ae2d9576331",
+        "operatorId": "sha256:ac342c9cb7a149c8b28e2bf1afce412218706b57e49ec1075954e1820251c679",
         "point": 2,
-        "signingPublicKey": "ba3k//4AA0x34sCDy3uOPnz6UhlV81c5PUbV6H9OpPk="
+        "signingPublicKey": "GzHpjFoBf0E9H9g4kB+nVzrLomN/kMojLb4Q++P3wKI="
       },
       {
-        "operatorId": "sha256:1daa697604d1a454a11a51dd143f1196bfd8799a8ad83b89e3dbf4cd4c9c6561",
+        "operatorId": "sha256:faff0bf4a415b8ba9f238b2f5d935ba24b8be871cc4126b5fabfef09b9c1931b",
         "point": 3,
-        "signingPublicKey": "+Vocln93HL3lpuNAx+I32QyLKxu4hMZa9jyEzmJrl68="
+        "signingPublicKey": "4vqKD5E3rapBngkH0X/AvI6rduTom/RhSo7P6M0Jq1k="
       }
     ],
     "operatorTopology": "colocated-single-process"
