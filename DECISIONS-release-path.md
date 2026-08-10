@@ -566,3 +566,36 @@ different responses. Each skip now records its reason and the quorum error repor
 Added while doing it: a loaded share is checked against the case's published threshold manifest by
 point, operator id and signing key together. A share from another ceremony is refused by name
 rather than incidentally failing later.
+
+## D23 — D18 was wrong. The store was right; the test's barrier was misplaced
+
+D18 attributed the `TestParticipantOriginatedNonceClaimIsAtomicAcrossRoles` flake to a race in
+`openObjectStore`'s root creation and left it as a product defect for a later change. That was a
+guess dressed as a diagnosis, and it was wrong. Re-probing the exact creation sequence passed
+1200/1200.
+
+The real cause, and it is not a defect: `usedBytes()` runs during every open and **refuses outright**
+if it sees a `.mordant-create-` temporary, because the store is a single-writer capability and a
+stray temporary means either a crash remnant or a concurrent writer. Failing closed there is the
+correct behaviour.
+
+The test released its barrier with `close(start)` as soon as both goroutines were *spawned*, not
+once both had finished opening. One side then began creating its claim temporary while the other
+was still scanning, and that side reported a store failure instead of the replay the test is about.
+The test also sends open errors and claim errors down one channel, so its message blamed the claim.
+
+**Fixed in the test**: the barrier now waits on a `sync.WaitGroup` until both stores are open.
+800 consecutive runs pass, where 300 previously failed reproducibly. No product code changed, and
+no invariant was weakened to make a test pass.
+
+This was the pre-existing `fhe-go` CI failure on `main`, including on the baseline `62504f2` this
+work branched from. Two lessons, both mine: a diagnosis is not a diagnosis until it reproduces, and
+"out of scope for this increment" is not the same as "not a blocker for the repository".
+
+## D24 — Why the reserved name `threshold-2of3-v1` was not used
+
+`ReleaseModeThreshold2Of3 = "threshold-2of3-v1"` already existed and reads like a reservation for
+exactly this work. It was not taken, for two reasons. It is used across the suite as the canonical
+"some other mode" in refusal tests, so promoting it to a known mode would silently delete those
+tests' meaning. And it hardcodes the quorum in the identifier, which becomes a lie the first time
+the threshold changes. `coalition-v5` names the property that matters, not today's parameters.

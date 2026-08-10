@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -810,15 +811,26 @@ func TestParticipantOriginatedNonceClaimIsAtomicAcrossRoles(t *testing.T) {
 	nonce := testDigest("shared-submission-nonce")
 	start := make(chan struct{})
 	results := make(chan error, 2)
+	// The barrier releases only once BOTH stores are open. The store is a
+	// single-writer capability: opening one scans the directory and refuses
+	// outright if a `.mordant-create-` temporary is present, because a stray
+	// temporary means either a crash remnant or a concurrent writer. Releasing
+	// the barrier before both opens finished let one side start creating its
+	// claim while the other was still scanning, and that side then reported a
+	// store failure rather than the replay this test is about.
+	var opened sync.WaitGroup
+	opened.Add(2)
 	for _, role := range []string{RoleA, RoleB} {
 		role := role
 		go func() {
 			journal, err := openObjectStore(journalRoot, PrivateCaseQuota, true)
 			if err != nil {
+				opened.Done()
 				results <- err
 				return
 			}
 			defer journal.close()
+			opened.Done()
 			<-start
 			verification := ParticipantOriginatedArtifactVerification{
 				Role: role, CaseID: testDigest("nonce-case"), SubmissionNonce: nonce,
@@ -828,6 +840,7 @@ func TestParticipantOriginatedNonceClaimIsAtomicAcrossRoles(t *testing.T) {
 			results <- err
 		}()
 	}
+	opened.Wait()
 	close(start)
 	successes, replays := 0, 0
 	for range 2 {
