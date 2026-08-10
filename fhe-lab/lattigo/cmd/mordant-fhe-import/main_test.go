@@ -28,6 +28,7 @@ func validImportRequest() participantImportRequest {
 		ClaimCommitment: repeatedHex("7"), SubmissionNonce: repeatedHex("8"), ArtifactDigest: repeatedHex("9"),
 		CiphertextDigest: repeatedHex("a"), CiphertextObjectLength: 1024,
 		FinalEncryptedAdmissionDigest: repeatedHex("b"),
+		EnrollmentSignature:           "0x" + strings.Repeat("c", 128),
 		ArtifactObject:                governedfhe.ObjectRef{Path: "submission-a.json", Digest: repeatedDigest(0xcc), Length: 512},
 		CiphertextObject:              governedfhe.ObjectRef{Path: "submission-a.bin", Digest: repeatedDigest(0xaa), Length: 1024},
 	}
@@ -145,5 +146,33 @@ func TestReconcileSkipsExpiredPreverifyAndBindsExactRequestRefs(t *testing.T) {
 	)
 	if !errors.Is(err, governedfhe.ErrParticipantImportMismatch) {
 		t.Fatalf("reconciliation accepted another manifest ref: %v", err)
+	}
+}
+
+// A participant enrollment is what lets the release boundary pair a submission,
+// so a request that carries no enrollment signature describes a submission that
+// could never be released. It is refused at the transport boundary rather than
+// much later.
+func TestImportRequestRequiresAnEnrollmentSignature(t *testing.T) {
+	for _, supplied := range []struct {
+		name  string
+		value string
+	}{
+		{"absent", ""},
+		{"truncated", "0x" + strings.Repeat("c", 126)},
+		{"not_hex", "0x" + strings.Repeat("z", 128)},
+		{"upper_case", "0x" + strings.Repeat("C", 128)},
+	} {
+		t.Run(supplied.name, func(t *testing.T) {
+			request := validImportRequest()
+			request.EnrollmentSignature = supplied.value
+			encoded, err := json.Marshal(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := decodeImportRequest(append(encoded, '\n')); err == nil {
+				t.Fatal("a request with no usable enrollment signature was accepted")
+			}
+		})
 	}
 }
