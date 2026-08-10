@@ -750,7 +750,9 @@ func newProductionFixture(t *testing.T, conflict bool) *productionFixture {
 	label := strings.ReplaceAll(t.Name(), "/", "-")
 	now := time.Now().UTC()
 	spec := CaseSpec{
-		AssetIdentity: testDigest(label + "/asset"),
+		// Enrollment issuance refuses an asset with no deployed case adapter, so
+		// the fixture uses the asset the deployed adapter actually binds.
+		AssetIdentity: DeployedCaseAdapterAssets()[0],
 		PolicyID:      testDigest("conflicting-pledge-policy/v1"),
 		ParticipantA:  ParticipantIdentity{ID: testDigest(label + "/participant-a"), Role: RoleA, SigningPublicKey: publicA},
 		ParticipantB:  ParticipantIdentity{ID: testDigest(label + "/participant-b"), Role: RoleB, SigningPublicKey: publicB},

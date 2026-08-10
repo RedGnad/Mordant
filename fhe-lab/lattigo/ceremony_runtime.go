@@ -38,6 +38,23 @@ func NewGovernedEvaluationRuntime(
 	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, governedKeyIDPrefix, true)
 }
 
+// NewCoalitionEvaluationRuntime builds an evaluator for a ceremony-produced
+// collective key whose circuit output must be byte-identical across evaluators.
+//
+// It advertises the ceremony custody, because that is how the key was made, and
+// it fixes the public circuit constants, because a coalition compares what each
+// operator recomputed. With a freshly encrypted constant two honest operators
+// would produce different bytes for the same inputs, and a digest comparison
+// between them would be meaningless.
+func NewCoalitionEvaluationRuntime(
+	params bgv.Parameters,
+	publicKey *rlwe.PublicKey,
+	relinearizationKey *rlwe.RelinearizationKey,
+	galoisKeys []*rlwe.GaloisKey,
+) (*Runtime, error) {
+	return newEvaluationRuntime(params, publicKey, relinearizationKey, galoisKeys, ceremonyKeyIDPrefix, true)
+}
+
 func newEvaluationRuntime(
 	params bgv.Parameters,
 	publicKey *rlwe.PublicKey,

@@ -223,7 +223,7 @@ func run(inputs chainInputs, workRoot string) (*sessionOutput, error) {
 	}
 	ceremonyMillis := time.Since(ceremonyStart).Milliseconds()
 
-	evaluator, err := fhe.NewEvaluationRuntime(params, material.publicKey, material.relinKey, material.galoisKeys)
+	evaluator, err := fhe.NewEvaluationRuntime(params, material.PublicKey, material.RelinearizationKey, material.GaloisKeys)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation runtime: %w", err)
 	}
@@ -232,7 +232,7 @@ func run(inputs chainInputs, workRoot string) (*sessionOutput, error) {
 	}
 
 	identity, err := fhe.LocalRuntimeIdentity(
-		params, material.publicKey, material.relinKey, material.galoisKeys, inputs.EvaluationKeyEpoch,
+		params, material.PublicKey, material.RelinearizationKey, material.GaloisKeys, inputs.EvaluationKeyEpoch,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("runtime identity: %w", err)
@@ -328,7 +328,7 @@ func run(inputs chainInputs, workRoot string) (*sessionOutput, error) {
 	// own locally derived runtime identity. They run concurrently.
 	operators := make([]*fhe.ReleaseOperatorV5, 0, 2)
 	for index := 0; index < 2; index++ {
-		threshold, err := fhe.NewThresholdOperator(material.bundles[index])
+		threshold, err := fhe.NewThresholdOperator(material.Bundles[index])
 		if err != nil {
 			return nil, err
 		}

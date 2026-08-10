@@ -165,7 +165,11 @@ type ParticipantOriginatedPreparedArtifact struct {
 	CiphertextObject       ObjectRef                                `json:"ciphertextObject"`
 	ClaimCommitment        Digest                                   `json:"claimCommitment"`
 	EncryptionIntentDigest ParticipantOriginatedAuthorizationDigest `json:"encryptionIntentDigest"`
-	Report                 SubmissionReport                         `json:"report"`
+	// The participant's signature over its own V5 enrollment, produced here on
+	// the participant's machine. It is the only enrollment material that travels;
+	// everything else the coordinator re-derives from the case and the artifact.
+	EnrollmentSignature []byte           `json:"enrollmentSignature"`
+	Report              SubmissionReport `json:"report"`
 }
 
 // PrepareParticipantOriginatedArtifact invokes the retained public-only
@@ -211,8 +215,8 @@ func PrepareParticipantOriginatedArtifact(options ParticipantOriginatedPreparati
 	if err != nil {
 		return prepared, err
 	}
-	client, err := fhe.NewGovernedExternalClient(params, publicKey)
-	if err != nil || client.CustodyModel() != fhe.CustodyGovernedEphemeral ||
+	client, expectedCustody, err := caseExternalClient(params, publicKey, verified.manifest.Binding.ReleaseMode)
+	if err != nil || client.CustodyModel() != expectedCustody ||
 		Digest(client.KeyIDBytes()) != verified.manifest.Binding.PublicKeyDigest ||
 		Digest(client.ParameterFingerprint()) != verified.manifest.Binding.ParameterFingerprint {
 		return prepared, ErrParticipantOriginated
@@ -262,11 +266,26 @@ func PrepareParticipantOriginatedArtifact(options ParticipantOriginatedPreparati
 		return prepared, err
 	}
 	artifactDigest, _ := artifact.Digest()
+	// The participant enrolls its own ciphertext into the bilateral session
+	// before the artifact leaves this machine. The signing key never does.
+	facts, err := EnrollmentCaseFactsFromBundle(verified.bundle)
+	if err != nil {
+		return prepared, err
+	}
+	circuitInputs, err := ParticipantCircuitSideDigest(cipherPledge)
+	if err != nil {
+		return prepared, err
+	}
+	enrollmentSignature, err := SignParticipantEnrollmentV5(facts, artifact, identity.Role, circuitInputs, options.SigningKey)
+	if err != nil {
+		return prepared, err
+	}
 	prepared = ParticipantOriginatedPreparedArtifact{
 		Artifact: artifact, ArtifactDigest: artifactDigest, CiphertextDigest: ciphertextRef.Digest,
 		ArtifactObject: artifactRef, CiphertextObject: ciphertextRef,
 		ClaimCommitment: claimCommitment, EncryptionIntentDigest: options.EncryptionIntentDigest,
-		Report: SubmissionReport{Duration: time.Since(started), CiphertextBytes: ciphertextRef.Length, ArtifactBytes: artifactRef.Length},
+		EnrollmentSignature: enrollmentSignature,
+		Report:              SubmissionReport{Duration: time.Since(started), CiphertextBytes: ciphertextRef.Length, ArtifactBytes: artifactRef.Length},
 	}
 	return prepared, nil
 }
@@ -367,7 +386,12 @@ type ParticipantOriginatedArtifactExpectations struct {
 	ArtifactDigest                Digest
 	CiphertextDigest              Digest
 	FinalEncryptedAdmissionDigest ParticipantOriginatedAuthorizationDigest
-	Now                           time.Time
+	// EnrollmentSignature is the participant's signature over its own V5
+	// enrollment. It is self-authenticating: publication re-derives the
+	// enrollment locally and refuses a signature that does not verify, so it is
+	// never trusted for being present in an authenticated request.
+	EnrollmentSignature []byte
+	Now                 time.Time
 }
 
 type ParticipantOriginatedArtifactVerification struct {
@@ -521,8 +545,8 @@ func validateFreshImportedParticipant(store *objectStore, manifest FHECaseManife
 	if err != nil {
 		return err
 	}
-	client, err := fhe.NewGovernedExternalClient(params, publicKey)
-	if err != nil || client.CustodyModel() != fhe.CustodyGovernedEphemeral ||
+	client, expectedCustody, err := caseExternalClient(params, publicKey, manifest.Binding.ReleaseMode)
+	if err != nil || client.CustodyModel() != expectedCustody ||
 		Digest(client.KeyIDBytes()) != manifest.Binding.PublicKeyDigest ||
 		Digest(client.ParameterFingerprint()) != manifest.Binding.ParameterFingerprint || pledge == nil ||
 		pledge.KeyID != client.KeyID() || Digest(pledge.ParameterFingerprint) != manifest.Binding.ParameterFingerprint {
@@ -558,6 +582,8 @@ func participantOriginatedArtifactRecoveryPolicy(role string) (*participantTempo
 		submissionBObject:   participantOriginatedMaximumCiphertextBytes,
 		submissionAManifest: maxManifestBytes,
 		submissionBManifest: maxManifestBytes,
+		enrollmentAObject:   maxManifestBytes,
+		enrollmentBObject:   maxManifestBytes,
 	}
 	return &participantTemporaryRecoveryPolicy{
 		maximum: participantOriginatedMaximumCiphertextBytes,
@@ -980,6 +1006,42 @@ func PublishParticipantOriginatedArtifact(options ParticipantOriginatedPublicati
 	publishedCiphertext, err := publishStagedObject(publicStore, quarantine, ciphertextName, ciphertextRef,
 		participantOriginatedMaximumCiphertextBytes, reconciled)
 	if err != nil {
+		return report, err
+	}
+	// The enrollment is written before the manifest for the same reason the
+	// ciphertext is: manifest-last must remain the single marker that says a
+	// complete, releasable participant input exists. A signature that does not
+	// verify against the locally re-derived enrollment stops publication here,
+	// before anything durable is committed for this role.
+	facts, factsErr := EnrollmentCaseFactsFromBinding(manifest.Binding)
+	if factsErr != nil {
+		return report, factsErr
+	}
+	stagedPledge, pledgeErr := loadParticipantCiphertext(quarantine, manifest, artifact)
+	if pledgeErr != nil {
+		return report, pledgeErr
+	}
+	publishedInputs, inputsErr := ParticipantCircuitSideDigest(stagedPledge)
+	if inputsErr != nil {
+		return report, inputsErr
+	}
+	enrollmentRecord, err := AdoptParticipantEnrollmentV5(facts, artifact, artifactDigest, verification.Role, publishedInputs, expected.EnrollmentSignature)
+	if err != nil {
+		return report, err
+	}
+	enrollmentName, err := enrollmentObjectForRole(verification.Role)
+	if err != nil {
+		return report, err
+	}
+	if existing, exists, readErr := readParticipantOriginatedJournal[ParticipantEnrollmentV5](publicStore, enrollmentName); readErr != nil {
+		return report, readErr
+	} else if exists {
+		// A reconciled retry republishes identical bytes; anything else would be
+		// a second enrollment for a role that already has one.
+		if existing.EnrollmentSigningDigest != enrollmentRecord.EnrollmentSigningDigest {
+			return report, ErrParticipantRoleOccupied
+		}
+	} else if _, _, err := publicStore.createJSON(enrollmentName, enrollmentRecord); err != nil {
 		return report, err
 	}
 	// Manifest-last is the durable commit marker observed by the unchanged

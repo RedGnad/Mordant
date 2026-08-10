@@ -129,6 +129,30 @@ func runConfigure(arguments []string) error {
 		!filepath.IsAbs(evidenceRoot) || !filepath.IsAbs(exportRoot) || !filepath.IsAbs(output) {
 		return errors.New("invalid configure arguments")
 	}
+	// The runtime requires each root to be a directory whose permissions are
+	// exactly 0700 (runner.go, evidence.go). That requirement is deliberate, but
+	// a root created at the caller's umask fails much later, inside the ceremony,
+	// behind an intentionally opaque error. Diagnose it here instead, where the
+	// roots are named and nothing has run yet. The root's role is reported, not
+	// its path, which the caller supplied and already knows.
+	for _, root := range []struct {
+		role string
+		path string
+	}{
+		{"publication-root", publicationRoot},
+		{"evidence-root", evidenceRoot},
+		{"export-root", exportRoot},
+	} {
+		if err := requireExclusiveDirectory(root.path); err != nil {
+			// main() reports only ONESHOT_RUNNER_FAILED, which is right for the
+			// ceremony but useless for a precondition the caller can fix in one
+			// command. Configuration is a local administrative step over
+			// arguments the caller just supplied, so naming the offending root
+			// here reveals nothing the caller does not already hold.
+			fmt.Fprintf(os.Stderr, "ONESHOT_RUNNER_PRECONDITION %s %v\n", root.role, err)
+			return fmt.Errorf("%s: %w", root.role, err)
+		}
+	}
 	authority, err := oneshotruntime.LoadSessionAuthorityPublic(authorityPath)
 	if err != nil {
 		return err
@@ -293,5 +317,25 @@ func runExport(arguments []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "ONESHOT_PUBLIC_EVIDENCE_EXPORTED path=%s\n", destination)
+	return nil
+}
+
+// requireExclusiveDirectory reports why a configured root cannot be used before
+// any ceremony work begins. The runtime accepts a root only when it is a real
+// directory, not a symlink, owned exclusively by the caller at mode 0700.
+func requireExclusiveDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return errors.New("does not exist; create it with mode 0700")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("is a symlink; the runtime requires a real directory")
+	}
+	if !info.IsDir() {
+		return errors.New("is not a directory")
+	}
+	if permissions := info.Mode().Perm(); permissions != 0o700 {
+		return fmt.Errorf("has mode %#o; the runtime requires exactly 0700 (chmod 700 it)", permissions)
+	}
 	return nil
 }

@@ -54,8 +54,8 @@ func loadAndValidateFreshParticipants(store *objectStore, manifest FHECaseManife
 	if err != nil {
 		return validated, err
 	}
-	client, err := fhe.NewGovernedExternalClient(params, publicKey)
-	if err != nil || client.CustodyModel() != fhe.CustodyGovernedEphemeral ||
+	client, expectedCustody, err := caseExternalClient(params, publicKey, manifest.Binding.ReleaseMode)
+	if err != nil || client.CustodyModel() != expectedCustody ||
 		Digest(client.KeyIDBytes()) != manifest.Binding.PublicKeyDigest ||
 		Digest(client.ParameterFingerprint()) != manifest.Binding.ParameterFingerprint {
 		return validated, ErrCiphertextValidation
@@ -145,4 +145,17 @@ func equalExpectedBGVMetadata(actual, expected *rlwe.MetaData) bool {
 		actual.LogDimensions == expected.LogDimensions &&
 		actual.IsNTT == expected.IsNTT &&
 		actual.IsMontgomery == expected.IsMontgomery
+}
+
+// caseExternalClient builds the public-only encryption boundary a case's key
+// calls for. The custody the client advertises follows the release mode, so a
+// ceremony-produced coalition key is never labelled as a single-party governed
+// case key, and vice versa.
+func caseExternalClient(params bgv.Parameters, publicKey *rlwe.PublicKey, releaseMode string) (*fhe.ExternalClient, fhe.CustodyModel, error) {
+	if releaseMode == ReleaseModeCoalitionV5 {
+		client, err := fhe.NewCeremonyExternalClient(params, publicKey)
+		return client, fhe.CustodyDealerlessCeremony, err
+	}
+	client, err := fhe.NewGovernedExternalClient(params, publicKey)
+	return client, fhe.CustodyGovernedEphemeral, err
 }

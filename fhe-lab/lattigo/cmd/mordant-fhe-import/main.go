@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -20,34 +21,42 @@ import (
 )
 
 const (
-	participantImportRequestSchema = "mordant.participant-originated-import-request/1"
+	// v2 adds the required enrollmentSignature. A v1 request carries no
+	// enrollment, and a submission with no enrollment can never be released, so
+	// it is rejected by version rather than by a confusing field error.
+	participantImportRequestSchema = "mordant.participant-originated-import-request/2"
 	maximumArtifactManifestBytes   = int64(4 << 20)
 	maximumParticipantCipherBytes  = int64(192 << 20)
 )
 
 var importBytes32 = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+var importSignature = regexp.MustCompile(`^0x[0-9a-f]{128}$`)
 
 // participantImportRequest is an internal coordinator request created only
 // after the EIP-712 chain has verified. encryptedArtifactDigest is the SHA-256
 // of semantic canonical JSON without its storage newline; ArtifactObject is a
 // separate exact-byte transport reference and must never be substituted for it.
 type participantImportRequest struct {
-	SchemaVersion                 string                `json:"schemaVersion"`
-	Role                          string                `json:"role"`
-	CaseID                        string                `json:"fheCaseId"`
-	AssetIdentity                 string                `json:"assetIdentityDigest"`
-	CaseBindingDigest             string                `json:"caseBindingDigest"`
-	SigningKeyDigest              string                `json:"participantSigningKeyDigest"`
-	BundleDigest                  string                `json:"clientBundleDigest"`
-	EncryptionIntentDigest        string                `json:"encryptionIntentDigest"`
-	ClaimCommitment               string                `json:"claimCommitment"`
-	SubmissionNonce               string                `json:"submissionNonce"`
-	ArtifactDigest                string                `json:"encryptedArtifactDigest"`
-	CiphertextDigest              string                `json:"ciphertextObjectDigest"`
-	CiphertextObjectLength        int64                 `json:"ciphertextObjectLength"`
-	FinalEncryptedAdmissionDigest string                `json:"finalEncryptedAdmissionDigest"`
-	ArtifactObject                governedfhe.ObjectRef `json:"artifactObject"`
-	CiphertextObject              governedfhe.ObjectRef `json:"ciphertextObject"`
+	SchemaVersion                 string `json:"schemaVersion"`
+	Role                          string `json:"role"`
+	CaseID                        string `json:"fheCaseId"`
+	AssetIdentity                 string `json:"assetIdentityDigest"`
+	CaseBindingDigest             string `json:"caseBindingDigest"`
+	SigningKeyDigest              string `json:"participantSigningKeyDigest"`
+	BundleDigest                  string `json:"clientBundleDigest"`
+	EncryptionIntentDigest        string `json:"encryptionIntentDigest"`
+	ClaimCommitment               string `json:"claimCommitment"`
+	SubmissionNonce               string `json:"submissionNonce"`
+	ArtifactDigest                string `json:"encryptedArtifactDigest"`
+	CiphertextDigest              string `json:"ciphertextObjectDigest"`
+	CiphertextObjectLength        int64  `json:"ciphertextObjectLength"`
+	FinalEncryptedAdmissionDigest string `json:"finalEncryptedAdmissionDigest"`
+	// The participant's signature over its own V5 enrollment, produced on the
+	// participant's machine. Publication re-derives the enrollment locally and
+	// refuses a signature that does not verify against it.
+	EnrollmentSignature string                `json:"enrollmentSignature"`
+	ArtifactObject      governedfhe.ObjectRef `json:"artifactObject"`
+	CiphertextObject    governedfhe.ObjectRef `json:"ciphertextObject"`
 }
 
 func main() {
@@ -214,7 +223,8 @@ func (request participantImportRequest) expected(now time.Time) governedfhe.Part
 		BundleDigest: mustDigest0x(request.BundleDigest), EncryptionIntentDigest: mustAuthorizationDigest(request.EncryptionIntentDigest),
 		ClaimCommitment: mustDigest0x(request.ClaimCommitment), SubmissionNonce: mustDigest0x(request.SubmissionNonce),
 		ArtifactDigest: mustDigest0x(request.ArtifactDigest), CiphertextDigest: mustDigest0x(request.CiphertextDigest),
-		FinalEncryptedAdmissionDigest: mustAuthorizationDigest(request.FinalEncryptedAdmissionDigest), Now: now,
+		FinalEncryptedAdmissionDigest: mustAuthorizationDigest(request.FinalEncryptedAdmissionDigest),
+		EnrollmentSignature:           mustSignature0x(request.EnrollmentSignature), Now: now,
 	}
 }
 
@@ -268,6 +278,9 @@ func (request participantImportRequest) validate() error {
 			return fmt.Errorf("invalid participant import bytes32")
 		}
 	}
+	if _, err := signatureBytes0x(request.EnrollmentSignature); err != nil {
+		return fmt.Errorf("invalid participant enrollment signature")
+	}
 	artifactName, ciphertextName := "submission-a.json", "submission-a.bin"
 	if request.Role == "PARTICIPANT_B" {
 		artifactName, ciphertextName = "submission-b.json", "submission-b.bin"
@@ -281,6 +294,25 @@ func (request participantImportRequest) validate() error {
 		return fmt.Errorf("import transport references do not match the authorization")
 	}
 	return nil
+}
+
+func signatureBytes0x(value string) ([]byte, error) {
+	if !importSignature.MatchString(value) {
+		return nil, fmt.Errorf("ed25519 signature must use exact lower-case 0x encoding")
+	}
+	decoded, err := hex.DecodeString(value[2:])
+	if err != nil || len(decoded) != ed25519.SignatureSize {
+		return nil, fmt.Errorf("invalid ed25519 signature")
+	}
+	return decoded, nil
+}
+
+func mustSignature0x(value string) []byte {
+	decoded, err := signatureBytes0x(value)
+	if err != nil {
+		panic("validated import signature became invalid")
+	}
+	return decoded
 }
 
 func digestBytes0x(value string) ([32]byte, error) {

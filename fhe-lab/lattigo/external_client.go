@@ -87,6 +87,40 @@ func NewGovernedExternalClient(params bgv.Parameters, publicKey *rlwe.PublicKey)
 	}}, nil
 }
 
+// NewCeremonyExternalClient constructs the public-only encryption boundary for
+// a collective key produced by the dealerless ceremony.
+//
+// It is the sibling of NewGovernedExternalClient and differs only in the custody
+// the key id advertises. The two exist separately so the label states how the
+// key was actually produced: a ceremony key relabelled as a governed ephemeral
+// case key would claim a single-party origin it does not have, and a governed
+// case key relabelled as a ceremony key would claim a shared origin it does not
+// have. Neither constructor verifies the origin; the caller picks the one that
+// matches how the case was created, and the case records which.
+func NewCeremonyExternalClient(params bgv.Parameters, publicKey *rlwe.PublicKey) (*ExternalClient, error) {
+	if publicKey == nil {
+		return nil, ErrWrongKeyID
+	}
+	parameterBytes, err := params.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid public parameters", ErrWrongKeyID)
+	}
+	publicKeyBytes, err := publicKey.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid collective public key", ErrWrongKeyID)
+	}
+	keyDigest := sha256.Sum256(publicKeyBytes)
+	return &ExternalClient{custody: CustodyDealerlessCeremony, engine: clientEncryptionEngine{
+		params:               params,
+		encoder:              bgv.NewEncoder(params),
+		encryptor:            rlwe.NewEncryptor(params, publicKey),
+		keyID:                fmt.Sprintf("%s%x", ceremonyKeyIDPrefix, keyDigest[:]),
+		keyIDBytes:           keyDigest,
+		parameterFingerprint: sha256.Sum256(parameterBytes),
+		publicKeyBytes:       publicKeyBytes,
+	}}, nil
+}
+
 // CustodyModel reports how the imported key was produced.
 func (c *ExternalClient) CustodyModel() CustodyModel { return c.custody }
 

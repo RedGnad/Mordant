@@ -22,6 +22,9 @@ const (
 	ResultSchema     = "mordant.fixed-conflict-boolean/v1"
 
 	ReleaseModeGovernedDecryptor = "governed-decryptor-v1"
+	// ReleaseModeCoalitionV5 names a case whose key is held as a t-of-n threshold
+	// and which therefore has no secret key to fall back to.
+	ReleaseModeCoalitionV5 = "coalition-v5"
 	ReleaseModeThreshold2Of3     = "threshold-2of3-v1"
 	ReleaseOrdinal               = uint32(1)
 	ResultSlot                   = uint32(0)

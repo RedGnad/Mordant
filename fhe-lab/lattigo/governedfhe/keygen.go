@@ -15,9 +15,20 @@ import (
 )
 
 type CreateCaseOptions struct {
-	PublicRoot       string
-	PrivateRoot      string
-	Spec             CaseSpec
+	PublicRoot  string
+	PrivateRoot string
+	Spec        CaseSpec
+	// ReleaseMode selects how the case's key is held. Empty means
+	// ReleaseModeGovernedDecryptor, which is what every existing caller gets.
+	//
+	// ReleaseModeCoalitionV5 runs the t-of-n ceremony instead of generating a
+	// case secret key, and writes one sealed share per OperatorRoot. No secret
+	// key object is created for such a case, so there is nothing to fall back to
+	// if the quorum cannot be assembled.
+	ReleaseMode string
+	// OperatorRoots is required for a coalition case and must be empty
+	// otherwise. Each root receives exactly one operator's sealed bundle.
+	OperatorRoots    []string
 	SourceProvenance Digest
 }
 
@@ -94,18 +105,50 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	}
 	report.ParameterBytes = parameterRef.Length
 
-	keyGenerator := rlwe.NewKeyGenerator(params)
-	secretKey, publicKey := keyGenerator.GenKeyPairNew()
-	secretBytes, err := secretKey.MarshalBinary()
+	coalition := options.ReleaseMode == ReleaseModeCoalitionV5
+
+	var (
+		secretRef          ObjectRef
+		publicKey          *rlwe.PublicKey
+		relinearizationKey *rlwe.RelinearizationKey
+		galoisKeys         []*rlwe.GaloisKey
+		ceremonyMaterial   *fhe.ColocatedCeremonyMaterial
+	)
+	elements, err := GaloisElements(params)
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
-	secretRef, err := privateStore.create(secretKeyObject, secretBytes)
-	if err != nil {
-		return FHECaseBinding{}, report, err
-	}
-	for index := range secretBytes {
-		secretBytes[index] = 0
+	if coalition {
+		ceremonyMaterial, err = fhe.RunColocatedCeremony(params, CoalitionThreshold, CoalitionOperators, [32]byte(options.Spec.PolicyID))
+		if err != nil {
+			return FHECaseBinding{}, report, fmt.Errorf("%w: %v", ErrCoalition, err)
+		}
+		publicKey = ceremonyMaterial.PublicKey
+		relinearizationKey = ceremonyMaterial.RelinearizationKey
+		galoisKeys = ceremonyMaterial.GaloisKeys
+		if len(galoisKeys) != len(elements) {
+			return FHECaseBinding{}, report, fmt.Errorf("%w: ceremony produced %d galois keys, %d required", ErrCoalition, len(galoisKeys), len(elements))
+		}
+	} else {
+		var secretKey *rlwe.SecretKey
+		keyGenerator := rlwe.NewKeyGenerator(params)
+		secretKey, publicKey = keyGenerator.GenKeyPairNew()
+		secretBytes, err := secretKey.MarshalBinary()
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		secretRef, err = privateStore.create(secretKeyObject, secretBytes)
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		for index := range secretBytes {
+			secretBytes[index] = 0
+		}
+		relinearizationKey = keyGenerator.GenRelinearizationKeyNew(secretKey)
+		galoisKeys = make([]*rlwe.GaloisKey, len(elements))
+		for index, element := range elements {
+			galoisKeys[index] = keyGenerator.GenGaloisKeyNew(element, secretKey)
+		}
 	}
 	publicBytes, err := publicKey.MarshalBinary()
 	if err != nil {
@@ -117,7 +160,6 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	}
 	report.PublicKeyBytes = publicRef.Length
 
-	relinearizationKey := keyGenerator.GenRelinearizationKeyNew(secretKey)
 	relinearizationBytes, err := relinearizationKey.MarshalBinary()
 	if err != nil {
 		return FHECaseBinding{}, report, err
@@ -128,14 +170,13 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	}
 	report.RelinearizationKeyBytes = relinearizationRef.Length
 
-	elements, err := GaloisElements(params)
-	if err != nil {
-		return FHECaseBinding{}, report, err
-	}
 	galoisRefs := make([]GaloisKeyRef, len(elements))
 	report.GaloisKeyBytes = make([]int64, len(elements))
 	for index, element := range elements {
-		key := keyGenerator.GenGaloisKeyNew(element, secretKey)
+		key := galoisKeys[index]
+		if key.GaloisElement != element {
+			return FHECaseBinding{}, report, fmt.Errorf("%w: galois key %d is for another element", ErrCoalition, index)
+		}
 		encoded, err := key.MarshalBinary()
 		if err != nil {
 			return FHECaseBinding{}, report, err
@@ -153,12 +194,37 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	if err != nil {
 		return FHECaseBinding{}, report, err
 	}
-	decryptorPublic, decryptorPrivate, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return FHECaseBinding{}, report, err
-	}
-	authorityID := releaseAuthorityIdentity(ReleaseModeGovernedDecryptor, decryptorPublic)
 	parameterFingerprint := Digest(sha256.Sum256(parameterBytes))
+	releaseMode := options.ReleaseMode
+	if releaseMode == "" {
+		releaseMode = ReleaseModeGovernedDecryptor
+	}
+
+	// The authority a coalition case publishes is its threshold manifest, and
+	// the case's authority identity is that manifest's digest. There is no
+	// authority key, because a key is exactly what the coalition removes.
+	var (
+		decryptorPublic   ed25519.PublicKey
+		decryptorPrivate  ed25519.PrivateKey
+		authorityID       Digest
+		coalitionManifest CoalitionThresholdManifest
+	)
+	if coalition {
+		coalitionManifest, err = buildCoalitionThresholdManifest(options.Spec.CaseID, publicRef.Digest, parameterFingerprint, ceremonyMaterial)
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		authorityID, err = coalitionManifest.Digest()
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+	} else {
+		decryptorPublic, decryptorPrivate, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		authorityID = releaseAuthorityIdentity(ReleaseModeGovernedDecryptor, decryptorPublic)
+	}
 	binding := FHECaseBinding{
 		SchemaVersion: CaseBindingSchema, CaseID: options.Spec.CaseID, AssetIdentity: options.Spec.AssetIdentity,
 		ServiceID: ServiceID, ServiceVersion: ServiceVersion, PolicyID: options.Spec.PolicyID, PolicyVersion: fhe.PolicyVersion,
@@ -166,7 +232,7 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 		ParameterFingerprint: parameterFingerprint, PublicKeyDigest: publicRef.Digest, EvaluationKeyManifestDigest: evaluationDigest,
 		ParticipantA: options.Spec.ParticipantA, ParticipantB: options.Spec.ParticipantB,
 		ParticipantOrder: []Digest{options.Spec.ParticipantA.ID, options.Spec.ParticipantB.ID}, InputSchema: InputSchema, ResultSchema: ResultSchema,
-		ReleaseMode: ReleaseModeGovernedDecryptor, ReleaseAuthorityID: authorityID, ReleaseAuthorityPublicKey: decryptorPublic,
+		ReleaseMode: releaseMode, ReleaseAuthorityID: authorityID, ReleaseAuthorityPublicKey: decryptorPublic,
 		CaseNonce: options.Spec.CaseNonce, CreatedAtUnix: options.Spec.CreatedAtUnix, ExpiresAtUnix: options.Spec.ExpiresAtUnix,
 	}
 	if binding.validate() != nil {
@@ -182,6 +248,22 @@ func CreateCase(options CreateCaseOptions) (FHECaseBinding, KeyGenerationReport,
 	}
 	if _, _, err := publicStore.createJSON(caseBindingObject, binding); err != nil {
 		return FHECaseBinding{}, report, err
+	}
+
+	if coalition {
+		if _, _, err := publicStore.createJSON(thresholdManifestObject, coalitionManifest); err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		if err := writeCoalitionOperatorBundles(options.OperatorRoots, ceremonyMaterial); err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		publicBytesUsed, err := publicStore.usedBytes()
+		if err != nil {
+			return FHECaseBinding{}, report, err
+		}
+		report.PublicArtifactBytes = publicBytesUsed
+		report.Duration = time.Since(started)
+		return binding, report, nil
 	}
 
 	signingRef, err := privateStore.create(decryptorSigningKeyObject, decryptorPrivate)
