@@ -9,6 +9,10 @@ optimizer = true
 optimizer_runs = 10_000
 fuzz = { runs = 256 }
 invariant = { runs = 128, depth = 64, fail_on_revert = false }
+# Read-only, and scoped to one directory. The coalition settlement test consumes
+# the digests a real 2-of-3 spine release produced rather than synthetic ones, so
+# the fixture has to be readable. Nothing here may write.
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]
 
 [fmt]
 line_length = 100
