@@ -198,7 +198,7 @@ class DeterministicParticipantWorker {
               chainId: CHAIN_ID,
               salt: PARTICIPANT_ADMISSION_DOMAIN_SALT,
             },
-            primaryType: "ParticipantAdmissionV1",
+            primaryType: "ParticipantAdmissionV2",
             types: PARTICIPANT_ADMISSION_TYPES,
             message: {
               verifyingService: APP_ORIGIN,
@@ -417,8 +417,8 @@ test.describe("direct participant browser integration", () => {
     const signedA = calls.filter((call) => call.provider === "Canonical Participant A" && call.method === "eth_signTypedData_v4");
     expect(signedA).toHaveLength(1);
     const typedA = typedPayload(signedA[0]);
-    expect(typedA.primaryType).toBe("ParticipantAdmissionV1");
-    expect(asRecord(typedA.types).ParticipantAdmissionV1).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1);
+    expect(typedA.primaryType).toBe("ParticipantAdmissionV2");
+    expect(asRecord(typedA.types).ParticipantAdmissionV2).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2);
     expect(asRecord(typedA.domain).name).toBe("Mordant Participant Admission");
     expect(asRecord(typedA.domain).version).toBe("1");
     expect(numeric(asRecord(typedA.domain).chainId)).toBe(BigInt(CHAIN_ID));
@@ -477,8 +477,8 @@ test.describe("direct participant browser integration", () => {
     const signedB = calls.filter((call) => call.provider === "Canonical Participant B" && call.method === "eth_signTypedData_v4");
     expect(signedB).toHaveLength(1);
     const typedB = typedPayload(signedB[0]);
-    expect(typedB.primaryType).toBe("ParticipantAdmissionV1");
-    expect(asRecord(typedB.types).ParticipantAdmissionV1).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV1);
+    expect(typedB.primaryType).toBe("ParticipantAdmissionV2");
+    expect(asRecord(typedB.types).ParticipantAdmissionV2).toEqual(PARTICIPANT_ADMISSION_TYPES.ParticipantAdmissionV2);
     const messageB = asRecord(typedB.message);
     expect(messageB.role).toBe("PARTICIPANT_B");
     expect(String(messageB.participantWallet).toLowerCase()).toBe(HOLDER_B.toLowerCase());
