@@ -92,12 +92,13 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(mobileComposition.intersectionWidth).toBeGreaterThan(12);
     expect(mobileComposition.intersectionHeight).toBeGreaterThan(8);
   }
-  // The primary call to action opens the live product directly, from every
-  // surface including the landing. It is one destination, not a landing anchor
-  // on one page and the product on another.
+  // The primary call to action lives in the shell header and opens the live
+  // product directly, from every surface including the landing. There is no
+  // second copy of it in the page body: this file asserts elsewhere that the
+  // live product "is never duplicated as a second navigation destination", and a
+  // hero link repeating it would be exactly that duplicate.
   await expect(page.getByTestId("shell-live-cta")).toHaveAttribute("href", "/protection/live");
-  await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" }).first())
-    .toHaveAttribute("href", "/protection/live");
+  await expect(page.getByRole("main").getByRole("link", { name: "Run live proof" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Product navigation" })
     .getByRole("link", { name: "Evidence" })).toHaveAttribute("href", "/protection/verified-run");
   await expect(page.getByRole("main").getByRole("link", { name: "Inspect verified evidence" }).first())
