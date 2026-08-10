@@ -23,6 +23,23 @@ import {
 export const EXPECTED_GOVERNED_FHE_COMMIT = "3b0247593d022fb18aadd2b554329f85c5a19898";
 export const PRODUCT_CLAIM_IDENTIFIER = "mordant.conflicting-pledge-protection/governed-fhe-mvp-v1" as const;
 export const EXPECTED_PUBLIC_KEY_BYTES = 7_864_600;
+
+/**
+ * One participant enrollment per role, published at submission.
+ *
+ * Its size is fixed by construction: every field is a digest, an address, a
+ * fixed-length Ed25519 signature or a 10-digit unix second, so the file is the
+ * same length for either role and from one run to the next.
+ *
+ * The terminal public-artifact pins below are expressed as a pre-enrollment
+ * baseline plus these bytes rather than as one opaque total. When V5 started
+ * publishing enrollments the totals moved by exactly this much and the opaque
+ * constants silently went stale, which failed every managed run at export.
+ * Written this way, a change to the enrollment format moves one number here and
+ * both scenarios follow.
+ */
+export const EXPECTED_ENROLLMENT_BYTES = 940;
+const PUBLISHED_ENROLLMENT_BYTES = EXPECTED_ENROLLMENT_BYTES * 2;
 export const EXPECTED_RESULT_CIPHERTEXT_BYTES = 6_291_950;
 
 export type PublicObjectReference = Readonly<{
@@ -1030,10 +1047,20 @@ function assertExactPublicEvidenceShape(evidence: MordantProtectionEvidence): vo
   ], "TRUSTED_RECOURSE_PIN_FIELDS");
 
   const evaluation = measurements.evaluation as Record<string, unknown>;
+  // Retained documents predate V5 and published no enrollment, so their public
+  // set is the baseline. A V5 run publishes one per role, and its submission
+  // measurement carries `enrollmentBytes` (the same marker the field list uses).
+  // Reading the marker rather than the value is deliberate: the value is
+  // currently zeroed on the way through measurements.json, while the files are
+  // on disk either way, so the count is what the total can be trusted to.
+  const publishesEnrollments = (measurements.submissions as unknown[]).some(
+    (entry) => Object.hasOwn(entry as object, "enrollmentBytes"),
+  );
+  const publishedEnrollmentBytes = publishesEnrollments ? PUBLISHED_ENROLLMENT_BYTES : 0;
   const expectedTerminalSizes = evidence.scenario === "conflict"
-    ? { releaseResultBytes: 1_750, publicArtifactBytes: 391_684_354 }
+    ? { releaseResultBytes: 1_750, publicArtifactBytes: 391_684_354 + publishedEnrollmentBytes }
     : evidence.scenario === "no-conflict"
-      ? { releaseResultBytes: 1_751, publicArtifactBytes: 391_682_810 }
+      ? { releaseResultBytes: 1_751, publicArtifactBytes: 391_682_810 + publishedEnrollmentBytes }
       : null;
   if (
     expectedTerminalSizes === null
