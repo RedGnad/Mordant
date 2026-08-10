@@ -7,6 +7,13 @@ contract MockEligibility is ICviVerifier {
     mapping(address account => mapping(uint8 role => bool eligible)) public eligibility;
     mapping(address account => mapping(uint8 role => bool denied)) public assetIneligibility;
     mapping(address account => bool valid) public identityValidity;
+    /// @dev Defaults to allowed, so existing tests are unaffected; set false to
+    /// exercise a policy that has turned against a pending transfer.
+    mapping(address recipient => bool denied) public transferDenied;
+
+    function setAssetTransferAllowed(address recipient, bool allowed) external {
+        transferDenied[recipient] = !allowed;
+    }
 
     function setIdentityValid(address account, bool valid_) external {
         identityValidity[account] = valid_;
@@ -36,11 +43,11 @@ contract MockEligibility is ICviVerifier {
         return eligibility[account][role] && !assetIneligibility[account][role];
     }
 
-    function isAssetTransferAllowed(address, address, address, uint256)
+    function isAssetTransferAllowed(address, address, address to, uint256)
         external
-        pure
+        view
         returns (bool)
     {
-        return true;
+        return !transferDenied[to];
     }
 }
