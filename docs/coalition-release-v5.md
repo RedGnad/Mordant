@@ -124,16 +124,35 @@ circuit cannot produce.
 | Plan input from the result | `conflict` | `policyConflict` |
 | Economics | pre-committed profile | pre-committed profile, unchanged |
 
-### What the off-chain verifier does not establish
+### The binding to the released value
 
-The binding of each operator statement to *this* release is not re-derived in TypeScript. An
-operator signs the digest of a statement built from the threshold descriptor it recomputed, and that
-binding is checked by the combiner in the release path, before any result exists. Re-deriving it
-here would mean reimplementing the threshold encoding in a second language, and a second
-implementation that drifts is worse than one trusted for a stated reason.
+A release share is generated **before any bit exists**, which is the point of a threshold. Nothing
+an operator signs during the release can therefore attest what the bits turned out to be, and a
+verifier that stopped at those signatures would authenticate the quorum and then have to trust
+whoever combined the shares.
 
-So the verifier establishes that the identity is the manifest's and that the quorum is authentic. It
-relies on the release path for the statements being about this release.
+So the release has a short second round. Each serving operator recombines both bits for itself, with
+`CombineReleaseBitV5` against the ciphertexts it recomputed, and signs a settlement statement naming
+the case, the case binding, the asset, the release identity, the transcript, the coalition and those
+two bits. It signs only if it obtains the bits it was shown.
+
+The settlement authority rebuilds that statement from the result and requires a quorum of valid
+signatures over it. **A result edited after production fails there even when every signature it
+carries is authentic**, because the message they were made over has moved. Flipping a bit, moving
+the release to another case or binding, substituting another transcript, moving a confirmation
+between operators, or supplying fewer confirmations than the quorum are each refused, and each has
+its own test.
+
+This grants no new capability. The shares are key-switch shares for those two ciphertexts, the
+operator contributed one of them, and holding the quorum's shares for a ciphertext the quorum agreed
+to release reveals only the bit it helped release. The collective secret is untouched.
+`SignSettlementStatement` is not a signing oracle either: a settlement message must carry its domain
+prefix and exceed 32 bytes, while a threshold statement is signed over a bare 32-byte digest, so
+neither can be replayed as the other.
+
+**Still not re-derived in TypeScript**: the threshold statement digests. Reimplementing that encoding
+in a second language would risk drift; the combiner checks them in the release path, and the
+settlement statements above are what carry the binding downstream.
 
 ### Executed locally, not deployed
 

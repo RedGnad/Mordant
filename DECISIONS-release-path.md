@@ -663,3 +663,34 @@ coalition's and whose economics are the profile's. 322 contract tests still pass
 **Not true, and not claimed.** The adapter is executed locally, not deployed to testnet. The
 TypeScript verifier does not re-derive each statement's binding to this release. Operator process
 independence and institutional decentralization remain undelivered.
+
+## D29 — The binding gap, and why it needed a second round
+
+Review found that the settlement verifier authenticated a quorum of signatures over opaque statement
+digests and then read `sameEconomicAsset` and `policyConflict` straight from the result. It could not
+detect a result edited after production. The finding was correct, and I had flagged the same gap
+without closing it.
+
+The constraint that shapes the fix: **an operator generates its release share before any bit
+exists.** That is what a threshold is for. No signature produced during the release can attest a
+value, so the gap was not a missing encoding, it was a temporal impossibility.
+
+**Fix: a short second round.** After combination, each serving operator recombines both bits itself
+with `CombineReleaseBitV5`, against the ciphertexts it recomputed, and signs a canonical settlement
+statement naming case, binding, asset, release identity, transcript, coalition and both bits, only
+if it obtains those bits. The verifier rebuilds that statement and requires a quorum of signatures.
+
+No new crypto: `CombineReleaseBitV5` and the canonical signing shape already existed. No new
+authority: the signers are the same operators, with the keys the manifest already publishes. No
+threshold encoding reimplemented in TypeScript.
+
+Two properties made explicit in code rather than assumed. `SignSettlementStatement` requires the
+domain prefix and a message longer than 32 bytes, while threshold statements are signed over a bare
+32-byte digest, so neither signature can be replayed as the other. And sharing the quorum's shares
+for these two ciphertexts grants no new capability: the operator contributed one, and the shares
+decrypt those two ciphertexts only.
+
+Three existing tests then failed, which was the fix working: they mutated the bits, and mutation now
+breaks the signatures. Two were rebuilt on a genuinely released non-conflicting branch rather than an
+edited one, which is stronger evidence anyway. The canonical-vector check stays as defence in depth,
+now unreachable from an authentically signed result.

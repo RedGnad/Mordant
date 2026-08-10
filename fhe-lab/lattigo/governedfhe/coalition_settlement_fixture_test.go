@@ -48,7 +48,8 @@ func TestEmitCoalitionSettlementFixture(t *testing.T) {
 		t.Fatal("MORDANT_COALITION_FIXTURE_OUT must be absolute")
 	}
 
-	fixture := newCoalitionFixture(t, true)
+	conflicting := os.Getenv("MORDANT_COALITION_FIXTURE_BRANCH") != "no-conflict"
+	fixture := newCoalitionFixture(t, conflicting)
 	result, err := fixture.release(t, fixture.operatorRoots)
 	if err != nil {
 		t.Fatalf("coalition release: %v", err)

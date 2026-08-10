@@ -1,0 +1,100 @@
+{
+  "coalitionResult": {
+    "schemaVersion": "mordant.coalition-conflict-result/1",
+    "caseId": "sha256:b11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
+    "caseBindingDigest": "sha256:d43a022c948983e32380eeeaf7df0d814db1243a97400acf4e534283467405da",
+    "assetIdentity": "sha256:7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+    "serviceId": "mordant.private-pledge-matching",
+    "serviceVersion": 1,
+    "policyId": "sha256:a9e039b95a56043532bcc1d7a8c1bb0086fc64d50adcb35ff54f54ee59fb6e65",
+    "policyVersion": 1,
+    "circuitId": "mordant.identity-full-fhe-256",
+    "circuitVersion": 5,
+    "circuitDigest": "sha256:2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+    "parameterProfile": "mordant.bgv.identity-full-fhe-256.n15/v1",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "participantArtifactDigests": [
+      "sha256:f7b7cbcbfd8d5549a33f777c0ee8be99ed6bf6a17778906364dcf887b18410f3",
+      "sha256:6601f3b8e8c04aeb7f08b3ea4f9109ab79bc3bf584ade0dc0a9d8abc6a4664d7"
+    ],
+    "enrollmentDigestA": "0x55ccdaf94a741920e22917a623c2d037604b08729b14850ce959bc503e1a096a",
+    "enrollmentDigestB": "0x2a91ccf86c6dfd96f1e005db85a3e53e159353710e92e17985168469d36ddd2f",
+    "evaluatedArtifactDigest": "sha256:f53373d1c6d7ea3ed017c4a1e04033ef40c8709f845c3e928af89839de43780d",
+    "sameEconomicAsset": true,
+    "policyConflict": false,
+    "releaseMode": "coalition-v5",
+    "releaseAuthorityId": "sha256:1dfb1a62be424e14ad41ac05e31ccb119bb01905973b33e1c32fcd7284d79c5a",
+    "threshold": 2,
+    "coalition": [
+      1,
+      2
+    ],
+    "operatorTopology": "colocated-single-process",
+    "operatorStatements": [
+      {
+        "point": 1,
+        "slot": 0,
+        "statementDigest": "0x0e4f719675a1881f79903a39705d87fd02914ba430e56a1c98c3724bf09990d7",
+        "signature": "0x6018659b12bb308621e847c3bf9ebebd039f3d350064ba4fa37c96fb5e32f43cce07b21ffa48f959d448d73832649554d08dea6c172f6e79d899ec06dd58b80a"
+      },
+      {
+        "point": 1,
+        "slot": 1,
+        "statementDigest": "0xe99c1cfd838274f461cf91b5674ac1c7441dab5f83187fe9aab5e93fb8e8bc70",
+        "signature": "0xbc3f82575cfdc12f36bfe8c0f51b21224b4745c6715e77cca7aa9495f7ae30b0e3a49cc22ca025966d7159278de21ba401e6f54584b1c92ff457447cf594c107"
+      },
+      {
+        "point": 2,
+        "slot": 0,
+        "statementDigest": "0xe84ccff9fb08157495f894c51bd89547ba5654df2bcfc1dc2aa43fb62212251b",
+        "signature": "0x416749340e94db2656bc075b006e4a959f2701b5b367946e59bcbff98193cc1c5ac0fd64ee360fd15ddef1144d52edf84d6cb12b4ec0b661ae9cf4b9b84e2a02"
+      },
+      {
+        "point": 2,
+        "slot": 1,
+        "statementDigest": "0xdba93893e049f5b9c05ee43a0dd80c99516d9e2a13cb96448c8cd367aa6b7171",
+        "signature": "0xff9e5bf62f8eafeddb67d6aacd5dc0576e95c8b681cf4fe2784c216c454fa45cd61538dec34be4863d932194f36fc7603a9b96ed4233f6e060e17a6f8e00fe0f"
+      }
+    ],
+    "releaseTranscript": "0xa8ab32b386432ed5724476ea8c9dabb9324d91d351050821e60ee29a6ac7e61e",
+    "settlementAttestations": [
+      {
+        "point": 1,
+        "signature": "TEafAyQAX/d5AvXLM1NQOVWiO/8cdAKcUu6zFNzCGoWXwXF+lwPmz9aupanoVrf9P9jlDNjUC8zzf6wfYUXIAQ=="
+      },
+      {
+        "point": 2,
+        "signature": "WbcBizSLdjrp7xSSX0WeENb0uVFEQ7BG+/6/6ZMlJmtjRRbMV39s6UUHyIUFQmcFJbxMlGEun3TT8tq6VuLjCg=="
+      }
+    ],
+    "runtimeFingerprint": "0x94443a81061b0b124be318692571d5846f94a7b4828e41e21f37c7253aaf2855",
+    "recomputedByAllOfQuorum": true,
+    "releasedAtUnix": 1786386333,
+    "sourceProvenance": "sha256:f98a250a4afefd7108fe88d35b34b9893bc07213cc26f045a216de51e557416b"
+  },
+  "thresholdManifest": {
+    "schemaVersion": "mordant.fhe-coalition-threshold-manifest/1",
+    "caseId": "sha256:b11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
+    "keyId": "sha256:2c1c6b433cfd0bc83f9a35541eb17ef7c55ca1905a1791d7d93031c9249a5ae3",
+    "parameterFingerprint": "sha256:d0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+    "threshold": 2,
+    "operators": [
+      {
+        "operatorId": "sha256:5a21621abcca9e996e0002986119701d155d2d8af65495c97c61cd58860991b9",
+        "point": 1,
+        "signingPublicKey": "vf7y1AppC7x8oH8fGABj7/nYiGm1yCrmxKqLoPGrnig="
+      },
+      {
+        "operatorId": "sha256:758525e9be9064936c1fa927847710d7af06a3c03e1c4092f88cb9a997d2e498",
+        "point": 2,
+        "signingPublicKey": "LccAFvrRrh95QoZN66GWXxAcOPlH/xwpjEdAYO3tfWU="
+      },
+      {
+        "operatorId": "sha256:941b95d5bfa5c58f4abd5c1f9bc8dc097a38672e77406d2e1e5150b5db8c0ac9",
+        "point": 3,
+        "signingPublicKey": "Atgj62nINVSgWS9N1NkXnoZt4/m+gh+pampIpuXBeo4="
+      }
+    ],
+    "operatorTopology": "colocated-single-process"
+  }
+}

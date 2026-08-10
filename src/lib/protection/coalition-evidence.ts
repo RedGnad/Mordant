@@ -57,6 +57,12 @@ export type CoalitionThresholdManifest = Readonly<{
   operatorTopology: string;
 }>;
 
+/** One operator's signature over the statement it verified for itself. */
+export type CoalitionSettlementAttestation = Readonly<{
+  point: number;
+  signature: string;
+}>;
+
 export type CoalitionOperatorStatement = Readonly<{
   point: number;
   slot: number;
@@ -78,8 +84,44 @@ export type CoalitionConflictResult = Readonly<{
   operatorTopology: string;
   operatorStatements: readonly CoalitionOperatorStatement[];
   releaseTranscript: string;
+  settlementAttestations: readonly CoalitionSettlementAttestation[];
+  policyId: string;
+  serviceId: string;
   [field: string]: unknown;
 }>;
+
+const SETTLEMENT_STATEMENT_SCHEMA = "mordant.coalition-settlement-statement/1" as const;
+const SETTLEMENT_STATEMENT_DOMAIN = "MordantCoalitionSettlementStatement/v1" as const;
+
+/**
+ * Rebuilds the exact statement one operator signed, in Go's field order.
+ *
+ * Every field is read from the result, so editing any of them here moves the
+ * message and breaks every signature over it. That is the whole binding: an
+ * operator's release share is generated before the bits exist and cannot attest
+ * them, so this statement is the only thing tying a published key to a value.
+ */
+function settlementStatementMessage(result: CoalitionConflictResult, point: number): Buffer {
+  const statement = {
+    schemaVersion: SETTLEMENT_STATEMENT_SCHEMA,
+    caseId: result.caseId,
+    caseBindingDigest: result.caseBindingDigest,
+    assetIdentity: result.assetIdentity,
+    releaseAuthorityId: result.releaseAuthorityId,
+    releaseMode: result.releaseMode,
+    releaseTranscript: result.releaseTranscript,
+    coalition: [...result.coalition],
+    threshold: result.threshold,
+    sameEconomicAsset: result.sameEconomicAsset,
+    policyConflict: result.policyConflict,
+    point,
+  };
+  return Buffer.concat([
+    Buffer.from(SETTLEMENT_STATEMENT_DOMAIN),
+    Buffer.of(0),
+    Buffer.from(JSON.stringify(statement)),
+  ]);
+}
 
 export type VerifiedCoalitionEvidence = Readonly<{
   facts: GovernedResultFacts;
@@ -159,15 +201,19 @@ function assertManifest(manifest: CoalitionThresholdManifest): void {
  * released bits are present, and the combination the circuit cannot produce is
  * refused.
  *
- * **What this does not establish.** The binding of each operator statement to
- * *this* release is not re-derived here. An operator signs the digest of a
- * statement built from the threshold descriptor it recomputed, and that binding
- * is checked in the release path, by the combiner, before any result exists.
- * Re-deriving it in TypeScript would mean reimplementing the threshold
- * encoding in a second language, and a second implementation that drifts is
- * worse than one that is trusted for a stated reason. So this verifier proves
- * the quorum is authentic and the identity is the manifest's; it relies on the
- * release path for the statements being about this release.
+ * **The binding to this release.** A release share is generated before any bit
+ * exists, so nothing signed during the release can attest what the bits turned
+ * out to be. Each serving operator therefore recombines both bits for itself
+ * after the release and signs a settlement statement naming this case, this
+ * release identity, this transcript and those two bits. This verifier rebuilds
+ * that statement from the result and checks a quorum of those signatures, so a
+ * result edited after production fails here even when every signature it carries
+ * is authentic.
+ *
+ * **What this still does not establish.** The threshold statement digests are
+ * not recomputed here, which would mean reimplementing the threshold encoding in
+ * a second language. They are checked by the combiner in the release path. The
+ * settlement statements above are what carry the binding downstream.
  */
 export function verifyCoalitionEvidence(
   result: CoalitionConflictResult,
@@ -234,6 +280,41 @@ export function verifyCoalitionEvidence(
     if (slots === undefined || !slots.has(0) || !slots.has(1)) {
       fail("STATEMENT_COVERAGE", `operator ${point} did not attest both released bits`);
     }
+  }
+
+  // The binding. Each serving operator signed a statement naming this case, this
+  // release and these two bits, and it signed only after recombining the bits
+  // itself. Rebuilding that statement here and checking the signatures is what
+  // makes an edited result detectable: change a bit, the case, the release
+  // identity or the transcript and every signature over it fails, however
+  // authentic the signatures themselves are.
+  const confirmed = new Set<number>();
+  for (const attestation of result.settlementAttestations ?? []) {
+    if (!serving.has(attestation.point)) {
+      fail("SETTLEMENT_ATTRIBUTION", "a settlement attestation names an operator outside the serving coalition");
+    }
+    if (confirmed.has(attestation.point)) {
+      fail("SETTLEMENT_REPLAY", "one operator confirmed the release twice");
+    }
+    const publicKey = keyByPoint.get(attestation.point);
+    if (publicKey === undefined) fail("SETTLEMENT_ATTRIBUTION", "a settlement attestation names an unpublished operator");
+    const signature = Buffer.from(attestation.signature, "base64");
+    if (signature.length !== 64 || signature.toString("base64") !== attestation.signature) {
+      fail("SETTLEMENT_ENCODING", "a settlement attestation signature is not canonical");
+    }
+    if (!verify(null, settlementStatementMessage(result, attestation.point), ed25519PublicKey(publicKey), signature)) {
+      fail(
+        "SETTLEMENT_SIGNATURE",
+        `operator ${attestation.point} did not confirm this case, this release and these released bits`,
+      );
+    }
+    confirmed.add(attestation.point);
+  }
+  if (confirmed.size < result.threshold) {
+    fail(
+      "SETTLEMENT_QUORUM",
+      `only ${confirmed.size} of the required ${result.threshold} operators confirmed the released bits`,
+    );
   }
 
   // H-02. The policy conjunction has identity equality as a factor, so this

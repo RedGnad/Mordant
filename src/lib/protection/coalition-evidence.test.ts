@@ -1,4 +1,5 @@
 import { deepStrictEqual, ok, strictEqual, throws } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -21,6 +22,41 @@ import {
 const evidence = JSON.parse(
   readFileSync(join(process.cwd(), "contracts/test/fixtures/coalition-evidence.json"), "utf8"),
 ) as { thresholdManifest: CoalitionThresholdManifest; coalitionResult: CoalitionConflictResult };
+
+/** Mirrors the verifier's own derivation so a test can keep it intact on purpose. */
+function thresholdManifestDigestForTest(manifest: MutableManifest): string {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        schemaVersion: manifest.schemaVersion,
+        caseId: manifest.caseId,
+        keyId: manifest.keyId,
+        parameterFingerprint: manifest.parameterFingerprint,
+        threshold: manifest.threshold,
+        operators: manifest.operators.map((operator) => ({
+          operatorId: operator.operatorId,
+          point: operator.point,
+          signingPublicKey: operator.signingPublicKey,
+        })),
+        operatorTopology: manifest.operatorTopology,
+      }),
+    )
+    .digest("hex")}`;
+}
+
+const noConflictEvidence = JSON.parse(
+  readFileSync(join(process.cwd(), "contracts/test/fixtures/coalition-evidence-no-conflict.json"), "utf8"),
+) as { thresholdManifest: CoalitionThresholdManifest; coalitionResult: CoalitionConflictResult };
+
+/** The genuinely released non-conflicting branch, verified as produced. */
+function verifyNoConflict() {
+  return verifyCoalitionEvidence(
+    noConflictEvidence.coalitionResult,
+    noConflictEvidence.thresholdManifest,
+    RESULT_DIGEST,
+    RUN_ID,
+  );
+}
 
 const RESULT_DIGEST = `0x${"11".repeat(32)}`;
 const RUN_ID = `0x${"22".repeat(32)}`;
@@ -115,20 +151,29 @@ test("every serving operator must attest both released bits", () => {
   });
 });
 
-test("a policy conflict without an asset match cannot have come from the circuit", () => {
-  refuses("NON_CANONICAL_DECISION", ({ result }) => {
-    result.sameEconomicAsset = false;
-    result.policyConflict = true;
-  });
+test("a policy conflict without an asset match is refused", () => {
+  // The canonical-vector check remains as defence in depth, but a result edited
+  // into that shape now fails at the settlement binding first: the operators
+  // confirmed the bits they recombined, and these are not those bits.
+  throws(
+    () =>
+      verify(({ result }) => {
+        result.sameEconomicAsset = false;
+        result.policyConflict = true;
+      }),
+    (error: unknown) =>
+      error instanceof CoalitionEvidenceError &&
+      (error.code === "SETTLEMENT_SIGNATURE" || error.code === "NON_CANONICAL_DECISION"),
+  );
 });
 
-test("an asset match without a policy conflict verifies and settles nothing", () => {
-  const verified = verify(({ result }) => {
-    result.sameEconomicAsset = true;
-    result.policyConflict = false;
-  });
-  strictEqual(verified.facts.conflict, false, "the plan must see no conflict");
+test("a real asset match without a policy conflict verifies and settles nothing", () => {
+  // A genuinely released non-conflicting branch, not an edited one: the same
+  // receivable on both sides with windows that do not meet.
+  const verified = verifyNoConflict();
   strictEqual(verified.sameEconomicAsset, true, "the asset fact survives as evidence");
+  strictEqual(verified.policyConflict, false);
+  strictEqual(verified.facts.conflict, false, "the plan must see no conflict");
 });
 
 test("the verified facts carry exactly the fields the settlement plan consumes", () => {
@@ -151,17 +196,20 @@ test("the verified facts carry exactly the fields the settlement plan consumes",
  * result and takes every economic term from the pre-committed profile. What the
  * coalition changes is only which identity the profile commits to.
  */
-function coalitionProfile(releaseAuthorityId: string): SettlementProfile {
+function coalitionProfile(
+  releaseAuthorityId: string,
+  source: CoalitionConflictResult = evidence.coalitionResult,
+): SettlementProfile {
   return Object.freeze({
     schemaVersion: "mordant.settlement-profile/2",
     profileId: "mordant.coalition.test-profile",
     profileVersion: 1,
     caseBinding: Object.freeze({
       runId: RUN_ID,
-      caseId: evidence.coalitionResult.caseId,
-      caseBindingDigest: evidence.coalitionResult.caseBindingDigest,
+      caseId: source.caseId,
+      caseBindingDigest: source.caseBindingDigest,
       protectionBindingDigest: `sha256:${"ee".repeat(32)}`,
-      releaseMode: evidence.coalitionResult.releaseMode,
+      releaseMode: source.releaseMode,
     }),
     participantConfig: Object.freeze({ path: "docs/evidence/coalition.json", sha256: `sha256:${"dd".repeat(32)}` }),
     committedAtUnix: 1_786_000_000,
@@ -209,13 +257,84 @@ test("a profile committed to another coalition refuses this release", () => {
 });
 
 test("a coalition release with no policy conflict authorizes no settlement", () => {
-  const verified = verify(({ result }) => {
-    result.policyConflict = false;
-  });
-  const profile = coalitionProfile(verified.coalitionAuthorityId);
+  const verified = verifyNoConflict();
+  const profile = coalitionProfile(verified.coalitionAuthorityId, noConflictEvidence.coalitionResult);
   const committed = settlementProfileDigest(profile);
   throws(
     () => deriveSettlementPlan(profile, committed, verified.facts),
     (error: unknown) => error instanceof SettlementAuthorityError && error.code === "NO_CONFLICT",
   );
+});
+
+// -------------------------------------------------------------- the binding
+
+/**
+ * The property the settlement authority must have: a coalition result edited
+ * after production is detectable, without trusting whoever wrote the file.
+ *
+ * Every case below leaves all supplied Ed25519 signatures authentic. What breaks
+ * is the message they were made over.
+ */
+test("flipping a released bit is refused although every signature is authentic", () => {
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    result.policyConflict = !result.policyConflict;
+    result.sameEconomicAsset = true;
+  });
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    result.sameEconomicAsset = false;
+    result.policyConflict = false;
+  });
+});
+
+test("moving the release to another case or binding is refused", () => {
+  refuses("SETTLEMENT_SIGNATURE", ({ manifest, result }) => {
+    const moved = `sha256:${"41".repeat(32)}`;
+    result.caseId = moved;
+    manifest.caseId = moved;
+    // Keep the identity derivation intact so the failure is the binding, not it.
+    result.releaseAuthorityId = thresholdManifestDigestForTest(manifest);
+  });
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    result.caseBindingDigest = `sha256:${"42".repeat(32)}`;
+  });
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    result.assetIdentity = `sha256:${"43".repeat(32)}`;
+  });
+});
+
+test("substituting another release's transcript is refused", () => {
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    result.releaseTranscript = `0x${"44".repeat(32)}`;
+  });
+});
+
+test("a confirmation cannot be moved between operators", () => {
+  refuses("SETTLEMENT_SIGNATURE", ({ result }) => {
+    const [first, second] = result.settlementAttestations;
+    result.settlementAttestations = [
+      { point: first.point, signature: second.signature },
+      { point: second.point, signature: first.signature },
+    ];
+  });
+});
+
+test("a quorum of confirmations is required, not one", () => {
+  refuses("SETTLEMENT_QUORUM", ({ result }) => {
+    result.settlementAttestations = [result.settlementAttestations[0]];
+  });
+  refuses("SETTLEMENT_QUORUM", ({ result }) => {
+    result.settlementAttestations = [];
+  });
+  refuses("SETTLEMENT_REPLAY", ({ result }) => {
+    result.settlementAttestations = [result.settlementAttestations[0], result.settlementAttestations[0]];
+  });
+});
+
+test("a confirmation from outside the serving coalition does not count", () => {
+  refuses("SETTLEMENT_ATTRIBUTION", ({ result }) => {
+    result.settlementAttestations = [
+      result.settlementAttestations[0],
+      { point: 99, signature: result.settlementAttestations[1].signature },
+    ];
+  });
 });

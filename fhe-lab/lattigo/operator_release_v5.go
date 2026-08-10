@@ -1,6 +1,7 @@
 package lattigospike
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/subtle"
 	"errors"
@@ -599,4 +600,104 @@ func requireCanonicalReleaseVector(decoded []uint64) error {
 		}
 	}
 	return nil
+}
+
+/* ------------------------------------------------- settlement confirmation */
+
+// CoalitionSettlementDomain prefixes the one message an operator will sign
+// outside the threshold protocol.
+//
+// It exists so that SignSettlementStatement is not a signing oracle. A threshold
+// statement is signed over a bare 32-byte digest; a settlement statement must
+// carry this prefix and is therefore longer and structurally distinct, so no
+// settlement signature can ever be replayed as a threshold statement or the
+// reverse.
+const CoalitionSettlementDomain = "MordantCoalitionSettlementStatement/v1\x00"
+
+// ErrSettlementStatementRejected reports an operator that would not confirm the
+// released bits it was shown.
+var ErrSettlementStatementRejected = errors.New("operator refuses to confirm the released bits")
+
+// SignSettlementStatement signs a domain-prefixed settlement statement with this
+// operator's published key.
+//
+// The caller supplies the exact bytes because the statement's schema belongs to
+// the product layer, not the threshold layer. What this enforces is only that
+// the bytes cannot be anything the threshold protocol would accept.
+func (o *ThresholdOperator) SignSettlementStatement(message []byte) ([ed25519.SignatureSize]byte, error) {
+	var signature [ed25519.SignatureSize]byte
+	if o == nil || len(o.signingKey) != ed25519.PrivateKeySize {
+		return signature, ErrInvalidThresholdOperator
+	}
+	if len(message) <= 32 || !bytes.HasPrefix(message, []byte(CoalitionSettlementDomain)) {
+		return signature, ErrInvalidThresholdOperator
+	}
+	copy(signature[:], ed25519.Sign(o.signingKey, message))
+	return signature, nil
+}
+
+// ConfirmReleasedBits recombines both released bits from the quorum's shares,
+// against the ciphertexts THIS operator recomputed, and signs the settlement
+// statement only if it obtains exactly the bits it was shown.
+//
+// This is what binds an operator's key to a released value. Its release share is
+// generated before any bit exists, so no signature produced during the release
+// can attest what the bits turned out to be. Without this second step a verifier
+// downstream can authenticate the quorum but must take the combining
+// coordinator's word for what the quorum's shares actually decrypted to.
+//
+// It grants no new capability. The shares are key-switch shares for these two
+// ciphertexts only, this operator contributed one of them, and holding the
+// quorum's shares for a ciphertext the quorum agreed to release reveals only the
+// bit this operator helped release. It does not touch the collective secret.
+func (operator *ReleaseOperatorV5) ConfirmReleasedBits(
+	params bgv.Parameters,
+	manifest ThresholdManifest,
+	request OperatorReleaseRequestV5,
+	verdict OperatorVerdictV5,
+	sameAssetShares []ThresholdReleaseResponse,
+	policyConflictShares []ThresholdReleaseResponse,
+	claimedSameAsset bool,
+	claimedPolicyConflict bool,
+	statement []byte,
+) ([ed25519.SignatureSize]byte, error) {
+	var signature [ed25519.SignatureSize]byte
+	if operator == nil || !verdict.Accepted || verdict.outputs == nil {
+		return signature, ErrOperatorCheckFailed
+	}
+	sameAsset, err := operator.recombine(params, manifest, request, verdict.outputs.SameEconomicAsset, sameAssetShares, 0)
+	if err != nil {
+		return signature, err
+	}
+	policyConflict, err := operator.recombine(params, manifest, request, verdict.outputs.PolicyConflict, policyConflictShares, 1)
+	if err != nil {
+		return signature, err
+	}
+	if sameAsset != claimedSameAsset || policyConflict != claimedPolicyConflict {
+		return signature, fmt.Errorf("%w: recombined (%t,%t), was shown (%t,%t)",
+			ErrSettlementStatementRejected, sameAsset, policyConflict, claimedSameAsset, claimedPolicyConflict)
+	}
+	return operator.threshold.SignSettlementStatement(statement)
+}
+
+func (operator *ReleaseOperatorV5) recombine(
+	params bgv.Parameters,
+	manifest ThresholdManifest,
+	request OperatorReleaseRequestV5,
+	ciphertext *rlwe.Ciphertext,
+	responses []ThresholdReleaseResponse,
+	slot uint8,
+) (bool, error) {
+	descriptor, err := ReleaseDescriptorForSlot(request.Descriptor, ciphertext, request.Coalition, slot, manifest.KeyID)
+	if err != nil {
+		return false, err
+	}
+	released, transcript, err := CombineReleaseBitV5(params, descriptor, manifest, ciphertext, responses)
+	if err != nil {
+		return false, err
+	}
+	if transcript == ([32]byte{}) {
+		return false, ErrInsufficientShare
+	}
+	return released, nil
 }
