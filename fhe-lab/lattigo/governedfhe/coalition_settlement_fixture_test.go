@@ -103,7 +103,27 @@ func TestEmitCoalitionSettlementFixture(t *testing.T) {
 	if err := os.WriteFile(destination, append(encoded, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("wrote coalition settlement fixture to %s", destination)
+	// The evidence the settlement authority verifies: the published manifest and
+	// the released result, exactly as the case holds them. Emitted verbatim so
+	// the TypeScript verifier is exercised against real bytes rather than a
+	// re-serialization.
+	resultBytes, err := os.ReadFile(filepath.Join(fixture.publicRoot, coalitionResultObject))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := map[string]json.RawMessage{
+		"thresholdManifest": json.RawMessage(raw),
+		"coalitionResult":   json.RawMessage(resultBytes),
+	}
+	evidenceEncoded, err := json.MarshalIndent(evidence, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidencePath := filepath.Join(filepath.Dir(destination), "coalition-evidence.json")
+	if err := os.WriteFile(evidencePath, append(evidenceEncoded, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("wrote coalition settlement fixture to %s and evidence to %s", destination, evidencePath)
 }
 
 func hexOfDigest(value Digest) string {

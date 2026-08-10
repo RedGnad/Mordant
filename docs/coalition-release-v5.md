@@ -93,3 +93,50 @@ The deployed case adapter fixes `expectedGovernedReleaseAuthorityId` to a single
 authority ID. A coalition has no such identity, so **a coalition result cannot currently be settled
 on chain**. This is a contract-level change and it is the blocker for the settlement increment. It
 is deliberately not worked around by routing the coalition back through a single authority key.
+
+## Settling a coalition release
+
+A coalition result reaches an economic consequence through the same three legs as a governed one,
+with one identity replaced.
+
+**Settlement authority.** `verifyCoalitionEvidence` replaces the single Ed25519 check. It recomputes
+the threshold manifest's digest and requires the result to name it, so the release identity is
+*derived* rather than read; requires the serving coalition to be the manifest's own operators at or
+above its quorum, with no repeated point; and verifies each operator statement's Ed25519 signature
+against the key the manifest publishes for that point. Operator statements are plain signatures over
+a 32-byte statement digest, so this needs no reimplementation of the threshold encoding.
+
+It returns the same `GovernedResultFacts` the governed path produces, so **`deriveSettlementPlan` is
+unchanged**. It still reads exactly one field from the result, `policyConflict`, and takes every
+economic term from the pre-committed profile. `sameEconomicAsset` never becomes an economic input.
+
+**Bridge.** Unchanged. The attestor is a secp256k1 signer of the EIP-712 payload, never the release
+identity, and it signs only after the coalition evidence has been verified.
+
+**Adapter.** `MordantCoalitionAdapter`, deployed per case as V2 already was. It pins the threshold
+manifest digest and the required quorum, carries both released bits, and refuses the vector the
+circuit cannot produce.
+
+| | Governed | Coalition |
+|---|---|---|
+| Off-chain check | one Ed25519 signature | quorum of operator signatures against the manifest |
+| Release identity | authority key identifier | threshold manifest digest |
+| Plan input from the result | `conflict` | `policyConflict` |
+| Economics | pre-committed profile | pre-committed profile, unchanged |
+
+### What the off-chain verifier does not establish
+
+The binding of each operator statement to *this* release is not re-derived in TypeScript. An
+operator signs the digest of a statement built from the threshold descriptor it recomputed, and that
+binding is checked by the combiner in the release path, before any result exists. Re-deriving it
+here would mean reimplementing the threshold encoding in a second language, and a second
+implementation that drifts is worse than one trusted for a stated reason.
+
+So the verifier establishes that the identity is the manifest's and that the quorum is authentic. It
+relies on the release path for the statements being about this release.
+
+### Executed locally, not deployed
+
+The contract is exercised against a real 2-of-3 spine release: the Foundry suite reads the digests a
+coalition run actually produced. **It has not been deployed to testnet.** Deploying a case adapter
+needs a funded deployer, and that decision is separate from this work.
