@@ -341,8 +341,8 @@ function harness(root: string, options: Partial<{ apass: (wallet: string) => Pro
   const orchestrator: AdmissionOrchestrator = {
     createNeutralParticipantCase: async () => ({ runId: RUN_ID }),
     readCustomSupervisedCase: async () => view(stage.value),
-    readParticipantAdmissionContext: async () => ({
-      participantSigningKeys: { PARTICIPANT_A: STUB_KEY_A, PARTICIPANT_B: STUB_KEY_B },
+    readParticipantAdmissionContext: async (_runId: string, role: "PARTICIPANT_A" | "PARTICIPANT_B") => ({
+      participantSigningKey: role === "PARTICIPANT_A" ? STUB_KEY_A : STUB_KEY_B,
       runId: RUN_ID,
       stage: stage.value as never,
       fheCaseId: FHE_CASE_ID,
@@ -636,15 +636,16 @@ test("the challenge is server-issued and carries no operator input", async () =>
     assert.equal(challenge.message.participantWallet, CANONICAL_PARTICIPANTS.holderA);
     // The wallet is asked to authorize a key that already exists. Without this
     // the admission and the enrollments would remain two unlinked identities.
-    const context = await dependencies.orchestrator.readParticipantAdmissionContext(RUN_ID);
+    const contextA = await dependencies.orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A");
+    const contextB = await dependencies.orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_B");
     assert.equal(
       challenge.message.participantSigningKeyDigest,
-      participantSigningKeyDigest(context.participantSigningKeys.PARTICIPANT_A),
+      participantSigningKeyDigest(contextA.participantSigningKey),
       "the challenge must name the key the case will publish for this role",
     );
     assert.notEqual(
       challenge.message.participantSigningKeyDigest,
-      participantSigningKeyDigest(context.participantSigningKeys.PARTICIPANT_B),
+      participantSigningKeyDigest(contextB.participantSigningKey),
       "each role authorizes its own key",
     );
     assert.match(challenge.message.authorizationNonce as string, /^0x[0-9a-f]{64}$/u);

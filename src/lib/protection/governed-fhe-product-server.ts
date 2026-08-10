@@ -1683,8 +1683,14 @@ export type ParticipantAdmissionContext = Readonly<{
    *
    * `rawParticipantKey` returns a retained key when one exists, so calling it
    * here and again at creation yields the same key rather than a second one.
+   *
+   * Only the requesting role's key. The other role's key is none of this
+   * challenge's business, and touching it is actively wrong once that role has
+   * submitted: its key is consumed and deleted by design at submission, so
+   * materialising it would either resurrect a key nobody re-authorized or, with
+   * the admitted-key guard in place, fail a request that is perfectly valid.
    */
-  participantSigningKeys: Readonly<Record<"PARTICIPANT_A" | "PARTICIPANT_B", string>>;
+  participantSigningKey: string;
 }>;
 
 function assertDirectParticipantAdmissionEnabled(runtime: ProtectionRuntime): void {
@@ -1705,24 +1711,21 @@ function assertDirectParticipantAdmissionEnabled(runtime: ProtectionRuntime): vo
 async function readParticipantAdmissionContextRuntime(
   runtime: ProtectionRuntime,
   runId: string,
+  role: "PARTICIPANT_A" | "PARTICIPANT_B",
 ): Promise<ParticipantAdmissionContext> {
   assertDirectParticipantAdmissionEnabled(runtime);
   const state = await loadState(runtime, runId, false);
   if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) {
     throw new ProtectionProductError("This case does not admit participants", 409);
   }
-  // Materialise both keys before either wallet is asked to sign. The directory
-  // is the same one case creation reads from, so the key a wallet authorizes is
-  // the key the case binding publishes.
+  // Materialise this role's key before its wallet is asked to sign. The
+  // directory is the same one case creation reads from, so the key a wallet
+  // authorizes is the key the case binding publishes.
   mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
   const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
-  const keyA = rawParticipantKey(
-    "PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation,
-    admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_A"),
-  );
-  const keyB = rawParticipantKey(
-    "PARTICIPANT_B", state.paths.participantPrivateRoot, preFoundation,
-    admittedSigningKeyDigest(runtime, state.runId, "PARTICIPANT_B"),
+  const key = rawParticipantKey(
+    role, state.paths.participantPrivateRoot, preFoundation,
+    admittedSigningKeyDigest(runtime, state.runId, role),
   );
   return Object.freeze({
     runId: state.runId,
@@ -1730,10 +1733,7 @@ async function readParticipantAdmissionContextRuntime(
     fheCaseId: state.protectionCase.fheCaseId,
     assetIdentityDigest: state.protectionCase.cleanverseAssetDigest,
     protectionBindingDigest: protectionAuthorizationBindingDigest(state),
-    participantSigningKeys: Object.freeze({
-      PARTICIPANT_A: keyA.publicBase64,
-      PARTICIPANT_B: keyB.publicBase64,
-    }),
+    participantSigningKey: key.publicBase64,
   });
 }
 
@@ -2799,7 +2799,10 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
       assertDirectParticipantAdmissionEnabled(runtime);
       return createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true);
     },
-    readParticipantAdmissionContext: (runId: string) => readParticipantAdmissionContextRuntime(runtime, runId),
+    readParticipantAdmissionContext: (
+      runId: string,
+      role: "PARTICIPANT_A" | "PARTICIPANT_B",
+    ) => readParticipantAdmissionContextRuntime(runtime, runId, role),
     admitParticipantClaim: (
       runId: string,
       role: "PARTICIPANT_A" | "PARTICIPANT_B",

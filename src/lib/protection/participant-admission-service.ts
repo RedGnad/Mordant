@@ -82,7 +82,10 @@ function fail(code: string, status: number, message: string): never {
 export type AdmissionOrchestrator = Readonly<{
   createNeutralParticipantCase: (creationRequestId?: string) => Promise<{ runId: string }>;
   readCustomSupervisedCase: (runId: string) => Promise<CustomSupervisedProtectionView>;
-  readParticipantAdmissionContext: (runId: string) => Promise<ParticipantAdmissionContext>;
+  readParticipantAdmissionContext: (
+    runId: string,
+    role: "PARTICIPANT_A" | "PARTICIPANT_B",
+  ) => Promise<ParticipantAdmissionContext>;
   preparePrivateMatch: (runId: string) => Promise<unknown>;
   admitParticipantClaim: (
     runId: string,
@@ -354,15 +357,15 @@ export async function participantAdmissionChallenge(
     claim,
     role === "PARTICIPANT_A" ? "participantA" : "participantB",
   );
-  const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId);
+  const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId, role);
   const expectedStage = role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
   if (context.stage !== expectedStage) {
     fail("ADMISSION_OUT_OF_ORDER", 409, `Participant ${role} admission is out of order`);
   }
   // The key this wallet is about to authorize. It already exists: the context
-  // materialises both keys before either wallet is asked to sign, so a wallet
+  // materialises this role's key before its wallet is asked to sign, so a wallet
   // never names a key the case has yet to choose.
-  const signingKeyDigest = participantSigningKeyDigest(context.participantSigningKeys[role]);
+  const signingKeyDigest = participantSigningKeyDigest(context.participantSigningKey);
   const issuedAt = dependencies.now();
   const typed = participantAdmissionV2TypedData({
     verifyingService: dependencies.verifyingService,
@@ -466,7 +469,7 @@ export async function admitParticipant(
     request.role === "PARTICIPANT_A" ? "participantA" : "participantB",
   );
 
-  const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId);
+  const context = await dependencies.orchestrator.readParticipantAdmissionContext(runId, request.role);
   const expectedStage = request.role === "PARTICIPANT_A" ? "MATCH_PREPARED" : "PARTICIPANT_A_SUBMITTED";
   // Do not reserve a durable role before the engine can accept it. Exact
   // retries are allowed to repair a crash after the ledger write.
@@ -487,7 +490,7 @@ export async function admitParticipant(
       protectionBindingDigest: digestToBytes32(context.protectionBindingDigest),
       assetIdentityDigest: digestToBytes32(context.assetIdentityDigest),
       role: request.role,
-      participantSigningKeyBase64: context.participantSigningKeys[request.role],
+      participantSigningKeyBase64: context.participantSigningKey,
       activeFrom: claim.activeFrom,
       activeUntil: claim.activeUntil,
       chainId: dependencies.chainId,

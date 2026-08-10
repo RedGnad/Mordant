@@ -480,7 +480,7 @@ async function admittedKeyCase() {
   await orchestrator.createNeutralParticipantCase(RUN_ID);
   // Reading the context is what mints the keys: under the V2 ordering the key
   // has to exist before the wallet can name it in a signature.
-  await orchestrator.readParticipantAdmissionContext(RUN_ID);
+  await orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A");
   const keyPath = join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519");
   const minted = readFileSync(keyPath);
   writeVerifiedDurableAdmission(base, "PARTICIPANT_A", admission({
@@ -493,7 +493,7 @@ test("an admitted key that has gone missing fails closed instead of being remint
   const { orchestrator, keyPath } = await admittedKeyCase();
   unlinkSync(keyPath);
   await assert.rejects(
-    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A"),
     (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
   );
   assert.equal(existsSync(keyPath), false, "the refusal must not have minted a replacement");
@@ -503,7 +503,7 @@ test("an admitted key that has been truncated fails closed instead of being remi
   const { orchestrator, keyPath, minted } = await admittedKeyCase();
   writeFileSync(keyPath, minted.subarray(0, 31));
   await assert.rejects(
-    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A"),
     (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
   );
   assert.equal(readFileSync(keyPath).length, 31, "the refusal must not have overwritten the damaged key");
@@ -521,7 +521,7 @@ test("a well-formed key substituted for the admitted one is refused", async () =
   assert.equal(substituted.length, 64);
   writeFileSync(keyPath, substituted);
   await assert.rejects(
-    () => orchestrator.readParticipantAdmissionContext(RUN_ID),
+    () => orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A"),
     (error: unknown) => error instanceof Error && /not the key that role's wallet admitted/.test(error.message),
   );
 });
@@ -532,7 +532,7 @@ test("a role with no admission yet is still free to have its key minted", async 
   const { base } = await harness();
   const orchestrator = createProtectionOrchestrator(base);
   await orchestrator.createNeutralParticipantCase(RUN_ID);
-  await orchestrator.readParticipantAdmissionContext(RUN_ID);
+  await orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A");
   assert.ok(existsSync(join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519")));
 });
 
@@ -547,4 +547,38 @@ test("the publishing path refuses an admitted key that has gone missing", async 
     (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
   );
   assert.equal(existsSync(keyPath), false, "the refusal must not have minted a replacement");
+});
+
+/**
+ * N1: the sequence, not the refusals in isolation.
+ *
+ * The F-05 controls above each check one damaged key in one call. None of them
+ * walked the real order, and that is where the guard did damage: B is admitted
+ * only after A has SUBMITTED, and A's signing key is deleted at submission
+ * because it is consumed. A challenge that materialised both roles' keys
+ * therefore met A's legitimate absence and refused B.
+ *
+ * Before the guard existed this path silently re-minted A's consumed key, which
+ * is the very substitution F-05 forbids. So the bug predates the guard; the
+ * guard only made it loud. The fix is that a challenge touches its own role's
+ * key and nothing else.
+ */
+test("B is still challengeable after A's key was consumed by A's own submission", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+
+  const contextA = await orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_A");
+  await admitVerified(orchestrator, base, "PARTICIPANT_A", admission({
+    participantSigningKeyDigest: participantSigningKeyDigest(contextA.participantSigningKey),
+  }));
+  await orchestrator.submitParticipantPledge(RUN_ID, "PARTICIPANT_A");
+
+  const keyA = join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519");
+  assert.equal(existsSync(keyA), false, "submission consumes A's signing key by design");
+
+  const contextB = await orchestrator.readParticipantAdmissionContext(RUN_ID, "PARTICIPANT_B");
+  assert.ok(contextB.participantSigningKey.length > 0, "B must still be able to be challenged");
+  assert.equal(existsSync(keyA), false, "and B's challenge must not resurrect A's consumed key");
 });
