@@ -135,7 +135,10 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
     event ReserveFunded(address indexed payer, uint256 amount, uint256 available);
     event ReserveWithdrawn(address indexed to, uint256 amount, uint256 available);
     event ReleaseConsumed(
-        bytes32 indexed runId, bool sameEconomicAsset, bool policyConflict, bytes32 coalitionResultDigest
+        bytes32 indexed runId,
+        bool sameEconomicAsset,
+        bool policyConflict,
+        bytes32 coalitionResultDigest
     );
     event CureWindowOpened(bytes32 indexed runId, uint64 cureDeadline, uint256 reserved);
     event ConflictCured(bytes32 indexed runId, uint256 released);
@@ -192,11 +195,13 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
         uint64 initialCureWindow
     ) {
         if (
-            address(initialSettlementToken) == address(0) || address(initialCviVerifier) == address(0)
-                || initialAttestor == address(0) || initialFacility == address(0) || initialOwner == address(0)
+            address(initialSettlementToken) == address(0)
+                || address(initialCviVerifier) == address(0) || initialAttestor == address(0)
+                || initialFacility == address(0) || initialOwner == address(0)
         ) revert ZeroAddress();
         if (
-            initialAssetIdentityDigest == bytes32(0) || initialExpectedCoalitionAuthorityId == bytes32(0)
+            initialAssetIdentityDigest == bytes32(0)
+                || initialExpectedCoalitionAuthorityId == bytes32(0)
                 || initialReleaseMode == bytes32(0) || initialCircuitHash == bytes32(0)
                 || initialParameterFingerprint == bytes32(0) || initialCureWindow == 0
         ) revert ZeroAmount();
@@ -249,12 +254,16 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
         nonReentrant
     {
         if (caseByRun[r.runId].state != CaseState.None) revert RunConsumed(r.runId);
-        if (resultConsumed[r.coalitionResultDigest]) revert ResultConsumed(r.coalitionResultDigest);
+        if (resultConsumed[r.coalitionResultDigest]) {
+            revert ResultConsumed(r.coalitionResultDigest);
+        }
         if (r.assetIdentityDigest != assetIdentityDigest) revert BadAsset(r.assetIdentityDigest);
         if (r.coalitionAuthorityId != expectedCoalitionAuthorityId) {
             revert CoalitionAuthorityMismatch(r.coalitionAuthorityId, expectedCoalitionAuthorityId);
         }
-        if (r.servingQuorum < requiredQuorum) revert QuorumTooSmall(r.servingQuorum, requiredQuorum);
+        if (r.servingQuorum < requiredQuorum) {
+            revert QuorumTooSmall(r.servingQuorum, requiredQuorum);
+        }
         // H-02 on chain. The circuit's policy conjunction has identity equality as a factor, so
         // this combination is unreachable. Refusing it keeps the two facts meaningful here rather
         // than letting the chain accept a vector the circuit cannot produce.
@@ -262,10 +271,15 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
             revert NonCanonicalDecision(r.sameEconomicAsset, r.policyConflict);
         }
         if (r.releaseMode != releaseMode) revert BadReleaseMode(r.releaseMode);
-        if (r.circuitHash != circuitHash || r.parameterFingerprint != parameterFingerprint) revert BadCircuit();
+        if (r.circuitHash != circuitHash || r.parameterFingerprint != parameterFingerprint) {
+            revert BadCircuit();
+        }
         if (block.timestamp > r.expiry) revert Expired(r.expiry);
         if (block.timestamp < r.issuedAt) revert NotYetIssued(r.issuedAt);
-        if (r.runId == bytes32(0) || r.coalitionResultDigest == bytes32(0) || r.releaseTranscript == bytes32(0)) {
+        if (
+            r.runId == bytes32(0) || r.coalitionResultDigest == bytes32(0)
+                || r.releaseTranscript == bytes32(0)
+        ) {
             revert ZeroAmount();
         }
 
@@ -360,7 +374,9 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
         // this is the same boundary for the same reason: an entitlement is not a
         // permission to move the token.
         _requireEligible(holder, ROLE_HOLDER);
-        if (!cviVerifier.isAssetTransferAllowed(address(settlementToken), address(this), holder, amount)) {
+        if (!cviVerifier.isAssetTransferAllowed(
+                address(settlementToken), address(this), holder, amount
+            )) {
             revert TransferPolicyDenied(holder, amount);
         }
 
@@ -393,7 +409,8 @@ contract MordantCoalitionAdapter is ReentrancyGuard {
 
     /// @notice token balance >= available + open reserved + entitled unpaid.
     function solvent() public view returns (bool) {
-        return settlementToken.balanceOf(address(this)) >= availableReserve + openReserved + entitledUnpaid;
+        return settlementToken.balanceOf(address(this))
+            >= availableReserve + openReserved + entitledUnpaid;
     }
 
     function assertSolvency() external view {

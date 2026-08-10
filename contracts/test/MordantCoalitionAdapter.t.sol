@@ -212,7 +212,9 @@ contract MordantCoalitionAdapterTest is Test {
         r.policyConflict = true;
         bytes memory signature = _sign(r, ATTESTOR_KEY);
         vm.expectRevert(
-            abi.encodeWithSelector(MordantCoalitionAdapter.NonCanonicalDecision.selector, false, true)
+            abi.encodeWithSelector(
+                MordantCoalitionAdapter.NonCanonicalDecision.selector, false, true
+            )
         );
         adapter.consumeCoalitionRelease(r, signature);
     }
@@ -255,7 +257,9 @@ contract MordantCoalitionAdapterTest is Test {
         bytes memory signature = _sign(r, ATTESTOR_KEY);
         vm.expectRevert(
             abi.encodeWithSelector(
-                MordantCoalitionAdapter.CoalitionAuthorityMismatch.selector, foreign, spine.coalitionAuthorityId
+                MordantCoalitionAdapter.CoalitionAuthorityMismatch.selector,
+                foreign,
+                spine.coalitionAuthorityId
             )
         );
         adapter.consumeCoalitionRelease(r, signature);
@@ -268,7 +272,9 @@ contract MordantCoalitionAdapterTest is Test {
         r.servingQuorum = 1;
         bytes memory signature = _sign(r, ATTESTOR_KEY);
         vm.expectRevert(
-            abi.encodeWithSelector(MordantCoalitionAdapter.QuorumTooSmall.selector, uint16(1), REQUIRED_QUORUM)
+            abi.encodeWithSelector(
+                MordantCoalitionAdapter.QuorumTooSmall.selector, uint16(1), REQUIRED_QUORUM
+            )
         );
         adapter.consumeCoalitionRelease(r, signature);
     }
@@ -276,7 +282,9 @@ contract MordantCoalitionAdapterTest is Test {
     /// @notice A quorum of one cannot even be configured.
     function testDeployingWithAQuorumOfOneIsRefused() public {
         vm.expectRevert(
-            abi.encodeWithSelector(MordantCoalitionAdapter.QuorumTooSmall.selector, uint16(1), uint16(2))
+            abi.encodeWithSelector(
+                MordantCoalitionAdapter.QuorumTooSmall.selector, uint16(1), uint16(2)
+            )
         );
         new MordantCoalitionAdapter(
             IERC20(address(token)),
@@ -366,7 +374,9 @@ contract MordantCoalitionAdapterTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(MordantCoalitionAdapter.InsufficientReserve.selector, uint256(1), uint256(0))
+            abi.encodeWithSelector(
+                MordantCoalitionAdapter.InsufficientReserve.selector, uint256(1), uint256(0)
+            )
         );
         adapter.withdrawAvailable(owner, 1);
         assertTrue(adapter.solvent(), "solvent while the liability is open");
@@ -379,14 +389,17 @@ contract MordantCoalitionAdapterTest is Test {
     /// the payout.
     function testIdentityLapsingAfterTheReleaseStopsThePayout() public {
         _fund(RESERVE);
-        MordantCoalitionAdapter.CoalitionRelease memory r = _release(keccak256("run/identity-lapse"));
+        MordantCoalitionAdapter.CoalitionRelease memory r =
+            _release(keccak256("run/identity-lapse"));
         adapter.consumeCoalitionRelease(r, _sign(r, ATTESTOR_KEY));
         vm.warp(block.timestamp + CURE_WINDOW + 1);
         adapter.finalize(r.runId);
 
         // The A-Pass behind holder A stops being valid after the result existed.
         eligibility.setEligible(holderA, 4, false);
-        vm.expectRevert(abi.encodeWithSelector(MordantCoalitionAdapter.Ineligible.selector, holderA, uint8(4)));
+        vm.expectRevert(
+            abi.encodeWithSelector(MordantCoalitionAdapter.Ineligible.selector, holderA, uint8(4))
+        );
         adapter.claim(r.runId, true);
 
         // The other holder, still eligible, is unaffected: the refusal is per identity.
@@ -409,7 +422,9 @@ contract MordantCoalitionAdapterTest is Test {
         eligibility.setAssetTransferAllowed(holderA, false);
         assertTrue(eligibility.isEligible(holderA, 4), "the identity gate still passes");
         vm.expectRevert(
-            abi.encodeWithSelector(MordantCoalitionAdapter.TransferPolicyDenied.selector, holderA, PAY_A)
+            abi.encodeWithSelector(
+                MordantCoalitionAdapter.TransferPolicyDenied.selector, holderA, PAY_A
+            )
         );
         adapter.claim(r.runId, true);
 

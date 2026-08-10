@@ -382,7 +382,7 @@ async function signedRequest(
   claim: { activeFrom: number; activeUntil: number },
   overrides: Partial<ParticipantAdmissionV2Message> = {},
 ) {
-  const authorization: ParticipantAdmissionV2Message = {
+  const admissionMessage: ParticipantAdmissionV2Message = {
     verifyingService: SERVICE,
     runId: RUN_ID,
     fheCaseId: `0x${"a".repeat(64)}`,
@@ -404,14 +404,14 @@ async function signedRequest(
     ),
     ...overrides,
   } as unknown as ParticipantAdmissionV2Message;
-  const typedData = participantAdmissionV2TypedData(authorization, CHAIN_ID);
+  const typedData = participantAdmissionV2TypedData(admissionMessage, CHAIN_ID);
   const signature = await account.signTypedData({
     domain: typedData.domain,
     types: typedData.types,
     primaryType: typedData.primaryType,
     message: typedData.message as never,
   });
-  return { caseCode, role, authorization, signature, claim };
+  return { caseCode, role, authorization: admissionMessage, signature, claim };
 }
 
 test("two distinct wallets each admit and submit only their own role", async () => {

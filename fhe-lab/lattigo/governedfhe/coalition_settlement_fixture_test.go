@@ -157,17 +157,28 @@ pragma solidity ^0.8.28;
 /// Regenerate with:
 ///   MORDANT_COALITION_FIXTURE_OUT=<abs path to test/fixtures/coalition-settlement.json> ///     go test -run TestEmitCoalitionSettlementFixture ./governedfhe/
 library CoalitionSettlementFixture {
-    bytes32 internal constant FHE_CASE_ID = %s;
-    bytes32 internal constant CASE_BINDING_DIGEST = %s;
-    bytes32 internal constant ASSET_IDENTITY_DIGEST = %s;
-    bytes32 internal constant COALITION_RESULT_DIGEST = %s;
-    bytes32 internal constant RELEASE_TRANSCRIPT = %s;
-    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_A = %s;
-    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_B = %s;
-    bytes32 internal constant COALITION_AUTHORITY_ID = %s;
-    bytes32 internal constant RELEASE_MODE = %s;
-    bytes32 internal constant CIRCUIT_DIGEST = %s;
-    bytes32 internal constant PARAMETER_FINGERPRINT = %s;
+    bytes32 internal constant FHE_CASE_ID =
+        %s;
+    bytes32 internal constant CASE_BINDING_DIGEST =
+        %s;
+    bytes32 internal constant ASSET_IDENTITY_DIGEST =
+        %s;
+    bytes32 internal constant COALITION_RESULT_DIGEST =
+        %s;
+    bytes32 internal constant RELEASE_TRANSCRIPT =
+        %s;
+    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_A =
+        %s;
+    bytes32 internal constant PARTICIPANT_ARTIFACT_DIGEST_B =
+        %s;
+    bytes32 internal constant COALITION_AUTHORITY_ID =
+        %s;
+    bytes32 internal constant RELEASE_MODE =
+        %s;
+    bytes32 internal constant CIRCUIT_DIGEST =
+        %s;
+    bytes32 internal constant PARAMETER_FINGERPRINT =
+        %s;
     uint16 internal constant SERVING_QUORUM = %d;
     bool internal constant SAME_ECONOMIC_ASSET = %t;
     bool internal constant POLICY_CONFLICT = %t;
