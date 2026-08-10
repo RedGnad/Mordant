@@ -599,3 +599,98 @@ exactly this work. It was not taken, for two reasons. It is used across the suit
 "some other mode" in refusal tests, so promoting it to a known mode would silently delete those
 tests' meaning. And it hardcodes the quorum in the identifier, which becomes a lie the first time
 the threshold changes. `coalition-v5` names the property that matters, not today's parameters.
+
+---
+
+# L3 — settling a coalition release
+
+## D25 — The seam was already right; only the identity changed
+
+`deriveSettlementPlan` carries the comment "this is the only place where a governed result meets
+committed economics, and it reads exactly one field from the result". That separation is what L3 had
+to preserve, and preserving it turned out to require **no change to it at all**. The profile already
+accepts a release authority as `sha256:<hex>` or `0x<hex>` and compares case-insensitively, so
+committing the threshold manifest digest works unchanged.
+
+What changed is one leg upstream: `verifyGovernedResultSignature` checks one Ed25519 signature, and
+a coalition has no such key. `verifyCoalitionEvidence` replaces it and returns the same
+`GovernedResultFacts`.
+
+The enabling discovery was in the threshold layer: an operator's statement signature is
+`ed25519.Sign(key, StatementDigest[:])`, a plain signature over 32 bytes the result already
+publishes. Verifying a quorum in TypeScript therefore needs no reimplementation of the threshold
+encoding, which is what would have made a second implementation a drift risk.
+
+## D26 — Adapter V3 rather than reusing the deployed one
+
+The deployed adapter compares `expectedGovernedReleaseAuthorityId` as data and never verifies a
+signature, so a coalition digest would fit its logic untouched. It was still not reused, for two
+reasons.
+
+The immutable's name and NatSpec say "the Ed25519 governed release authority". Putting a coalition
+manifest digest behind that name would be a field that lies, in a codebase whose whole discipline is
+that names do not. And V2's single `conflict` Boolean has exactly the shape H-02 identifies as
+unable to distinguish "different receivable" from "same receivable, no policy conflict".
+
+A case-specific adapter is already the deployment pattern, not a workaround: the reviewed V2 doc
+states a per-case deployment is required because the release authority is minted per case. A new
+version is therefore the normal cost, not an escalation.
+
+`MordantCoalitionAdapter` pins the manifest digest and the required quorum, carries both bits,
+refuses `(sameEconomicAsset=false, policyConflict=true)`, and refuses a quorum of one **at
+deployment** rather than only at release. Every economic control is byte-identical to V2 so the two
+can be diffed.
+
+## D27 — The proof uses the spine's own digests
+
+The Foundry suite reads a fixture emitted by a real 2-of-3 coalition release rather than synthetic
+keccaks. A test on synthetic values would show the contract is internally consistent; it would not
+show that what the spine releases is what this adapter settles.
+
+The fixture's `circuitDigest` and `parameterFingerprint` equal the immutables read from the deployed
+adapter on chain, which is an independent cross-check that the coalition ran the circuit and
+parameters that contract pins.
+
+`fs_permissions` was added to `foundry.toml`, read-only and scoped to `./test/fixtures`.
+
+## D28 — L3 status
+
+**True and tested.** 14 Foundry tests, including the whole path from reserve through consume, cure
+window, finalize and both claims, with solvency asserted throughout. 12 TypeScript tests over the
+real evidence, including the unchanged `deriveSettlementPlan` producing a plan whose identity is the
+coalition's and whose economics are the profile's. 322 contract tests still pass.
+
+**Not true, and not claimed.** The adapter is executed locally, not deployed to testnet. The
+TypeScript verifier does not re-derive each statement's binding to this release. Operator process
+independence and institutional decentralization remain undelivered.
+
+## D29 — The binding gap, and why it needed a second round
+
+Review found that the settlement verifier authenticated a quorum of signatures over opaque statement
+digests and then read `sameEconomicAsset` and `policyConflict` straight from the result. It could not
+detect a result edited after production. The finding was correct, and I had flagged the same gap
+without closing it.
+
+The constraint that shapes the fix: **an operator generates its release share before any bit
+exists.** That is what a threshold is for. No signature produced during the release can attest a
+value, so the gap was not a missing encoding, it was a temporal impossibility.
+
+**Fix: a short second round.** After combination, each serving operator recombines both bits itself
+with `CombineReleaseBitV5`, against the ciphertexts it recomputed, and signs a canonical settlement
+statement naming case, binding, asset, release identity, transcript, coalition and both bits, only
+if it obtains those bits. The verifier rebuilds that statement and requires a quorum of signatures.
+
+No new crypto: `CombineReleaseBitV5` and the canonical signing shape already existed. No new
+authority: the signers are the same operators, with the keys the manifest already publishes. No
+threshold encoding reimplemented in TypeScript.
+
+Two properties made explicit in code rather than assumed. `SignSettlementStatement` requires the
+domain prefix and a message longer than 32 bytes, while threshold statements are signed over a bare
+32-byte digest, so neither signature can be replayed as the other. And sharing the quorum's shares
+for these two ciphertexts grants no new capability: the operator contributed one, and the shares
+decrypt those two ciphertexts only.
+
+Three existing tests then failed, which was the fix working: they mutated the bits, and mutation now
+breaks the signatures. Two were rebuilt on a genuinely released non-conflicting branch rather than an
+edited one, which is stronger evidence anyway. The canonical-vector check stays as defence in depth,
+now unreachable from an authentically signed result.

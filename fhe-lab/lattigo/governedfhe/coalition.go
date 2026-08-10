@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"encoding/hex"
+	"encoding/json"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
@@ -182,10 +183,14 @@ type CoalitionConflictResult struct {
 	// transcript commitment over the whole release. The signatures are what let
 	// a third party check that this coalition actually attested, rather than
 	// taking the coordinator's word that it verified them.
-	OperatorStatements      []CoalitionOperatorStatement `json:"operatorStatements"`
-	ReleaseTranscript       string                       `json:"releaseTranscript"`
-	RuntimeFingerprint      string                       `json:"runtimeFingerprint"`
-	RecomputedByAllOfQuorum bool                         `json:"recomputedByAllOfQuorum"`
+	OperatorStatements []CoalitionOperatorStatement `json:"operatorStatements"`
+	ReleaseTranscript  string                       `json:"releaseTranscript"`
+	// One per serving operator, each signed only after that operator recombined
+	// the released bits for itself. This is what ties an operator's published key
+	// to a value rather than to a share.
+	SettlementAttestations  []CoalitionSettlementAttestation `json:"settlementAttestations"`
+	RuntimeFingerprint      string                           `json:"runtimeFingerprint"`
+	RecomputedByAllOfQuorum bool                             `json:"recomputedByAllOfQuorum"`
 
 	ReleasedAtUnix   int64  `json:"releasedAtUnix"`
 	SourceProvenance Digest `json:"sourceProvenance"`
@@ -454,7 +459,7 @@ func (d *CoalitionDecryptor) Release(expected EvaluatedConflictArtifact) (Coalit
 	if err != nil {
 		return result, nil, err
 	}
-	sameAsset, policyConflict, statements, err := releaseCoalitionBits(runtime.Params, thresholdManifest.thresholdManifest(), quorum, request)
+	sameAsset, policyConflict, statements, shares, err := releaseCoalitionBits(runtime.Params, thresholdManifest.thresholdManifest(), quorum, request)
 	if err != nil {
 		return result, nil, err
 	}
@@ -498,6 +503,36 @@ func (d *CoalitionDecryptor) Release(expected EvaluatedConflictArtifact) (Coalit
 		ReleasedAtUnix:             d.config.Now.Unix(),
 		SourceProvenance:           d.config.Provenance,
 	}
+
+	// The confirmation round. Each serving operator recombines both released bits
+	// for itself, against the ciphertexts it recomputed, and signs a statement
+	// naming this case, this release and those bits only if it obtains them.
+	//
+	// This is the binding a release share cannot carry: a share is generated
+	// before any bit exists, which is the point of a threshold. Without this
+	// round a downstream verifier authenticates the quorum and then has to trust
+	// whoever combined the shares for what they decrypted to.
+	attestations := make([]CoalitionSettlementAttestation, 0, len(quorum))
+	for _, held := range quorum {
+		statement := coalitionSettlementStatement(result, held.point)
+		message, messageErr := statement.signingMessage()
+		if messageErr != nil {
+			return CoalitionConflictResult{}, nil, fmt.Errorf("%w: %v", ErrCoalition, messageErr)
+		}
+		signature, confirmErr := held.operator.ConfirmReleasedBits(
+			runtime.Params, thresholdManifest.thresholdManifest(), request, held.verdict,
+			shares[0], shares[1], sameAsset, policyConflict, message,
+		)
+		if confirmErr != nil {
+			return CoalitionConflictResult{}, nil, fmt.Errorf(
+				"%w: operator %d would not confirm the released bits: %v", ErrCoalition, held.point, confirmErr)
+		}
+		attestations = append(attestations, CoalitionSettlementAttestation{
+			Point: held.point, Signature: append([]byte(nil), signature[:]...),
+		})
+	}
+	result.SettlementAttestations = attestations
+
 	_, encoded, err := d.publicStore.createJSON(coalitionResultObject, result)
 	if err != nil {
 		return CoalitionConflictResult{}, nil, err
@@ -695,14 +730,15 @@ func releaseCoalitionBits(
 	manifest fhe.ThresholdManifest,
 	quorum []*coalitionOperator,
 	request fhe.OperatorReleaseRequestV5,
-) (bool, bool, []CoalitionOperatorStatement, error) {
+) (bool, bool, []CoalitionOperatorStatement, [2][]fhe.ThresholdReleaseResponse, error) {
+	var shares [2][]fhe.ThresholdReleaseResponse
 	sameShares := make([]fhe.ThresholdReleaseResponse, 0, len(quorum))
 	conflictShares := make([]fhe.ThresholdReleaseResponse, 0, len(quorum))
 	statements := make([]CoalitionOperatorStatement, 0, len(quorum)*2)
 	for _, held := range quorum {
 		same, conflict, err := held.operator.ReleaseShares(request, held.verdict, time.Now())
 		if err != nil {
-			return false, false, nil, fmt.Errorf("%w: operator %d refused to share: %v", ErrCoalition, held.point, err)
+			return false, false, nil, shares, fmt.Errorf("%w: operator %d refused to share: %v", ErrCoalition, held.point, err)
 		}
 		sameShares = append(sameShares, same)
 		conflictShares = append(conflictShares, conflict)
@@ -720,24 +756,25 @@ func releaseCoalitionBits(
 	}
 	outputs := quorum[0].verdict.RecomputedOutputs()
 	if outputs == nil || outputs.SameEconomicAsset == nil || outputs.PolicyConflict == nil {
-		return false, false, nil, fmt.Errorf("%w: quorum carries no recomputed outputs", ErrCoalition)
+		return false, false, nil, shares, fmt.Errorf("%w: quorum carries no recomputed outputs", ErrCoalition)
 	}
 	sameAsset, err := combineCoalitionBit(params, manifest, request, outputs.SameEconomicAsset, sameShares, 0)
 	if err != nil {
-		return false, false, nil, fmt.Errorf("%w: sameEconomicAsset: %v", ErrCoalition, err)
+		return false, false, nil, shares, fmt.Errorf("%w: sameEconomicAsset: %v", ErrCoalition, err)
 	}
 	policyConflict, err := combineCoalitionBit(params, manifest, request, outputs.PolicyConflict, conflictShares, 1)
 	if err != nil {
-		return false, false, nil, fmt.Errorf("%w: policyConflict: %v", ErrCoalition, err)
+		return false, false, nil, shares, fmt.Errorf("%w: policyConflict: %v", ErrCoalition, err)
 	}
 	// H-02 is the reason both bits are released. It is not a reason to invent a
 	// business consequence for their combination here: the two facts are
 	// reported as they were released, and what they mean is a policy question
 	// answered elsewhere.
 	if policyConflict && !sameAsset {
-		return false, false, nil, fmt.Errorf("%w: policy conflict without asset match", ErrCoalition)
+		return false, false, nil, shares, fmt.Errorf("%w: policy conflict without asset match", ErrCoalition)
 	}
-	return sameAsset, policyConflict, statements, nil
+	shares[0], shares[1] = sameShares, conflictShares
+	return sameAsset, policyConflict, statements, shares, nil
 }
 
 func combineCoalitionBit(
@@ -878,4 +915,84 @@ func writeCoalitionOperatorBundles(roots []string, material *fhe.ColocatedCeremo
 		}
 	}
 	return nil
+}
+
+/* ---------------------------------------------- settlement statement binding */
+
+// CoalitionSettlementStatementSchema versions the one statement an operator
+// signs about a released value.
+const CoalitionSettlementStatementSchema = "mordant.coalition-settlement-statement/1"
+
+// CoalitionSettlementStatementDomain is the signing domain, without the trailing
+// separator that signCanonical adds.
+const CoalitionSettlementStatementDomain = "MordantCoalitionSettlementStatement/v1"
+
+// CoalitionSettlementStatement is what binds an operator's published key to the
+// bits that were actually released.
+//
+// The release shares cannot carry this. An operator generates its share before
+// any bit exists, which is the point of a threshold, so nothing it signs during
+// the release can attest what the bits turned out to be. Without this statement
+// a downstream verifier can authenticate the quorum and must then take the
+// combining coordinator's word for the values.
+//
+// Every field a downstream verifier needs to rebuild independently is here, and
+// nothing else. It carries no economic term: what a released conflict is worth
+// comes from the pre-committed settlement profile and never from this.
+type CoalitionSettlementStatement struct {
+	SchemaVersion      string   `json:"schemaVersion"`
+	CaseID             Digest   `json:"caseId"`
+	CaseBindingDigest  Digest   `json:"caseBindingDigest"`
+	AssetIdentity      Digest   `json:"assetIdentity"`
+	ReleaseAuthorityID Digest   `json:"releaseAuthorityId"`
+	ReleaseMode        string   `json:"releaseMode"`
+	ReleaseTranscript  string   `json:"releaseTranscript"`
+	Coalition          []uint64 `json:"coalition"`
+	Threshold          uint16   `json:"threshold"`
+	SameEconomicAsset  bool     `json:"sameEconomicAsset"`
+	PolicyConflict     bool     `json:"policyConflict"`
+	/// The operator attesting. Each serving operator signs its own statement, so
+	/// a signature cannot be moved between points.
+	Point uint64 `json:"point"`
+}
+
+// CoalitionSettlementAttestation is one operator's signature over its statement.
+type CoalitionSettlementAttestation struct {
+	Point     uint64 `json:"point"`
+	Signature []byte `json:"signature"`
+}
+
+// signingMessage is the exact byte string the operator signs, in the same
+// domain-separated shape signCanonical uses everywhere else in this package.
+func (s CoalitionSettlementStatement) signingMessage() ([]byte, error) {
+	encoded, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+	message := make([]byte, 0, len(CoalitionSettlementStatementDomain)+1+len(encoded))
+	message = append(message, []byte(CoalitionSettlementStatementDomain)...)
+	message = append(message, 0)
+	message = append(message, encoded...)
+	return message, nil
+}
+
+// coalitionSettlementStatement builds the statement one operator will sign.
+func coalitionSettlementStatement(
+	result CoalitionConflictResult,
+	point uint64,
+) CoalitionSettlementStatement {
+	return CoalitionSettlementStatement{
+		SchemaVersion:      CoalitionSettlementStatementSchema,
+		CaseID:             result.CaseID,
+		CaseBindingDigest:  result.CaseBindingDigest,
+		AssetIdentity:      result.AssetIdentity,
+		ReleaseAuthorityID: result.ReleaseAuthorityID,
+		ReleaseMode:        result.ReleaseMode,
+		ReleaseTranscript:  result.ReleaseTranscript,
+		Coalition:          append([]uint64(nil), result.Coalition...),
+		Threshold:          result.Threshold,
+		SameEconomicAsset:  result.SameEconomicAsset,
+		PolicyConflict:     result.PolicyConflict,
+		Point:              point,
+	}
 }

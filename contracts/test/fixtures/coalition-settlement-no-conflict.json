@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "mordant.coalition-settlement-fixture/1",
+  "fheCaseId": "0xb11cd43ae71072e2e03bdc6eaf63afc34dfd39e5cfd3e4463af86c3f1a240f62",
+  "caseBindingDigest": "0xd43a022c948983e32380eeeaf7df0d814db1243a97400acf4e534283467405da",
+  "assetIdentityDigest": "0x7613136ebe7efb777c78cdf8bd73a5a3e5604b005875e05e1427cce9dbc4c95c",
+  "coalitionResultDigest": "0xc3dda3a68ae9879c8886e5c6ca962f04cc909f23f052f6fb3809d2abd1f36ccc",
+  "releaseTranscript": "0xa8ab32b386432ed5724476ea8c9dabb9324d91d351050821e60ee29a6ac7e61e",
+  "participantArtifactDigestA": "0xf7b7cbcbfd8d5549a33f777c0ee8be99ed6bf6a17778906364dcf887b18410f3",
+  "participantArtifactDigestB": "0x6601f3b8e8c04aeb7f08b3ea4f9109ab79bc3bf584ade0dc0a9d8abc6a4664d7",
+  "coalitionAuthorityId": "0x1dfb1a62be424e14ad41ac05e31ccb119bb01905973b33e1c32fcd7284d79c5a",
+  "servingQuorum": 2,
+  "coalition": [
+    1,
+    2
+  ],
+  "releaseMode": "0x3e9aa502ff816920edf9c2ccd76b26b04c99aa481ff8977d681068163943ff11",
+  "circuitDigest": "0x2c16603974671e3de32f9023f0e205bedeb0e0553e663d12c37e42822aaddf2e",
+  "parameterFingerprint": "0xd0f85e99048a71163f218e8a6e12e7c21ddd5188527ae637a3b9cd16ff7c25d6",
+  "sameEconomicAsset": true,
+  "policyConflict": false,
+  "operatorTopology": "colocated-single-process"
+}

@@ -93,3 +93,69 @@ The deployed case adapter fixes `expectedGovernedReleaseAuthorityId` to a single
 authority ID. A coalition has no such identity, so **a coalition result cannot currently be settled
 on chain**. This is a contract-level change and it is the blocker for the settlement increment. It
 is deliberately not worked around by routing the coalition back through a single authority key.
+
+## Settling a coalition release
+
+A coalition result reaches an economic consequence through the same three legs as a governed one,
+with one identity replaced.
+
+**Settlement authority.** `verifyCoalitionEvidence` replaces the single Ed25519 check. It recomputes
+the threshold manifest's digest and requires the result to name it, so the release identity is
+*derived* rather than read; requires the serving coalition to be the manifest's own operators at or
+above its quorum, with no repeated point; and verifies each operator statement's Ed25519 signature
+against the key the manifest publishes for that point. Operator statements are plain signatures over
+a 32-byte statement digest, so this needs no reimplementation of the threshold encoding.
+
+It returns the same `GovernedResultFacts` the governed path produces, so **`deriveSettlementPlan` is
+unchanged**. It still reads exactly one field from the result, `policyConflict`, and takes every
+economic term from the pre-committed profile. `sameEconomicAsset` never becomes an economic input.
+
+**Bridge.** Unchanged. The attestor is a secp256k1 signer of the EIP-712 payload, never the release
+identity, and it signs only after the coalition evidence has been verified.
+
+**Adapter.** `MordantCoalitionAdapter`, deployed per case as V2 already was. It pins the threshold
+manifest digest and the required quorum, carries both released bits, and refuses the vector the
+circuit cannot produce.
+
+| | Governed | Coalition |
+|---|---|---|
+| Off-chain check | one Ed25519 signature | quorum of operator signatures against the manifest |
+| Release identity | authority key identifier | threshold manifest digest |
+| Plan input from the result | `conflict` | `policyConflict` |
+| Economics | pre-committed profile | pre-committed profile, unchanged |
+
+### The binding to the released value
+
+A release share is generated **before any bit exists**, which is the point of a threshold. Nothing
+an operator signs during the release can therefore attest what the bits turned out to be, and a
+verifier that stopped at those signatures would authenticate the quorum and then have to trust
+whoever combined the shares.
+
+So the release has a short second round. Each serving operator recombines both bits for itself, with
+`CombineReleaseBitV5` against the ciphertexts it recomputed, and signs a settlement statement naming
+the case, the case binding, the asset, the release identity, the transcript, the coalition and those
+two bits. It signs only if it obtains the bits it was shown.
+
+The settlement authority rebuilds that statement from the result and requires a quorum of valid
+signatures over it. **A result edited after production fails there even when every signature it
+carries is authentic**, because the message they were made over has moved. Flipping a bit, moving
+the release to another case or binding, substituting another transcript, moving a confirmation
+between operators, or supplying fewer confirmations than the quorum are each refused, and each has
+its own test.
+
+This grants no new capability. The shares are key-switch shares for those two ciphertexts, the
+operator contributed one of them, and holding the quorum's shares for a ciphertext the quorum agreed
+to release reveals only the bit it helped release. The collective secret is untouched.
+`SignSettlementStatement` is not a signing oracle either: a settlement message must carry its domain
+prefix and exceed 32 bytes, while a threshold statement is signed over a bare 32-byte digest, so
+neither can be replayed as the other.
+
+**Still not re-derived in TypeScript**: the threshold statement digests. Reimplementing that encoding
+in a second language would risk drift; the combiner checks them in the release path, and the
+settlement statements above are what carry the binding downstream.
+
+### Executed locally, not deployed
+
+The contract is exercised against a real 2-of-3 spine release: the Foundry suite reads the digests a
+coalition run actually produced. **It has not been deployed to testnet.** Deploying a case adapter
+needs a funded deployer, and that decision is separate from this work.
