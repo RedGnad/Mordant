@@ -535,3 +535,16 @@ test("a role with no admission yet is still free to have its key minted", async 
   await orchestrator.readParticipantAdmissionContext(RUN_ID);
   assert.ok(existsSync(join(base.runRoot!, RUN_ID, "participant-private", "participant_a.ed25519")));
 });
+
+test("the publishing path refuses an admitted key that has gone missing", async () => {
+  // The other call site, and the more dangerous one: this is where the key is
+  // written into the case spec. A remint here would publish an unauthorized key
+  // as the case's own, so the refusal has to hold on this path too.
+  const { orchestrator, keyPath } = await admittedKeyCase();
+  unlinkSync(keyPath);
+  await assert.rejects(
+    () => orchestrator.preparePrivateMatch(RUN_ID),
+    (error: unknown) => error instanceof Error && /already admitted/.test(error.message),
+  );
+  assert.equal(existsSync(keyPath), false, "the refusal must not have minted a replacement");
+});
