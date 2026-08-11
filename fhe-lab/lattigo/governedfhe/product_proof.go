@@ -163,7 +163,7 @@ func (binding MordantProtectionBinding) Validate() error {
 		binding.HolderSnapshot[0] != (ProductHolderAllocation{HolderID: "HOLDER_A", ProtectedUnits: "60000000", AllocationBPS: 6000}) ||
 		binding.HolderSnapshot[1] != (ProductHolderAllocation{HolderID: "HOLDER_B", ProtectedUnits: "40000000", AllocationBPS: 4000}) ||
 		binding.HolderAllocationDigest != allocation || binding.FHECaseID != caseID ||
-		binding.GovernedReleaseMode != ReleaseModeGovernedDecryptor ||
+		!knownReleaseMode(binding.GovernedReleaseMode) ||
 		!nonzero(binding.CleanverseAssetRecordDigest, binding.PolicyID, binding.HolderAllocationDigest, binding.CaseNonce, binding.FHECaseID) {
 		return ErrBinding
 	}
