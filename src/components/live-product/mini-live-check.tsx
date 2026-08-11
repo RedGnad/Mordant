@@ -14,7 +14,7 @@ import {
   MINI_TIMELINE_MIN,
   MiniClaimTimeline,
 } from "./mini-claim-timeline";
-import type { ManagedWorkerView } from "./managed-intake-adapter";
+import { COALITION_CUSTOM_VIEW_SCHEMA, type ManagedWorkerView } from "./managed-intake-adapter";
 import {
   ManagedResponseRejected,
   readManagedRun,
@@ -65,6 +65,16 @@ const EXECUTION_PHASES = [
   "BGV evaluation completed",
   "Governed result released",
 ] as const;
+
+/**
+ * The release phase is named for the runtime that actually serves the run: a
+ * coalition view (schema V3) releases through the 2-of-3 operator quorum, so
+ * "Governed result released" would misname its authority.
+ */
+function executionPhaseLabels(view: ManagedWorkerView | null): readonly string[] {
+  if (view?.schemaVersion !== COALITION_CUSTOM_VIEW_SCHEMA) return EXECUTION_PHASES;
+  return [...EXECUTION_PHASES.slice(0, 3), "Result released by operator coalition"];
+}
 
 type Phase =
   | Readonly<{ kind: "IDLE" }>
@@ -561,13 +571,17 @@ export function MiniLiveCheck({
                       : "No conflict"}
                   </strong>
                   <p>
-                    {governedPolicyPlan === null
+                    {view?.governedResult?.coalition != null
                       ? verdict === "conflict"
-                        ? "The governed result establishes only that these windows conflict. Policy and human review determine what happens next."
-                        : "The governed result establishes only that these windows do not conflict. Policy and human review determine what happens next."
-                      : verdict === "conflict"
-                        ? "Conflict status entered the precommitted policy, which opened a 24-hour local demo cure path. It authorizes no legal judgment or settlement."
-                        : "The governed result establishes only that these windows do not conflict. The precommitted policy selects record-and-close; it does not authorize legal judgment or settlement."}
+                        ? "A 2-of-3 operator coalition released two facts, separately: both pledges name the same economic asset, and their windows conflict. The bounded action is authorized and the run ends execution-ready."
+                        : "A 2-of-3 operator coalition released two facts, separately: both pledges name the same economic asset, and their windows do not conflict. No settlement can derive from a cleared check."
+                      : governedPolicyPlan === null
+                        ? verdict === "conflict"
+                          ? "The governed result establishes only that these windows conflict. Policy and human review determine what happens next."
+                          : "The governed result establishes only that these windows do not conflict. Policy and human review determine what happens next."
+                        : verdict === "conflict"
+                          ? "Conflict status entered the precommitted policy, which opened a 24-hour local demo cure path. It authorizes no legal judgment or settlement."
+                          : "The governed result establishes only that these windows do not conflict. The precommitted policy selects record-and-close; it does not authorize legal judgment or settlement."}
                   </p>
                 </>
               ) : (
@@ -576,7 +590,7 @@ export function MiniLiveCheck({
                   <strong>
                     {phase.kind === "STARTING"
                       ? "Checking A-Pass eligibility"
-                      : EXECUTION_PHASES[phaseIndex ?? 0]}
+                      : executionPhaseLabels(view)[phaseIndex ?? 0]}
                   </strong>
                   <span className={styles.elapsed} data-testid="mini-elapsed">
                     {elapsed}s elapsed
@@ -600,7 +614,7 @@ export function MiniLiveCheck({
               className={styles.executionPhases}
               aria-label="Execution phases"
             >
-              {EXECUTION_PHASES.map((label, index) => (
+              {executionPhaseLabels(view).map((label, index) => (
                 <li
                   key={label}
                   data-state={

@@ -9,6 +9,7 @@
  */
 
 import {
+  COALITION_STAGE_ORDER,
   ONCHAIN_NOT_CONNECTED,
   ausdcFromAtomic,
   buildStages,
@@ -45,7 +46,10 @@ export type ManagedWorkerStage =
   | "ABORTED";
 
 export type ManagedWorkerView = Readonly<{
-  schemaVersion: "mordant.custom-supervised-protection-view/1" | "mordant.custom-supervised-protection-view/2";
+  schemaVersion:
+    | "mordant.custom-supervised-protection-view/1"
+    | "mordant.custom-supervised-protection-view/2"
+    | "mordant.custom-supervised-protection-view/3";
   runId: string;
   executionVariant: "CUSTOM_SUPERVISED";
   stage: ManagedWorkerStage;
@@ -60,10 +64,33 @@ export type ManagedWorkerView = Readonly<{
   }>;
   participantArtifactDigests: Readonly<{ participantA: string | null; participantB: string | null }>;
   evaluatedArtifactDigest: string | null;
-  governedResult: null | Readonly<{ conflict: boolean; digest: string; releaseMode: string }>;
+  /**
+   * `conflict` is the UI branch key. For a coalition release it carries the
+   * released policy bit, while both released bits stay separately readable
+   * under `coalition`; they are never reduced to the branch key alone.
+   */
+  governedResult: null | Readonly<{
+    conflict: boolean;
+    digest: string;
+    releaseMode: string;
+    coalition?: null | Readonly<{
+      sameEconomicAsset: boolean;
+      policyConflict: boolean;
+      threshold: number;
+      coalition: readonly number[];
+      operatorTopology: string;
+    }>;
+  }>;
   recourse: null | Readonly<{ opened: boolean; reason: string | null }>;
   receipt: Readonly<Record<string, unknown>> | null;
   governedPolicy: ManagedGovernedPolicy | null;
+  /** Coalition views only: what the pre-committed settlement profile yielded. */
+  settlement?: null | Readonly<{
+    status: "EXECUTION_READY" | "NO_CONFLICT_NO_SETTLEMENT";
+    settlementProfileDigest: string;
+    planHash: string | null;
+    authorizationHash: string | null;
+  }>;
 }>;
 
 export type ManagedGovernedPolicy = Readonly<{
@@ -103,6 +130,8 @@ export type ManagedGovernedPolicy = Readonly<{
 const WORKER_SCHEMA = "mordant.live-worker/1";
 const CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/1";
 const GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/2";
+export const COALITION_CUSTOM_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/3";
+const HEX32 = /^0x[0-9a-f]{64}$/u;
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const MANAGED_POLICY_HASH = "sha256:a79e86e58de597a81d646c72434882ad60592d79fda0d6337dac4426932a225e";
@@ -381,12 +410,15 @@ function parseManagedGovernedPolicy(
 export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null {
   if (!record(value)) return null;
   const governedPolicyView = value.schemaVersion === GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA;
+  const coalitionView = value.schemaVersion === COALITION_CUSTOM_VIEW_SCHEMA;
   if (!exactRecord(value, [
     "schemaVersion", "runId", "executionVariant", "stage", "nextOperation", "terminalScenario",
     "protectionCase", "participantArtifactDigests", "evaluatedArtifactDigest", "governedResult", "recourse", "receipt",
     ...(governedPolicyView ? ["governedPolicy"] : []),
+    ...(coalitionView ? ["settlement"] : []),
   ])) return null;
-  if ((value.schemaVersion !== CUSTOM_VIEW_SCHEMA && !governedPolicyView) || value.executionVariant !== "CUSTOM_SUPERVISED") return null;
+  if ((value.schemaVersion !== CUSTOM_VIEW_SCHEMA && !governedPolicyView && !coalitionView)
+    || value.executionVariant !== "CUSTOM_SUPERVISED") return null;
   if (typeof value.runId !== "string" || !RUN_ID.test(value.runId)) return null;
   if (typeof value.stage !== "string" || !(MANAGED_STAGES as readonly string[]).includes(value.stage)) return null;
   if (value.nextOperation !== null && (typeof value.nextOperation !== "string" || value.nextOperation.length === 0 || value.nextOperation.length > 120)) return null;
@@ -404,7 +436,34 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
   }
 
   let governedResult: ManagedWorkerView["governedResult"] = null;
-  if (value.governedResult !== null) {
+  if (value.governedResult !== null && coalitionView) {
+    const raw = value.governedResult;
+    if (!exactRecord(raw, [
+      "digest", "releaseMode", "sameEconomicAsset", "policyConflict", "threshold", "coalition", "operatorTopology",
+    ])) return null;
+    if (typeof raw.digest !== "string" || !SHA256_DIGEST.test(raw.digest) || raw.releaseMode !== "coalition-v5") return null;
+    if (typeof raw.sameEconomicAsset !== "boolean" || typeof raw.policyConflict !== "boolean") return null;
+    // The combination the circuit cannot produce: the policy conjunction has
+    // identity equality as a factor.
+    if (raw.policyConflict && !raw.sameEconomicAsset) return null;
+    if (!Number.isInteger(raw.threshold) || (raw.threshold as number) < 2) return null;
+    if (!Array.isArray(raw.coalition) || raw.coalition.length !== raw.threshold
+      || raw.coalition.some((point) => !Number.isInteger(point) || (point as number) <= 0)) return null;
+    if (typeof raw.operatorTopology !== "string" || raw.operatorTopology.trim() === "" || raw.operatorTopology.length > 80) return null;
+    governedResult = Object.freeze({
+      // The branch key carries the policy bit; both released bits stay below.
+      conflict: raw.policyConflict,
+      digest: raw.digest,
+      releaseMode: raw.releaseMode,
+      coalition: Object.freeze({
+        sameEconomicAsset: raw.sameEconomicAsset,
+        policyConflict: raw.policyConflict,
+        threshold: raw.threshold as number,
+        coalition: Object.freeze([...(raw.coalition as number[])]),
+        operatorTopology: raw.operatorTopology,
+      }),
+    });
+  } else if (value.governedResult !== null) {
     if (!exactRecord(value.governedResult, ["conflict", "digest", "releaseMode"])) return null;
     if (typeof value.governedResult.conflict !== "boolean" || typeof value.governedResult.digest !== "string"
       || !SHA256_DIGEST.test(value.governedResult.digest) || value.governedResult.releaseMode !== "governed-decryptor-v1") return null;
@@ -412,7 +471,37 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
       conflict: value.governedResult.conflict,
       digest: value.governedResult.digest,
       releaseMode: value.governedResult.releaseMode,
+      coalition: null,
     });
+  }
+
+  let settlement: ManagedWorkerView["settlement"] = null;
+  if (coalitionView) {
+    // The coalition milestone ends at the verified release: no recourse, no
+    // receipt, and a settlement projection exactly when a release exists.
+    if (value.recourse !== null || value.receipt !== null || value.stage === "COMPLETE") return null;
+    if (value.settlement === null) {
+      if (governedResult !== null) return null;
+    } else {
+      if (governedResult === null || governedResult.coalition == null) return null;
+      if (!exactRecord(value.settlement, ["status", "settlementProfileDigest", "planHash", "authorizationHash"])) return null;
+      const raw = value.settlement;
+      if (typeof raw.settlementProfileDigest !== "string" || !HEX32.test(raw.settlementProfileDigest)) return null;
+      if (governedResult.coalition.policyConflict) {
+        if (raw.status !== "EXECUTION_READY") return null;
+        if (typeof raw.planHash !== "string" || !HEX32.test(raw.planHash)) return null;
+        if (typeof raw.authorizationHash !== "string" || !HEX32.test(raw.authorizationHash)) return null;
+      } else {
+        if (raw.status !== "NO_CONFLICT_NO_SETTLEMENT") return null;
+        if (raw.planHash !== null || raw.authorizationHash !== null) return null;
+      }
+      settlement = Object.freeze({
+        status: raw.status,
+        settlementProfileDigest: raw.settlementProfileDigest,
+        planHash: raw.planHash as string | null,
+        authorizationHash: raw.authorizationHash as string | null,
+      });
+    }
   }
 
   let recourse: ManagedWorkerView["recourse"] = null;
@@ -455,7 +544,9 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
   if (carriesForbiddenViewKey(value)) return null;
 
   return Object.freeze({
-    schemaVersion: governedPolicyView ? GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA : CUSTOM_VIEW_SCHEMA,
+    schemaVersion: coalitionView
+      ? COALITION_CUSTOM_VIEW_SCHEMA
+      : governedPolicyView ? GOVERNED_POLICY_CUSTOM_VIEW_SCHEMA : CUSTOM_VIEW_SCHEMA,
     runId: value.runId,
     executionVariant: "CUSTOM_SUPERVISED",
     stage: value.stage as ManagedWorkerStage,
@@ -477,6 +568,7 @@ export function parseManagedWorkerView(value: unknown): ManagedWorkerView | null
     recourse,
     receipt,
     governedPolicy,
+    settlement,
   });
 }
 
@@ -567,6 +659,29 @@ function decisionRailFor(
   governedPolicy: ManagedGovernedPolicy | null,
 ): DecisionRail | null {
   if (release === null) return null;
+  if (release.coalition != null) {
+    // coalition-v5 pins a three-operator roster (the threshold manifest's own
+    // validation refuses any other size), so "of 3" states the protocol.
+    const quorum = `${release.coalition.threshold} of 3 operators`;
+    if (release.conflict) {
+      return Object.freeze({
+        nextDecision: "Bounded action authorized",
+        responsibleNow: `Mordant managed execution · ${quorum}`,
+        deadlineIso: null,
+        deadlineNote: "No deadline applies in this managed run.",
+        consequence: "Execution-ready: the settlement plan derived from the pre-committed profile is verified and bounded. This managed run stops before any on-chain execution.",
+        receiptAvailable: false,
+      });
+    }
+    return Object.freeze({
+      nextDecision: "Record the cleared check",
+      responsibleNow: `Mordant managed execution · ${quorum}`,
+      deadlineIso: null,
+      deadlineNote: "No deadline applies.",
+      consequence: "No settlement can derive from a cleared check; the pre-committed profile stays unused.",
+      receiptAvailable: false,
+    });
+  }
   const plan = governedPolicy?.actionPlan ?? null;
   if (plan !== null && release.conflict) {
     return Object.freeze({
@@ -699,8 +814,15 @@ export function adaptManagedIntake(input: Readonly<{
 }>): LiveProductViewModel {
   const { view, capabilitySet, eligibility, wallet, claimsAuthored, elapsedSeconds } = input;
   const mode = intakeMode(capabilitySet);
-  const order: readonly ExecutionStageId[] = stageOrderFor(mode);
-  const reached = view === null || view.stage === "ABORTED" ? -1 : STAGE_INDEX[view.stage] ?? -1;
+  const coalitionView = view?.schemaVersion === COALITION_CUSTOM_VIEW_SCHEMA;
+  const order: readonly ExecutionStageId[] = coalitionView ? COALITION_STAGE_ORDER : stageOrderFor(mode);
+  // A coalition run is terminal at its verified release; its final stage is
+  // the authorized bounded action, not a recourse application.
+  const reached = view === null || view.stage === "ABORTED"
+    ? -1
+    : coalitionView && view.stage === "RELEASED"
+      ? order.indexOf("EXECUTION_READY")
+      : STAGE_INDEX[view.stage] ?? -1;
 
   const release: GovernedRelease | null = view?.governedResult ?? null;
   const governedPolicy = view?.governedPolicy === null || view?.governedPolicy === undefined
@@ -779,6 +901,7 @@ export function adaptManagedIntake(input: Readonly<{
     recourse,
     governedPolicy,
     decisionRail: decisionRailFor(release, recourse, view?.governedPolicy ?? null),
+    settlement: view?.settlement ?? null,
 
     // The on-chain capability is not qualified, so the adapter never fabricates one.
     onchain: ONCHAIN_NOT_CONNECTED,

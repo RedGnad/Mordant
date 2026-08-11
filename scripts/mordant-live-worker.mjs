@@ -89,6 +89,12 @@ export function readWorkerConfiguration(environment = process.env) {
   if (directParticipantAdmission && maxActiveCases !== 1) {
     throw new WorkerError(500, "CONFIG", "Direct participant admission requires exactly one active BGV case");
   }
+  // Opt-in only. Off, every managed case keeps the governed decryptor exactly
+  // as before; on, managed cases release through the 2-of-3 operator coalition.
+  const coalitionRelease = environment.MORDANT_WORKER_COALITION_RELEASE === "enabled";
+  if (coalitionRelease && directParticipantAdmission) {
+    throw new WorkerError(500, "CONFIG", "Coalition release and direct participant admission cannot share the one BGV slot");
+  }
   return Object.freeze({
     dataRoot: environment.MORDANT_WORKER_DATA_ROOT ?? "/data/mordant",
     tokenSecret: secret,
@@ -105,6 +111,7 @@ export function readWorkerConfiguration(environment = process.env) {
     chainId,
     /** Disabled unless an operator supplies both explicit direct-admission gates. */
     directParticipantAdmission,
+    coalitionRelease,
     retainedReceipts: positiveIntEnv(environment, "MORDANT_WORKER_RETAINED_RECEIPTS", 50),
     port: positiveIntEnv(environment, "PORT", 8080),
     version: environment.MORDANT_PROTECTION_SOURCE_COMMIT ?? "unknown",
@@ -368,6 +375,19 @@ export function progressFor(stage) {
   return LIVE_STAGES[stage] ?? "Private evaluation in progress";
 }
 
+/**
+ * A coalition run is terminal at its verified release, so its RELEASED stage
+ * is a completed state, not a verification still running. Every other view
+ * keeps the exact stage labels above.
+ */
+export function progressForView(view) {
+  if (view?.schemaVersion === "mordant.custom-supervised-protection-view/3"
+    && view.stage === "RELEASED" && view.governedResult !== null) {
+    return "Bounded action authorized";
+  }
+  return progressFor(view?.stage);
+}
+
 // ---------------------------------------------------------------- fixed journey
 
 /**
@@ -410,6 +430,27 @@ export async function runPostAdmissionJourney(orchestrator, runId, onStage) {
   return finishJourney(orchestrator, runId, step);
 }
 
+/**
+ * The coalition journey. It ends at the verified release: the released facts
+ * are verified against the published threshold manifest, the pre-committed
+ * settlement profile has yielded its plan, and the run is execution-ready.
+ * Nothing opens recourse and no receipt is sealed in this milestone, so the
+ * release itself is the terminal step.
+ */
+export async function runCoalitionJourney(orchestrator, runId, onStage) {
+  const step = async (operation) => {
+    await operation();
+    const view = await orchestrator.readCustomSupervisedCase(runId);
+    await onStage(view);
+    return view;
+  };
+  await step(() => orchestrator.preparePrivateMatch(runId));
+  await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_A"));
+  await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_B"));
+  await step(() => orchestrator.evaluatePrivateConflict(runId));
+  return step(() => orchestrator.releaseGovernedResult(runId));
+}
+
 async function finishJourney(orchestrator, runId, step) {
   await step(() => orchestrator.evaluatePrivateConflict(runId));
   await step(() => orchestrator.releaseGovernedResult(runId));
@@ -429,7 +470,19 @@ async function finishJourney(orchestrator, runId, step) {
  */
 export function pruneReproducibleArtifacts(runRoot, runId) {
   const removed = [];
-  for (const directory of ["public", "decryptor-private", "participant-private"]) {
+  // A coalition case holds its release capability in the operator bundles and
+  // their session ledgers, because it generated no case secret key. Leaving them
+  // behind would keep a finished release replayable, so they are pruned with the
+  // rest rather than being treated as ordinary working files.
+  for (const directory of [
+    "public",
+    "decryptor-private",
+    "participant-private",
+    "coalition-operator-1",
+    "coalition-operator-2",
+    "coalition-operator-3",
+    "coalition-ledger",
+  ]) {
     const target = join(runRoot, runId, directory);
     if (existsSync(target)) {
       rmSync(target, { recursive: true, force: true });
@@ -734,13 +787,16 @@ export function createLiveWorker(options) {
 
   async function persistStage(runId, view) {
     state.lastView.set(runId, view);
-    state.lastProgress.set(runId, progressFor(view.stage));
+    state.lastProgress.set(runId, progressForView(view));
   }
 
   async function admitCase(windows, nowMs) {
     const orchestrator = createOrchestrator();
     const runId = randomUUID();
-    const created = await orchestrator.createManagedGovernedPolicyCase(runId, windows);
+    const coalition = configuration.coalitionRelease === true;
+    const created = coalition
+      ? await orchestrator.createManagedCoalitionCase(runId, windows)
+      : await orchestrator.createManagedGovernedPolicyCase(runId, windows);
     if (created.runId !== runId) throw new WorkerError(500, "RUN_ID", "Case creation did not bind the generated run identifier");
     const view = await orchestrator.readCustomSupervisedCase(runId);
     await persistStage(runId, view);
@@ -751,11 +807,17 @@ export function createLiveWorker(options) {
     void (async () => {
       const started = now();
       try {
-        const terminal = await runFixedJourney(orchestrator, runId, (next) => persistStage(runId, next));
-        if (terminal?.receipt == null) throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
+        const terminal = coalition
+          ? await runCoalitionJourney(orchestrator, runId, (next) => persistStage(runId, next))
+          : await runFixedJourney(orchestrator, runId, (next) => persistStage(runId, next));
+        if (coalition) {
+          if (terminal?.governedResult == null) throw new WorkerError(500, "RELEASE", "Terminal coalition release is missing");
+        } else if (terminal?.receipt == null) {
+          throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
+        }
         const pruned = pruneReproducibleArtifacts(paths.runRoot, runId);
         await persistStage(runId, terminal);
-        state.lastProgress.set(runId, progressFor("COMPLETE"));
+        state.lastProgress.set(runId, coalition ? "Bounded action authorized" : progressFor("COMPLETE"));
         options.onComplete?.({ runId, pruned, durationMs: now() - started });
       } catch (error) {
         state.lastProgress.set(runId, "Execution stopped");
@@ -941,7 +1003,7 @@ export function createLiveWorker(options) {
       try {
         const view = await orchestrator.readCustomSupervisedCase(runId);
         state.lastView.set(runId, view);
-        return send(response, 200, liveCaseBody(view, progressFor(view.stage)), cors);
+        return send(response, 200, liveCaseBody(view, progressForView(view)), cors);
       } catch (error) {
         // While an engine operation holds the run, the last durably observed
         // view is the honest answer. It is never fabricated.

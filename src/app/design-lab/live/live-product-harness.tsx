@@ -5,9 +5,10 @@ import { useState } from "react";
 import { PublicShell } from "@/components/public-shell";
 import { adaptDirectParticipantIntake } from "@/components/live-product/direct-participant-adapter";
 import { LiveProduct, type ClaimDraft } from "@/components/live-product/live-product";
-import { adaptManagedIntake } from "@/components/live-product/managed-intake-adapter";
+import { adaptManagedIntake, parseManagedWorkerView } from "@/components/live-product/managed-intake-adapter";
 import type { ParticipantAdmissionProjection } from "@/components/live-product/participant-admission-client";
 import {
+  coalitionRawView,
   conflictView,
   noConflictView,
   onchainFixture,
@@ -91,6 +92,17 @@ function build(scenario: string, now: Date): { model: LiveProductViewModel; draf
   }
   if (scenario === "no-conflict") {
     return { model: adaptManagedIntake({ ...base, view: noConflictView(), elapsedSeconds: null }), draft: DISJOINT };
+  }
+  // The coalition fixtures are raw worker views on purpose, and the harness
+  // feeds them through the same strict parser production uses, so a fixture
+  // that drifts from the parser fails loudly here instead of only in prod.
+  if (scenario === "coalition-conflict" || scenario === "coalition-no-conflict") {
+    const parsed = parseManagedWorkerView(coalitionRawView(scenario === "coalition-conflict"));
+    if (parsed === null) throw new Error("the coalition fixture no longer satisfies the strict view parser");
+    return {
+      model: adaptManagedIntake({ ...base, view: parsed, elapsedSeconds: null }),
+      draft: scenario === "coalition-conflict" ? DRAFT : DISJOINT,
+    };
   }
   if (scenario === "busy") {
     return {

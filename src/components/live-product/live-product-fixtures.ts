@@ -149,6 +149,55 @@ export function noConflictView(): ManagedWorkerView {
   });
 }
 
+/**
+ * Terminal coalition fixtures, in the RAW worker shape (schema V3): the
+ * released bits are separate and no browser-derived branch key exists yet.
+ * They are meant to be fed through `parseManagedWorkerView`, exactly as a real
+ * worker response would be; nothing may hand them to the adapter unparsed.
+ */
+export function coalitionRawView(policyConflict: boolean): Record<string, unknown> {
+  const runId = policyConflict
+    ? "00000000-0000-4000-8000-000000000004"
+    : "00000000-0000-4000-8000-000000000005";
+  return {
+    schemaVersion: "mordant.custom-supervised-protection-view/3",
+    runId,
+    executionVariant: "CUSTOM_SUPERVISED",
+    stage: "RELEASED",
+    nextOperation: null,
+    terminalScenario: policyConflict ? "conflict" : "no-conflict",
+    protectionCase: { ...CASE, incidentState: policyConflict ? "CONFLICT_CONFIRMED" : "CLEARED", recourseState: "NOT_OPEN", cureDeadline: null },
+    participantArtifactDigests: { participantA: digest("a"), participantB: digest("b") },
+    evaluatedArtifactDigest: digest("e"),
+    governedResult: {
+      // A well-formed hex digest: this raw fixture is fed through the strict
+      // parser, which refuses anything outside [0-9a-f].
+      digest: digest("f"),
+      releaseMode: "coalition-v5",
+      sameEconomicAsset: true,
+      policyConflict,
+      threshold: 2,
+      coalition: [1, 2],
+      operatorTopology: "colocated-single-process",
+    },
+    recourse: null,
+    receipt: null,
+    settlement: policyConflict
+      ? {
+        status: "EXECUTION_READY",
+        settlementProfileDigest: `0x${"4".repeat(64)}`,
+        planHash: `0x${"5".repeat(64)}`,
+        authorizationHash: `0x${"6".repeat(64)}`,
+      }
+      : {
+        status: "NO_CONFLICT_NO_SETTLEMENT",
+        settlementProfileDigest: `0x${"4".repeat(64)}`,
+        planHash: null,
+        authorizationHash: null,
+      },
+  };
+}
+
 // ---------------------------------------------------------------- wallet fixtures
 
 export const WALLET_DISCONNECTED: WalletView = Object.freeze({

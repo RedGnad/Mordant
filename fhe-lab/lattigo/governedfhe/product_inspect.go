@@ -20,6 +20,7 @@ type ProductInspection struct {
 	FoundationPrivateComplete bool                         `json:"foundationPrivateComplete"`
 	ReleasePrivateComplete    bool                         `json:"releasePrivateComplete"`
 	Release                   *ProductReleaseInspection    `json:"release,omitempty"`
+	CoalitionRelease          *ProductCoalitionInspection  `json:"coalitionRelease,omitempty"`
 	Recourse                  *RecourseRecord              `json:"recourse,omitempty"`
 	ProtectionBindingDigest   *Digest                      `json:"protectionBindingDigest,omitempty"`
 	RecourseAttestationDigest *Digest                      `json:"recourseAttestationDigest,omitempty"`
@@ -52,6 +53,18 @@ type ProductReleaseInspection struct {
 	ResultBytes         int64               `json:"resultBytes"`
 	ExactRetry          bool                `json:"exactRetry"`
 	TrustedRecoursePins TrustedRecoursePins `json:"trustedRecoursePins"`
+}
+
+// ProductCoalitionInspection reports that a coalition result object exists and
+// is readable. The two bits are reported separately, matching the released
+// result; the quorum signatures and settlement confirmations are verified by
+// the settlement authority, not re-derived here.
+type ProductCoalitionInspection struct {
+	ResultDigest      Digest `json:"resultDigest"`
+	SameEconomicAsset bool   `json:"sameEconomicAsset"`
+	PolicyConflict    bool   `json:"policyConflict"`
+	ReleaseMode       string `json:"releaseMode"`
+	ResultBytes       int64  `json:"resultBytes"`
 }
 
 func inspectSubmission(store *objectStore, manifest FHECaseManifest, role string) (*ProductSubmissionInspection, error) {
@@ -119,7 +132,16 @@ func InspectProductCase(publicRoot string) (ProductInspection, error) {
 	}
 	bindingDigest, _ := binding.Digest()
 	temporaryManifest := FHECaseManifest{Binding: binding, Crypto: cryptoManifest}
-	if _, err := loadReleaseAuthority(publicStore, temporaryManifest); err != nil {
+	// A coalition case has no release-authority key object; its authority
+	// identity is the threshold manifest's digest, so the manifest is what must
+	// exist and agree with the binding for the foundation to be whole.
+	coalition := binding.ReleaseMode == ReleaseModeCoalitionV5
+	if coalition {
+		if _, err := loadCoalitionThresholdManifest(publicStore, binding); err != nil {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_AUTHORITY"
+			return inspection, nil
+		}
+	} else if _, err := loadReleaseAuthority(publicStore, temporaryManifest); err != nil {
 		inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_AUTHORITY"
 		return inspection, nil
 	}
@@ -177,6 +199,13 @@ func InspectProductCase(publicRoot string) (ProductInspection, error) {
 	}
 
 	if publicStore.exists(publicResultObject) {
+		// A governed result object inside a coalition case (or the reverse,
+		// below) means two release paths touched one case; nothing can decide
+		// which one to trust, so the state is ambiguous rather than picked.
+		if coalition {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "RELEASE_MODE_MISMATCH"
+			return inspection, nil
+		}
 		if inspection.Evaluation == nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "RESULT_WITHOUT_EVALUATION"
 			return inspection, nil
@@ -193,6 +222,33 @@ func InspectProductCase(publicRoot string) (ProductInspection, error) {
 		inspection.Release = &ProductReleaseInspection{
 			ResultDigest: DigestBytes(resultBytes[:len(resultBytes)-1]), Conflict: result.Conflict, ReleaseMode: result.ReleaseMode,
 			ResultBytes: resultRef.Length, ExactRetry: true, TrustedRecoursePins: recoursePinsForResult(result),
+		}
+	}
+
+	if publicStore.exists(coalitionResultObject) {
+		if !coalition {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "RELEASE_MODE_MISMATCH"
+			return inspection, nil
+		}
+		if inspection.Evaluation == nil {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "RESULT_WITHOUT_EVALUATION"
+			return inspection, nil
+		}
+		var result CoalitionConflictResult
+		resultBytes, resultRef, resultErr := publicStore.readJSON(coalitionResultObject, &result)
+		if resultErr != nil || result.SchemaVersion != CoalitionResultSchema ||
+			result.CaseID != binding.CaseID || result.CaseBindingDigest != bindingDigest ||
+			result.ReleaseMode != ReleaseModeCoalitionV5 || result.ReleaseAuthorityID != binding.ReleaseAuthorityID ||
+			!publicStore.exists(coalitionConsumedObject) {
+			inspection.Ambiguous, inspection.AmbiguousReason = true, "INCOMPLETE_RELEASE_ADMISSION"
+			return inspection, nil
+		}
+		inspection.CoalitionRelease = &ProductCoalitionInspection{
+			ResultDigest:      DigestBytes(resultBytes[:len(resultBytes)-1]),
+			SameEconomicAsset: result.SameEconomicAsset,
+			PolicyConflict:    result.PolicyConflict,
+			ReleaseMode:       result.ReleaseMode,
+			ResultBytes:       resultRef.Length,
 		}
 	}
 
@@ -286,6 +342,25 @@ func InspectPendingProductPrivate(publicRoot, privateRoot, phase string) (Produc
 		return inspection, nil
 	}
 	bindingDigest, _ := binding.Digest()
+	// A coalition case has no private decryptor material at all: its release
+	// capability lives in the operator bundles, and its release admission and
+	// terminal result are public one-shot objects. Both recovery questions are
+	// therefore answered from the public store.
+	if binding.ReleaseMode == ReleaseModeCoalitionV5 {
+		if phase == "PREPARING" {
+			if _, err := loadCoalitionThresholdManifest(publicStore, binding); err != nil {
+				inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_PRIVATE_FOUNDATION"
+				return inspection, nil
+			}
+			inspection.FoundationPrivateComplete = true
+			return inspection, nil
+		}
+		inspection.ReleaseAdmission = publicStore.exists(coalitionAdmissionObject)
+		if publicStore.exists(coalitionResultObject) && publicStore.exists(coalitionConsumedObject) {
+			inspection.ReleasePrivateComplete = true
+		}
+		return inspection, nil
+	}
 	if phase == "PREPARING" {
 		if inspectPrivateFoundation(privateStore, binding, bindingDigest) != nil {
 			inspection.Ambiguous, inspection.AmbiguousReason = true, "PARTIAL_KEYGEN_PRIVATE_FOUNDATION"

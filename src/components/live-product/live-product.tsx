@@ -509,10 +509,31 @@ export function LiveProduct({
             {conflict ? "Conflict confirmed." : "No conflict."}
           </h2>
           <p className={styles.revealLede}>
-            {conflict
-              ? "The governed result establishes only that the private claim windows conflict. The original receivable remains outstanding and intact."
-              : "The governed result establishes only that the private claim windows do not conflict. The precommitted policy selects record and close."}
+            {model.release?.coalition != null
+              ? (conflict
+                ? "The coalition release establishes two facts, separately: both encrypted pledges name the same economic asset, and their private claim windows conflict. The original receivable remains outstanding and intact."
+                : "The coalition release establishes two facts, separately: both encrypted pledges name the same economic asset, and their private claim windows do not conflict.")
+              : conflict
+                ? "The governed result establishes only that the private claim windows conflict. The original receivable remains outstanding and intact."
+                : "The governed result establishes only that the private claim windows do not conflict. The precommitted policy selects record and close."}
           </p>
+
+          {model.release?.coalition == null ? null : (
+            <dl className={styles.decisionRail} data-testid="coalition-facts">
+              <div>
+                <dt>Same economic asset</dt>
+                <dd>{model.release.coalition.sameEconomicAsset ? "Yes" : "No"}</dd>
+              </div>
+              <div>
+                <dt>Policy conflict</dt>
+                <dd>{model.release.coalition.policyConflict ? "Confirmed" : "None"}</dd>
+              </div>
+              <div>
+                <dt>Released by</dt>
+                <dd>{model.release.coalition.threshold} of 3 operators</dd>
+              </div>
+            </dl>
+          )}
 
           {managedDraft === null ? null : (
             <ClaimTimeline

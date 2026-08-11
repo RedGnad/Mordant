@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { createProtectionOrchestrator, type ProtectionRuntimeOptions } from "./governed-fhe-product-server";
 import { isPublicProtectionCaseProjection } from "./protection-presentation";
 import {
+  COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA,
   CUSTOM_SUPERVISED_VIEW_SCHEMA,
   GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
   parseCustomSupervisedProtectionView,
@@ -160,6 +161,108 @@ test("every dishonest custom view is refused", () => {
       ...releasedView(CUSTOM_RUN, true),
       receipt: { governedResult: { conflict: false } },
     },
+  };
+  for (const [name, value] of Object.entries(cases)) {
+    assert.equal(parseCustomSupervisedProtectionView(value), null, `${name} must be refused`);
+  }
+});
+
+function coalitionReleasedView(runId: string, policyConflict: boolean) {
+  const base = preReleaseView(runId);
+  return {
+    ...base,
+    schemaVersion: COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA,
+    stage: "RELEASED",
+    nextOperation: null,
+    terminalScenario: policyConflict ? "conflict" : "no-conflict",
+    protectionCase: { ...base.protectionCase, incidentState: policyConflict ? "CONFLICT_CONFIRMED" : "CLEARED" },
+    governedResult: {
+      digest: `sha256:${"c".repeat(64)}`,
+      releaseMode: "coalition-v5",
+      sameEconomicAsset: true,
+      policyConflict,
+      threshold: 2,
+      coalition: [1, 3],
+      operatorTopology: "colocated-single-process",
+    },
+    settlement: policyConflict
+      ? {
+        status: "EXECUTION_READY",
+        settlementProfileDigest: `0x${"d".repeat(64)}`,
+        planHash: `0x${"e".repeat(64)}`,
+        authorizationHash: `0x${"f".repeat(64)}`,
+      }
+      : {
+        status: "NO_CONFLICT_NO_SETTLEMENT",
+        settlementProfileDigest: `0x${"d".repeat(64)}`,
+        planHash: null,
+        authorizationHash: null,
+      },
+  };
+}
+
+test("a coalition case is created under its own view schema, with nothing released", async () => {
+  const base = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createManagedCoalitionCase(CUSTOM_RUN, structuredClone(WINDOWS));
+  const view = await orchestrator.readCustomSupervisedCase(CUSTOM_RUN);
+  assert.equal(view.schemaVersion, COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA);
+  assert.equal(view.governedResult, null);
+  if (view.schemaVersion !== COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA) assert.fail("expected the coalition view");
+  assert.equal(view.settlement, null);
+  assert.equal(view.terminalScenario, null);
+  assert.notEqual(parseCustomSupervisedProtectionView(view), null);
+});
+
+test("a released coalition view carries both bits separately and its settlement projection", () => {
+  const confirmed = parseCustomSupervisedProtectionView(coalitionReleasedView(CUSTOM_RUN, true));
+  assert.notEqual(confirmed, null);
+  if (confirmed?.schemaVersion !== COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA) assert.fail("expected the coalition view");
+  assert.equal(confirmed.governedResult?.sameEconomicAsset, true);
+  assert.equal(confirmed.governedResult?.policyConflict, true);
+  assert.equal(confirmed.settlement?.status, "EXECUTION_READY");
+  assert.equal(confirmed.terminalScenario, "conflict");
+
+  const cleared = parseCustomSupervisedProtectionView(coalitionReleasedView(CUSTOM_RUN, false));
+  assert.notEqual(cleared, null);
+  if (cleared?.schemaVersion !== COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA) assert.fail("expected the coalition view");
+  assert.equal(cleared.governedResult?.sameEconomicAsset, true);
+  assert.equal(cleared.governedResult?.policyConflict, false);
+  assert.equal(cleared.settlement?.status, "NO_CONFLICT_NO_SETTLEMENT");
+  assert.equal(cleared.settlement?.planHash, null);
+  assert.equal(cleared.terminalScenario, "no-conflict");
+});
+
+test("every dishonest coalition view is refused", () => {
+  const conflict = coalitionReleasedView(CUSTOM_RUN, true);
+  const cleared = coalitionReleasedView(CUSTOM_RUN, false);
+  const cases: Record<string, unknown> = {
+    "the bit combination the circuit cannot produce": {
+      ...conflict,
+      governedResult: { ...conflict.governedResult, sameEconomicAsset: false },
+      terminalScenario: "conflict",
+    },
+    "the two bits recompressed into one canonical Boolean": {
+      ...conflict,
+      governedResult: { ...conflict.governedResult, conflict: true },
+    },
+    "a released view without its settlement projection": { ...conflict, settlement: null },
+    "an execution-ready settlement on a cleared run": { ...cleared, settlement: conflict.settlement },
+    "a cleared settlement on a confirmed run": { ...conflict, settlement: cleared.settlement },
+    "a governed release mode inside the coalition view": {
+      ...conflict,
+      governedResult: { ...conflict.governedResult, releaseMode: "governed-decryptor-v1" },
+    },
+    "a serving coalition smaller than its quorum": {
+      ...conflict,
+      governedResult: { ...conflict.governedResult, coalition: [1] },
+    },
+    "a recourse decision in the coalition milestone": {
+      ...conflict,
+      recourse: { opened: true, reason: null },
+    },
+    "a terminal scenario disagreeing with the policy bit": { ...conflict, terminalScenario: "no-conflict" },
+    "a settlement before any release": { ...preReleaseView(CUSTOM_RUN), schemaVersion: COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA, settlement: cleared.settlement },
   };
   for (const [name, value] of Object.entries(cases)) {
     assert.equal(parseCustomSupervisedProtectionView(value), null, `${name} must be refused`);

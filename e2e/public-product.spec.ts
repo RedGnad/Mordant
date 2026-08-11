@@ -229,7 +229,7 @@ test("the compressed landing keeps the frozen hero and one truthful journey", as
     expect(hardenedProofTop).toBeGreaterThan((viewport?.height ?? 800) * 0.82);
   }
   await expect(page.getByText(
-    "The selected plan authorizes the bounded managed operation, and the sealed evidence binds its outcome back to that authorization. Settlement is not authorized in this managed run.",
+    "The private result selects only a precommitted action branch, with the exact execution boundary recorded in evidence.",
     { exact: true },
   )).toBeVisible();
   if (testInfo.project.name === "1280x800" || testInfo.project.name === "390x844") {
