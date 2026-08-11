@@ -46,7 +46,7 @@ const WALLET_B = "0x1111111111111111111111111111111111111111";
 /** Never reachable in production: the harness is the only place this is on. */
 const WITH_ONCHAIN = capabilities("MANAGED_COMBINED_INTAKE", "ONCHAIN_RECOURSE_CONNECTED");
 
-function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDraft | null; busy?: boolean } {
+function build(scenario: string, now: Date): { model: LiveProductViewModel; draft: ClaimDraft | null; busy?: boolean } {
   const base = {
     capabilitySet: MANAGED,
     eligibility: VERIFIED,
@@ -204,7 +204,7 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
 
   if (scenario.startsWith("onchain-")) {
     const phase = scenario.slice("onchain-".length).toUpperCase().replace(/-/gu, "_") as OnchainPhase;
-    const model = adaptManagedIntake({ ...base, capabilitySet: WITH_ONCHAIN, view: conflictView(), elapsedSeconds: null });
+    const model = adaptManagedIntake({ ...base, capabilitySet: WITH_ONCHAIN, view: conflictView(now), elapsedSeconds: null });
     return {
       // The adapter never fabricates an on-chain view, so the harness supplies
       // the typed fixture in its place.
@@ -212,11 +212,25 @@ function build(scenario: string): { model: LiveProductViewModel; draft: ClaimDra
       draft: DRAFT,
     };
   }
-  return { model: adaptManagedIntake({ ...base, view: conflictView(), elapsedSeconds: null }), draft: DRAFT };
+  return { model: adaptManagedIntake({ ...base, view: conflictView(now), elapsedSeconds: null }), draft: DRAFT };
 }
 
-export function LiveProductHarness({ scenario }: { readonly scenario: string }) {
-  const [{ model, draft, busy = false }] = useState(() => build(scenario));
+export function LiveProductHarness({ scenario, nowIso }: {
+  readonly scenario: string;
+  /**
+   * A caller-fixed clock. The conflict fixture derives its cure deadline from
+   * the current time, and this component is server-rendered before it hydrates,
+   * so an unpinned clock makes the server and the client disagree on the printed
+   * deadline: React reports a hydration mismatch and regenerates the tree. That
+   * is a real defect of this dev-only page, not of the product, and it is what
+   * made the surface impossible to capture deterministically.
+   */
+  readonly nowIso?: string;
+}) {
+  const [{ model, draft, busy = false }] = useState(() => build(
+    scenario,
+    nowIso === undefined ? new Date() : new Date(nowIso),
+  ));
 
   return (
     <PublicShell surface="live">
