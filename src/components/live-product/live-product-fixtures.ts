@@ -170,7 +170,9 @@ export function coalitionRawView(policyConflict: boolean): Record<string, unknow
     participantArtifactDigests: { participantA: digest("a"), participantB: digest("b") },
     evaluatedArtifactDigest: digest("e"),
     governedResult: {
-      digest: digest("g"),
+      // A well-formed hex digest: this raw fixture is fed through the strict
+      // parser, which refuses anything outside [0-9a-f].
+      digest: digest("f"),
       releaseMode: "coalition-v5",
       sameEconomicAsset: true,
       policyConflict,
