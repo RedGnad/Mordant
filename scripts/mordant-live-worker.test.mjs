@@ -1044,3 +1044,119 @@ test("a cached admission lifecycle follows the cached view's stage during the jo
   // Pre-journey stages keep the ledger's own projection.
   assert.equal(journeyLifecycle("MATCH_PREPARED", "PARTICIPANT_A_ADMITTED"), "PARTICIPANT_A_ADMITTED");
 });
+
+test("startup prunes stranded terminal coalition material and resumes an interrupted journey", async () => {
+  const config = configuration();
+  const paths = ensureWorkerLayout(config);
+  const RELEASED_RUN = "3f2504e0-4f89-11d3-9a0c-0305e82c3311";
+  const STUCK_RUN = "3f2504e0-4f89-11d3-9a0c-0305e82c3322";
+  const nowUnix = Math.floor(Date.now() / 1_000);
+
+  // A coalition case that reached its verified release but crashed before the
+  // in-process prune: the operator bundles and ledger are still on the volume.
+  mkdirSync(join(paths.runRoot, RELEASED_RUN, "coalition-operator-1"), { recursive: true });
+  mkdirSync(join(paths.runRoot, RELEASED_RUN, "coalition-ledger"), { recursive: true });
+  writeFileSync(join(paths.runRoot, RELEASED_RUN, "execution.json"), JSON.stringify({
+    runId: RELEASED_RUN,
+    stage: "RELEASED",
+    protectionCase: { releaseMode: "coalition-v5" },
+    coalitionRelease: { policyConflict: true, sameEconomicAsset: true },
+  }));
+
+  // A coalition case interrupted mid-journey after both admissions.
+  mkdirSync(join(paths.runRoot, STUCK_RUN), { recursive: true });
+  writeFileSync(join(paths.runRoot, STUCK_RUN, "execution.json"), JSON.stringify({
+    runId: STUCK_RUN,
+    stage: "EVALUATED",
+    protectionCase: { releaseMode: "coalition-v5" },
+  }));
+  writeFileSync(join(paths.caseClock, `${STUCK_RUN}.json`), JSON.stringify({
+    schemaVersion: "mordant.worker-case-clock/1", runId: STUCK_RUN, createdAtUnix: nowUnix,
+  }));
+
+  const journey = [];
+  const releasedView = {
+    schemaVersion: "mordant.custom-supervised-protection-view/3",
+    stage: "RELEASED",
+    governedResult: { releaseMode: "coalition-v5", sameEconomicAsset: true, policyConflict: false },
+    receipt: null,
+  };
+  const orchestrator = {
+    evaluatePrivateConflict: async (runId) => { journey.push(["evaluate", runId]); },
+    releaseGovernedResult: async (runId) => { journey.push(["release", runId]); },
+    openRecourseCase: async () => { throw new Error("a coalition resume must never open recourse"); },
+    readCustomSupervisedCase: async () => releasedView,
+  };
+  const worker = createLiveWorker({ configuration: config, createOrchestrator: () => orchestrator });
+  try {
+    // The stranded terminal material is gone, the durable record remains.
+    assert.equal(existsSync(join(paths.runRoot, RELEASED_RUN, "coalition-operator-1")), false);
+    assert.equal(existsSync(join(paths.runRoot, RELEASED_RUN, "coalition-ledger")), false);
+    assert.equal(existsSync(join(paths.runRoot, RELEASED_RUN, "execution.json")), true);
+    // The interrupted journey resumed from its durable stage and ended at the release.
+    for (let i = 0; i < 100 && journey.length < 2; i += 1) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(journey, [["evaluate", STUCK_RUN], ["release", STUCK_RUN]]);
+  } finally {
+    worker.server.close();
+  }
+});
+
+test("the participant readback serves its cache only while the run is held, never to mask a fault", async () => {
+  const config = configuration({
+    MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION: "enabled",
+    MORDANT_WORKER_DIRECT_PARTICIPANT_ADMISSION_ACK: "MORDANT_PARTICIPANT_ADMISSION_V1",
+  });
+  ensureWorkerLayout(config);
+  const RUN = "3f2504e0-4f89-11d3-9a0c-0305e82c3333";
+  const CODE = "ABCDEFGH23456789";
+  const view = {
+    schemaVersion: "mordant.custom-supervised-protection-view/3",
+    runId: RUN,
+    stage: "EVALUATED",
+    governedResult: null,
+    receipt: null,
+  };
+  const admissionProjection = {
+    schemaVersion: "mordant.participant-case/1",
+    caseCode: CODE,
+    runId: RUN,
+    lifecycle: "EVALUATED",
+    participantA: { admitted: true, wallet: "0x1111111111111111111111111111111111111111" },
+    participantB: { admitted: true, wallet: "0x2222222222222222222222222222222222222222" },
+    bothAdmitted: true,
+    abandoned: false,
+  };
+  let mode = "ok";
+  const admission = {
+    resolveCaseCode: () => RUN,
+    readParticipantCase: async () => {
+      if (mode === "held") { const error = new Error("operation still running"); error.status = 423; throw error; }
+      if (mode === "fault") { const error = new Error("ambiguous terminal state"); error.status = 500; throw error; }
+      return { runId: RUN, view, admission: admissionProjection };
+    },
+    admissionFailure: (error) => (error?.status === undefined ? null : { status: error.status, body: { error: error.message } }),
+  };
+  const worker = createLiveWorker({ configuration: config, createOrchestrator: () => ({}), admission });
+  worker.server.listen(0, "127.0.0.1");
+  await once(worker.server, "listening");
+  const { port } = worker.server.address();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const first = await fetch(`${base}/v1/participant-cases/${CODE}`);
+    assert.equal(first.status, 200, "a healthy read populates the cache");
+
+    mode = "held";
+    const held = await fetch(`${base}/v1/participant-cases/${CODE}`);
+    assert.equal(held.status, 200, "a held run serves the last durably observed state");
+    const heldBody = await held.json();
+    assert.equal(heldBody.view.stage, "EVALUATED");
+    assert.equal(heldBody.admission.lifecycle, "EVALUATED");
+
+    mode = "fault";
+    const fault = await fetch(`${base}/v1/participant-cases/${CODE}`);
+    assert.notEqual(fault.status, 200, "a real fault must stay visible, not be masked by the cache");
+  } finally {
+    worker.server.close();
+    await once(worker.server, "close");
+  }
+});

@@ -698,6 +698,48 @@ export function createLiveWorker(options) {
     releaseAbandonedParticipantCases(nowMs);
   }
 
+  /**
+   * H1 repair: a crash or redeploy between a terminal write and the in-process
+   * prune must not strand the reproducible roots — for a coalition case they
+   * are the operator bundles and their ledgers, the release capability itself.
+   * Terminal is durable, prune is idempotent, so sweeping at startup is safe.
+   */
+  function startupTerminalSweep() {
+    if (!existsSync(paths.runRoot)) return;
+    for (const entry of readdirSync(paths.runRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !RUN_ID.test(entry.name)) continue;
+      if (!participantCaseHasTerminalReceipt(entry.name)) continue;
+      const removed = pruneReproducibleArtifacts(paths.runRoot, entry.name);
+      if (removed.length > 0) {
+        process.stdout.write(`${JSON.stringify({ event: "startup-terminal-prune", runId: entry.name, removed })}\n`);
+      }
+    }
+  }
+
+  /**
+   * H2 repair: the post-admission journey was only ever started by the
+   * admissions route, so a restart mid-journey stranded the case until its
+   * clock expired. Both admissions and every completed step are durable; the
+   * journey's operations are idempotent from wherever the crash left them.
+   */
+  function resumeInterruptedParticipantJourneys(nowMs) {
+    if (!existsSync(paths.caseClock)) return;
+    const resumable = ["PARTICIPANT_B_SUBMITTED", "EVALUATED", "RELEASED", "RECOURSE_OPENED", "CHRONOLOGY_COMPLETE"];
+    for (const entry of readdirSync(paths.caseClock, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const runId = entry.name.slice(0, -".json".length);
+      if (!RUN_ID.test(runId)) continue;
+      if (participantCaseHasTerminalReceipt(runId) || participantCaseExpired(runId, nowMs)) continue;
+      const durable = readJson(join(paths.runRoot, runId, "execution.json"), null);
+      // A stage this far means both institutions are in and the remainder needs
+      // no participant input; a RELEASED coalition case never reaches here
+      // because the terminal check above already owns it.
+      if (durable === null || !resumable.includes(durable.stage)) continue;
+      process.stdout.write(`${JSON.stringify({ event: "journey-resumed", runId, stage: durable.stage })}\n`);
+      beginPostAdmissionJourney(runId, durable.protectionCase?.releaseMode === "coalition-v5");
+    }
+  }
+
   restoreOpenParticipantCases(now());
 
   const admissionService = () => {
@@ -997,7 +1039,10 @@ export function createLiveWorker(options) {
       } catch (error) {
         // While an engine operation holds the run (the post-admission journey
         // does, for minutes), the last durably observed view is the honest
-        // answer, exactly as on the managed route. It is never fabricated.
+        // answer, exactly as on the managed route. It is never fabricated, and
+        // it answers ONLY for the held-run refusal: any other fault must stay
+        // a visible fault rather than be masked by a stale success.
+        if (error?.status !== 423) throw error;
         const runId = admissionService().resolveCaseCode(paths.runRoot, caseCode);
         const cachedView = runId === null ? undefined : state.lastView.get(runId);
         const cachedAdmission = runId === null ? undefined : state.lastAdmission.get(runId);
@@ -1055,8 +1100,11 @@ export function createLiveWorker(options) {
       // now. It is never started with one participant, because the engine itself
       // refuses evaluation until both submissions are finalized. Which journey
       // follows is the durable case's own mode, read from its view schema,
-      // never from configuration at this later moment.
-      if (admitted.admission.bothAdmitted && !state.running.has(admitted.runId)) {
+      // never from configuration at this later moment. An exact retry of an
+      // admission on an already-terminal case repairs the ledger read and must
+      // not relaunch anything.
+      if (admitted.admission.bothAdmitted && !state.running.has(admitted.runId)
+        && !participantCaseHasTerminalReceipt(admitted.runId)) {
         beginPostAdmissionJourney(
           admitted.runId,
           admitted.view.schemaVersion === "mordant.custom-supervised-protection-view/3",
@@ -1070,7 +1118,7 @@ export function createLiveWorker(options) {
         newlyAdmitted: admitted.newlyAdmitted,
         view: admitted.view,
         admission: admitted.admission,
-        progress: progressFor(admitted.view.stage),
+        progress: progressForView(admitted.view),
       }, cors);
     }
 
@@ -1093,6 +1141,10 @@ export function createLiveWorker(options) {
 
     throw new WorkerError(404, "ROUTE", "Unknown route");
   }
+
+  // Startup repairs run once every closure they rely on is initialized.
+  startupTerminalSweep();
+  resumeInterruptedParticipantJourneys(now());
 
   const server = createServer((request, response) => {
     handle(request, response).catch((error) => {
