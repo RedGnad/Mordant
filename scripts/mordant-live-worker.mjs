@@ -429,7 +429,19 @@ async function finishJourney(orchestrator, runId, step) {
  */
 export function pruneReproducibleArtifacts(runRoot, runId) {
   const removed = [];
-  for (const directory of ["public", "decryptor-private", "participant-private"]) {
+  // A coalition case holds its release capability in the operator bundles and
+  // their session ledgers, because it generated no case secret key. Leaving them
+  // behind would keep a finished release replayable, so they are pruned with the
+  // rest rather than being treated as ordinary working files.
+  for (const directory of [
+    "public",
+    "decryptor-private",
+    "participant-private",
+    "coalition-operator-1",
+    "coalition-operator-2",
+    "coalition-operator-3",
+    "coalition-ledger",
+  ]) {
     const target = join(runRoot, runId, directory);
     if (existsSync(target)) {
       rmSync(target, { recursive: true, force: true });

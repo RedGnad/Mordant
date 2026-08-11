@@ -34,6 +34,7 @@ import { currentCustomReceiptDisclosures } from "../custom-supervised-receipt-di
 import {
   appendProtectionEvent,
   assertProtectionAssetBinding,
+  COALITION_RELEASE_MODE,
   createProtectionCase as createProtectionCaseModel,
   FHE_CIRCUIT,
   FHE_PARAMETER_PROFILE,
@@ -139,6 +140,19 @@ export const PRODUCT_STORAGE = Object.freeze({
 
 const GOVERNED_FHE_COMMIT = EXPECTED_GOVERNED_FHE_COMMIT;
 const MAX_PROCESS_BUFFER = 8 << 20;
+
+/**
+ * The on-disk names of a coalition case's private material. Declared once
+ * because two places must agree about them: creation writes them, and cleanup
+ * has to remove them. A cleanup that knew only `decryptor-private` would leave
+ * a coalition release replayable.
+ */
+export const COALITION_OPERATOR_DIRECTORIES = Object.freeze([
+  "coalition-operator-1",
+  "coalition-operator-2",
+  "coalition-operator-3",
+]);
+export const COALITION_LEDGER_DIRECTORY = "coalition-ledger" as const;
 
 const BINARIES = Object.freeze({
   keygen: "mordant-fhe-keygen",
@@ -294,6 +308,14 @@ type InternalState = Readonly<{
     publicRoot: string;
     decryptorPrivateRoot: string;
     participantPrivateRoot: string;
+    /**
+     * Coalition runs only. One sealed bundle per operator, and the operators'
+     * one-shot session ledgers. This is key material: a case that generated no
+     * secret key holds its release capability here and nowhere else, so these
+     * roots must be pruned with the rest.
+     */
+    coalitionOperatorRoots?: readonly string[];
+    coalitionLedgerRoot?: string;
   }>;
   participantKeys?: Readonly<Record<"PARTICIPANT_A" | "PARTICIPANT_B", string>>;
   keygen?: KeygenOutput;
@@ -1440,6 +1462,9 @@ async function createProtectionCaseRuntime(
   // Enabled only by the managed public worker. Existing operator and direct-
   // participant creation semantics remain byte-for-byte compatible.
   governedRecoursePolicy = false,
+  // Enabled only by the managed public worker. A coalition case generates no
+  // case secret key, so the mode is fixed at creation and cannot be changed.
+  coalitionRelease = false,
 ): Promise<ProtectionCaseView> {
   const windows = supervisedPledgeWindows === undefined
     ? undefined
@@ -1480,6 +1505,7 @@ async function createProtectionCaseRuntime(
       createdAt,
       caseNonce: randomBytes(32).toString("hex"),
       ...(custom ? { executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT } : {}),
+      ...(coalitionRelease ? { releaseMode: COALITION_RELEASE_MODE } : {}),
     });
     const state: InternalState = {
       schemaVersion: "mordant.protection-execution/2",
@@ -1501,6 +1527,10 @@ async function createProtectionCaseRuntime(
         publicRoot: join(root, "public"),
         decryptorPrivateRoot: join(root, "decryptor-private"),
         participantPrivateRoot: join(root, "participant-private"),
+        ...(coalitionRelease ? {
+          coalitionOperatorRoots: COALITION_OPERATOR_DIRECTORIES.map((name) => join(root, name)),
+          coalitionLedgerRoot: join(root, COALITION_LEDGER_DIRECTORY),
+        } : {}),
       },
       startedAtUnix: unix(createdAt),
     };
@@ -1541,6 +1571,12 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
     mkdirSync(state.paths.publicRoot, { recursive: true, mode: 0o755 });
     mkdirSync(state.paths.decryptorPrivateRoot, { recursive: true, mode: 0o700 });
     mkdirSync(state.paths.participantPrivateRoot, { recursive: true, mode: 0o700 });
+    for (const operatorRoot of state.paths.coalitionOperatorRoots ?? []) {
+      mkdirSync(operatorRoot, { recursive: true, mode: 0o700 });
+    }
+    if (state.paths.coalitionLedgerRoot !== undefined) {
+      mkdirSync(state.paths.coalitionLedgerRoot, { recursive: true, mode: 0o700 });
+    }
     const preFoundation = !existsSync(join(state.paths.publicRoot, "case-binding.json"));
     const participantA = rawParticipantKey(
       "PARTICIPANT_A", state.paths.participantPrivateRoot, preFoundation,
@@ -1591,6 +1627,13 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       classification: "PROTOCOL_DOUBLE",
       evidenceRef: state.protectionCase.holderAllocationDigest,
     }, { incidentState: "PRIVATE_MATCH_OPEN" });
+    // A coalition case names its operator roots at creation: the ceremony seals
+    // one bundle per root and no case secret key is generated at all, so this
+    // is the only moment the release capability is distributed.
+    const coalitionCreateArgs = state.paths.coalitionOperatorRoots === undefined ? [] : [
+      "-release-mode", COALITION_RELEASE_MODE,
+      ...state.paths.coalitionOperatorRoots.flatMap((operatorRoot) => ["-operator-root", operatorRoot]),
+    ];
     const output = await runJSON<KeygenOutput>(runtime, "keygen", [
       "-mode", "create",
       "-public-root", state.paths.publicRoot,
@@ -1598,6 +1641,7 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       "-spec", specPath,
       "-participant-a-key", participantA.path,
       "-participant-b-key", participantB.path,
+      ...coalitionCreateArgs,
     ]);
     runtime.failpoint("after-keygen-before-state-save");
     const binding = readJson<Record<string, unknown>>(join(state.paths.publicRoot, "case-binding.json"));
