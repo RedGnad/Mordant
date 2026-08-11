@@ -36,7 +36,7 @@ const INTEGRATION_STEPS = [
   {
     label: "Policy-authorized action",
     detail: "Bounded local operation",
-    story: "The selected plan authorizes the bounded managed operation, and the sealed evidence binds its outcome back to that authorization. Settlement is not authorized in this managed run.",
+    story: "The selected plan authorizes the bounded managed operation, and the sealed evidence binds its outcome back to that authorization. The run ends with its bounded action authorized, execution-ready; the exact boundary of the run is recorded in the evidence.",
   },
 ] as const;
 

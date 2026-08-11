@@ -288,7 +288,8 @@ export type ExecutionStageId =
   | "EVALUATION_COMPLETE"
   | "GOVERNED_VERIFICATION"
   | "RECOURSE_APPLICATION"
-  | "RECEIPT_SEALED";
+  | "RECEIPT_SEALED"
+  | "EXECUTION_READY";
 
 export type StageProgress = "done" | "active" | "pending";
 
@@ -310,12 +311,14 @@ const STAGE_LABEL: Readonly<Record<ExecutionStageId, string>> = Object.freeze({
   GOVERNED_VERIFICATION: "Governed result pending",
   RECOURSE_APPLICATION: "Recourse application",
   RECEIPT_SEALED: "Receipt sealed",
+  EXECUTION_READY: "Bounded action authorized",
 });
 
 const STAGE_DETAIL: Readonly<Partial<Record<ExecutionStageId, string>>> = Object.freeze({
   ENCRYPTION_PREPARED: "Mordant's managed execution service is preparing the encryption for this case.",
   GOVERNED_VERIFICATION: "Encrypted evaluation is complete. The designated decryptor is recomputing the circuit before any signed conflict status is released.",
   RECOURSE_APPLICATION: "The signed conflict status is entering the precommitted Governed Recourse Policy.",
+  EXECUTION_READY: "The released facts are verified against the published operator set; the pre-committed settlement plan is execution-ready.",
 });
 
 export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
@@ -327,6 +330,21 @@ export const MANAGED_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
   "GOVERNED_VERIFICATION",
   "RECOURSE_APPLICATION",
   "RECEIPT_SEALED",
+]);
+
+/**
+ * A coalition run's lifecycle ends at the verified release: no recourse
+ * application and no sealed receipt in this milestone. Its terminal stage is
+ * the authorized, execution-ready bounded action.
+ */
+export const COALITION_STAGE_ORDER: readonly ExecutionStageId[] = Object.freeze([
+  "CASE_AUTHORIZED",
+  "ENCRYPTION_PREPARED",
+  "PARTICIPANT_A_ENCRYPTED",
+  "PARTICIPANT_B_ENCRYPTED",
+  "EVALUATION_COMPLETE",
+  "GOVERNED_VERIFICATION",
+  "EXECUTION_READY",
 ]);
 
 /** Separate admission adds one real stage the managed intake does not have. */
@@ -357,10 +375,34 @@ export function buildStages(order: readonly ExecutionStageId[], reachedIndex: nu
 
 // ---------------------------------------------------------------- result and recourse
 
+/**
+ * The two facts a coalition releases, separately. `policyConflict` is only
+ * meaningful where `sameEconomicAsset` holds; they are never folded into one
+ * Boolean here: `GovernedRelease.conflict` is the UI's branch key and, for a
+ * coalition release, it carries the policy bit while both facts stay visible.
+ */
+export type CoalitionReleaseFacts = Readonly<{
+  sameEconomicAsset: boolean;
+  policyConflict: boolean;
+  threshold: number;
+  coalition: readonly number[];
+  operatorTopology: string;
+}>;
+
+/** What the run's pre-committed settlement profile yielded, if anything. */
+export type CoalitionSettlementView = Readonly<{
+  status: "EXECUTION_READY" | "NO_CONFLICT_NO_SETTLEMENT";
+  settlementProfileDigest: string;
+  planHash: string | null;
+  authorizationHash: string | null;
+}>;
+
 export type GovernedRelease = Readonly<{
   conflict: boolean;
   digest: string;
   releaseMode: string;
+  /** Present only for a coalition release. */
+  coalition?: CoalitionReleaseFacts | null;
 }>;
 
 export type RecourseDecision = Readonly<{
@@ -504,6 +546,8 @@ export type LiveProductViewModel = Readonly<{
   recourse: RecourseDecision | null;
   governedPolicy: GovernedRecoursePolicyView | null;
   decisionRail: DecisionRail | null;
+  /** Coalition runs only: what the pre-committed profile yielded. */
+  settlement: CoalitionSettlementView | null;
 
   onchain: OnchainView;
   receipt: LayeredReceipt | null;

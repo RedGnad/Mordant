@@ -7,6 +7,7 @@ import {
   type ManagedWorkerView,
 } from "../src/components/live-product/managed-intake-adapter";
 import {
+  coalitionRawView,
   conflictView,
   noConflictView,
   RUNNING_VIEW,
@@ -357,5 +358,73 @@ test.describe("live product presentation model", () => {
       ...RUNNING_VIEW,
       claim: { participantA: { activeFrom: 120, activeUntil: 420 } },
     })).toBeNull();
+  });
+
+  test("a coalition view parses with both released bits separate and adapts to an execution-ready model", () => {
+    const parsed = parseManagedWorkerView(coalitionRawView(true));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.governedResult?.conflict).toBe(true);
+    expect(parsed!.governedResult?.releaseMode).toBe("coalition-v5");
+    expect(parsed!.governedResult?.coalition).toMatchObject({
+      sameEconomicAsset: true,
+      policyConflict: true,
+      threshold: 2,
+      operatorTopology: "colocated-single-process",
+    });
+    expect(parsed!.settlement).toMatchObject({ status: "EXECUTION_READY" });
+
+    const model = adapt(parsed);
+    expect(model.state).toBe("CONFLICT_REVEALED");
+    expect(model.release?.coalition?.sameEconomicAsset).toBe(true);
+    expect(model.release?.coalition?.policyConflict).toBe(true);
+    expect(model.settlement?.status).toBe("EXECUTION_READY");
+    expect(model.decisionRail?.nextDecision).toBe("Bounded action authorized");
+    expect(model.decisionRail?.responsibleNow).toContain("2 of 3 operators");
+    expect(model.decisionRail?.consequence).toContain("Execution-ready");
+    expect(model.decisionRail?.consequence).not.toContain("Settlement is not authorized");
+    // The lifecycle ends at the verified release: the terminal stage is the
+    // authorized bounded action, and no recourse or receipt stage exists.
+    const ids = model.stages.map((stage) => stage.id);
+    expect(ids).toContain("EXECUTION_READY");
+    expect(ids).not.toContain("RECOURSE_APPLICATION");
+    expect(ids).not.toContain("RECEIPT_SEALED");
+    expect(model.stages.find((stage) => stage.id === "EXECUTION_READY")?.progress).toBe("active");
+    expect(model.receipt).toBeNull();
+  });
+
+  test("a cleared coalition view keeps the asset match visible and derives no settlement", () => {
+    const parsed = parseManagedWorkerView(coalitionRawView(false));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.governedResult?.conflict).toBe(false);
+    expect(parsed!.governedResult?.coalition?.sameEconomicAsset).toBe(true);
+    expect(parsed!.settlement).toMatchObject({ status: "NO_CONFLICT_NO_SETTLEMENT", planHash: null });
+
+    const model = adapt(parsed);
+    expect(model.state).toBe("NO_CONFLICT_REVEALED");
+    expect(model.release?.coalition?.policyConflict).toBe(false);
+    expect(model.settlement?.status).toBe("NO_CONFLICT_NO_SETTLEMENT");
+    expect(model.decisionRail?.consequence).toContain("No settlement can derive");
+  });
+
+  test("dishonest coalition projections are refused by the browser parser", () => {
+    const raw = coalitionRawView(true);
+    const result = raw.governedResult as Record<string, unknown>;
+    // The combination the circuit cannot produce.
+    expect(parseManagedWorkerView({
+      ...raw,
+      governedResult: { ...result, sameEconomicAsset: false },
+    })).toBeNull();
+    // The two bits recompressed into one canonical Boolean.
+    expect(parseManagedWorkerView({
+      ...raw,
+      governedResult: { ...result, conflict: true },
+    })).toBeNull();
+    // A released coalition view without its settlement projection.
+    expect(parseManagedWorkerView({ ...raw, settlement: null })).toBeNull();
+    // A recourse decision inside the coalition milestone.
+    expect(parseManagedWorkerView({ ...raw, recourse: { opened: true, reason: null } })).toBeNull();
+    // An execution-ready settlement on a cleared run.
+    const cleared = coalitionRawView(false);
+    expect(parseManagedWorkerView({ ...cleared, settlement: raw.settlement })).toBeNull();
   });
 });
