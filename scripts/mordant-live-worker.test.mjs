@@ -14,6 +14,7 @@ import {
   healthBody,
   liveCaseBody,
   progressFor,
+  progressForView,
   pruneReproducibleArtifacts,
   recordCaseStart,
   readWorkerConfiguration,
@@ -976,4 +977,32 @@ test("pruning removes an admitted claim while leaving the admission provable", (
   // The commitment survives, so the admission stays checkable without the interval.
   assert.equal(after.admittedClaims.PARTICIPANT_A.claimCommitment, `0x${"2".repeat(64)}`);
   assert.equal(after.admittedClaims.PARTICIPANT_A.participantWallet, WALLET_A);
+});
+
+test("coalition release is opt-in, and cannot share the one BGV slot with direct admission", () => {
+  assert.equal(configuration().coalitionRelease, false);
+  assert.equal(configuration({ MORDANT_WORKER_COALITION_RELEASE: "enabled" }).coalitionRelease, true);
+  // Any value other than the explicit gate stays off.
+  assert.equal(configuration({ MORDANT_WORKER_COALITION_RELEASE: "true" }).coalitionRelease, false);
+  assert.throws(() => configuration({
+    MORDANT_WORKER_COALITION_RELEASE: "enabled",
+    MORDANT_WORKER_ENABLE_DIRECT_PARTICIPANT_ADMISSION: "enabled",
+    MORDANT_WORKER_DIRECT_PARTICIPANT_ADMISSION_ACK: "MORDANT_PARTICIPANT_ADMISSION_V1",
+  }), (error) => error instanceof WorkerError && error.code === "CONFIG");
+});
+
+test("a released coalition view reports the bounded action, every other view keeps its stage label", () => {
+  const released = {
+    schemaVersion: "mordant.custom-supervised-protection-view/3",
+    stage: "RELEASED",
+    governedResult: { releaseMode: "coalition-v5", sameEconomicAsset: true, policyConflict: true },
+  };
+  assert.equal(progressForView(released), "Bounded action authorized");
+  // Before its release, a coalition run is still verifying.
+  assert.equal(progressForView({ ...released, governedResult: null }), progressFor("RELEASED"));
+  // A governed view at RELEASED still has recourse ahead of it.
+  assert.equal(
+    progressForView({ schemaVersion: "mordant.custom-supervised-protection-view/2", stage: "RELEASED", governedResult: { conflict: true } }),
+    progressFor("RELEASED"),
+  );
 });
