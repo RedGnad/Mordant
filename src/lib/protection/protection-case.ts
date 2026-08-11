@@ -17,6 +17,16 @@ export const PROTECTION_SERVICE_VERSION = 1 as const;
 export const PROTECTION_POLICY_VERSION = 1 as const;
 export const PROTECTION_FIXTURE_CLASSIFICATION = "SYNTHETIC_HACKATHON_FIXTURE" as const;
 export const GOVERNED_RELEASE_MODE = "governed-decryptor-v1" as const;
+/**
+ * The coalition release. A case created in this mode generates no case secret
+ * key at all: a co-located ceremony seals one bundle per operator, and a quorum
+ * of them releases the result.
+ *
+ * It is a second mode rather than a replacement because the governed path is
+ * still what every retained run used, and its evidence must keep verifying.
+ */
+export const COALITION_RELEASE_MODE = "coalition-v5" as const;
+export type ReleaseMode = typeof GOVERNED_RELEASE_MODE | typeof COALITION_RELEASE_MODE;
 export const FHE_PARAMETER_PROFILE = "mordant.bgv.identity-full-fhe-256.n15/v1" as const;
 export const FHE_CIRCUIT = "mordant.identity-full-fhe-256" as const;
 export const PROTECTION_PRODUCT_CLAIM =
@@ -62,7 +72,7 @@ export type MordantProtectionBinding = Readonly<{
   holderAllocationDigest: Sha256Digest;
   caseNonce: Sha256Digest;
   fheCaseId: Sha256Digest;
-  governedReleaseMode: typeof GOVERNED_RELEASE_MODE;
+  governedReleaseMode: ReleaseMode;
 }>;
 
 export type ProtectionTimelineEvent = Readonly<{
@@ -95,7 +105,7 @@ export type MordantProtectionCase = Readonly<{
   holderAllocationDigest: Sha256Digest;
   caseNonce: Sha256Digest;
   fheCaseId: Sha256Digest;
-  releaseMode: typeof GOVERNED_RELEASE_MODE;
+  releaseMode: ReleaseMode;
   incidentState: IncidentState;
   cureDeadline: string | null;
   recourseState: RecourseState;
@@ -193,7 +203,7 @@ export function assertProtectionBindingDerivations(binding: MordantProtectionBin
     || binding.protectedAmount.asset !== "aUSDC" || binding.protectedAmount.minorUnits !== "100000000"
     || binding.reserveBasisPoints !== 1000
     || binding.reserveAmount.asset !== "aUSDC" || binding.reserveAmount.minorUnits !== "10000000"
-    || binding.governedReleaseMode !== GOVERNED_RELEASE_MODE
+    || (binding.governedReleaseMode !== GOVERNED_RELEASE_MODE && binding.governedReleaseMode !== COALITION_RELEASE_MODE)
     || allocation !== binding.holderAllocationDigest
     || caseId !== binding.fheCaseId
   ) throw new ProtectionBindingError("Canonical protection binding derivation rejected");
@@ -203,6 +213,12 @@ export function createProtectionCase(options: Readonly<{
   scenario: ProductScenario;
   createdAt: string;
   caseNonce: string;
+  /**
+   * Defaults to the governed decryptor, which is what every existing caller and
+   * every retained run gets. Naming the coalition mode here is what makes the
+   * case generate no secret key at all, so it cannot be changed after creation.
+   */
+  releaseMode?: ReleaseMode;
   assetRecord?: CleanverseAssetRecord;
   /**
    * Present only for a supervised custom run. When set, the case is authorized
@@ -263,7 +279,7 @@ export function createProtectionCase(options: Readonly<{
     holderAllocationDigest: allocationDigest,
     caseNonce,
     fheCaseId,
-    releaseMode: GOVERNED_RELEASE_MODE,
+    releaseMode: options.releaseMode ?? GOVERNED_RELEASE_MODE,
     incidentState: "AUTHORIZED",
     cureDeadline: null,
     recourseState: "NOT_OPEN",

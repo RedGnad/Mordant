@@ -5,7 +5,7 @@ import {
   type MordantProtectionEvidence,
   type ProductClockClass,
 } from "./protection-evidence";
-import type { MordantProtectionCase, ProductScenario } from "./protection-case";
+import type { MordantProtectionCase, ProductScenario, ReleaseMode } from "./protection-case";
 
 export type PublicProtectionCaseProjection = Readonly<{
   productScenario: ProductScenario;
@@ -32,7 +32,10 @@ export type PublicProtectionCaseProjection = Readonly<{
   ];
   holderAllocationDigest: Sha256Digest;
   fheCaseId: Sha256Digest;
-  releaseMode: "governed-decryptor-v1";
+  // The mode the case was created in. `governedResult` below keeps its own
+  // literal: that block describes a governed release specifically, and a
+  // coalition release is a different shape carrying two facts, not one.
+  releaseMode: ReleaseMode;
   originalReceivable: Readonly<{
     state: "OUTSTANDING_INTACT";
     principalMinorUnits: "110000000";

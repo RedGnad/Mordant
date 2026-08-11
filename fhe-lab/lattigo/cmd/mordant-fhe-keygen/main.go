@@ -23,6 +23,31 @@ type participantFoundationSpec struct {
 	ProtectionBinding governedfhe.MordantProtectionBinding `json:"protectionBinding"`
 }
 
+// operatorRoots collects a repeatable -operator-root flag. A coalition case
+// writes one sealed bundle per root and generates no case secret key, so the
+// roots are the only place its key material exists; they are named one at a
+// time rather than parsed out of a single delimited value, so a path that
+// contains the delimiter cannot silently become two roots.
+type operatorRoots []string
+
+func (r *operatorRoots) String() string { return fmt.Sprint(*r) }
+
+func (r *operatorRoots) Set(value string) error {
+	if value == "" {
+		return fmt.Errorf("an operator root cannot be empty")
+	}
+	if !filepath.IsAbs(value) {
+		return fmt.Errorf("an operator root must be absolute")
+	}
+	for _, existing := range *r {
+		if existing == value {
+			return fmt.Errorf("operator root %q was named twice", value)
+		}
+	}
+	*r = append(*r, value)
+	return nil
+}
+
 // participantCeremonyRequestInput contains only public pins. In particular it
 // has no participant private-key field and is safe to retain as coordinator
 // evidence.
@@ -47,13 +72,16 @@ func main() {
 	role := flag.String("role", "", "PARTICIPANT_A or PARTICIPANT_B")
 	participantAKey := flag.String("participant-a-key", "", "participant A Ed25519 private-key file")
 	participantBKey := flag.String("participant-b-key", "", "participant B Ed25519 private-key file")
+	releaseMode := flag.String("release-mode", "", "empty for the governed decryptor, or "+governedfhe.ReleaseModeCoalitionV5)
+	var operators operatorRoots
+	flag.Var(&operators, "operator-root", "absolute root for one coalition operator bundle; repeat once per operator")
 	flag.Parse()
 	if *publicRoot == "" {
 		fail(fmt.Errorf("-public-root is required"))
 	}
 	switch *mode {
 	case "create":
-		runManagedCreate(*publicRoot, *privateRoot, *specPath, *participantAKey, *participantBKey)
+		runManagedCreate(*publicRoot, *privateRoot, *specPath, *participantAKey, *participantBKey, *releaseMode, operators)
 	case "finalize":
 		runManagedFinalize(*publicRoot)
 	case "participant-foundation":
@@ -81,9 +109,25 @@ func rejectParticipantFoundationPrivateKeys(participantAKey, participantBKey str
 	return nil
 }
 
-func runManagedCreate(publicRoot, privateRoot, specPath, participantAKey, participantBKey string) {
+func runManagedCreate(publicRoot, privateRoot, specPath, participantAKey, participantBKey, releaseMode string, operators operatorRoots) {
 	if privateRoot == "" || specPath == "" || participantAKey == "" || participantBKey == "" {
 		fail(fmt.Errorf("create requires -private-root, -spec, and both participant keys"))
+	}
+	// The library rejects the wrong pairing as well, but refusing it here keeps a
+	// mistyped mode from reaching a ceremony: a coalition case that generated no
+	// secret key has nothing to fall back to, and a governed case that quietly
+	// accepted operator roots would leave bundles no release will ever read.
+	switch releaseMode {
+	case "":
+		if len(operators) != 0 {
+			fail(fmt.Errorf("-operator-root belongs to a coalition case; pass -release-mode %s", governedfhe.ReleaseModeCoalitionV5))
+		}
+	case governedfhe.ReleaseModeCoalitionV5:
+		if len(operators) != governedfhe.CoalitionOperators {
+			fail(fmt.Errorf("a coalition case needs exactly %d -operator-root values, got %d", governedfhe.CoalitionOperators, len(operators)))
+		}
+	default:
+		fail(fmt.Errorf("unsupported -release-mode"))
 	}
 	data, err := os.ReadFile(specPath)
 	if err != nil {
@@ -106,6 +150,7 @@ func runManagedCreate(publicRoot, privateRoot, specPath, participantAKey, partic
 	binding, report, authorization, err := governedfhe.CreateProductAuthorizedCase(governedfhe.ProductAuthorizedCreateOptions{
 		CreateCaseOptions: governedfhe.CreateCaseOptions{
 			PublicRoot: publicRoot, PrivateRoot: privateRoot, Spec: spec.CaseSpec, SourceProvenance: provenance,
+			ReleaseMode: releaseMode, OperatorRoots: operators,
 		},
 		ProtectionBinding:      spec.ProtectionBinding,
 		ParticipantASigningKey: ed25519.PrivateKey(keyA),
