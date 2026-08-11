@@ -6,6 +6,7 @@ import {
   parseManagedWorkerView,
   type ManagedWorkerView,
 } from "../src/components/live-product/managed-intake-adapter";
+import { adaptDirectParticipantIntake } from "../src/components/live-product/direct-participant-adapter";
 import {
   coalitionRawView,
   conflictView,
@@ -404,6 +405,41 @@ test.describe("live product presentation model", () => {
     expect(model.release?.coalition?.policyConflict).toBe(false);
     expect(model.settlement?.status).toBe("NO_CONFLICT_NO_SETTLEMENT");
     expect(model.decisionRail?.consequence).toContain("No settlement can derive");
+  });
+
+  test("a released coalition case on the two-institution rail adapts to the same execution-ready model", () => {
+    const parsed = parseManagedWorkerView(coalitionRawView(true));
+    expect(parsed).not.toBeNull();
+    const model = adaptDirectParticipantIntake({
+      view: parsed,
+      admission: {
+        schemaVersion: "mordant.participant-case/1",
+        caseCode: "ABCDEFGH23456789",
+        runId: parsed!.runId,
+        lifecycle: "RELEASED",
+        participantA: { admitted: true, wallet: "0x911F99f424D47F08a15fcC771e94dcc2f7252B02" },
+        participantB: { admitted: true, wallet: "0x1111111111111111111111111111111111111111" },
+        bothAdmitted: true,
+        abandoned: false,
+      },
+      capabilitySet: capabilities("DIRECT_PARTICIPANT_ADMISSION"),
+      activeRole: null,
+      eligibility: VERIFIED,
+      ownDraft: { activeFrom: "", activeUntil: "" },
+      wallet: null,
+      authorizing: false,
+      actionPhase: null,
+      retryReady: false,
+      elapsedSeconds: null,
+      notice: null,
+      noticeState: null,
+    });
+    expect(model.state).toBe("CONFLICT_REVEALED");
+    expect(model.release?.coalition?.sameEconomicAsset).toBe(true);
+    expect(model.settlement?.status).toBe("EXECUTION_READY");
+    expect(model.decisionRail?.nextDecision).toBe("Bounded action authorized");
+    expect(model.stages.map((stage) => stage.id)).toContain("EXECUTION_READY");
+    expect(model.receipt).toBeNull();
   });
 
   test("dishonest coalition projections are refused by the browser parser", () => {
