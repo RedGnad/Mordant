@@ -225,7 +225,10 @@ test("a neutral coalition case carries the coalition mode from creation, with no
   if (view.schemaVersion !== "mordant.custom-supervised-protection-view/3") assert.fail("expected the coalition view");
   assert.equal(view.settlement, null);
   const raw = readFileSync(join(base.runRoot!, RUN_ID, "execution.json"), "utf8");
-  const stored = JSON.parse(raw) as Record<string, any>;
+  const stored = JSON.parse(raw) as {
+    protectionCase: { releaseMode: string };
+    paths: { coalitionOperatorRoots: readonly string[]; coalitionLedgerRoot?: string };
+  };
   assert.equal(stored.protectionCase.releaseMode, "coalition-v5");
   assert.equal(stored.paths.coalitionOperatorRoots.length, 3);
   assert.equal(typeof stored.paths.coalitionLedgerRoot, "string");
@@ -240,7 +243,9 @@ test("coalition preparation engages the settlement profile before any admission 
   await orchestrator.createNeutralCoalitionParticipantCase(RUN_ID);
   await orchestrator.preparePrivateMatch(RUN_ID);
   const profilePath = join(base.runRoot!, RUN_ID, "settlement-profile.json");
-  const committed = JSON.parse(readFileSync(profilePath, "utf8")) as Record<string, any>;
+  const committed = JSON.parse(readFileSync(profilePath, "utf8")) as {
+    profile: { caseBinding: { releaseMode: string }; releaseAuthorityId: string };
+  };
   assert.equal(committed.profile.caseBinding.releaseMode, "coalition-v5");
   assert.equal(committed.profile.releaseAuthorityId, digest("7"));
   // The commitment precedes every admission: no admission record exists yet.
