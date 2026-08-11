@@ -24,5 +24,8 @@ export default async function LiveProductHarnessPage({ searchParams }: {
   if (process.env.NODE_ENV === "production") notFound();
   const query = await searchParams;
   const scenario = typeof query.scenario === "string" ? query.scenario : "conflict";
-  return <LiveProductHarness scenario={scenario} />;
+  const nowIso = typeof query.now === "string" && !Number.isNaN(Date.parse(query.now))
+    ? query.now
+    : undefined;
+  return <LiveProductHarness scenario={scenario} nowIso={nowIso} />;
 }
