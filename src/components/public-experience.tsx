@@ -35,8 +35,8 @@ const INTEGRATION_STEPS = [
   },
   {
     label: "Policy-authorized action",
-    detail: "Bounded local operation",
-    story: "The selected plan authorizes the bounded managed operation, and the sealed evidence binds its outcome back to that authorization. The run ends with its bounded action authorized, execution-ready; the exact boundary of the run is recorded in the evidence.",
+    detail: "Bounded execution",
+    story: "The private result selects only a precommitted action branch, with the exact execution boundary recorded in evidence.",
   },
 ] as const;
 
