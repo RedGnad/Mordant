@@ -3275,6 +3275,19 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
       assertDirectParticipantAdmissionEnabled(runtime);
       return createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true);
     },
+    /**
+     * A neutral two-institution case whose release is the 2-of-3 operator
+     * coalition. Exactly the admission discipline of
+     * `createNeutralParticipantCase` — each wallet signs for its own published
+     * key and supplies only its own claim — composed with the coalition case
+     * shape: the ceremony distributes the release capability at preparation,
+     * no case secret key ever exists, and the lifecycle ends at the verified
+     * release. Both released bits stay separate facts all the way out.
+     */
+    createNeutralCoalitionParticipantCase: async (creationRequestId: string = randomUUID()) => {
+      assertDirectParticipantAdmissionEnabled(runtime);
+      return createProtectionCaseRuntime(runtime, "conflict", creationRequestId, undefined, true, false, true);
+    },
     readParticipantAdmissionContext: (
       runId: string,
       role: "PARTICIPANT_A" | "PARTICIPANT_B",

@@ -75,13 +75,17 @@ async function harness() {
       for (const forbidden of ["activeFrom", "activeUntil"]) {
         assert.equal(encoded.includes(forbidden), false, `${forbidden} must not reach the case spec`);
       }
+      // Mode-aware, like the real binary: a coalition create names its mode and
+      // publishes the threshold manifest digest as the release authority.
+      const coalition = args.includes("-release-mode");
       writeFileSync(join(publicRoot, "case-binding.json"), `${JSON.stringify({
         caseId: spec.caseId,
         assetIdentity: spec.assetIdentity,
         policyId: spec.policyId,
-        releaseMode: "governed-decryptor-v1",
+        releaseMode: coalition ? "coalition-v5" : "governed-decryptor-v1",
         parameterProfile: "mordant.bgv.identity-full-fhe-256.n15/v1",
         circuitId: "mordant.identity-full-fhe-256",
+        ...(coalition ? { releaseAuthorityId: digest("7") } : {}),
       })}\n`);
       return {
         bindingDigest: digest("1"),
@@ -207,6 +211,40 @@ test("direct participant admission is disabled unless the runtime explicitly ena
   const { base } = await harness();
   const disabled = createProtectionOrchestrator({ ...base, directParticipantAdmissionEnabled: false });
   await assert.rejects(disabled.createNeutralParticipantCase(RUN_ID), /disabled/u);
+  await assert.rejects(disabled.createNeutralCoalitionParticipantCase(RUN_ID), /disabled/u);
+});
+
+test("a neutral coalition case carries the coalition mode from creation, with no private input", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  const created = await orchestrator.createNeutralCoalitionParticipantCase(RUN_ID);
+  assert.equal(created.runId, RUN_ID);
+  const view = await orchestrator.readCustomSupervisedCase(RUN_ID);
+  assert.equal(view.schemaVersion, "mordant.custom-supervised-protection-view/3");
+  assert.equal(view.governedResult, null);
+  if (view.schemaVersion !== "mordant.custom-supervised-protection-view/3") assert.fail("expected the coalition view");
+  assert.equal(view.settlement, null);
+  const raw = readFileSync(join(base.runRoot!, RUN_ID, "execution.json"), "utf8");
+  const stored = JSON.parse(raw) as Record<string, any>;
+  assert.equal(stored.protectionCase.releaseMode, "coalition-v5");
+  assert.equal(stored.paths.coalitionOperatorRoots.length, 3);
+  assert.equal(typeof stored.paths.coalitionLedgerRoot, "string");
+  for (const forbidden of ["activeFrom", "activeUntil", "supervisedPledgeWindows", "admittedClaims"]) {
+    assert.equal(raw.includes(forbidden), false, `${forbidden} must not exist at neutral creation`);
+  }
+});
+
+test("coalition preparation engages the settlement profile before any admission or input exists", async () => {
+  const { base } = await harness();
+  const orchestrator = createProtectionOrchestrator(base);
+  await orchestrator.createNeutralCoalitionParticipantCase(RUN_ID);
+  await orchestrator.preparePrivateMatch(RUN_ID);
+  const profilePath = join(base.runRoot!, RUN_ID, "settlement-profile.json");
+  const committed = JSON.parse(readFileSync(profilePath, "utf8")) as Record<string, any>;
+  assert.equal(committed.profile.caseBinding.releaseMode, "coalition-v5");
+  assert.equal(committed.profile.releaseAuthorityId, digest("7"));
+  // The commitment precedes every admission: no admission record exists yet.
+  assert.equal(existsSync(join(base.runRoot!, RUN_ID, "admissions")), false);
 });
 
 test("a neutral participant pledge fails closed without its verified durable admission", async () => {
