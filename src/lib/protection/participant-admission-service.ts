@@ -81,6 +81,8 @@ function fail(code: string, status: number, message: string): never {
 /** The engine surface this module drives. Narrow on purpose, so a test can supply it. */
 export type AdmissionOrchestrator = Readonly<{
   createNeutralParticipantCase: (creationRequestId?: string) => Promise<{ runId: string }>;
+  /** Present when the runtime offers the coalition release for two-institution cases. */
+  createNeutralCoalitionParticipantCase?: (creationRequestId?: string) => Promise<{ runId: string }>;
   readCustomSupervisedCase: (runId: string) => Promise<CustomSupervisedProtectionView>;
   readParticipantAdmissionContext: (
     runId: string,
@@ -102,6 +104,12 @@ export type AdmissionDependencies = Readonly<{
   runRoot: string;
   /** Disabled by default; the worker enables it only after all runtime gates pass. */
   directParticipantAdmissionEnabled?: boolean;
+  /**
+   * When true, a new two-institution case releases through the 2-of-3 operator
+   * coalition instead of the governed decryptor. Selection happens at creation
+   * and only at creation: an existing case keeps the mode it was created with.
+   */
+  coalitionRelease?: boolean;
   /** The exact service the wallet signed for. */
   verifyingService: string;
   chainId?: number;
@@ -268,7 +276,13 @@ export async function createParticipantCase(
   creationRequestId: string = randomUUID(),
 ): Promise<CreatedParticipantCase> {
   canonicalDirectAdmissionConfiguration(dependencies);
-  const created = await dependencies.orchestrator.createNeutralParticipantCase(creationRequestId);
+  if (dependencies.coalitionRelease === true
+    && typeof dependencies.orchestrator.createNeutralCoalitionParticipantCase !== "function") {
+    fail("COALITION_UNAVAILABLE", 500, "The coalition release is enabled but the engine offers no coalition participant case");
+  }
+  const created = dependencies.coalitionRelease === true
+    ? await dependencies.orchestrator.createNeutralCoalitionParticipantCase!(creationRequestId)
+    : await dependencies.orchestrator.createNeutralParticipantCase(creationRequestId);
   const runId = created.runId;
   const caseCode = generateCaseCode();
   bindCaseCode(dependencies.runRoot, caseCode, runId);

@@ -89,12 +89,14 @@ export function readWorkerConfiguration(environment = process.env) {
   if (directParticipantAdmission && maxActiveCases !== 1) {
     throw new WorkerError(500, "CONFIG", "Direct participant admission requires exactly one active BGV case");
   }
-  // Opt-in only. Off, every managed case keeps the governed decryptor exactly
-  // as before; on, managed cases release through the 2-of-3 operator coalition.
+  // Opt-in only. Off, every case keeps the governed decryptor exactly as
+  // before. On, new cases release through the 2-of-3 operator coalition:
+  // managed cases via the managed journey, and, when direct participant
+  // admission is also enabled, two-institution cases via the admission rail.
+  // The two modes never contend for the slot: the direct-admission profile
+  // closes the managed creation route, so participant cases are the only
+  // creation surface and the existing reservation accounting covers them.
   const coalitionRelease = environment.MORDANT_WORKER_COALITION_RELEASE === "enabled";
-  if (coalitionRelease && directParticipantAdmission) {
-    throw new WorkerError(500, "CONFIG", "Coalition release and direct participant admission cannot share the one BGV slot");
-  }
   return Object.freeze({
     dataRoot: environment.MORDANT_WORKER_DATA_ROOT ?? "/data/mordant",
     tokenSecret: secret,
@@ -353,7 +355,7 @@ export function participantCaseBody(view, admission) {
     schemaVersion: WORKER_SCHEMA,
     view,
     admission,
-    progress: progressFor(view.stage),
+    progress: progressForView(view),
   };
 }
 
@@ -380,6 +382,23 @@ export function progressFor(stage) {
  * is a completed state, not a verification still running. Every other view
  * keeps the exact stage labels above.
  */
+/**
+ * The post-admission stages a cached admission projection can be observed at,
+ * mapped exactly as the admission service maps them. Anything else keeps the
+ * cached lifecycle.
+ */
+export function journeyLifecycle(stage, fallback) {
+  switch (stage) {
+    case "PARTICIPANT_B_SUBMITTED": return "SUBMISSIONS_FINALIZED";
+    case "EVALUATED": return "EVALUATED";
+    case "RELEASED":
+    case "RECOURSE_OPENED":
+    case "CHRONOLOGY_COMPLETE":
+    case "COMPLETE": return "RELEASED";
+    default: return fallback;
+  }
+}
+
 export function progressForView(view) {
   if (view?.schemaVersion === "mordant.custom-supervised-protection-view/3"
     && view.stage === "RELEASED" && view.governedResult !== null) {
@@ -447,6 +466,23 @@ export async function runCoalitionJourney(orchestrator, runId, onStage) {
   await step(() => orchestrator.preparePrivateMatch(runId));
   await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_A"));
   await step(() => orchestrator.submitParticipantPledge(runId, "PARTICIPANT_B"));
+  await step(() => orchestrator.evaluatePrivateConflict(runId));
+  return step(() => orchestrator.releaseGovernedResult(runId));
+}
+
+/**
+ * The remainder of a two-institution coalition journey once both participants
+ * have admitted and each has published its own artifact. It ends at the
+ * verified release, exactly like the managed coalition journey: no recourse,
+ * no receipt, both released bits carried separately in the V3 view.
+ */
+export async function runCoalitionPostAdmissionJourney(orchestrator, runId, onStage) {
+  const step = async (operation) => {
+    await operation();
+    const view = await orchestrator.readCustomSupervisedCase(runId);
+    await onStage(view);
+    return view;
+  };
   await step(() => orchestrator.evaluatePrivateConflict(runId));
   return step(() => orchestrator.releaseGovernedResult(runId));
 }
@@ -592,6 +628,7 @@ export function createLiveWorker(options) {
     lastCompletedAt: 0,
     lastView: new Map(),
     lastProgress: new Map(),
+    lastAdmission: new Map(),
     /** Cases awaiting their second participant. */
     openCases: new Set(),
     /** Capacity already reserved for a neutral case still being prepared. */
@@ -615,7 +652,11 @@ export function createLiveWorker(options) {
   }
 
   function participantCaseHasTerminalReceipt(runId) {
-    return existsSync(join(paths.runRoot, runId, "custom-supervised-receipt.json"));
+    if (existsSync(join(paths.runRoot, runId, "custom-supervised-receipt.json"))) return true;
+    // A terminal coalition case seals no receipt: its lifecycle ends at the
+    // verified release, recorded in the durable execution state.
+    const durable = readJson(join(paths.runRoot, runId, "execution.json"), null);
+    return durable !== null && durable.stage === "RELEASED" && durable.coalitionRelease !== undefined;
   }
 
   /**
@@ -657,6 +698,48 @@ export function createLiveWorker(options) {
     releaseAbandonedParticipantCases(nowMs);
   }
 
+  /**
+   * H1 repair: a crash or redeploy between a terminal write and the in-process
+   * prune must not strand the reproducible roots — for a coalition case they
+   * are the operator bundles and their ledgers, the release capability itself.
+   * Terminal is durable, prune is idempotent, so sweeping at startup is safe.
+   */
+  function startupTerminalSweep() {
+    if (!existsSync(paths.runRoot)) return;
+    for (const entry of readdirSync(paths.runRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !RUN_ID.test(entry.name)) continue;
+      if (!participantCaseHasTerminalReceipt(entry.name)) continue;
+      const removed = pruneReproducibleArtifacts(paths.runRoot, entry.name);
+      if (removed.length > 0) {
+        process.stdout.write(`${JSON.stringify({ event: "startup-terminal-prune", runId: entry.name, removed })}\n`);
+      }
+    }
+  }
+
+  /**
+   * H2 repair: the post-admission journey was only ever started by the
+   * admissions route, so a restart mid-journey stranded the case until its
+   * clock expired. Both admissions and every completed step are durable; the
+   * journey's operations are idempotent from wherever the crash left them.
+   */
+  function resumeInterruptedParticipantJourneys(nowMs) {
+    if (!existsSync(paths.caseClock)) return;
+    const resumable = ["PARTICIPANT_B_SUBMITTED", "EVALUATED", "RELEASED", "RECOURSE_OPENED", "CHRONOLOGY_COMPLETE"];
+    for (const entry of readdirSync(paths.caseClock, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const runId = entry.name.slice(0, -".json".length);
+      if (!RUN_ID.test(runId)) continue;
+      if (participantCaseHasTerminalReceipt(runId) || participantCaseExpired(runId, nowMs)) continue;
+      const durable = readJson(join(paths.runRoot, runId, "execution.json"), null);
+      // A stage this far means both institutions are in and the remainder needs
+      // no participant input; a RELEASED coalition case never reaches here
+      // because the terminal check above already owns it.
+      if (durable === null || !resumable.includes(durable.stage)) continue;
+      process.stdout.write(`${JSON.stringify({ event: "journey-resumed", runId, stage: durable.stage })}\n`);
+      beginPostAdmissionJourney(runId, durable.protectionCase?.releaseMode === "coalition-v5");
+    }
+  }
+
   restoreOpenParticipantCases(now());
 
   const admissionService = () => {
@@ -677,6 +760,7 @@ export function createLiveWorker(options) {
       orchestrator: createOrchestrator(),
       runRoot: paths.runRoot,
       directParticipantAdmissionEnabled: configuration.directParticipantAdmission === true,
+      coalitionRelease: configuration.coalitionRelease === true,
       verifyingService: configuration.allowedOrigin,
       chainId: configuration.chainId,
       verifyApass: service.verifyApass,
@@ -745,18 +829,24 @@ export function createLiveWorker(options) {
     };
   }
 
-  function beginPostAdmissionJourney(runId) {
+  function beginPostAdmissionJourney(runId, coalition = false) {
     state.running.add(runId);
     state.openCases.delete(runId);
     synchronizeBusyState();
     void (async () => {
       const started = now();
       try {
-        const terminal = await runPostAdmissionJourney(orchestratorFor(runId), runId, (next) => persistStage(runId, next));
-        if (terminal?.receipt == null) throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
+        const terminal = coalition
+          ? await runCoalitionPostAdmissionJourney(orchestratorFor(runId), runId, (next) => persistStage(runId, next))
+          : await runPostAdmissionJourney(orchestratorFor(runId), runId, (next) => persistStage(runId, next));
+        if (coalition) {
+          if (terminal?.governedResult == null) throw new WorkerError(500, "RELEASE", "Terminal coalition release is missing");
+        } else if (terminal?.receipt == null) {
+          throw new WorkerError(500, "RECEIPT", "Terminal receipt is missing");
+        }
         const pruned = pruneReproducibleArtifacts(paths.runRoot, runId);
         await persistStage(runId, terminal);
-        state.lastProgress.set(runId, progressFor("COMPLETE"));
+        state.lastProgress.set(runId, coalition ? "Bounded action authorized" : progressFor("COMPLETE"));
         options.onComplete?.({ runId, pruned, durationMs: now() - started });
       } catch (error) {
         state.lastProgress.set(runId, "Execution stopped");
@@ -923,7 +1013,8 @@ export function createLiveWorker(options) {
           },
         });
         state.lastView.set(created.runId, created.view);
-        state.lastProgress.set(created.runId, progressFor(created.view.stage));
+        state.lastAdmission.set(created.runId, created.admission);
+        state.lastProgress.set(created.runId, progressForView(created.view));
         return send(response, 201, participantCaseBody(created.view, created.admission), cors);
       } finally {
         // Only the active preparation reservation is released here. A case
@@ -934,13 +1025,39 @@ export function createLiveWorker(options) {
 
     if (request.method === "GET" && url.pathname.startsWith("/v1/participant-cases/")) {
       const caseCode = url.pathname.slice("/v1/participant-cases/".length);
-      const readback = await admissionService().readParticipantCase(
-        dependencies(), caseCode, readCaseStartFor(caseCode, nowMs),
-      );
-      if (readback.admission.abandoned || readback.admission.lifecycle === "EXECUTION_ABORTED") {
-        state.openCases.delete(readback.runId);
+      try {
+        const readback = await admissionService().readParticipantCase(
+          dependencies(), caseCode, readCaseStartFor(caseCode, nowMs),
+        );
+        if (readback.admission.abandoned || readback.admission.lifecycle === "EXECUTION_ABORTED") {
+          state.openCases.delete(readback.runId);
+        }
+        state.lastView.set(readback.runId, readback.view);
+        state.lastAdmission.set(readback.runId, readback.admission);
+        state.lastProgress.set(readback.runId, progressForView(readback.view));
+        return send(response, 200, participantCaseBody(readback.view, readback.admission), cors);
+      } catch (error) {
+        // While an engine operation holds the run (the post-admission journey
+        // does, for minutes), the last durably observed view is the honest
+        // answer, exactly as on the managed route. It is never fabricated, and
+        // it answers ONLY for the held-run refusal: any other fault must stay
+        // a visible fault rather than be masked by a stale success.
+        if (error?.status !== 423) throw error;
+        const runId = admissionService().resolveCaseCode(paths.runRoot, caseCode);
+        const cachedView = runId === null ? undefined : state.lastView.get(runId);
+        const cachedAdmission = runId === null ? undefined : state.lastAdmission.get(runId);
+        if (cachedView !== undefined && cachedAdmission !== undefined) {
+          return send(response, 200, {
+            schemaVersion: WORKER_SCHEMA,
+            view: cachedView,
+            // The lifecycle is a pure projection of the durable stage; served
+            // from cache it must stay coherent with the cached view's stage.
+            admission: { ...cachedAdmission, lifecycle: journeyLifecycle(cachedView.stage, cachedAdmission.lifecycle) },
+            progress: state.lastProgress.get(runId) ?? progressForView(cachedView),
+          }, cors);
+        }
+        throw error;
       }
-      return send(response, 200, participantCaseBody(readback.view, readback.admission), cors);
     }
 
     if (request.method === "POST" && url.pathname.endsWith("/challenge")
@@ -977,12 +1094,21 @@ export function createLiveWorker(options) {
         readCaseStartFor(caseCode, nowMs),
       );
       state.lastView.set(admitted.runId, admitted.view);
-      state.lastProgress.set(admitted.runId, progressFor(admitted.view.stage));
+      state.lastAdmission.set(admitted.runId, admitted.admission);
+      state.lastProgress.set(admitted.runId, progressForView(admitted.view));
       // Both roles present: the remainder of the journey is reachable and starts
       // now. It is never started with one participant, because the engine itself
-      // refuses evaluation until both submissions are finalized.
-      if (admitted.admission.bothAdmitted && !state.running.has(admitted.runId)) {
-        beginPostAdmissionJourney(admitted.runId);
+      // refuses evaluation until both submissions are finalized. Which journey
+      // follows is the durable case's own mode, read from its view schema,
+      // never from configuration at this later moment. An exact retry of an
+      // admission on an already-terminal case repairs the ledger read and must
+      // not relaunch anything.
+      if (admitted.admission.bothAdmitted && !state.running.has(admitted.runId)
+        && !participantCaseHasTerminalReceipt(admitted.runId)) {
+        beginPostAdmissionJourney(
+          admitted.runId,
+          admitted.view.schemaVersion === "mordant.custom-supervised-protection-view/3",
+        );
       }
       return send(response, admitted.newlyAdmitted ? 201 : 200, {
         schemaVersion: WORKER_SCHEMA,
@@ -992,7 +1118,7 @@ export function createLiveWorker(options) {
         newlyAdmitted: admitted.newlyAdmitted,
         view: admitted.view,
         admission: admitted.admission,
-        progress: progressFor(admitted.view.stage),
+        progress: progressForView(admitted.view),
       }, cors);
     }
 
@@ -1015,6 +1141,10 @@ export function createLiveWorker(options) {
 
     throw new WorkerError(404, "ROUTE", "Unknown route");
   }
+
+  // Startup repairs run once every closure they rely on is initialized.
+  startupTerminalSweep();
+  resumeInterruptedParticipantJourneys(now());
 
   const server = createServer((request, response) => {
     handle(request, response).catch((error) => {

@@ -457,6 +457,39 @@ test("direct admission fails closed unless explicitly enabled on canonical Monad
   }
 });
 
+test("coalition release selects the coalition participant factory, and only at creation", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    const created: string[] = [];
+    const orchestrator: AdmissionOrchestrator = {
+      ...dependencies.orchestrator,
+      createNeutralParticipantCase: async () => { created.push("governed"); return { runId: RUN_ID }; },
+      createNeutralCoalitionParticipantCase: async () => { created.push("coalition"); return { runId: RUN_ID }; },
+    };
+    await createParticipantCase({ ...dependencies, orchestrator, coalitionRelease: true });
+    assert.deepEqual(created, ["coalition"]);
+    created.length = 0;
+    await createParticipantCase({ ...dependencies, orchestrator }, "3f2504e0-4f89-11d3-9a0c-0305e82c3302");
+    assert.deepEqual(created, ["governed"], "without the flag the governed factory keeps serving");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an enabled coalition release with no coalition factory fails closed at creation", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    await rejectsCode(
+      createParticipantCase({ ...dependencies, coalitionRelease: true }),
+      "COALITION_UNAVAILABLE",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("the durable case-clock callback runs before private match preparation", async () => {
   const root = temporaryRoot();
   try {
@@ -655,6 +688,37 @@ test("the challenge is server-issued and carries no operator input", async () =>
       dependencies, code, "PARTICIPANT_A", CANONICAL_PARTICIPANTS.holderA, { activeFrom: 100, activeUntil: 400 },
     );
     assert.notEqual(challenge.message.authorizationNonce, second.message.authorizationNonce);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an invitation code binds each side to its canonical institution, never to whoever holds the code", async () => {
+  const root = temporaryRoot();
+  try {
+    const { dependencies } = harness(root);
+    const code = generateCaseCode();
+    bindCaseCode(root, code, RUN_ID);
+    // An arbitrary wallet holding the invitation cannot take side A.
+    await rejectsCode(
+      participantAdmissionChallenge(
+        dependencies, code, "PARTICIPANT_A", accountA.address, { activeFrom: 100, activeUntil: 400 }, NOW,
+      ),
+      "CANONICAL_PARTICIPANT",
+    );
+    // The side-A institution cannot use the same invitation to take side B.
+    await admitParticipant(
+      dependencies,
+      await signedRequest(code, "PARTICIPANT_A", accountA, { activeFrom: 100, activeUntil: 400 }),
+      NOW,
+    );
+    await rejectsCode(
+      participantAdmissionChallenge(
+        dependencies, code, "PARTICIPANT_B", CANONICAL_PARTICIPANTS.holderA,
+        { activeFrom: 200, activeUntil: 500 }, NOW,
+      ),
+      "CANONICAL_PARTICIPANT",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
