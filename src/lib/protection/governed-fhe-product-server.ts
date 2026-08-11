@@ -81,15 +81,37 @@ import {
   type SupervisedPledgeWindow,
   type SupervisedPledgeWindows,
 } from "./supervised-pledge-windows";
-import { participantClaimCommitment } from "./participant-authorization";
+import { digestToBytes32, participantClaimCommitment } from "./participant-authorization";
 import { readAdmission } from "./participant-admission-store";
 import {
   MONAD_TESTNET_CHAIN_ID,
+  PINNED_PARTICIPANT_CONFIGS,
   loadCanonicalRecourseConfiguration,
+  readParticipantConfigSelection,
 } from "./adapter-compatibility";
 import {
+  verifyCoalitionEvidence,
+  type CoalitionConflictResult,
+  type CoalitionThresholdManifest,
+} from "./coalition-evidence";
+import {
+  commitSettlementProfile,
+  readCommittedSettlementProfile,
+  settlementAuthorityForRun,
+  settlementProfilePath,
+} from "./settlement-profile-store";
+import {
+  SETTLEMENT_PROFILE_SCHEMA,
+  settlementAuthorizationHash,
+  type SettlementProfile,
+} from "./settlement-authority";
+import { bridgeRunId } from "./governed-recourse-bridge";
+import {
+  COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA,
   CUSTOM_SUPERVISED_VIEW_SCHEMA,
   GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA,
+  type CoalitionReleaseProjection,
+  type CoalitionSettlementProjection,
   type CustomSupervisedProtectionView,
 } from "./custom-supervised-view";
 import {
@@ -214,6 +236,41 @@ type ReleaseOutput = Readonly<{
   }>;
 }>;
 
+/**
+ * Terminal record of a verified coalition release. The two released bits are
+ * carried separately, end to end: `policyConflict` is the only Boolean the
+ * settlement path reads, and `sameEconomicAsset` stays evidence. There is
+ * deliberately no combined `conflict` member here.
+ */
+type CoalitionReleaseOutput = Readonly<{
+  resultDigest: Sha256Digest;
+  sameEconomicAsset: boolean;
+  policyConflict: boolean;
+  releaseMode: typeof COALITION_RELEASE_MODE;
+  releaseAuthorityId: string;
+  threshold: number;
+  coalition: readonly number[];
+  operatorTopology: string;
+  durationNanos: number;
+  resultBytes: number;
+  exactRetry: boolean;
+}>;
+
+/** What the coalition decryptor CLI prints for a completed release. */
+type CoalitionCliOutput = Readonly<{
+  resultDigest: Sha256Digest;
+  sameEconomicAsset: boolean;
+  policyConflict: boolean;
+  releaseMode: string;
+  releaseAuthorityId: Sha256Digest;
+  threshold: number;
+  coalition: readonly number[];
+  operatorTopology: string;
+  recomputedByAllOfQuorum: boolean;
+  durationNanos: number;
+  resultBytes: number;
+}>;
+
 type ProductInspection = Readonly<{
   foundation?: Readonly<{ bindingDigest: Sha256Digest; report: Readonly<Record<string, unknown>> }>;
   submissionA?: Omit<SubmissionOutput, "durationNanos">;
@@ -225,6 +282,13 @@ type ProductInspection = Readonly<{
   foundationPrivateComplete: boolean;
   releasePrivateComplete: boolean;
   release?: Omit<ReleaseOutput, "durationNanos">;
+  coalitionRelease?: Readonly<{
+    resultDigest: Sha256Digest;
+    sameEconomicAsset: boolean;
+    policyConflict: boolean;
+    releaseMode: string;
+    resultBytes: number;
+  }>;
   recourse?: PublicRecourseRecord;
   protectionBindingDigest?: Sha256Digest;
   recourseAttestationDigest?: Sha256Digest;
@@ -322,6 +386,10 @@ type InternalState = Readonly<{
   submissions?: Readonly<Partial<Record<"PARTICIPANT_A" | "PARTICIPANT_B", SubmissionOutput>>>;
   evaluation?: EvaluationOutput;
   release?: ReleaseOutput;
+  /** Coalition runs only; mutually exclusive with `release`. */
+  coalitionRelease?: CoalitionReleaseOutput;
+  /** What the pre-committed settlement profile yielded. Coalition runs only. */
+  coalitionSettlement?: CoalitionSettlementProjection;
   recourse?: Readonly<{ opened: boolean; reason?: "SIGNED_RESULT_FALSE"; record?: Readonly<Record<string, unknown>> }>;
   evidence?: MordantProtectionEvidence;
   abortedReason?: string;
@@ -589,6 +657,27 @@ function loadStateRaw(runtime: ProtectionRuntime, runId: string): InternalState 
     throw new ProtectionProductError("Protection execution record rejected", 500);
   }
   assertProtectionAssetBinding(state.protectionCase, CANONICAL_CLEANVERSE_ASSET_DIGEST);
+  // The two release paths are mutually exclusive by case mode, and the
+  // settlement projection must agree with the released policy bit. A state
+  // mixing them cannot be interpreted, so it is refused rather than read.
+  if (state.protectionCase.releaseMode === COALITION_RELEASE_MODE) {
+    if (state.release !== undefined || state.recourse !== undefined || state.governedActionPlan !== undefined) {
+      throw new ProtectionProductError("A coalition case cannot carry governed-decryptor release state", 500);
+    }
+  } else if (state.coalitionRelease !== undefined || state.coalitionSettlement !== undefined) {
+    throw new ProtectionProductError("A governed case cannot carry coalition release state", 500);
+  }
+  if (state.coalitionRelease !== undefined) {
+    if (state.coalitionRelease.policyConflict && !state.coalitionRelease.sameEconomicAsset) {
+      throw new ProtectionProductError("Coalition release state carries the non-canonical bit combination", 500);
+    }
+    if (state.coalitionSettlement === undefined
+      || (state.coalitionSettlement.status === "EXECUTION_READY") !== state.coalitionRelease.policyConflict) {
+      throw new ProtectionProductError("Coalition settlement projection binding rejected", 500);
+    }
+  } else if (state.coalitionSettlement !== undefined) {
+    throw new ProtectionProductError("Coalition settlement projection without a release rejected", 500);
+  }
   if (state.governedRecoursePolicySelection !== undefined) {
     verifyManagedDemoGovernedRecoursePolicySelection(state.governedRecoursePolicySelection);
     if (state.governedRecoursePolicySelection.caseId !== state.protectionCase.fheCaseId) {
@@ -679,6 +768,45 @@ function nextOperation(stage: ExecutionStage, scenario: ProductScenario): string
  * all, which is the honest state: there is nothing to report yet.
  */
 function customSupervisedView(state: InternalState): CustomSupervisedProtectionView {
+  if (state.protectionCase.releaseMode === COALITION_RELEASE_MODE) {
+    const release = state.coalitionRelease;
+    const coalitionResult: CoalitionReleaseProjection | null = release === undefined ? null : {
+      digest: release.resultDigest,
+      releaseMode: COALITION_RELEASE_MODE,
+      sameEconomicAsset: release.sameEconomicAsset,
+      policyConflict: release.policyConflict,
+      threshold: release.threshold,
+      coalition: release.coalition,
+      operatorTopology: release.operatorTopology,
+    };
+    return {
+      schemaVersion: COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA,
+      runId: state.runId,
+      executionVariant: CUSTOM_SUPERVISED_EXECUTION_VARIANT,
+      stage: state.stage,
+      // This milestone's lifecycle ends at the verified release: the bounded
+      // action is authorized and the run is execution-ready. Nothing opens
+      // recourse and nothing settles, so there is no operation to drive next.
+      nextOperation: release === undefined ? nextOperationBeforeRelease(state.stage) : null,
+      terminalScenario: release === undefined ? null : release.policyConflict ? "conflict" : "no-conflict",
+      protectionCase: {
+        cleanverseAssetDigest: state.protectionCase.cleanverseAssetDigest,
+        fheCaseId: state.protectionCase.fheCaseId,
+        incidentState: state.protectionCase.incidentState,
+        recourseState: state.protectionCase.recourseState,
+        cureDeadline: state.protectionCase.cureDeadline,
+      },
+      participantArtifactDigests: {
+        participantA: state.submissions?.PARTICIPANT_A?.artifactDigest ?? null,
+        participantB: state.submissions?.PARTICIPANT_B?.artifactDigest ?? null,
+      },
+      evaluatedArtifactDigest: state.evaluation?.artifactDigest ?? null,
+      governedResult: coalitionResult,
+      recourse: null,
+      receipt: null,
+      settlement: state.coalitionSettlement ?? null,
+    };
+  }
   const governedResult = state.release === undefined ? null : {
     conflict: state.release.conflict,
     digest: state.release.resultDigest,
@@ -745,9 +873,14 @@ function publicView(state: InternalState, runtime: ProtectionRuntime): Protectio
     schemaVersion: "mordant.protection-product-view/1",
     runId: state.runId,
     stage: state.stage,
-    nextOperation: nextOperation(state.stage, state.release === undefined
-      ? state.protectionCase.productScenario
-      : terminalScenarioAfterRelease(state)),
+    // A released coalition run is terminal for this milestone: no recourse
+    // operation follows the verified release, so the V1 view offers none. The
+    // coalition facts themselves live in the custom V3 view, not here.
+    nextOperation: state.coalitionRelease !== undefined
+      ? null
+      : nextOperation(state.stage, state.release === undefined
+        ? state.protectionCase.productScenario
+        : terminalScenarioAfterRelease(state)),
     protectionCase: {
       ...protectionCase,
       incidentState: state.protectionCase.incidentState,
@@ -965,6 +1098,35 @@ function reconcileProtectionProjection(
       return { ...state, stage: "EVALUATED", protectionCase, evaluation: { ...inspection.evaluation, durationNanos: 0 } };
     }
     case "RELEASING": {
+      if (state.protectionCase.releaseMode === COALITION_RELEASE_MODE) {
+        // A coalition result is terminal only once both public one-shot
+        // objects exist; the artifacts are then re-read and fully re-verified,
+        // exactly as the release operation itself would have.
+        if (inspection.coalitionRelease === undefined || !inspection.releasePrivateComplete) return null;
+        const recovered = verifiedCoalitionReleaseFromArtifacts(runtime, state);
+        const protectionCase = coalitionProtectionCaseAfterRelease(
+          state, recovered.result, recovered.resultDigest, recovered.coalitionAuthorityId, at,
+        );
+        return {
+          ...state,
+          stage: "RELEASED",
+          protectionCase,
+          coalitionRelease: {
+            resultDigest: recovered.resultDigest,
+            sameEconomicAsset: recovered.result.sameEconomicAsset,
+            policyConflict: recovered.result.policyConflict,
+            releaseMode: COALITION_RELEASE_MODE,
+            releaseAuthorityId: recovered.coalitionAuthorityId,
+            threshold: recovered.servingQuorum,
+            coalition: [...recovered.result.coalition],
+            operatorTopology: recovered.operatorTopology,
+            durationNanos: 0,
+            resultBytes: inspection.coalitionRelease.resultBytes,
+            exactRetry: true,
+          },
+          coalitionSettlement: recovered.coalitionSettlement,
+        };
+      }
       if (inspection.release === undefined || !inspection.releasePrivateComplete) return null;
       const release: ReleaseOutput = { ...inspection.release, durationNanos: 0 };
       let protectionCase = appendEventOnce(state.protectionCase, {
@@ -1445,10 +1607,74 @@ function buildCustomSupervisedReceipt(
 
 function terminalScenarioAfterRelease(state: InternalState): ProductScenario {
   if (state.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) return state.protectionCase.productScenario;
+  // For a coalition run the scenario label derives from the released policy
+  // bit alone. The asset bit is not folded in: it stays a separate fact on the
+  // release record and in the view.
+  if (state.coalitionRelease !== undefined) {
+    return state.coalitionRelease.policyConflict ? "conflict" : "no-conflict";
+  }
   if (state.release === undefined) {
     throw new ProtectionProductError("A custom supervised run has no scenario before governed release", 500);
   }
   return state.release.conflict ? "conflict" : "no-conflict";
+}
+
+/**
+ * The pre-engaged settlement profile of a live coalition run.
+ *
+ * Committed once the case foundation exists (the threshold manifest's digest,
+ * republished by the signed case binding, is the release authority the profile
+ * names) and strictly before any result-bearing artifact, which
+ * `commitSettlementProfile` itself enforces. Every economic term comes from the
+ * canonical reviewed V2 configuration; nothing here can depend on an outcome,
+ * because none exists yet. Idempotent: an existing commitment is read back and
+ * integrity-checked, never rewritten.
+ */
+function ensureCoalitionSettlementProfileCommitted(runtime: ProtectionRuntime, state: InternalState): void {
+  if (state.protectionCase.releaseMode !== COALITION_RELEASE_MODE) return;
+  if (existsSync(settlementProfilePath(runtime.runRoot, state.runId))) {
+    readCommittedSettlementProfile(runtime.runRoot, state.runId);
+    return;
+  }
+  if (state.keygen === undefined) {
+    throw new ProtectionProductError("A settlement profile needs the published case foundation", 500);
+  }
+  const binding = readJson<Record<string, unknown>>(join(state.paths.publicRoot, "case-binding.json"));
+  const releaseAuthorityId = binding.releaseAuthorityId;
+  if (typeof releaseAuthorityId !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(releaseAuthorityId)) {
+    throw new ProtectionProductError("The coalition case binding names no release authority", 500);
+  }
+  const selection = readParticipantConfigSelection();
+  const canonical = loadCanonicalRecourseConfiguration(undefined, selection);
+  const pinned = PINNED_PARTICIPANT_CONFIGS[selection];
+  const profile: SettlementProfile = {
+    schemaVersion: SETTLEMENT_PROFILE_SCHEMA,
+    profileId: "mordant.coalition-live.execution-ready",
+    profileVersion: 1,
+    caseBinding: {
+      runId: state.runId,
+      caseId: state.protectionCase.fheCaseId,
+      caseBindingDigest: state.keygen.bindingDigest,
+      protectionBindingDigest: state.keygen.protectionBindingDigest,
+      releaseMode: COALITION_RELEASE_MODE,
+    },
+    participantConfig: { path: pinned.path, sha256: pinned.sha256 },
+    committedAtUnix: unix(runtime.now().toISOString()),
+    chainId: canonical.adapter.chainId,
+    adapter: canonical.adapter.address,
+    settlementToken: canonical.adapter.settlementToken,
+    cviVerifier: canonical.adapter.verifier,
+    facility: canonical.adapter.facility,
+    attestor: canonical.adapter.attestor,
+    holderA: canonical.participants.holderA,
+    holderB: canonical.participants.holderB,
+    payoutA: canonical.participants.payoutA.toString(),
+    payoutB: canonical.participants.payoutB.toString(),
+    cureWindowSeconds: canonical.cureWindowSeconds,
+    releaseAuthorityId,
+    settlementAuthorization: "AUTHORIZED",
+  };
+  commitSettlementProfile(runtime.runRoot, state.runId, profile);
 }
 
 async function createProtectionCaseRuntime(
@@ -1490,6 +1716,7 @@ async function createProtectionCaseRuntime(
       const sameShape = custom
         ? existing.executionVariant === CUSTOM_SUPERVISED_EXECUTION_VARIANT
           && (existing.governedRecoursePolicySelection !== undefined) === governedRecoursePolicy
+          && (existing.protectionCase.releaseMode === COALITION_RELEASE_MODE) === coalitionRelease
         : existing.executionVariant === undefined && existing.protectionCase.productScenario === scenario;
       if (!sameShape) throw new ProtectionProductError("Creation request scenario mismatch", 409);
       return publicView(existing, runtime);
@@ -1663,6 +1890,10 @@ async function preparePrivateMatchRuntime(runtime: ProtectionRuntime, runId: str
       keygen: output,
       participantKeys: { PARTICIPANT_A: participantA.path, PARTICIPANT_B: participantB.path },
     });
+    // The coalition settlement profile is engaged here, while the only thing
+    // that exists is the case foundation. Re-checked at evaluation entry so a
+    // crash in this window fails closed instead of running uncommitted.
+    ensureCoalitionSettlementProfileCommitted(runtime, state);
     finishOperation(runtime.runRoot, runId, operation.operationId, "COMPLETED", runtime.now().toISOString());
     return publicView(state, runtime);
   });
@@ -2060,6 +2291,9 @@ async function evaluatePrivateConflictRuntime(runtime: ProtectionRuntime, runId:
     let state = await loadState(runtime, runId);
     if (state.stage === "EVALUATED") return publicView(state, runtime);
     if (state.stage !== "PARTICIPANT_B_SUBMITTED") throw new ProtectionProductError("Both encrypted submissions are required");
+    // Last moment a coalition profile can still honestly be engaged: the
+    // evaluator is about to write the first result-bearing artifact.
+    ensureCoalitionSettlementProfileCommitted(runtime, state);
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "evaluatePrivateConflict",
       phase: "EVALUATING",
@@ -2095,11 +2329,189 @@ async function evaluatePrivateConflictRuntime(runtime: ProtectionRuntime, runId:
   });
 }
 
+/**
+ * Reads the two published coalition artifacts, verifies the quorum evidence,
+ * and derives what the pre-committed profile yields for the released facts.
+ * Shared by the release operation and by crash reconciliation, so both paths
+ * trust exactly the same checks and nothing trusts a CLI exit status.
+ */
+function verifiedCoalitionReleaseFromArtifacts(
+  runtime: ProtectionRuntime,
+  state: InternalState,
+): Readonly<{
+  result: CoalitionConflictResult;
+  resultDigest: Sha256Digest;
+  coalitionAuthorityId: string;
+  operatorTopology: string;
+  servingQuorum: number;
+  coalitionSettlement: CoalitionSettlementProjection;
+}> {
+  const resultPath = join(state.paths.publicRoot, "coalition-conflict-result.json");
+  const result = readJson<CoalitionConflictResult>(resultPath);
+  const manifest = readJson<CoalitionThresholdManifest>(join(state.paths.publicRoot, "threshold-manifest.json"));
+  const resultDigest = digestPublicFile(resultPath);
+  const verified = verifyCoalitionEvidence(result, manifest, digestToBytes32(resultDigest), bridgeRunId(state.runId));
+  if (
+    result.assetIdentity !== state.protectionCase.cleanverseAssetDigest
+    || result.caseId !== state.protectionCase.fheCaseId
+    || result.policyId !== state.protectionCase.policyId
+    || result.releaseMode !== COALITION_RELEASE_MODE
+    || result.caseBindingDigest !== state.keygen?.bindingDigest
+    || result.evaluatedArtifactDigest !== state.evaluation?.artifactDigest
+  ) {
+    throw new ProtectionProductError("Coalition result case binding mismatch", 500);
+  }
+  let coalitionSettlement: CoalitionSettlementProjection;
+  if (verified.facts.conflict) {
+    // The verified facts meet the pre-engaged profile here, and nowhere else.
+    // Economics come only from the commitment; the run stops execution-ready.
+    const settlement = settlementAuthorityForRun(runtime.runRoot, state.runId, verified.facts);
+    coalitionSettlement = {
+      status: "EXECUTION_READY",
+      settlementProfileDigest: settlement.committedDigest,
+      planHash: settlement.authorization.planHash,
+      authorizationHash: settlementAuthorizationHash(settlement.authorization),
+    };
+  } else {
+    // A released false policy bit authorizes nothing, by design. The
+    // commitment is read back, integrity-checked, as proof of what was
+    // pre-engaged for the run that did not conflict.
+    const committed = readCommittedSettlementProfile(runtime.runRoot, state.runId);
+    coalitionSettlement = {
+      status: "NO_CONFLICT_NO_SETTLEMENT",
+      settlementProfileDigest: committed.committedDigest,
+      planHash: null,
+      authorizationHash: null,
+    };
+  }
+  return {
+    result,
+    resultDigest,
+    coalitionAuthorityId: verified.coalitionAuthorityId,
+    operatorTopology: verified.operatorTopology,
+    servingQuorum: verified.servingQuorum,
+    coalitionSettlement,
+  };
+}
+
+function coalitionProtectionCaseAfterRelease(
+  state: InternalState,
+  result: CoalitionConflictResult,
+  resultDigest: Sha256Digest,
+  coalitionAuthorityId: string,
+  at: string,
+): MordantProtectionCase {
+  const protectionCase = appendEventOnce(state.protectionCase, {
+    kind: "COALITION_QUORUM_RECOMPUTED",
+    at,
+    label: `A ${result.threshold}-of-${COALITION_OPERATOR_DIRECTORIES.length} operator coalition recomputed the fixed circuit`,
+    classification: "LOCAL_EXECUTION",
+    evidenceRef: coalitionAuthorityId as Sha256Digest,
+  });
+  return appendEventOnce(protectionCase, {
+    kind: result.policyConflict ? "COALITION_CONFLICT_CONFIRMED" : "COALITION_CONFLICT_CLEARED",
+    at,
+    label: result.policyConflict
+      ? "Coalition quorum confirmed a conflicting pledge on the same economic asset"
+      : "Coalition quorum cleared the conflicting-pledge check",
+    classification: "LOCAL_EXECUTION",
+    evidenceRef: resultDigest,
+  }, { incidentState: result.policyConflict ? "CONFLICT_CONFIRMED" : "CLEARED" });
+}
+
+/**
+ * The coalition branch of the release step. The CLI performs the quorum
+ * release; everything this state records is then re-derived from the published
+ * artifacts and verified with {@link verifyCoalitionEvidence}. The coalition
+ * binary is one-shot (its consumed marker refuses a second run), so a result
+ * already on disk is read back and re-verified instead of re-released.
+ */
+async function releaseCoalitionResult(
+  runtime: ProtectionRuntime,
+  runId: string,
+  initial: InternalState,
+): Promise<ProtectionCaseView> {
+  let state = initial;
+  const operatorRoots = state.paths.coalitionOperatorRoots;
+  const ledgerRoot = state.paths.coalitionLedgerRoot;
+  if (operatorRoots === undefined || ledgerRoot === undefined) {
+    throw new ProtectionProductError("A coalition case must name its operator and ledger roots", 500);
+  }
+  // The profile must already be engaged: settlement authority after the result
+  // exists depends entirely on the commitment predating it.
+  readCommittedSettlementProfile(runtime.runRoot, runId);
+  const operation = beginOperation(runtime.runRoot, runId, {
+    operation: "releaseGovernedResult",
+    phase: "RELEASING",
+    immutableParameters: {
+      caseId: state.protectionCase.fheCaseId,
+      evaluatedArtifactDigest: state.evaluation?.artifactDigest,
+      releaseMode: COALITION_RELEASE_MODE,
+      releaseOrdinal: 1,
+    },
+    expectedCurrentStage: "EVALUATED",
+    expectedTargetStage: "RELEASED",
+    expectedArtifacts: ["coalition-release-admitted.json", "coalition-conflict-result.json", "coalition-release-consumed.json"],
+    createdAt: runtime.now().toISOString(),
+  });
+  const resultPath = join(state.paths.publicRoot, "coalition-conflict-result.json");
+  const exactRetry = existsSync(resultPath);
+  let cli: CoalitionCliOutput | null = null;
+  if (!exactRetry) {
+    cli = await runJSON<CoalitionCliOutput>(runtime, "decryptor", [
+      "-public-root", state.paths.publicRoot,
+      "-release-mode", COALITION_RELEASE_MODE,
+      "-ledger-root", ledgerRoot,
+      ...operatorRoots.flatMap((operatorRoot) => ["-operator-root", operatorRoot]),
+    ]);
+  }
+  runtime.failpoint("after-release-publication-before-state-save");
+  const release = verifiedCoalitionReleaseFromArtifacts(runtime, state);
+  if (cli !== null && (
+    cli.resultDigest !== release.resultDigest
+    || cli.sameEconomicAsset !== release.result.sameEconomicAsset
+    || cli.policyConflict !== release.result.policyConflict
+    || cli.releaseMode !== COALITION_RELEASE_MODE
+  )) {
+    throw new ProtectionProductError("Coalition release output does not match the published result", 500);
+  }
+  const protectionCase = coalitionProtectionCaseAfterRelease(
+    state, release.result, release.resultDigest, release.coalitionAuthorityId, operation.createdAt,
+  );
+  const output: CoalitionReleaseOutput = {
+    resultDigest: release.resultDigest,
+    sameEconomicAsset: release.result.sameEconomicAsset,
+    policyConflict: release.result.policyConflict,
+    releaseMode: COALITION_RELEASE_MODE,
+    releaseAuthorityId: release.coalitionAuthorityId,
+    threshold: release.servingQuorum,
+    coalition: [...release.result.coalition],
+    operatorTopology: release.operatorTopology,
+    durationNanos: cli?.durationNanos ?? 0,
+    resultBytes: cli?.resultBytes ?? 0,
+    exactRetry,
+  };
+  state = saveState(runtime, {
+    ...state,
+    stage: "RELEASED",
+    protectionCase,
+    coalitionRelease: output,
+    coalitionSettlement: release.coalitionSettlement,
+  });
+  finishOperation(runtime.runRoot, runId, operation.operationId, exactRetry ? "RECONCILED" : "COMPLETED", runtime.now().toISOString());
+  return publicView(state, runtime);
+}
+
 async function releaseGovernedResultRuntime(runtime: ProtectionRuntime, runId: string): Promise<ProtectionCaseView> {
   return exclusive(runId, async () => {
     let state = await loadState(runtime, runId);
-    if (state.stage === "RELEASED" && state.release !== undefined) return publicView(state, runtime);
+    if (state.stage === "RELEASED" && (state.release !== undefined || state.coalitionRelease !== undefined)) {
+      return publicView(state, runtime);
+    }
     if (state.stage !== "EVALUATED") throw new ProtectionProductError("FHE evaluation is not complete");
+    if (state.protectionCase.releaseMode === COALITION_RELEASE_MODE) {
+      return releaseCoalitionResult(runtime, runId, state);
+    }
     const operation = beginOperation(runtime.runRoot, runId, {
       operation: "releaseGovernedResult",
       phase: "RELEASING",
@@ -2831,6 +3243,26 @@ export function createProtectionOrchestrator(options: ProtectionRuntimeOptions =
       "conflict",
       creationRequestId,
       supervisedPledgeWindows,
+      false,
+      true,
+    ),
+    /**
+     * Managed public check whose release is the 2-of-3 operator coalition.
+     *
+     * The settlement profile is engaged during preparation, before any result
+     * exists. No governed recourse policy is selected: this run's lifecycle
+     * ends at the verified coalition release, execution-ready, and drives no
+     * recourse operation.
+     */
+    createManagedCoalitionCase: (
+      creationRequestId: string,
+      supervisedPledgeWindows: SupervisedPledgeWindows,
+    ) => createProtectionCaseRuntime(
+      runtime,
+      "conflict",
+      creationRequestId,
+      supervisedPledgeWindows,
+      false,
       false,
       true,
     ),

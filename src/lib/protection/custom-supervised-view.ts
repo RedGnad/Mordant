@@ -25,6 +25,7 @@ import type {
 
 export const CUSTOM_SUPERVISED_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/1" as const;
 export const GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/2" as const;
+export const COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA = "mordant.custom-supervised-protection-view/3" as const;
 
 export const CUSTOM_INCIDENT_STATES = Object.freeze([
   "AUTHORIZED", "PRIVATE_MATCH_OPEN", "EVALUATED", "CONFLICT_CONFIRMED", "CLEARED",
@@ -77,9 +78,45 @@ export type CustomSupervisedProtectionViewV2 = CustomSupervisedProtectionViewBas
   governedPolicy: GovernedPolicyProjection;
 }>;
 
+/**
+ * The released coalition facts, as released: the two bits are carried
+ * separately and never folded into one canonical `conflict` Boolean.
+ * `policyConflict` is only meaningful where `sameEconomicAsset` holds, and a
+ * reader given a single Boolean could not tell "different receivables" from
+ * "same receivable, no policy conflict".
+ */
+export type CoalitionReleaseProjection = Readonly<{
+  digest: Sha256Digest;
+  releaseMode: "coalition-v5";
+  sameEconomicAsset: boolean;
+  policyConflict: boolean;
+  threshold: number;
+  coalition: readonly number[];
+  operatorTopology: string;
+}>;
+
+/**
+ * What the pre-committed settlement profile yielded for this run. The plan and
+ * its authorization exist only on a released policy conflict; the run stops at
+ * execution-ready and performs no on-chain action.
+ */
+export type CoalitionSettlementProjection = Readonly<{
+  status: "EXECUTION_READY" | "NO_CONFLICT_NO_SETTLEMENT";
+  settlementProfileDigest: string;
+  planHash: string | null;
+  authorizationHash: string | null;
+}>;
+
+export type CustomSupervisedProtectionViewV3 = Omit<CustomSupervisedProtectionViewBase, "governedResult"> & Readonly<{
+  schemaVersion: typeof COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA;
+  governedResult: CoalitionReleaseProjection | null;
+  settlement: CoalitionSettlementProjection | null;
+}>;
+
 export type CustomSupervisedProtectionView =
   | CustomSupervisedProtectionViewV1
-  | CustomSupervisedProtectionViewV2;
+  | CustomSupervisedProtectionViewV2
+  | CustomSupervisedProtectionViewV3;
 
 function record(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -116,6 +153,9 @@ const FORBIDDEN_VIEW_KEYS = Object.freeze([
  */
 export function parseCustomSupervisedProtectionView(value: unknown): CustomSupervisedProtectionView | null {
   if (!record(value)) return null;
+  if (value.schemaVersion === COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA) {
+    return parseCoalitionSupervisedProtectionView(value);
+  }
   const v2 = value.schemaVersion === GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA;
   const topLevelKeys = [
     "schemaVersion", "runId", "executionVariant", "stage", "nextOperation", "terminalScenario",
@@ -247,9 +287,93 @@ export function parseCustomSupervisedProtectionView(value: unknown): CustomSuper
   return value as unknown as CustomSupervisedProtectionView;
 }
 
+/**
+ * Strict exact parser for the coalition view. The released facts stay two
+ * separate Booleans, the combination the circuit cannot produce is refused, and
+ * the settlement projection must agree with the released policy bit: a plan on
+ * a cleared run, or a missing plan on a confirmed one, is a refusal.
+ */
+function parseCoalitionSupervisedProtectionView(value: Readonly<Record<string, unknown>>): CustomSupervisedProtectionViewV3 | null {
+  if (!exactRecord(value, [
+    "schemaVersion", "runId", "executionVariant", "stage", "nextOperation", "terminalScenario",
+    "protectionCase", "participantArtifactDigests", "evaluatedArtifactDigest", "governedResult",
+    "recourse", "receipt", "settlement",
+  ])) return null;
+  if (value.executionVariant !== CUSTOM_SUPERVISED_EXECUTION_VARIANT) return null;
+  if (typeof value.runId !== "string" || !RUN_ID.test(value.runId)) return null;
+  if (typeof value.stage !== "string") return null;
+  if (value.nextOperation !== null && typeof value.nextOperation !== "string") return null;
+
+  const protectionCase = value.protectionCase;
+  if (!exactRecord(protectionCase, [
+    "cleanverseAssetDigest", "fheCaseId", "incidentState", "recourseState", "cureDeadline",
+  ])) return null;
+  if (!digest(protectionCase.cleanverseAssetDigest) || !digest(protectionCase.fheCaseId)) return null;
+  if (!CUSTOM_INCIDENT_STATES.includes(protectionCase.incidentState as never)) return null;
+  if (!CUSTOM_RECOURSE_STATES.includes(protectionCase.recourseState as never)) return null;
+  if (protectionCase.cureDeadline !== null) return null;
+
+  const digests = value.participantArtifactDigests;
+  if (!exactRecord(digests, ["participantA", "participantB"])) return null;
+  for (const entry of [digests.participantA, digests.participantB]) {
+    if (entry !== null && !digest(entry)) return null;
+  }
+  if (value.evaluatedArtifactDigest !== null && !digest(value.evaluatedArtifactDigest)) return null;
+
+  const governedResult = value.governedResult;
+  if (governedResult !== null) {
+    if (!exactRecord(governedResult, [
+      "digest", "releaseMode", "sameEconomicAsset", "policyConflict", "threshold", "coalition", "operatorTopology",
+    ])) return null;
+    if (!digest(governedResult.digest)) return null;
+    if (governedResult.releaseMode !== "coalition-v5") return null;
+    if (typeof governedResult.sameEconomicAsset !== "boolean" || typeof governedResult.policyConflict !== "boolean") return null;
+    // H-02: the policy conjunction has identity equality as a factor, so this
+    // combination cannot have come from the circuit.
+    if (governedResult.policyConflict && !governedResult.sameEconomicAsset) return null;
+    if (!Number.isInteger(governedResult.threshold) || (governedResult.threshold as number) < 2) return null;
+    if (!Array.isArray(governedResult.coalition)
+      || governedResult.coalition.length !== governedResult.threshold
+      || governedResult.coalition.some((point) => !Number.isInteger(point) || (point as number) <= 0)) return null;
+    if (typeof governedResult.operatorTopology !== "string" || governedResult.operatorTopology === "") return null;
+  }
+
+  // The coalition milestone lifecycle ends at the verified release. Nothing
+  // opens recourse and no receipt is sealed, so both must stay null.
+  if (value.recourse !== null || value.receipt !== null) return null;
+
+  const terminalScenario = value.terminalScenario;
+  const settlement = value.settlement;
+  if (governedResult === null) {
+    if (terminalScenario !== null || settlement !== null) return null;
+  } else {
+    const expected = (governedResult.policyConflict as boolean) ? "conflict" : "no-conflict";
+    if (terminalScenario !== expected) return null;
+    if (!exactRecord(settlement, ["status", "settlementProfileDigest", "planHash", "authorizationHash"])) return null;
+    if (typeof settlement.settlementProfileDigest !== "string"
+      || !/^0x[0-9a-f]{64}$/u.test(settlement.settlementProfileDigest)) return null;
+    if (governedResult.policyConflict === true) {
+      if (settlement.status !== "EXECUTION_READY") return null;
+      for (const hash of [settlement.planHash, settlement.authorizationHash]) {
+        if (typeof hash !== "string" || !/^0x[0-9a-f]{64}$/u.test(hash)) return null;
+      }
+    } else {
+      if (settlement.status !== "NO_CONFLICT_NO_SETTLEMENT") return null;
+      if (settlement.planHash !== null || settlement.authorizationHash !== null) return null;
+    }
+  }
+
+  const encoded = JSON.stringify(value);
+  for (const forbidden of FORBIDDEN_VIEW_KEYS) {
+    if (encoded.includes(`"${forbidden}"`)) return null;
+  }
+  return value as unknown as CustomSupervisedProtectionViewV3;
+}
+
 export function isCustomSupervisedProtectionView(value: unknown): boolean {
   return record(value) && (
     value.schemaVersion === CUSTOM_SUPERVISED_VIEW_SCHEMA
     || value.schemaVersion === GOVERNED_POLICY_CUSTOM_SUPERVISED_VIEW_SCHEMA
+    || value.schemaVersion === COALITION_CUSTOM_SUPERVISED_VIEW_SCHEMA
   );
 }
