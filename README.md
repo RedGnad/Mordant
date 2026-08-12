@@ -149,15 +149,17 @@ Privacy claims are scoped to the component and profile that actually provides th
 | Boundary | Current truth |
 | --- | --- |
 | **Managed combined intake** | Active public profile. Managed infrastructure receives both synthetic demo windows during intake/preparation, then performs real BGV evaluation. |
-| **Direct participant admission** | Implemented and tested. Two distinct wallets separately sign `ParticipantAdmissionV1`; this proves separate authorization, not participant-local encryption. |
+| **Direct participant admission** | Implemented and tested. Two distinct wallets separately sign `ParticipantAdmissionV2`, which also names the Ed25519 key that will sign that participant's enrollments; this proves separate authorization, not participant-local encryption. |
 | **Participant-originated native CLI** | Current qualified capability. In this opt-in, disabled-by-default profile, each participant encrypts its claim in a participant-controlled environment before Mordant coordination receives it. It is not the managed public profile or the browser direct-admission profile. |
 | **Evaluator** | Receives ciphertext artifacts only and has no decryption key. |
-| **Governed decryptor** | Designated, trusted and Mordant-controlled; not threshold or independently operated. |
+| **Governed decryptor** | The default managed profile uses a designated, Mordant-controlled decryptor: trusted, and not independently operated. |
+| **Coalition release** | Implemented and verified, opt-in and off by default. A coalition case generates no case secret key at all: a co-located ceremony seals one bundle per operator and a 2-of-3 quorum releases the result. Operators are not independently hosted, so this removes the single key, not yet the single operator. |
 
 The workflow does not require one lender to disclose its pledge window to the counterparty. That is
 different from claiming that no Mordant infrastructure receives plaintext. Browser/device BGV,
-participant-controlled decryption, threshold release, semantic equality proofs and ERC-1271
-support are not current capabilities.
+participant-controlled decryption, semantic equality proofs and ERC-1271 support are not current
+capabilities. Threshold release is implemented as the opt-in coalition profile above; it is not what
+the default public deployment runs.
 
 The participant-originated capability is intentionally a profile of the same recourse system, not a
 second product: encrypt in a participant-controlled native environment, authenticate the ciphertext
@@ -220,7 +222,7 @@ environment. Mordant coordination receives authenticated encrypted artifacts rat
 window bounds in this profile.
 
 This does not globalize the claim to the public managed profile or direct wallet admission. It does
-not claim browser/device BGV, participant-controlled or threshold decryption, semantic equality
+not claim browser/device BGV, participant-controlled decryption, semantic equality
 between a commitment and ciphertext plaintext, production institutional key management, or
 production-cluster readiness. The profile is opt-in and disabled by default. See
 [Participant-originated encryption](docs/participant-originated-encryption.md) and the retained
@@ -258,6 +260,8 @@ evidence remain unchanged.
 - Current managed V2 policy selection, closed branch, plan-derived operation authorization and
   operation-bound evidence.
 - Direct-participant wallet authorization and exact admission retry semantics.
+- A verified 2-of-3 coalition release over the participants' real ciphertexts, releasing
+  `sameEconomicAsset` and `policyConflict` as two separate facts, opt-in and off by default.
 - Qualified participant-originated native-CLI encryption with ciphertext-only coordination, within
   its documented opt-in boundary.
 - A separate completed Adapter V2 execution with a real 600-second cure, finalization and aUSDC
