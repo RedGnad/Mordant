@@ -11,23 +11,23 @@ receipt.
 
 > Conflict became recourse.
 
+**Live demo: <https://mordant-two.vercel.app>**
+
 ## Verify the Cleanverse integration in 30 seconds
 
-- **The live run is gated by a fresh on-chain A-Pass read.** Open the
-  [live workflow](https://mordant-two.vercel.app/protection/live) and check eligibility for the
-  preloaded holder: a launch token is minted only after
-  [`ccp-eligibility.ts`](src/lib/protection/ccp-eligibility.ts) calls the Cleanverse validator's
-  `complianceVerify` on Monad at submit time. An ineligible holder cannot start a run.
-- **Institutional admission is Cleanverse-gated.** A participant wallet is admitted only after
-  `verifyApass` runs against the wallet that actually signed; a Cleanverse refusal returns
-  `APASS_DENIED`
+Cleanverse is not a badge here. Remove it and no run starts, no participant is admitted and no
+holder is paid.
+
+- **No run starts without a live A-Pass.** [`ccp-eligibility.ts`](src/lib/protection/ccp-eligibility.ts)
+  calls the validator's `complianceVerify` on Monad at submit time; an ineligible holder gets no
+  launch token.
+- **No participant is admitted without one.** `verifyApass` runs against the wallet that actually
+  signed, and a refusal returns `APASS_DENIED`
   ([`participant-admission-service.ts`](src/lib/protection/participant-admission-service.ts)).
-- **Role and payout gating is enforced in the contracts.** Case creation reverts unless
-  `cviVerifier.isEligible` passes for the facility, buyer and originator roles
-  ([`MordantFactoryV2.sol`](contracts/src/MordantFactoryV2.sol)), and the deployed
-  [case adapter](https://testnet.monadexplorer.com/address/0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1)
-  of the hardened run checked eligibility before opening the cure and before each aUSDC holder
-  claim listed below.
+- **No payout without one.** Case creation reverts unless `cviVerifier.isEligible` passes for the
+  facility, buyer and originator ([`MordantFactoryV2.sol`](contracts/src/MordantFactoryV2.sol)), and
+  the deployed [case adapter](https://testnet.monadexplorer.com/address/0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1)
+  rechecked eligibility before the cure and before each aUSDC claim.
 
 | Product level | What is implemented or qualified |
 | --- | --- |
@@ -51,14 +51,9 @@ private claims
   → operation-bound evidence
 ```
 
-**The governed result establishes conflict or no conflict only.** It does not independently
-authorize recourse, operational action, settlement or legal judgment, and it establishes no legal
-priority, responsibility, ownership, fraud, default, payout recipient or payout amount. The
-precommitted policy selects the bounded managed branch. Human and institutional processes remain
-responsible for legal and operational judgment.
-
-This is a bounded hackathon MVP built for Cleanverse Build: Trusted Assets on Monad testnet. It is
-not production authorized.
+A bounded hackathon MVP for Cleanverse Build: Trusted Assets on Monad testnet, not production
+authorized. What the governed result does and does not establish is stated exactly under
+[what is real and what is bounded](#what-is-real-and-what-is-bounded).
 
 ## What Mordant does
 
@@ -270,6 +265,11 @@ evidence remain unchanged.
 
 ### Bounded
 
+- **The governed result establishes conflict or no conflict only.** It does not independently
+  authorize recourse, operational action, settlement or legal judgment, and it establishes no legal
+  priority, responsibility, ownership, fraud, default, payout recipient or payout amount. The
+  precommitted policy selects the bounded managed branch, and human and institutional processes
+  remain responsible for legal and operational judgment.
 - Claim windows and protected notionals are synthetic fixtures.
 - Managed infrastructure sees demo plaintext during intake/preparation.
 - The qualified participant-originated profile is a separate native-CLI surface; it is not wired
