@@ -2,13 +2,32 @@
 
 **The recourse layer for tokenized private credit.**
 
-Mordant turns an authenticated private-credit case state into a policy-governed bounded action and
+**Mordant protects investors when the same receivable is financed twice.** It turns an
+authenticated private-credit case state into a policy-governed bounded action and
 verifiable evidence. Its first implemented workflow is **Conflicting Pledge Protection**: two private
 financing claims against one receivable are evaluated under encryption, the signed conflict status
 enters a policy committed before result exposure, and the resulting managed operation is bound to a
 receipt.
 
 > Conflict became recourse.
+
+## Verify the Cleanverse integration in 30 seconds
+
+- **The live run is gated by a fresh on-chain A-Pass read.** Open the
+  [live workflow](https://mordant-two.vercel.app/protection/live) and check eligibility for the
+  preloaded holder: a launch token is minted only after
+  [`ccp-eligibility.ts`](src/lib/protection/ccp-eligibility.ts) calls the Cleanverse validator's
+  `complianceVerify` on Monad at submit time. An ineligible holder cannot start a run.
+- **Institutional admission is Cleanverse-gated.** A participant wallet is admitted only after
+  `verifyApass` runs against the wallet that actually signed; a Cleanverse refusal returns
+  `APASS_DENIED`
+  ([`participant-admission-service.ts`](src/lib/protection/participant-admission-service.ts)).
+- **Role and payout gating is enforced in the contracts.** Case creation reverts unless
+  `cviVerifier.isEligible` passes for the facility, buyer and originator roles
+  ([`MordantFactoryV2.sol`](contracts/src/MordantFactoryV2.sol)), and the deployed
+  [case adapter](https://testnet.monadexplorer.com/address/0x9cD93089E02d301BDdfC86EaAbB39242272cAfa1)
+  of the hardened run checked eligibility before opening the cure and before each aUSDC holder
+  claim listed below.
 
 | Product level | What is implemented or qualified |
 | --- | --- |
